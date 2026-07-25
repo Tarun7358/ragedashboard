@@ -10,7 +10,7 @@ interface AnalyticsProps {
 }
 
 export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
-  const { token } = useAuth();
+  const { token, activeGuildId } = useAuth();
   const [days, setDays] = useState(7);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,20 +22,29 @@ export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const guildId = localStorage.getItem('cn_active_guild_id') || 'fallback';
+        const guildId = activeGuildId || localStorage.getItem('cn_active_guild') || '';
+        if (!guildId) {
+          if (active) setLoading(false);
+          return;
+        }
         const res = await fetch(`${API_BASE}/api/analytics/summary?guildId=${guildId}&days=${days}`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'X-Guild-Id': guildId
+          }
         });
         if (res.ok && active) {
           const json = await res.json();
           setData(json);
         }
-      } catch {}
+      } catch (err) {
+        console.error('[Analytics] Error fetching analytics data:', err);
+      }
       if (active) setLoading(false);
     };
     fetchData();
     return () => { active = false; };
-  }, [days, token]);
+  }, [days, token, activeGuildId]);
 
   const totalMembers = registry.memberCount ?? 0;
   const onlineMembers = registry.onlineCount ?? 0;
