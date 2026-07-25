@@ -68,15 +68,6 @@ export const VoiceManagerManifest: ModuleManifest = {
           ]
         },
         {
-          name: 'mass-move',
-          description: 'Move all members of a channel to a new channel',
-          type: 1,
-          options: [
-            { name: 'from', type: 7, description: 'Source channel', required: true, channel_types: [2, 13] },
-            { name: 'to', type: 7, description: 'Destination channel', required: true, channel_types: [2, 13] }
-          ]
-        },
-        {
           name: 'freeze',
           description: 'Prevent anyone from joining a voice channel',
           type: 1,
@@ -160,23 +151,6 @@ export const VoiceManagerManifest: ModuleManifest = {
           ]
         },
         {
-          name: 'massdrag',
-          description: 'Move all members of channel to another',
-          type: 1,
-          options: [
-            { name: 'from', type: 7, description: 'Source channel', required: true, channel_types: [2, 13] },
-            { name: 'to', type: 7, description: 'Destination channel', required: true, channel_types: [2, 13] }
-          ]
-        },
-        {
-          name: 'pullall',
-          description: 'Pull everyone from a channel to yours',
-          type: 1,
-          options: [
-            { name: 'from', type: 7, description: 'Source channel', required: true, channel_types: [2, 13] }
-          ]
-        },
-        {
           name: 'swap',
           description: 'Swap users of two voice channels',
           type: 1,
@@ -193,11 +167,6 @@ export const VoiceManagerManifest: ModuleManifest = {
             { name: 'user', type: 6, description: 'User to disconnect', required: true },
             { name: 'reason', type: 3, description: 'Reason for disconnect', required: false }
           ]
-        },
-        {
-          name: 'clean',
-          description: 'Force delete empty temporary voice channels',
-          type: 1
         },
         {
           name: 'sessions',
