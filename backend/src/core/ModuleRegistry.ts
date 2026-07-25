@@ -186,6 +186,10 @@ export class ModuleRegistry {
     if (this.client && id && id !== 'default_guild') {
       (async () => {
         try {
+          if (finalMsg.startsWith('[DashboardOnly]') || finalMsg.startsWith('[Internal]')) {
+            return;
+          }
+
           const logModule = state.modules.find((m: any) => m.id === 'logging');
           if (!logModule || logModule.status !== 'enabled') return;
 

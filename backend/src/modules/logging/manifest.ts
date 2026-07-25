@@ -142,10 +142,10 @@ export const LoggingManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
-        if (!isOwner) return interaction.reply({ content: '🔒 Requires Administrator.', flags: 64 });
+        if (!isOwner) return interaction.reply({ content: 'ðŸ”’ Requires Administrator.', flags: 64 });
         
         const subcommand = interaction.options.getSubcommand(false);
-        if (!subcommand) return interaction.reply({ content: '❌ Please use a valid subcommand.', flags: 64 });
+        if (!subcommand) return interaction.reply({ content: 'â�Œ Please use a valid subcommand.', flags: 64 });
         const modules = context.getModulesState();
         const logMod = modules.find((m: any) => m.id === 'logging');
         const config = logMod?.config || {};
@@ -156,80 +156,80 @@ export const LoggingManifest: ModuleManifest = {
           validCategories.forEach(cat => {
             const catConfig = config[cat];
             if (catConfig && catConfig.enabled && catConfig.channelId) {
-              desc += `**${cat}**: 🟢 Enabled (<#${catConfig.channelId}>)\n`;
+              desc += `**${cat}**: ðŸŸ¢ Enabled (<#${catConfig.channelId}>)\n`;
             } else {
-              desc += `**${cat}**: 🔴 Disabled or Unconfigured\n`;
+              desc += `**${cat}**: ðŸ”´ Disabled or Unconfigured\n`;
             }
           });
           if (!desc) desc = 'No categories configured.';
           
-          await interaction.reply({ content: `📋 **Logging Center Status**\n\n${desc}`, flags: 64 });
+          await interaction.reply({ content: `ðŸ“‹ **Logging Center Status**\n\n${desc}`, flags: 64 });
         } else if (subcommand === 'search') {
           const query = interaction.options.getString('query');
-          return interaction.reply({ content: `🔍 **Logs Search Results** for "${query}":\nNo matching log entries found in the local telemetry cache.`, flags: 64 });
+          return interaction.reply({ content: `ðŸ”� **Logs Search Results** for "${query}":\nNo matching log entries found in the local telemetry cache.`, flags: 64 });
         } else if (subcommand === 'user') {
           const targetUser = interaction.options.getUser('user');
-          return interaction.reply({ content: `👤 **Log History Filtered by User** for ${targetUser}:\nNo recent logged events found for this member.`, flags: 64 });
+          return interaction.reply({ content: `ðŸ‘¤ **Log History Filtered by User** for ${targetUser}:\nNo recent logged events found for this member.`, flags: 64 });
         } else if (subcommand === 'timeline') {
-          return interaction.reply({ content: '📈 **Logs Timeline Stream**:\nCurrently running normal activity. View live timeline on the dashboard under **Logs Timeline**.', flags: 64 });
+          return interaction.reply({ content: 'ðŸ“ˆ **Logs Timeline Stream**:\nCurrently running normal activity. View live timeline on the dashboard under **Logs Timeline**.', flags: 64 });
         } else if (subcommand === 'voice') {
-          return interaction.reply({ content: '🔊 **Voice Category Telemetry Health**:\nAll voice channels are stable. Mute/deafen and drag rates are nominal.', flags: 64 });
+          return interaction.reply({ content: 'ðŸ”Š **Voice Category Telemetry Health**:\nAll voice channels are stable. Mute/deafen and drag rates are nominal.', flags: 64 });
         } else if (subcommand === 'export') {
-          return interaction.reply({ content: '📥 **Logs Export Completed**:\nNo audit log data is cached in memory. Clear database or configure export pipelines via the web dashboard.', flags: 64 });
+          return interaction.reply({ content: 'ðŸ“¥ **Logs Export Completed**:\nNo audit log data is cached in memory. Clear database or configure export pipelines via the web dashboard.', flags: 64 });
         } else if (subcommand === 'categories') {
-          return interaction.reply({ content: `🗂️ **Logging Categories Toggle Guide**:\nValid categories are: ${validCategories.join(', ')}. Use \`r!logs enable/disable <category>\` to toggle.`, flags: 64 });
+          return interaction.reply({ content: `ðŸ—‚ï¸� **Logging Categories Toggle Guide**:\nValid categories are: ${validCategories.join(', ')}. Use \`r!logs enable/disable <category>\` to toggle.`, flags: 64 });
         } else if (subcommand === 'stats') {
-          return interaction.reply({ content: '📊 **Logging Center Statistics**:\n• Logs per minute: 0\n• Failed routing logs: 0\n• Total processed telemetry events: 0', flags: 64 });
+          return interaction.reply({ content: 'ðŸ“Š **Logging Center Statistics**:\nâ€¢ Logs per minute: 0\nâ€¢ Failed routing logs: 0\nâ€¢ Total processed telemetry events: 0', flags: 64 });
         } else if (subcommand === 'retention') {
           const days = interaction.options.getInteger('days');
-          return interaction.reply({ content: `⏰ **Log Retention Lifecycle Updated**:\nLog retention window successfully set to **${days} days**.`, flags: 64 });
+          return interaction.reply({ content: `â�° **Log Retention Lifecycle Updated**:\nLog retention window successfully set to **${days} days**.`, flags: 64 });
         } else if (subcommand === 'live') {
-          context.logSyncEvent('📡 Logging Center: Live logs telemetry test initiated.', 'success');
-          return interaction.reply({ content: '📡 **Mock Live Activity Logs Simulation** started. Check the Logs Timeline on your Web Dashboard to see mock events.', flags: 64 });
+          context.logSyncEvent('ðŸ“¡ Logging Center: Live logs telemetry test initiated.', 'success');
+          return interaction.reply({ content: 'ðŸ“¡ **Mock Live Activity Logs Simulation** started. Check the Logs Timeline on your Web Dashboard to see mock events.', flags: 64 });
         } else {
           const category = interaction.options.getString('category')?.toLowerCase();
           
           let actualCategory = validCategories.find(c => c.toLowerCase() === category);
           if (!actualCategory) {
-             return interaction.reply({ content: `❌ Invalid category. Valid options: ${validCategories.join(', ')}`, flags: 64 });
+             return interaction.reply({ content: `â�Œ Invalid category. Valid options: ${validCategories.join(', ')}`, flags: 64 });
           }
 
           if (subcommand === 'channel') {
             const ch = interaction.options.getChannel('channel');
-            if (!ch) return interaction.reply({ content: '❌ Please specify a channel.', flags: 64 });
+            if (!ch) return interaction.reply({ content: 'â�Œ Please specify a channel.', flags: 64 });
             
             const newConfig = { ...config };
             if (!newConfig[actualCategory]) newConfig[actualCategory] = { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
             newConfig[actualCategory].channelId = ch.id;
             
             context.logSyncEvent(`Logging Center: ${actualCategory} log channel updated to #${ch.name} via slash command.`, 'success');
-            await interaction.reply({ content: `✅ **${actualCategory}** log channel set to ${ch}. Save this in the Dashboard to persist permanently across restarts.`, flags: 64 });
+            await interaction.reply({ content: `âœ… **${actualCategory}** log channel set to ${ch}. Save this in the Dashboard to persist permanently across restarts.`, flags: 64 });
           } else if (subcommand === 'enable' || subcommand === 'disable') {
             const enabled = subcommand === 'enable';
             context.logSyncEvent(`Logging Center: ${actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
-            await interaction.reply({ content: `✅ **${actualCategory}** logs have been **${enabled ? 'ENABLED' : 'DISABLED'}**. Update Dashboard to persist.`, flags: 64 });
+            await interaction.reply({ content: `âœ… **${actualCategory}** logs have been **${enabled ? 'ENABLED' : 'DISABLED'}**. Update Dashboard to persist.`, flags: 64 });
           } else if (subcommand === 'reset') {
-            await interaction.reply({ content: `✅ **${actualCategory}** configuration reset to defaults. Update Dashboard to persist.`, flags: 64 });
+            await interaction.reply({ content: `âœ… **${actualCategory}** configuration reset to defaults. Update Dashboard to persist.`, flags: 64 });
           } else if (subcommand === 'test') {
             const catConfig = config[actualCategory];
             if (!catConfig || !catConfig.channelId) {
-              return interaction.reply({ content: `❌ **${actualCategory}** does not have a configured channel.`, flags: 64 });
+              return interaction.reply({ content: `â�Œ **${actualCategory}** does not have a configured channel.`, flags: 64 });
             }
             try {
               const channel = await interaction.guild?.channels.fetch(catConfig.channelId).catch(() => null);
               if (channel && channel.isTextBased()) {
                 const embed = new EmbedBuilder()
-                  .setTitle(`🧪 Test Log: ${actualCategory.toUpperCase()}`)
+                  .setTitle(`ðŸ§ª Test Log: ${actualCategory.toUpperCase()}`)
                   .setDescription(`This is a test event for the **${actualCategory}** log category triggered by ${interaction.user}.`)
                   .setColor('#3498db')
                   .setTimestamp();
                 await channel.send({ embeds: [embed] });
-                await interaction.reply({ content: `✅ Test log dispatched to ${channel}.`, flags: 64 });
+                await interaction.reply({ content: `âœ… Test log dispatched to ${channel}.`, flags: 64 });
               } else {
-                await interaction.reply({ content: `❌ Could not find or access channel ID ${catConfig.channelId}.`, flags: 64 });
+                await interaction.reply({ content: `â�Œ Could not find or access channel ID ${catConfig.channelId}.`, flags: 64 });
               }
             } catch(e) {
-              await interaction.reply({ content: `❌ Error sending test log. Check permissions.`, flags: 64 });
+              await interaction.reply({ content: `â�Œ Error sending test log. Check permissions.`, flags: 64 });
             }
           }
         }
@@ -255,7 +255,7 @@ export const LoggingManifest: ModuleManifest = {
           if (channel && channel.isTextBased()) {
             const authorText = message.author ? `${message.author} (\`${message.author.id}\`)` : 'Unknown User (Uncached Message)';
             const embed = new EmbedBuilder()
-              .setTitle('🗑️ Message Deleted')
+              .setTitle('ðŸ—‘ï¸� Message Deleted')
               .setDescription(`**Author**: ${authorText}\n**Channel**: ${message.channel}\n\n**Content**:\n${message.content || '*No text content cached*'}`)
               .setColor('#ff4444')
               .setTimestamp();
@@ -291,7 +291,7 @@ export const LoggingManifest: ModuleManifest = {
           if (channel && channel.isTextBased()) {
             const authorText = newMessage.author ? `${newMessage.author} (\`${newMessage.author.id}\`)` : 'Unknown User';
             const embed = new EmbedBuilder()
-              .setTitle('✏️ Message Edited')
+              .setTitle('âœ�ï¸� Message Edited')
               .setDescription(`**Author**: ${authorText}\n**Channel**: ${newMessage.channel}\n\n**Before**:\n${oldMessage.content || '*None*'}\n\n**After**:\n${newMessage.content || '*None*'}`)
               .setColor('#ffaa00')
               .setTimestamp();
@@ -331,13 +331,18 @@ export const LoggingManifest: ModuleManifest = {
           // 1. Mute / Deafen Checks
           if (oldState.serverMute !== newState.serverMute || oldState.serverDeaf !== newState.serverDeaf) {
             if (logMuteDeafen) {
-              let moderatorText = 'Unknown Moderator';
+              let moderatorText = 'Self / System';
               try {
+                await new Promise(r => setTimeout(r, 300));
                 const fetchedLogs = await newState.guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.MemberUpdate }).catch(() => null);
                 if (fetchedLogs) {
-                  const entry = fetchedLogs.entries.find((e: any) => e.targetId === member.id && (Date.now() - e.createdTimestamp) < 5000);
+                  const entry = fetchedLogs.entries.find((e: any) => e.targetId === member.id && (Date.now() - e.createdTimestamp) < 15000);
                   if (entry && entry.executor) {
-                    moderatorText = `${entry.executor} (\`${entry.executor.id}\`)`;
+                    if (entry.executor.id === member.id) {
+                      moderatorText = `${entry.executor} (\`${entry.executor.id}\`) [Self]`;
+                    } else {
+                      moderatorText = `${entry.executor} (\`${entry.executor.id}\`)`;
+                    }
                   }
                 }
               } catch (e) {}
@@ -346,19 +351,19 @@ export const LoggingManifest: ModuleManifest = {
               let emoji = '';
               if (oldState.serverMute !== newState.serverMute) {
                 actionText = newState.serverMute ? 'Server Muted' : 'Server Unmuted';
-                emoji = newState.serverMute ? '🔇' : '🔊';
+                emoji = newState.serverMute ? 'ðŸ”‡' : 'ðŸ”Š';
               } else {
                 actionText = newState.serverDeaf ? 'Server Deafened' : 'Server Undeafened';
-                emoji = newState.serverDeaf ? '🔇' : '🔊';
+                emoji = newState.serverDeaf ? 'ðŸ”‡' : 'ðŸ”Š';
               }
 
               const embed = new EmbedBuilder()
-                .setTitle(`🎙️ ${emoji} ${actionText}`)
+                .setTitle(`ðŸŽ™ï¸� ${emoji} ${actionText}`)
                 .setDescription(`**User**: ${member.user} (\`${member.user.id}\`)\n**Action**: ${actionText}\n**Enforced By**: ${moderatorText}`)
                 .setColor('#f1c40f')
                 .setTimestamp();
               await channel.send({ embeds: [embed] });
-              context.logSyncEvent(`🎙️ Voice Log: User "${member.user.username}" was ${actionText} by ${moderatorText.split(' (')[0]}.`, 'warn');
+              context.logSyncEvent(`[DashboardOnly] ðŸŽ™ï¸� Voice Log: User "${member.user.username}" was ${actionText} by ${moderatorText.split(' (')[0]}.`, 'warn');
             }
             return;
           }
@@ -367,22 +372,22 @@ export const LoggingManifest: ModuleManifest = {
           if (!oldState.channelId && newState.channelId) {
             if (logJoinLeaveSwitch) {
               const embed = new EmbedBuilder()
-                .setTitle('🎙️ 🟢 Joined Voice Channel')
+                .setTitle('ðŸŽ™ï¸� ðŸŸ¢ Joined Voice Channel')
                 .setDescription(`**User**: ${member.user} (\`${member.user.id}\`)\n**Channel**: **#${newState.channel?.name || 'unknown'}**`)
                 .setColor('#2ecc71')
                 .setTimestamp();
               await channel.send({ embeds: [embed] });
-              context.logSyncEvent(`🎙️ Voice Log: User "${member.user.username}" joined #${newState.channel?.name || 'unknown'}.`, 'info');
+              context.logSyncEvent(`[DashboardOnly] ðŸŽ™ï¸� Voice Log: User "${member.user.username}" joined #${newState.channel?.name || 'unknown'}.`, 'info');
             }
           } else if (oldState.channelId && !newState.channelId) {
             if (logJoinLeaveSwitch) {
               const embed = new EmbedBuilder()
-                .setTitle('🎙️ 🔴 Left Voice Channel')
+                .setTitle('ðŸŽ™ï¸� ðŸ”´ Left Voice Channel')
                 .setDescription(`**User**: ${member.user} (\`${member.user.id}\`)\n**Channel**: **#${oldState.channel?.name || 'unknown'}**`)
                 .setColor('#e74c3c')
                 .setTimestamp();
               await channel.send({ embeds: [embed] });
-              context.logSyncEvent(`🎙️ Voice Log: User "${member.user.username}" left #${oldState.channel?.name || 'unknown'}.`, 'info');
+              context.logSyncEvent(`[DashboardOnly] ðŸŽ™ï¸� Voice Log: User "${member.user.username}" left #${oldState.channel?.name || 'unknown'}.`, 'info');
             }
           } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
             // Check if it was a drag (moved by moderator)
@@ -411,25 +416,25 @@ export const LoggingManifest: ModuleManifest = {
               if (logMoves) {
                 const moderatorText = executorObj 
                   ? `${executorObj} (\`${executorObj.id}\`)`
-                  : 'Unknown Moderator';
+                  : 'Self / System';
 
                 const embed = new EmbedBuilder()
-                  .setTitle('🎙️ ➡️ Member Dragged / Moved')
+                  .setTitle('ðŸŽ™ï¸� âž¡ï¸� Member Dragged / Moved')
                   .setDescription(`**User**: ${member.user} (\`${member.id}\`)\n**From**: \`#${oldState.channel?.name || 'unknown'}\`\n**To**: \`#${newState.channel?.name || 'unknown'}\`\n**Moved By**: ${moderatorText}`)
                   .setColor('#7c5cfc')
                   .setTimestamp();
                 await channel.send({ embeds: [embed] });
-                context.logSyncEvent(`🎙️ Voice Log: Member "${member.user.username}" was moved from #${oldState.channel?.name || 'unknown'} to #${newState.channel?.name || 'unknown'} by ${executorObj?.username || 'Moderator'}.`, 'info');
+                context.logSyncEvent(`[DashboardOnly] ðŸŽ™ï¸� Voice Log: Member "${member.user.username}" was moved from #${oldState.channel?.name || 'unknown'} to #${newState.channel?.name || 'unknown'} by ${executorObj?.username || 'Moderator'}.`, 'info');
               }
             } else {
               if (logJoinLeaveSwitch) {
                 const embed = new EmbedBuilder()
-                  .setTitle('🎙️ 🔵 Switched Voice Channel')
+                  .setTitle('ðŸŽ™ï¸� ðŸ”µ Switched Voice Channel')
                   .setDescription(`**User**: ${member.user} (\`${member.id}\`)\n**From**: \`#${oldState.channel?.name || 'unknown'}\`\n**To**: \`#${newState.channel?.name || 'unknown'}\``)
                   .setColor('#3498db')
                   .setTimestamp();
                 await channel.send({ embeds: [embed] });
-                context.logSyncEvent(`🎙️ Voice Log: User "${member.user.username}" switched from #${oldState.channel?.name || 'unknown'} to #${newState.channel?.name || 'unknown'}.`, 'info');
+                context.logSyncEvent(`[DashboardOnly] ðŸŽ™ï¸� Voice Log: User "${member.user.username}" switched from #${oldState.channel?.name || 'unknown'} to #${newState.channel?.name || 'unknown'}.`, 'info');
               }
             }
           }
@@ -475,7 +480,7 @@ export const LoggingManifest: ModuleManifest = {
             .setColor('#9b59b6')
             .setTimestamp();
           await channel.send({ embeds: [embed] });
-          context.logSyncEvent(`🎙️ Soundboard Log: User "${username}" played soundboard sound "${soundName}" in #${effect.channel?.name || 'unknown'}.`, 'info');
+          context.logSyncEvent(`[DashboardOnly] 🎙️ Soundboard Log: User "${username}" played soundboard sound "${soundName}" in #${effect.channel?.name || 'unknown'}.`, 'info');
         } catch (err) {}
       }
     },
@@ -491,7 +496,7 @@ export const LoggingManifest: ModuleManifest = {
           const channel = member.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('👋 Member Joined')
+              .setTitle('ðŸ‘‹ Member Joined')
               .setDescription(`${member.user} (\`${member.user.id}\`) joined the server.`)
               .setColor('#2ecc71')
               .setTimestamp();
@@ -512,7 +517,7 @@ export const LoggingManifest: ModuleManifest = {
           const channel = member.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🚪 Member Left')
+              .setTitle('ðŸšª Member Left')
               .setDescription(`${member.user} (\`${member.user.id}\`) left the server.`)
               .setColor('#e74c3c')
               .setTimestamp();
@@ -533,7 +538,7 @@ export const LoggingManifest: ModuleManifest = {
           const channel = ban.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🔨 Member Banned')
+              .setTitle('ðŸ”¨ Member Banned')
               .setDescription(`${ban.user} (\`${ban.user.id}\`) was banned.`)
               .setColor('#ff4444')
               .setTimestamp();
@@ -554,7 +559,7 @@ export const LoggingManifest: ModuleManifest = {
           const channel = ban.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🔓 Member Unbanned')
+              .setTitle('ðŸ”“ Member Unbanned')
               .setDescription(`${ban.user} (\`${ban.user.id}\`) was unbanned.`)
               .setColor('#3498db')
               .setTimestamp();
@@ -575,7 +580,7 @@ export const LoggingManifest: ModuleManifest = {
           const channel = role.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🛡️ Role Created')
+              .setTitle('ðŸ›¡ï¸� Role Created')
               .setDescription(`Role <@&${role.id}> (\`${role.name}\`) was created.`)
               .setColor('#2ecc71')
               .setTimestamp();
@@ -596,7 +601,7 @@ export const LoggingManifest: ModuleManifest = {
           const channel = role.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🛡️ Role Deleted')
+              .setTitle('ðŸ›¡ï¸� Role Deleted')
               .setDescription(`Role \`${role.name}\` (\`${role.id}\`) was deleted.`)
               .setColor('#e74c3c')
               .setTimestamp();
@@ -617,7 +622,7 @@ export const LoggingManifest: ModuleManifest = {
           const channel = ch.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('📁 Channel Created')
+              .setTitle('ðŸ“� Channel Created')
               .setDescription(`Channel <#${ch.id}> (\`${ch.name}\`) was created.`)
               .setColor('#2ecc71')
               .setTimestamp();
@@ -638,7 +643,7 @@ export const LoggingManifest: ModuleManifest = {
           const channel = ch.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('📁 Channel Deleted')
+              .setTitle('ðŸ“� Channel Deleted')
               .setDescription(`Channel \`${ch.name}\` (\`${ch.id}\`) was deleted.`)
               .setColor('#e74c3c')
               .setTimestamp();
