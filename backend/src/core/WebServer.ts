@@ -13,6 +13,7 @@ import { OAuthService } from './OAuthService.js';
 import { AnalyticsService } from './AnalyticsService.js';
 import bcrypt from 'bcryptjs';
 import { EmbedBuilder } from 'discord.js';
+import crypto from 'crypto';
 
 /**
  * Unified guild ID resolution — reads from header, query, params, or env fallback.
@@ -54,7 +55,8 @@ export const authenticateToken = (req: any, res: any, next: any) => {
   
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-  jwt.verify(token, (process.env.JWT_SECRET || 'fallback_secret') as string, (err: any, user: any) => {
+  // BUG-003 FIX: No fallback_secret — index.ts startup guard ensures JWT_SECRET is always valid.
+  jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
     if (err) return res.status(403).json({ error: 'Forbidden' });
     req.user = user;
     next();
@@ -224,7 +226,8 @@ export class WebServer {
         return;
       }
 
-      jwt.verify(token, process.env.JWT_SECRET as string || 'fallback_secret', (err: any, user: any) => {
+      // BUG-003 FIX: No fallback_secret — index.ts startup guard ensures JWT_SECRET is always valid.
+      jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
         if (err) {
           ws.close(1008, 'Unauthorized');
           return;
@@ -672,7 +675,9 @@ function appRoutes(server: WebServer, app: Express, registry: ModuleRegistry, re
 
   // Step 1: Redirect to Discord authorization page
   app.get('/api/auth/discord', (req, res) => {
-    const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    // BUG-011 FIX: Use crypto.randomBytes for CSRF state — Math.random() is
+    // not cryptographically secure and can be predicted by a timing attacker.
+    const state = crypto.randomBytes(24).toString('hex');
     oauthStates.set(state, Date.now());
     const url = OAuthService.getAuthorizationUrl(state);
     res.json({ url, state });

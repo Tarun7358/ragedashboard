@@ -158,7 +158,13 @@ export const LevelingManifest: ModuleManifest = {
 
         if (newLevel > oldLevel) {
           const channel = message.channel;
-          await channel.send(`🎉 **Level Up!** ${message.author} has reached Level **${newLevel}**!`).catch(() => {});
+          const levelEmbed = new EmbedBuilder()
+            .setTitle('⭐ Level Up!')
+            .setDescription(`> ${message.author} has advanced to Level **${newLevel}**!\n\n**Member**: ${message.author} (\`${message.author.username}\`)\n**New Level**: \`${newLevel}\`\n**Total XP**: \`${newXp}\``)
+            .setColor('#10b981')
+            .setThumbnail(message.author.displayAvatarURL({ size: 256 }) || null)
+            .setTimestamp();
+          await channel.send({ embeds: [levelEmbed] }).catch(() => {});
           context.logSyncEvent(`Leveling: ${userTag(message.author)} leveled up to Lvl ${newLevel}.`, 'info');
 
           // Role Reward assignment
@@ -189,10 +195,14 @@ export const LevelingManifest: ModuleManifest = {
         const level = Math.floor(0.1 * Math.sqrt(xp));
         const nextLevelXp = Math.pow((level + 1) / 0.1, 2);
         
-        await interaction.reply({
-          content: `📊 **Rank for ${target.username}**\n- **Level**: \`${level}\`\n- **XP**: \`${xp} / ${nextLevelXp}\``,
-          ephemeral: false
-        });
+        const rankEmbed = new EmbedBuilder()
+          .setTitle(`📊 Rank & Progress — ${target.username}`)
+          .setThumbnail(target.displayAvatarURL({ size: 256 }) || null)
+          .setDescription(`> **Member**: ${target} (\`${target.username}\`)\n\n**Current Level**: \`${level}\`\n**Current XP**: \`${xp} / ${nextLevelXp}\``)
+          .setColor('#3b82f6')
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [rankEmbed] });
       }
     },
     {
@@ -204,17 +214,29 @@ export const LevelingManifest: ModuleManifest = {
         const sorted = await getTopXP(guildId, 10);
         
         if (sorted.length === 0) {
-          return interaction.reply({ content: 'No XP data yet.', flags: 64 });
+          const emptyEmbed = new EmbedBuilder()
+            .setTitle('🏆 Server Level Leaderboard')
+            .setDescription('> No XP data recorded for this server yet.')
+            .setColor('#f59e0b');
+          return interaction.reply({ embeds: [emptyEmbed], flags: 64 });
         }
 
-        const lines = ['🏆 **Server Leaderboard**'];
+        const lines = [];
         for (let i = 0; i < sorted.length; i++) {
           const item = sorted[i];
           const level = Math.floor(0.1 * Math.sqrt(item.xp));
-          lines.push(`**#${i+1}** <@${item.userId}> — Level **${level}** (${item.xp} XP)`);
+          lines.push(`**#${i+1}** <@${item.userId}> — Level **${level}** (\`${item.xp} XP\`)`);
         }
 
-        await interaction.reply({ content: lines.join('\n'), ephemeral: false });
+        const lbEmbed = new EmbedBuilder()
+          .setTitle('🏆 Server Level Leaderboard')
+          .setThumbnail(interaction.guild?.iconURL({ size: 256 }) || null)
+          .setDescription(`> Top active members in **${interaction.guild?.name || 'Server'}**:\n\n${lines.join('\n')}`)
+          .setColor('#f59e0b')
+          .setFooter({ text: `${interaction.guild?.name} • XP Leaderboard` })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [lbEmbed] });
       }
     },
     {
@@ -225,7 +247,14 @@ export const LevelingManifest: ModuleManifest = {
         if (!guildId) return;
 
         const eco = await getUserEco(guildId, target.id);
-        await interaction.reply(`💰 **${target.username}** has **${eco.balance}** coins.`);
+        const balEmbed = new EmbedBuilder()
+          .setTitle(`💰 Balance — ${target.username}`)
+          .setThumbnail(target.displayAvatarURL({ size: 256 }) || null)
+          .setDescription(`> **User**: ${target} (\`${target.username}\`)\n\n**Wallet Balance**: \`${eco.balance.toLocaleString()}\` coins`)
+          .setColor('#f59e0b')
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [balEmbed] });
       }
     },
     {
@@ -242,14 +271,24 @@ export const LevelingManifest: ModuleManifest = {
         
         if (diff < cooldown) {
           const remaining = Math.ceil((cooldown - diff) / 3600000);
-          return interaction.reply({ content: `⏳ You already claimed your daily! Come back in **${remaining} hours**.`, flags: 64 });
+          const cdEmbed = new EmbedBuilder()
+            .setTitle('⏳ Daily Cooldown Active')
+            .setDescription(`> You have already claimed your daily reward today.\n\n**Cooldown Remaining**: \`${remaining} hours\``)
+            .setColor('#f59e0b');
+          return interaction.reply({ embeds: [cdEmbed], flags: 64 });
         }
         
         eco.balance += 500;
         eco.lastDaily = now;
         await saveUserEco(guildId, interaction.user.id, eco);
         
-        await interaction.reply(`🎉 You claimed your daily reward of **500 coins**! Your new balance is **${eco.balance}** coins.`);
+        const dailyEmbed = new EmbedBuilder()
+          .setTitle('🎁 Daily Reward Claimed')
+          .setDescription(`> You claimed your daily reward of **500 coins**!\n\n**New Balance**: \`${eco.balance.toLocaleString()}\` coins`)
+          .setColor('#10b981')
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [dailyEmbed] });
       }
     },
     {
@@ -265,7 +304,11 @@ export const LevelingManifest: ModuleManifest = {
         
         if (now - last < cooldown) {
           const remaining = Math.ceil((cooldown - (now - last)) / 60000);
-          return interaction.reply({ content: `⏳ You are too tired to work! Come back in **${remaining} minutes**.`, flags: 64 });
+          const cdEmbed = new EmbedBuilder()
+            .setTitle('⏳ Work Shift Cooldown')
+            .setDescription(`> You are currently resting after your work shift.\n\n**Cooldown Remaining**: \`${remaining} minutes\``)
+            .setColor('#f59e0b');
+          return interaction.reply({ embeds: [cdEmbed], flags: 64 });
         }
         
         const earnings = Math.floor(Math.random() * 200) + 100; // 100 to 300
@@ -273,7 +316,13 @@ export const LevelingManifest: ModuleManifest = {
         eco.lastWork = now;
         await saveUserEco(guildId, interaction.user.id, eco);
         
-        await interaction.reply(`💼 You worked hard and earned **${earnings} coins**! New balance: **${eco.balance}**`);
+        const workEmbed = new EmbedBuilder()
+          .setTitle('💼 Work Shift Completed')
+          .setDescription(`> You worked hard and earned **${earnings} coins**!\n\n**New Balance**: \`${eco.balance.toLocaleString()}\` coins`)
+          .setColor('#10b981')
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [workEmbed] });
       }
     },
     {
@@ -301,7 +350,13 @@ export const LevelingManifest: ModuleManifest = {
         await saveUserEco(guildId, interaction.user.id, senderEco);
         await saveUserEco(guildId, target.id, targetEco);
         
-        await interaction.reply(`💸 You paid **${amount} coins** to ${target.username}.`);
+        const payEmbed = new EmbedBuilder()
+          .setTitle('💸 Coin Transfer Successful')
+          .setDescription(`> Successfully transferred **${amount} coins** to ${target}.\n\n**Recipient**: ${target} (\`${target.username}\`)\n**Amount Transferred**: \`${amount}\` coins`)
+          .setColor('#10b981')
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [payEmbed] });
       }
     },
     {
@@ -329,10 +384,21 @@ export const LevelingManifest: ModuleManifest = {
         const inv = eco.inventory || [];
         
         if (inv.length === 0) {
-          return interaction.reply(`🎒 ${interaction.user.username}'s inventory is empty.`);
+          const emptyEmbed = new EmbedBuilder()
+            .setTitle(`🎒 Inventory — ${interaction.user.username}`)
+            .setDescription('> Your inventory is currently empty.')
+            .setColor('#8b5cf6');
+          return interaction.reply({ embeds: [emptyEmbed] });
         }
         
-        await interaction.reply(`🎒 **${interaction.user.username}'s Inventory**:\n- ${inv.join('\n- ')}`);
+        const invEmbed = new EmbedBuilder()
+          .setTitle(`🎒 Inventory — ${interaction.user.username}`)
+          .setThumbnail(interaction.user.displayAvatarURL({ size: 256 }) || null)
+          .setDescription(`> **Member**: ${interaction.user}\n\n**Owned Items**:\n- ${inv.join('\n- ')}`)
+          .setColor('#8b5cf6')
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [invEmbed] });
       }
     },
     {
@@ -358,12 +424,24 @@ export const LevelingManifest: ModuleManifest = {
           targetEco.balance -= stolen;
           await saveUserEco(guildId, interaction.user.id, myEco);
           await saveUserEco(guildId, target.id, targetEco);
-          await interaction.reply(`🥷 **Success!** You successfully robbed ${target.username} and got away with **${stolen} coins**!`);
+
+          const robEmbed = new EmbedBuilder()
+            .setTitle('🥷 Robbery Successful')
+            .setDescription(`> You successfully robbed ${target} and got away with **${stolen} coins**!\n\n**New Balance**: \`${myEco.balance.toLocaleString()}\` coins`)
+            .setColor('#10b981')
+            .setTimestamp();
+          await interaction.reply({ embeds: [robEmbed] });
         } else {
           const fine = 500;
           myEco.balance -= fine;
           await saveUserEco(guildId, interaction.user.id, myEco);
-          await interaction.reply(`🚓 **Busted!** You were caught trying to rob ${target.username} and paid a fine of **${fine} coins**.`);
+
+          const failEmbed = new EmbedBuilder()
+            .setTitle('🚓 Robbery Failed')
+            .setDescription(`> You were caught attempting to rob ${target} and paid a fine of **${fine} coins**.\n\n**New Balance**: \`${myEco.balance.toLocaleString()}\` coins`)
+            .setColor('#ef4444')
+            .setTimestamp();
+          await interaction.reply({ embeds: [failEmbed] });
         }
       }
     },

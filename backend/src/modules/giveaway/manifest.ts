@@ -121,6 +121,44 @@ export const GiveawayManifest: ModuleManifest = {
           description: 'View info about a specific giveaway',
           type: 1,
           options: [{ name: 'id', type: 3, description: 'Giveaway ID', required: true }]
+        },
+        {
+          name: 'pause',
+          description: 'Pause an active giveaway',
+          type: 1,
+          options: [{ name: 'id', type: 3, description: 'Giveaway ID', required: true }]
+        },
+        {
+          name: 'resume',
+          description: 'Resume a paused giveaway',
+          type: 1,
+          options: [{ name: 'id', type: 3, description: 'Giveaway ID', required: true }]
+        },
+        {
+          name: 'edit',
+          description: 'Edit prize or duration of giveaway',
+          type: 1,
+          options: [
+            { name: 'id', type: 3, description: 'Giveaway ID', required: true },
+            { name: 'prize', type: 3, description: 'New prize name', required: false },
+            { name: 'duration', type: 3, description: 'New duration (e.g. 2h)', required: false }
+          ]
+        },
+        {
+          name: 'cancel',
+          description: 'Cancel a giveaway',
+          type: 1,
+          options: [{ name: 'id', type: 3, description: 'Giveaway ID', required: true }]
+        },
+        {
+          name: 'history',
+          description: 'Show recent giveaway host history',
+          type: 1
+        },
+        {
+          name: 'stats',
+          description: 'Giveaway system throughput rates stats',
+          type: 1
         }
       ]
     }
@@ -283,6 +321,89 @@ export const GiveawayManifest: ModuleManifest = {
           }
 
           await interaction.reply({ embeds: [embed], flags: 64 });
+        }
+        else if (sub === 'pause') {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
+          }
+          const id = interaction.options.getString('id');
+          const gw = giveaways.find(g => g.id === id) as any;
+          if (!gw) return interaction.reply({ content: `❌ Giveaway \`${id}\` not found.`, flags: 64 });
+          if (gw.ended) return interaction.reply({ content: '❌ This giveaway has already ended.', flags: 64 });
+
+          const existing = activeGiveaways.get(id);
+          if (existing) { clearTimeout(existing); activeGiveaways.delete(id); }
+          gw.paused = true;
+          saveGiveaways(giveaways);
+          context.logSyncEvent(`[Giveaway] Paused giveaway "${id}".`, 'warn');
+          return interaction.reply({ content: `⏸️ Giveaway \`${id}\` has been paused.`, flags: 64 });
+        }
+        else if (sub === 'resume') {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
+          }
+          const id = interaction.options.getString('id');
+          const gw = giveaways.find(g => g.id === id) as any;
+          if (!gw) return interaction.reply({ content: `❌ Giveaway \`${id}\` not found.`, flags: 64 });
+          if (!gw.paused) return interaction.reply({ content: '❌ This giveaway is not paused.', flags: 64 });
+
+          gw.paused = false;
+          const ms = new Date(gw.endsAt).getTime() - Date.now();
+          if (ms <= 0) {
+            await endGiveaway(client, gw, context, 'Ended upon resume');
+          } else {
+            const timeout = setTimeout(() => endGiveaway(client, gw, context), ms);
+            activeGiveaways.set(gw.id, timeout);
+          }
+          saveGiveaways(giveaways);
+          context.logSyncEvent(`[Giveaway] Resumed giveaway "${id}".`, 'success');
+          return interaction.reply({ content: `▶️ Giveaway \`${id}\` has been resumed.`, flags: 64 });
+        }
+        else if (sub === 'edit') {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
+          }
+          const id = interaction.options.getString('id');
+          const prize = interaction.options.getString('prize');
+          const durationStr = interaction.options.getString('duration');
+          const gw = giveaways.find(g => g.id === id) as any;
+          if (!gw) return interaction.reply({ content: `❌ Giveaway \`${id}\` not found.`, flags: 64 });
+
+          if (prize) gw.prize = prize;
+          if (durationStr) {
+            const ms = parseMs(durationStr);
+            gw.endsAt = new Date(Date.now() + ms);
+            const existing = activeGiveaways.get(id);
+            if (existing) { clearTimeout(existing); activeGiveaways.delete(id); }
+            const timeout = setTimeout(() => endGiveaway(client, gw, context), ms);
+            activeGiveaways.set(gw.id, timeout);
+          }
+          saveGiveaways(giveaways);
+          context.logSyncEvent(`[Giveaway] Edited giveaway "${id}".`, 'info');
+          return interaction.reply({ content: `📝 Giveaway \`${id}\` has been edited.`, flags: 64 });
+        }
+        else if (sub === 'cancel') {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
+          }
+          const id = interaction.options.getString('id');
+          if (!giveaways.find(g => g.id === id)) return interaction.reply({ content: `❌ Giveaway \`${id}\` not found.`, flags: 64 });
+          const existing = activeGiveaways.get(id);
+          if (existing) { clearTimeout(existing); activeGiveaways.delete(id); }
+          saveGiveaways(giveaways.filter(g => g.id !== id));
+          context.logSyncEvent(`[Giveaway] Canceled giveaway "${id}".`, 'warn');
+          return interaction.reply({ content: `❌ Giveaway \`${id}\` has been canceled.`, flags: 64 });
+        }
+        else if (sub === 'history') {
+          const past = giveaways.filter(g => g.ended);
+          if (past.length === 0) return interaction.reply({ content: '📋 No giveaway history cached.', flags: 64 });
+          const lines = past.slice(0, 10).map(g => `• **${g.prize}** — Won by ${g.winnerIds?.map(w => `<@${w}>`).join(', ') || 'no one'} — ID: \`${g.id}\``);
+          return interaction.reply({ content: `⏳ **Recent Giveaways History:**\n${lines.join('\n')}`, flags: 64 });
+        }
+        else if (sub === 'stats') {
+          const total = giveaways.length;
+          const active = giveaways.filter(g => !g.ended).length;
+          return interaction.reply({ content: `📊 **Giveaway System Statistics**:\n• Active Giveaways: **${active}**\n• Ended Giveaways: **${total - active}**\n• Total Hosted: **${total}**`, flags: 64 });
         }
       }
     },

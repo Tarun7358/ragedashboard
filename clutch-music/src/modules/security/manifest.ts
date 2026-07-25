@@ -104,8 +104,7 @@ export const SecurityManifest: ModuleManifest = {
           
           context.logSyncEvent(`Quarantined user "${member.user.tag}" via Slash Command.`, 'warn');
           await interaction.reply({
-            content: `🚨 **Member Quarantined**: Successfully isolated ${member.user} and applied protection rules.`,
-            ephemeral: false
+            content: `🚨 **Member Quarantined**: Successfully isolated ${member.user} and applied protection rules.`
           });
         } catch (err) {
           console.error(err);

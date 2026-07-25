@@ -177,6 +177,33 @@ export const JoinToCreateManifest: ModuleManifest = {
           name: 'reset',
           description: 'Reset your JTC channel to defaults',
           type: 1
+        },
+        {
+          name: 'hide',
+          description: 'Hide your voice channel',
+          type: 1
+        },
+        {
+          name: 'unhide',
+          description: 'Unhide your voice channel',
+          type: 1
+        },
+        {
+          name: 'permit',
+          description: 'Permit a user to join your locked channel',
+          type: 1,
+          options: [{ name: 'user', type: 6, description: 'Target user', required: true }]
+        },
+        {
+          name: 'reject',
+          description: 'Reject/block a user from joining your channel',
+          type: 1,
+          options: [{ name: 'user', type: 6, description: 'Target user', required: true }]
+        },
+        {
+          name: 'claim',
+          description: 'Claim ownership of the JTC channel if owner left',
+          type: 1
         }
       ]
     }
@@ -410,6 +437,60 @@ export const JoinToCreateManifest: ModuleManifest = {
           myChannel.locked = false;
           saveConfig({ activeChannels });
           return interaction.reply({ content: `✅ Reset your channel to **${defaultPrivacy}** defaults.`, flags: 64 });
+        }
+
+        if (sub === 'hide') {
+          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
+          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          await channel.permissionOverwrites.edit(interaction.guild?.roles.everyone.id!, { ViewChannel: false });
+          return interaction.reply({ content: '✅ Channel successfully hidden.', flags: 64 });
+        }
+
+        if (sub === 'unhide') {
+          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
+          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          await channel.permissionOverwrites.edit(interaction.guild?.roles.everyone.id!, { ViewChannel: true });
+          return interaction.reply({ content: '✅ Channel successfully unhidden.', flags: 64 });
+        }
+
+        if (sub === 'permit') {
+          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
+          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          const target = interaction.options.getUser('user');
+          await channel.permissionOverwrites.edit(target.id, { Connect: true, ViewChannel: true });
+          return interaction.reply({ content: `✅ Allowed ${target} to join your channel.`, flags: 64 });
+        }
+
+        if (sub === 'reject') {
+          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
+          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          const target = interaction.options.getUser('user');
+          await channel.permissionOverwrites.edit(target.id, { Connect: false });
+          const member = interaction.guild?.members.cache.get(target.id);
+          if (member && member.voice?.channelId === channel.id) {
+            await member.voice.disconnect().catch(() => {});
+          }
+          return interaction.reply({ content: `❌ Blocked ${target} from joining your channel.`, flags: 64 });
+        }
+
+        if (sub === 'claim') {
+          const currentVoiceChannel = (interaction.member as any)?.voice?.channel;
+          if (!currentVoiceChannel) return interaction.reply({ content: '❌ You must be in a JTC voice channel to claim it.', flags: 64 });
+          const activeCh = activeChannels.find((c: any) => c.channelId === currentVoiceChannel.id);
+          if (!activeCh) return interaction.reply({ content: '❌ This channel is not a managed JTC channel.', flags: 64 });
+          const originalOwnerInVc = currentVoiceChannel.members.has(activeCh.ownerId);
+          if (originalOwnerInVc && activeCh.ownerId !== interaction.user.id) {
+            return interaction.reply({ content: '❌ You cannot claim this channel because the owner is still in the voice channel.', flags: 64 });
+          }
+          activeCh.ownerId = interaction.user.id;
+          activeCh.ownerTag = interaction.user.tag;
+          saveConfig({ activeChannels });
+          await currentVoiceChannel.permissionOverwrites.edit(interaction.user.id, { ManageChannels: true, Connect: true, ViewChannel: true });
+          return interaction.reply({ content: '👑 **You have successfully claimed ownership of this channel!**' });
         }
       }
     },

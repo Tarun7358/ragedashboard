@@ -3,7 +3,9 @@ import { generateSecret, generateURI, verify } from 'otplib';
 
 export class SecurityService {
   private static getEncryptionKey(): Buffer {
-    const secret = process.env.JWT_SECRET || 'fallback_secret';
+    // BUG-003 FIX: Do not fall back to the publicly-known 'fallback_secret'.
+    // The startup guard in index.ts guarantees JWT_SECRET is set and ≥32 chars.
+    const secret = process.env.JWT_SECRET!;
     // Create a 32-byte key from the secret using SHA-256
     return crypto.createHash('sha256').update(String(secret)).digest();
   }

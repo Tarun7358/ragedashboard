@@ -1,5 +1,6 @@
 export interface ParsedCommand {
   commandName: string;
+  subcommand?: string;  // BUG-014 FIX: first positional arg treated as subcommand for lock key granularity
   args: string[];
   flags: Record<string, string | boolean>;
   rawInput: string;
@@ -50,8 +51,12 @@ export class PrefixParser {
       }
     }
 
+    // First positional arg is the subcommand (for multi-subcommand commands like r!audit export)
+    const subcommand = args.length > 0 && !args[0].startsWith('-') ? args[0].toLowerCase() : undefined;
+
     return {
       commandName,
+      subcommand,
       args,
       flags,
       rawInput

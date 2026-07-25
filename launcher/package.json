@@ -48,14 +48,7 @@
           "!node_modules/**"
         ]
       },
-      {
-        "from": "../gateway",
-        "to": "gateway",
-        "filter": [
-          "**/*",
-          "!node_modules/**"
-        ]
-      },
+
       {
         "from": "../clutch-music",
         "to": "clutch-music",

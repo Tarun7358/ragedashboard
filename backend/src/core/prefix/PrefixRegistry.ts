@@ -1,5 +1,14 @@
 import { ModuleManifest } from '../types.js';
 
+export interface PrefixCommandSubMeta {
+  name: string;
+  description: string;
+  usage?: string;
+  examples?: string[];
+  userPermissions?: string[];
+  botPermissions?: string[];
+}
+
 export interface PrefixCommandMeta {
   name: string;
   description: string;
@@ -13,6 +22,16 @@ export interface PrefixCommandMeta {
   examples: string[];
   relatedCommands?: string[];
   moduleOwnerId: string;
+  
+  // Pipeline-ready attributes
+  dangerLevel?: 'Low' | 'Medium' | 'High' | 'Critical';
+  supportsAutocomplete?: boolean;
+  supportsMentions?: boolean;
+  argumentTypes?: string[];
+  subcommands?: PrefixCommandSubMeta[];
+  experimental?: boolean;
+  hidden?: boolean;
+  confirmationRequired?: boolean;
 }
 
 export class PrefixRegistry {
@@ -66,11 +85,12 @@ export class PrefixRegistry {
       const category = this.resolveCategory(manifest.id, manifest.name);
 
       if (manifest.commands) {
-        for (const cmd of manifest.commands) {
+        for (const cmdOfManifest of manifest.commands) {
+          const cmd = cmdOfManifest as any;
           const name = cmd.name.toLowerCase();
           const description = cmd.description || `${cmd.name} command`;
           const usage = this.formatUsage(cmd);
-          const aliases: string[] = [];
+          const aliases: string[] = cmd.aliases || [];
 
           // Find inverted aliases
           for (const [alias, target] of this.aliasMap.entries()) {
@@ -83,16 +103,24 @@ export class PrefixRegistry {
             name,
             description,
             category,
-            usage: `r!${name} ${usage}`.trim(),
+            usage: cmd.usage || `r!${name} ${usage}`.trim(),
             aliases,
-            userPermissions: this.inferUserPermissions(name),
-            botPermissions: ['SendMessages', 'EmbedLinks'],
-            cooldownSeconds: 3,
-            examples: [
+            userPermissions: cmd.userPermissions || this.inferUserPermissions(name),
+            botPermissions: cmd.botPermissions || ['SendMessages', 'EmbedLinks'],
+            cooldownSeconds: cmd.cooldownSeconds || 3,
+            examples: cmd.examples || [
               `r!${name}`,
               aliases.length > 0 ? `r!${aliases[0]}` : `r!${name} --help`
             ],
-            moduleOwnerId: manifest.id
+            moduleOwnerId: manifest.id,
+            dangerLevel: cmd.dangerLevel || 'Low',
+            supportsAutocomplete: cmd.supportsAutocomplete ?? false,
+            supportsMentions: cmd.supportsMentions ?? false,
+            argumentTypes: cmd.argumentTypes || [],
+            subcommands: cmd.subcommands || (cmd.options ? cmd.options.filter((o: any) => o.type === 1).map((o: any) => ({ name: o.name, description: o.description })) : []),
+            experimental: cmd.experimental ?? false,
+            hidden: cmd.hidden ?? false,
+            confirmationRequired: cmd.confirmationRequired ?? false
           };
 
           this.commandsMap.set(name, meta);
@@ -129,35 +157,37 @@ export class PrefixRegistry {
 
   private static resolveCategory(moduleId: string, moduleName: string): string {
     const map: Record<string, string> = {
-      'security': 'AntiNuke',
-      'moderation': 'Moderation',
-      'tickets': 'Ticket',
-      'tickets-v2': 'Ticket',
-      'verification': 'Welcome',
-      'welcome-v2': 'Welcome',
+      'security': 'Security',
+      'moderation': 'Security',
+      'tickets': 'Tickets',
+      'tickets-v2': 'Tickets',
+      'verification': 'System',
+      'welcome-v2': 'System',
       'logging': 'Logging',
-      'backups': 'Backup',
-      'automation': 'Automations',
-      'voice': 'Voice Protection',
-      'voice-protection': 'Voice Protection',
+      'backups': 'Backups',
+      'automation': 'System',
+      'voice': 'Voice',
+      'voice-protection': 'Voice',
       'member_whitelist': 'Security',
-      'reaction-roles': 'Reaction Roles',
-      'leveling': 'Leveling',
-      'automod': 'AutoMod',
-      'music': 'Music',
-      'blacklist': 'AntiNuke',
-      'giveaway': 'Giveaway',
-      'reminders': 'Utility',
-      'announcements': 'Utility',
-      'joinToCreate': 'VoiceMaster',
-      'voice_manager': 'VoiceMaster',
-      'bulk_ops': 'Administration',
-      'diagnostics': 'Security',
+      'reaction-roles': 'General',
+      'leveling': 'Economy',
+      'automod': 'Security',
+      'music': 'Voice',
+      'blacklist': 'Security',
+      'giveaway': 'Giveaways',
+      'reminders': 'General',
+      'announcements': 'Announcements',
+      'joinToCreate': 'Join To Create',
+      'voice_manager': 'Voice',
+      'bulk_ops': 'System',
+      'diagnostics': 'Diagnostics',
       'join-role-guard': 'Security',
-      'social-updates': 'Utility'
+      'social-updates': 'General',
+      'analytics': 'Analytics',
+      'audit': 'Audit'
     };
 
-    return map[moduleId] || 'Utility';
+    return map[moduleId] || 'General';
   }
 
   private static formatUsage(cmd: any): string {
@@ -166,10 +196,10 @@ export class PrefixRegistry {
   }
 
   private static inferUserPermissions(commandName: string): string[] {
-    if (['ban', 'softban', 'hackban', 'tempban', 'unban'].includes(commandName)) return ['Ban Members'];
-    if (['kick', 'mute', 'unmute', 'timeout', 'untimeout', 'warn', 'clearwarn'].includes(commandName)) return ['Moderate Members'];
-    if (['purge', 'clear'].includes(commandName)) return ['Manage Messages'];
-    if (['lock', 'unlock', 'slowmode'].includes(commandName)) return ['Manage Channels'];
+    if (['ban', 'softban', 'hackban', 'tempban', 'unban'].includes(commandName)) return ['BanMembers'];
+    if (['kick', 'mute', 'unmute', 'timeout', 'untimeout', 'warn', 'clearwarn'].includes(commandName)) return ['ModerateMembers'];
+    if (['purge', 'clear'].includes(commandName)) return ['ManageMessages'];
+    if (['lock', 'unlock', 'slowmode'].includes(commandName)) return ['ManageChannels'];
     if (['setup', 'config', 'settings', 'prefix', 'permissions'].includes(commandName)) return ['Administrator'];
     return [];
   }
@@ -179,33 +209,36 @@ export class PrefixRegistry {
       {
         name: 'help',
         description: 'Display interactive help system and module overview',
-        category: 'Core',
+        category: 'System',
         usage: 'r!help [module/command]',
         aliases: ['h', 'commands'],
         cooldownSeconds: 2,
         examples: ['r!help', 'r!help moderation', 'r!help ban'],
-        moduleOwnerId: 'core'
+        moduleOwnerId: 'core',
+        dangerLevel: 'Low'
       },
       {
         name: 'prefix',
         description: 'View or change the server prefix',
-        category: 'Administration',
+        category: 'System',
         usage: 'r!prefix [set <prefix> | reset | list]',
         aliases: ['pfx'],
         userPermissions: ['Administrator'],
         cooldownSeconds: 3,
         examples: ['r!prefix', 'r!prefix set !', 'r!prefix reset'],
-        moduleOwnerId: 'core'
+        moduleOwnerId: 'core',
+        dangerLevel: 'Low'
       },
       {
         name: 'ping',
         description: 'Check bot latency and gateway performance',
-        category: 'Core',
+        category: 'System',
         usage: 'r!ping',
         aliases: ['latency'],
         cooldownSeconds: 3,
         examples: ['r!ping'],
-        moduleOwnerId: 'core'
+        moduleOwnerId: 'core',
+        dangerLevel: 'Low'
       }
     ];
 

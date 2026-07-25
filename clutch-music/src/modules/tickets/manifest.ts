@@ -166,7 +166,7 @@ export const TicketsManifest: ModuleManifest = {
         if (!channel) return;
 
         try {
-          await interaction.reply({ content: '🔒 **Closing ticket...** Channel will be removed in 5 seconds.', ephemeral: false });
+          await interaction.reply({ content: '🔒 **Closing ticket...** Channel will be removed in 5 seconds.' });
           
           context.logSyncEvent(`Ticket Support: User "${interaction.user.tag}" closed ticket channel #${channel.name}.`, 'info');
           

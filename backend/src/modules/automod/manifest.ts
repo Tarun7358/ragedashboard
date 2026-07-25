@@ -95,8 +95,14 @@ export const AutomodManifest: ModuleManifest = {
         if (deleted) {
           try {
             await message.delete();
-            await message.channel.send(`${message.author}, your message was removed. Reason: **${reason}**`)
-              .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 5000));
+            const warningEmbed = new EmbedBuilder()
+              .setTitle('🛡️ AutoMod Enforcement')
+              .setDescription(`**User**: ${message.author} (\`${message.author.id}\`)\n**Reason**: ${reason}\n**Action**: Message removed.`)
+              .setColor('#ff9900')
+              .setTimestamp();
+
+            await message.channel.send({ embeds: [warningEmbed] })
+              .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 6000));
             
              context.logSyncEvent(`AutoMod: Removed message from ${userTag(message.author)} in #${message.channel.name} (${reason})`, 'warn');
             
@@ -106,13 +112,8 @@ export const AutomodManifest: ModuleManifest = {
               if (logChannel && logChannel.isTextBased()) {
                 const embed = new EmbedBuilder()
                   .setTitle('🛡️ AutoMod Intervention')
+                  .setDescription(`**User**: ${userTag(message.author)} (\`${message.author.id}\`)\n**Channel**: ${message.channel}\n**Reason**: \`${reason}\`\n\n**Content**:\n${message.content.length > 900 ? message.content.substring(0, 900) + '...' : message.content}`)
                   .setColor('#ff9900')
-                  .addFields(
-                    { name: 'User', value: `${userTag(message.author)} (${message.author.id})` },
-                    { name: 'Channel', value: `<#${message.channel.id}>` },
-                    { name: 'Reason', value: reason },
-                    { name: 'Content', value: message.content.substring(0, 1000) }
-                  )
                   .setTimestamp();
                 await logChannel.send({ embeds: [embed] });
               }
@@ -120,7 +121,13 @@ export const AutomodManifest: ModuleManifest = {
 
             // Handle punishment
             if (config.punishment === 'warn') {
-               await message.member.send(`⚠️ **Warning from ${message.guild.name}**\nYour message was removed by AutoMod for: ${reason}`).catch(() => {});
+              const dmEmbed = new EmbedBuilder()
+                .setTitle(`⚠️ AutoMod Warning — ${message.guild.name}`)
+                .setDescription(`Your message in **#${message.channel.name || 'channel'}** was removed by AutoMod.\n\n**Server**: ${message.guild.name}\n**Reason**: ${reason}`)
+                .setColor('#ff9900')
+                .setFooter({ text: `${message.guild.name} • AutoMod Protection` })
+                .setTimestamp();
+              await message.member.send({ embeds: [dmEmbed] }).catch(() => {});
             } else if (config.punishment === 'timeout') {
                await message.member.timeout(5 * 60 * 1000, 'AutoMod Timeout').catch(() => {});
             } else if (config.punishment === 'kick') {

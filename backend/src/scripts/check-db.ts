@@ -21,7 +21,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
     console.log(`Found ${rows.length} tables in database:`);
     for (const row of rows as any[]) {
       await new Promise<void>((resolve) => {
-        db.get(`SELECT COUNT(*) as count FROM ${row.name}`, [], (err, countRow: any) => {
+        // BUG-013 FIX: Validate that the table name is a safe SQL identifier
+        // before interpolating it into the COUNT query. sqlite_master.name comes
+        // from the schema (not user input), but this matches the defensive standard
+        // used everywhere else in the codebase. SQLite does not support parameterised
+        // identifiers, so we use an allowlist regex instead.
+        const safeName = /^[a-zA-Z0-9_]+$/.test(row.name) ? row.name : null;
+        if (!safeName) {
+          console.log(`  - ${row.name}: Skipped (unsafe identifier)`);
+          return resolve();
+        }
+        db.get(`SELECT COUNT(*) as count FROM ${safeName}`, [], (err, countRow: any) => {
           if (err) {
             console.error(`  - ${row.name}: Error - ${err.message}`);
           } else {

@@ -168,18 +168,7 @@ function createTray() {
       }
     },
     { type: 'separator' },
-    {
-      label: '🔄  Restart Gateway',
-      click: async () => {
-        logger.info('Tray: Restart Gateway requested');
-        try {
-          await pm.restartProcess('gateway', BASE_PATH);
-          logger.success('Gateway restarted from tray.');
-        } catch (e) {
-          dialog.showErrorBox('Restart Failed', e.message);
-        }
-      }
-    },
+
     {
       label: '🔄  Restart Music Bot',
       click: async () => {
@@ -258,7 +247,6 @@ const STEPS = [
   { label: 'Verifying required files' },
   { label: 'Loading configuration' },
   { label: 'Initializing logging system' },
-  { label: 'Starting Telemetry Gateway' },
   { label: 'Starting backend API' },
   { label: 'Connecting WebSocket server' },
   { label: 'Connecting Discord bot & Prefix Engine' },
@@ -294,24 +282,21 @@ async function runStartupSequence() {
   logger.info(`Base path: ${BASE_PATH}`);
 
   let prevLabel = null;
+  let stepIdx = 0;
 
   // ── Step 0: Verify files
-  sendStep(0, prevLabel);
-  prevLabel = STEPS[0].label;
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   await sleep(300);
   const backendEnv = path.join(BASE_PATH, 'backend', '.env');
-  const gatewayEnv = path.join(BASE_PATH, 'gateway', '.env');
   const backendPkg = path.join(BASE_PATH, 'backend', 'package.json');
-  const gatewayPkg = path.join(BASE_PATH, 'gateway', 'package.json');
   const dashPkg = path.join(BASE_PATH, config.paths.dashboard || 'frontend', 'package.json');
 
   if (!fs.existsSync(backendEnv)) {
     return sendError(STEPS[0].label, `Missing: backend/.env\n\nPlease create the .env file with your Discord token and other required variables.`);
   }
-  if (!fs.existsSync(gatewayEnv)) {
-    return sendError(STEPS[0].label, `Missing: gateway/.env\n\nPlease create the .env file for gateway configuration.`);
-  }
-  if (!fs.existsSync(backendPkg) || !fs.existsSync(gatewayPkg) || !fs.existsSync(dashPkg)) {
+  if (!fs.existsSync(backendPkg) || !fs.existsSync(dashPkg)) {
     return sendError(STEPS[0].label, 'Missing required package.json files. Ensure the project structure is intact.');
   }
   logger.success('Required files verified.');
@@ -331,54 +316,49 @@ async function runStartupSequence() {
   logger.info('Runtime directories created.');
 
   // ── Step 1: Load config
-  sendStep(1, prevLabel);
-  prevLabel = STEPS[1].label;
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   await sleep(200);
-  logger.success(`Config loaded: dashboard=${config.ports.dashboard}, backend=${config.ports.backend}, gateway=${config.ports.gateway}`);
+  logger.success(`Config loaded: dashboard=${config.ports.dashboard}, backend=${config.ports.backend}`);
 
   // ── Step 2: Init logging
-  sendStep(2, prevLabel);
-  prevLabel = STEPS[2].label;
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   await sleep(200);
   logger.success(`Log file: ${logger.getLogPath()}`);
 
-  // ── Step 3: Start Telemetry Gateway
-  sendStep(3, prevLabel);
-  prevLabel = STEPS[3].label;
-  logger.info('Spawning telemetry gateway process...');
-  try {
-    await pm.spawnGateway(BASE_PATH);
-    logger.success('Telemetry Gateway started.');
-  } catch (e) {
-    logger.warn(`Telemetry Gateway failed to start: ${e.message}`);
-  }
-
-  // ── Step 4: Start backend
-  sendStep(4, prevLabel);
-  prevLabel = STEPS[4].label;
+  // ── Step 3: Start backend
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   logger.info('Spawning backend process...');
   try {
     await pm.spawnBackend(BASE_PATH);
     logger.success('Backend API started.');
   } catch (e) {
-    return sendError(STEPS[4].label, e.message);
+    return sendError(STEPS[stepIdx - 1].label, e.message);
   }
 
-  // ── Step 5: WebSocket (part of backend, verify port)
-  sendStep(5, prevLabel);
-  prevLabel = STEPS[5].label;
+  // ── Step 4: WebSocket (part of backend, verify port)
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   await sleep(1000);
   logger.success(`WebSocket server on port ${config.ports.websocket} (managed by backend).`);
 
-  // ── Step 6: Discord Bot & Prefix Engine
-  sendStep(6, prevLabel);
-  prevLabel = STEPS[6].label;
+  // ── Step 5: Discord Bot & Prefix Engine
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   await sleep(3000); // Give Discord bot a moment to connect
   logger.info('Discord bot & Prefix Command System initialized.');
 
-  // ── Step 7: Start Rage Music
-  sendStep(7, prevLabel);
-  prevLabel = STEPS[7].label;
+  // ── Step 6: Start Rage Music
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   logger.info('Spawning Rage Music...');
   try {
     await pm.spawnMusicBot(BASE_PATH);
@@ -387,9 +367,10 @@ async function runStartupSequence() {
     logger.warn(`Rage Music failed to start: ${e.message}`);
   }
 
-  // ── Step 8: Start dashboard
-  sendStep(8, prevLabel);
-  prevLabel = STEPS[8].label;
+  // ── Step 7: Start dashboard
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   logger.info('Spawning Vite dashboard...');
   try {
     const dashInfo = await pm.spawnDashboard(BASE_PATH);
@@ -397,12 +378,13 @@ async function runStartupSequence() {
     config.ports.dashboard = actualDashboardPort; // Also update config object in memory for tray menu URLs
     logger.success(`Dashboard server started on port ${actualDashboardPort}.`);
   } catch (e) {
-    return sendError(STEPS[8].label, e.message);
+    return sendError(STEPS[stepIdx - 1].label, e.message);
   }
 
-  // ── Step 9: Verify connections
-  sendStep(9, prevLabel);
-  prevLabel = STEPS[9].label;
+  // ── Step 8: Verify connections
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   await sleep(1500);
   let backendOk = false;
   for (let i = 0; i < 10; i++) {
@@ -417,25 +399,18 @@ async function runStartupSequence() {
   if (!backendOk) {
     logger.warn('Backend health check did not respond in time, continuing anyway...');
   }
-  let gatewayOk = false;
-  try {
-    await ping(`http://localhost:${config.ports.gateway || 6002}/api/health`);
-    gatewayOk = true;
-  } catch (_) {}
-  if (gatewayOk) {
-    logger.success('Telemetry Gateway connection verified.');
-  }
   logger.success('Connection verification complete.');
 
-  // ── Step 10: Open window
-  sendStep(10, prevLabel);
-  prevLabel = STEPS[10].label;
+  // ── Step 9: Open window
+  sendStep(stepIdx, prevLabel);
+  prevLabel = STEPS[stepIdx].label;
+  stepIdx++;
   await sleep(500);
   createMainWindow();
   logger.success(`Opening dashboard at ${config.dashboard.url}`);
 
-  // ── Step 11: Complete
-  sendStep(11, prevLabel);
+  // ── Step 10: Complete
+  sendStep(stepIdx, prevLabel);
   if (splashWin && !splashWin.isDestroyed()) {
     splashWin.webContents.send('startup:complete', {});
   }

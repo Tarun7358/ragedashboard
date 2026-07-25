@@ -56,6 +56,25 @@ if (loadedPath) {
   console.warn('⚠️ No .env file could be resolved.');
 }
 
+// BUG-003 FIX: Refuse to start if JWT_SECRET is missing or too short.
+// A missing secret causes all JWT operations to fall back to the publicly known
+// string 'fallback_secret', allowing anyone to forge valid admin tokens.
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error('');
+  console.error('╔══════════════════════════════════════════════════════════════╗');
+  console.error('║  FATAL STARTUP ERROR — JWT_SECRET not configured correctly   ║');
+  console.error('╠══════════════════════════════════════════════════════════════╣');
+  console.error('║  JWT_SECRET must be set to a string of at least 32 chars     ║');
+  console.error('║  in your .env file before starting in production mode.        ║');
+  console.error('║                                                                ║');
+  console.error('║  Example:  JWT_SECRET=your-32-char-secure-random-secret-here  ║');
+  console.error('║                                                                ║');
+  console.error('║  Refusing to start to prevent insecure JWT token forgery.     ║');
+  console.error('╚══════════════════════════════════════════════════════════════╝');
+  console.error('');
+  process.exit(1);
+}
+
 if (process.stdout && (process.stdout as any)._handle && typeof (process.stdout as any)._handle.setBlocking === 'function') {
   (process.stdout as any)._handle.setBlocking(true);
 }
@@ -76,9 +95,6 @@ import { PublicFeedManager } from './core/PublicFeedManager.js';
 
 // ---- Existing Feature Module Manifests ----
 import { SecurityManifest } from './modules/security/manifest.js';
-import { ModerationManifest } from './modules/moderation/manifest.js';
-import { TicketsManifest } from './modules/tickets/manifest.js';
-import { VerificationManifest } from './modules/verification/manifest.js';
 import { LoggingManifest } from './modules/logging/manifest.js';
 import { BackupsManifest } from './modules/backups/manifest.js';
 import { AutomationManifest } from './modules/automation/manifest.js';
@@ -89,12 +105,10 @@ import { LevelingManifest } from './modules/leveling/manifest.js';
 import { AutomodManifest } from './modules/automod/manifest.js';
 import { DiscordDashboardManifest } from './modules/discord-dashboard/manifest.js';
 import { MusicManifest } from './modules/music/manifest.js';
-import { CommunityManifest } from './modules/community/manifest.js';
 
 import { QueueManager } from './modules/music/QueueManager.js';
 
 // ---- NEW Feature Module Manifests ----
-import { BlacklistManifest } from './modules/blacklist/manifest.js';
 import { GiveawayManifest } from './modules/giveaway/manifest.js';
 import { RemindersManifest } from './modules/reminders/manifest.js';
 import { AnnouncementsManifest } from './modules/announcements/manifest.js';
@@ -107,6 +121,8 @@ import { JoinRoleAssignmentGuardManifest } from './modules/join-role-guard/manif
 import { SocialUpdatesManifest } from './modules/social-updates/manifest.js';
 import { WelcomeV2Manifest } from './modules/welcome-v2/manifest.js';
 import { TicketsV2Manifest } from './modules/tickets-v2/manifest.js';
+import { AnalyticsManifest } from './modules/analytics/manifest.js';
+import { AuditManifest } from './modules/audit/manifest.js';
 
 
 
@@ -114,9 +130,6 @@ import { TicketsV2Manifest } from './modules/tickets-v2/manifest.js';
 export const ALL_MANIFESTS = [
   // Existing
   SecurityManifest,
-  ModerationManifest,
-  TicketsManifest,
-  VerificationManifest,
   LoggingManifest,
   BackupsManifest,
   AutomationManifest,
@@ -127,10 +140,8 @@ export const ALL_MANIFESTS = [
   AutomodManifest,
   DiscordDashboardManifest,
   MusicManifest,
-  CommunityManifest,
 
   // New
-  BlacklistManifest,
   GiveawayManifest,
   RemindersManifest,
   AnnouncementsManifest,
@@ -143,6 +154,8 @@ export const ALL_MANIFESTS = [
   SocialUpdatesManifest,
   WelcomeV2Manifest,
   TicketsV2Manifest,
+  AnalyticsManifest,
+  AuditManifest,
 ];
 
 // Web-server excluded manifests (no routes needed for some)
@@ -224,13 +237,7 @@ async function bootstrap() {
     gateway.connect();
     console.log(`✅ Rage Optimiser booted with ${ALL_MANIFESTS.length} modules registered.`);
 
-    // Start Monitoring Agent asynchronously to protect the boot lifecycle
-    try {
-      const { MonitoringAgent } = await import('./monitoring/agent/index.js');
-      MonitoringAgent.start(gateway, registry, webServer);
-    } catch (monError) {
-      console.error('⚠️ Failed to start Monitoring Agent:', monError);
-    }
+
   } catch (error) {
     console.error('❌ Critical bootstrap error:', error);
     process.exit(1);

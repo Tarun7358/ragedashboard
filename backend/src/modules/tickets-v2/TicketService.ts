@@ -131,7 +131,16 @@ export class TicketService {
     if (!db) return;
 
     updates.updatedAt = Date.now();
-    const keys = Object.keys(updates);
+
+    // BUG-002 FIX: Allowlist column names to prevent SQL injection via arbitrary
+    // Object.keys() interpolation. Any key not in this set is silently dropped.
+    const ALLOWED_TICKET_UPDATE_COLS = new Set([
+      'status', 'claimedById', 'claimedByName', 'claimedByAvatar',
+      'claimedAt', 'closedAt', 'closedBy', 'priority', 'updatedAt',
+      'threadId', 'channelId', 'transcriptUrl', 'rating', 'feedback'
+    ]);
+
+    const keys = Object.keys(updates).filter(k => ALLOWED_TICKET_UPDATE_COLS.has(k));
     if (keys.length === 0) return;
 
     const sets = keys.map(k => `${k} = ?`).join(', ');

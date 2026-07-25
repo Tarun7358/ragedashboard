@@ -14,7 +14,7 @@ class HealthMonitor {
     // Zombie detection: counts consecutive failed HTTP responses while process is "running"
     // If a process has a PID but fails health checks N times in a row, it is killed and respawned.
     const zombieThreshold = (config.health && config.health.zombieThreshold) || 3;
-    this.failCounts = { backend: 0, gateway: 0, dashboard: 0 };
+    this.failCounts = { backend: 0, dashboard: 0 };
     this.zombieThreshold = zombieThreshold;
   }
 
@@ -37,12 +37,10 @@ class HealthMonitor {
 
   async _check() {
     const backendPort = this.config.ports.backend;
-    const gatewayPort = this.config.ports.gateway || 6002;
     const dashPort = this.config.ports.dashboard;
 
-    const [backendOk, gatewayOk, dashOk, mem, cpu] = await Promise.all([
+    const [backendOk, dashOk, mem, cpu] = await Promise.all([
       this._pingHttp(`http://localhost:${backendPort}/api/health`),
-      this._pingHttp(`http://localhost:${gatewayPort}/api/health`),
       this._pingHttp(`http://localhost:${dashPort}`),
       this._getMemUsage(),
       this._getCpuUsage()
@@ -56,11 +54,6 @@ class HealthMonitor {
         running: procStatus.backend,
         responding: backendOk,
         pid: procStatus.backendPid
-      },
-      gateway: {
-        running: procStatus.gateway,
-        responding: gatewayOk,
-        pid: procStatus.gatewayPid
       },
       musicBot: {
         running: procStatus.musicBot,
@@ -100,20 +93,7 @@ class HealthMonitor {
       }
     }
 
-    if (procStatus.gateway) {
-      if (!gatewayOk) {
-        this.failCounts.gateway++;
-        if (this.failCounts.gateway >= this.zombieThreshold) {
-          this.logger.warn(`[HealthMonitor] Gateway zombie detected (${this.failCounts.gateway} consecutive failures). Killing PID ${procStatus.gatewayPid} and triggering respawn.`);
-          this.failCounts.gateway = 0;
-          await this._killAndRespawn('gateway', procStatus.gatewayPid);
-        } else {
-          this.logger.warn(`[HealthMonitor] Gateway not responding (${this.failCounts.gateway}/${this.zombieThreshold}).`);
-        }
-      } else {
-        this.failCounts.gateway = 0;
-      }
-    }
+
 
     if (procStatus.dashboard) {
       if (!dashOk) {
@@ -157,7 +137,6 @@ class HealthMonitor {
 
     try {
       if (name === 'backend') await this.pm.spawnBackend(this.basePath);
-      if (name === 'gateway') await this.pm.spawnGateway(this.basePath);
       if (name === 'dashboard') await this.pm.spawnDashboard(this.basePath);
       this.logger.success(`[HealthMonitor] ${name} respawned successfully after zombie kill.`);
     } catch (e) {

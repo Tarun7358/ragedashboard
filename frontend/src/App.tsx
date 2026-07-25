@@ -15,7 +15,6 @@ const DashboardHome = React.lazy(() => import('./pages/DashboardHome').then(m =>
 const DiscordDashboard = React.lazy(() => import('./pages/DiscordDashboard').then(m => ({ default: m.DiscordDashboard })));
 const ConfigHealth = React.lazy(() => import('./pages/ConfigHealth').then(m => ({ default: m.ConfigHealth })));
 const Security = React.lazy(() => import('./pages/Security').then(m => ({ default: m.Security })));
-const Moderation = React.lazy(() => import('./pages/Moderation').then(m => ({ default: m.Moderation })));
 const Automation = React.lazy(() => import('./pages/Automation').then(m => ({ default: m.Automation })));
 const Logging = React.lazy(() => import('./pages/Logging').then(m => ({ default: m.Logging })));
 const Analytics = React.lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
@@ -23,7 +22,6 @@ const Settings = React.lazy(() => import('./pages/Settings').then(m => ({ defaul
 const SocialUpdates = React.lazy(() => import('./pages/SocialUpdates').then(m => ({ default: m.SocialUpdates })));
 const Welcome = React.lazy(() => import('./pages/Welcome').then(m => ({ default: m.Welcome })));
 const Tickets = React.lazy(() => import('./pages/Tickets').then(m => ({ default: m.Tickets })));
-const Verification = React.lazy(() => import('./pages/Verification').then(m => ({ default: m.Verification })));
 const Backups = React.lazy(() => import('./pages/Backups').then(m => ({ default: m.Backups })));
 const VoicePresence = React.lazy(() => import('./pages/VoicePresence').then(m => ({ default: m.VoicePresence })));
 const VoiceProtection = React.lazy(() => import('./pages/VoiceProtection').then(m => ({ default: m.VoiceProtection })));
@@ -41,7 +39,6 @@ const PublicDashboard = React.lazy(() => import('./pages/PublicDashboard').then(
 
 const Automod = React.lazy(() => import('./pages/Automod').then(m => ({ default: m.Automod })));
 const Download = React.lazy(() => import('./pages/Download').then(m => ({ default: m.Download })));
-const Blacklist = React.lazy(() => import('./pages/Blacklist').then(m => ({ default: m.Blacklist })));
 const Giveaway = React.lazy(() => import('./pages/Giveaway').then(m => ({ default: m.Giveaway })));
 const Announcements = React.lazy(() => import('./pages/Announcements').then(m => ({ default: m.Announcements })));
 const JoinToCreate = React.lazy(() => import('./pages/JoinToCreate').then(m => ({ default: m.JoinToCreate })));
@@ -189,16 +186,6 @@ function App() {
             onUpdateConfig={updateModuleConfig}
           />
         );
-      case 'moderation':
-        return (
-          <Moderation
-            onSaveConfig={triggerToast}
-            onManualTrigger={pushManualEvent}
-            modules={modules}
-            registry={registry}
-            onUpdateConfig={updateModuleConfig}
-          />
-        );
       case 'automation':
         return (
           <Automation
@@ -331,16 +318,6 @@ function App() {
             onUpdateConfig={updateModuleConfig}
           />
         );
-      case 'verification':
-        return (
-          <Verification
-            onSaveConfig={triggerToast}
-            onManualTrigger={pushManualEvent}
-            modules={modules}
-            registry={registry}
-            onUpdateConfig={updateModuleConfig}
-          />
-        );
       case 'backups':
         return (
           <Backups
@@ -356,14 +333,6 @@ function App() {
           />
         );
 
-      case 'blacklist':
-        return (
-          <Blacklist
-            onSaveConfig={triggerToast}
-            modules={modules}
-            onUpdateConfig={updateModuleConfig}
-          />
-        );
       case 'giveaway':
         return (
           <Giveaway

@@ -56,8 +56,6 @@ export function Layout({
     { id: 'discord-dashboard', label: 'Discord Dashboard', icon: <LayoutTemplate size={18} /> },
     { id: 'health', label: 'Config Health', icon: <AlertTriangle size={18} color="var(--color-warning)" /> },
     { id: 'security', label: 'Security Panel', icon: <Shield size={18} /> },
-    { id: 'moderation', label: 'Moderation', icon: <Gavel size={18} /> },
-    { id: 'blacklist', label: 'Blacklist Manager', icon: <ShieldAlert size={18} /> },
     { id: 'giveaway', label: 'Giveaways', icon: <Gift size={18} /> },
     { id: 'announcements', label: 'Announcements', icon: <Send size={18} /> },
     { id: 'join_to_create', label: 'Join To Create', icon: <Volume2 size={18} /> },

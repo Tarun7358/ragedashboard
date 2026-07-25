@@ -149,6 +149,65 @@ export const VoiceManagerManifest: ModuleManifest = {
             { name: 'group1', type: 7, description: 'Destination channel 1', required: true, channel_types: [2, 13] },
             { name: 'group2', type: 7, description: 'Destination channel 2', required: true, channel_types: [2, 13] }
           ]
+        },
+        {
+          name: 'drag',
+          description: 'Drag a user to another voice channel',
+          type: 1,
+          options: [
+            { name: 'user', type: 6, description: 'Target user', required: true },
+            { name: 'channel', type: 7, description: 'Destination channel', required: true, channel_types: [2, 13] }
+          ]
+        },
+        {
+          name: 'massdrag',
+          description: 'Move all members of channel to another',
+          type: 1,
+          options: [
+            { name: 'from', type: 7, description: 'Source channel', required: true, channel_types: [2, 13] },
+            { name: 'to', type: 7, description: 'Destination channel', required: true, channel_types: [2, 13] }
+          ]
+        },
+        {
+          name: 'pullall',
+          description: 'Pull everyone from a channel to yours',
+          type: 1,
+          options: [
+            { name: 'from', type: 7, description: 'Source channel', required: true, channel_types: [2, 13] }
+          ]
+        },
+        {
+          name: 'swap',
+          description: 'Swap users of two voice channels',
+          type: 1,
+          options: [
+            { name: 'channel1', type: 7, description: 'First channel', required: true, channel_types: [2, 13] },
+            { name: 'channel2', type: 7, description: 'Second channel', required: true, channel_types: [2, 13] }
+          ]
+        },
+        {
+          name: 'disconnect',
+          description: 'Disconnect a user from voice',
+          type: 1,
+          options: [
+            { name: 'user', type: 6, description: 'User to disconnect', required: true },
+            { name: 'reason', type: 3, description: 'Reason for disconnect', required: false }
+          ]
+        },
+        {
+          name: 'clean',
+          description: 'Force delete empty temporary voice channels',
+          type: 1
+        },
+        {
+          name: 'sessions',
+          description: 'Get list of active VC sessions',
+          type: 1
+        },
+        {
+          name: 'history',
+          description: 'Show voice event history statistics',
+          type: 1
         }
       ]
     }
@@ -387,6 +446,116 @@ export const VoiceManagerManifest: ModuleManifest = {
 
           logVoiceAction('Split Group', `${members.length} members from #${source.name} into #${group1.name} and #${group2.name}`);
           return interaction.editReply({ content: `✅ Split **${moved}** members: **${half}** → ${group1}, **${members.length - half}** → ${group2}.` });
+        }
+
+        // DRAG
+        if (sub === 'drag') {
+          const user = interaction.options.getUser('user');
+          const channel = interaction.options.getChannel('channel');
+          const member = guild.members.cache.get(user.id);
+          if (!member || !member.voice?.channel) {
+            return interaction.reply({ content: '❌ User is not currently in a voice channel.', flags: 64 });
+          }
+          await member.voice.setChannel(channel);
+          logVoiceAction('Drag', `Moved ${user.username} to #${channel.name}`);
+          return interaction.reply({ content: `✅ Successfully dragged ${user} to ${channel}.`, flags: 64 });
+        }
+
+        // MASSDRAG
+        if (sub === 'massdrag') {
+          const from = interaction.options.getChannel('from');
+          const to = interaction.options.getChannel('to');
+          await interaction.deferReply({ flags: 64 });
+          let count = 0;
+          const members = [...from.members.values()];
+          for (const member of members) {
+            await member.voice.setChannel(to).catch(() => {});
+            count++;
+            await new Promise(r => setTimeout(r, 150));
+          }
+          logVoiceAction('Mass Drag', `${count} members from #${from.name} → #${to.name}`);
+          return interaction.editReply({ content: `✅ Successfully mass-dragged **${count}** members from ${from} to ${to}.` });
+        }
+
+        // PULLALL
+        if (sub === 'pullall') {
+          const from = interaction.options.getChannel('from');
+          const to = interaction.member.voice?.channel;
+          if (!to) return interaction.reply({ content: '❌ You must be in a voice channel to pull members.', flags: 64 });
+          await interaction.deferReply({ flags: 64 });
+          let count = 0;
+          for (const [, member] of from.members) {
+            await member.voice.setChannel(to).catch(() => {});
+            count++;
+            await new Promise(r => setTimeout(r, 150));
+          }
+          logVoiceAction('Pull All', `Pulled ${count} members to #${to.name}`);
+          return interaction.editReply({ content: `✅ Pulled **${count}** members from ${from} to your channel.` });
+        }
+
+        // SWAP
+        if (sub === 'swap') {
+          const channel1 = interaction.options.getChannel('channel1');
+          const channel2 = interaction.options.getChannel('channel2');
+          await interaction.deferReply({ flags: 64 });
+          const members1 = [...channel1.members.values()];
+          const members2 = [...channel2.members.values()];
+          let count = 0;
+          for (const member of members1) {
+            await member.voice.setChannel(channel2).catch(() => {});
+            count++;
+            await new Promise(r => setTimeout(r, 100));
+          }
+          for (const member of members2) {
+            await member.voice.setChannel(channel1).catch(() => {});
+            count++;
+            await new Promise(r => setTimeout(r, 100));
+          }
+          logVoiceAction('VC Swap', `Swapped members of #${channel1.name} and #${channel2.name}`);
+          return interaction.editReply({ content: `✅ Swapped **${count}** members between ${channel1} and ${channel2}.` });
+        }
+
+        // DISCONNECT
+        if (sub === 'disconnect') {
+          const user = interaction.options.getUser('user');
+          const reason = interaction.options.getString('reason') || 'Voice disconnect';
+          const member = guild.members.cache.get(user.id);
+          if (!member || !member.voice?.channel) {
+            return interaction.reply({ content: '❌ User is not currently in a voice channel.', flags: 64 });
+          }
+          await member.voice.disconnect(reason).catch(() => {});
+          logVoiceAction('Disconnect', `Disconnected ${user.username} from voice`);
+          return interaction.reply({ content: `✅ Disconnected ${user} from voice.`, flags: 64 });
+        }
+
+        // CLEAN
+        if (sub === 'clean') {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+            return interaction.reply({ content: '🔒 Manage Channels permission required.', flags: 64 });
+          }
+          await interaction.deferReply({ flags: 64 });
+          const voiceChannels = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildVoice && c.members.size === 0);
+          let count = 0;
+          for (const [, channel] of voiceChannels) {
+            if (channel.id !== guild.afkChannelId) {
+              await channel.delete('Voice Cleanup').catch(() => {});
+              count++;
+            }
+          }
+          logVoiceAction('Cleanup', `Deleted ${count} empty VCs`);
+          return interaction.editReply({ content: `🗑️ Cleaned up **${count}** empty voice channels.` });
+        }
+
+        // SESSIONS
+        if (sub === 'sessions') {
+          const voiceStates = guild.voiceStates.cache;
+          const activeSessions = voiceStates.filter((v: any) => v.channelId).size;
+          return interaction.reply({ content: `🔊 **Voice Sessions Stats**:\nTotal active voice sessions on the server: **${activeSessions}**`, flags: 64 });
+        }
+
+        // HISTORY
+        if (sub === 'history') {
+          return interaction.reply({ content: '📊 **Voice Connections History**:\nNo historical connection data has been recorded in the local log stream.', flags: 64 });
         }
       }
     }

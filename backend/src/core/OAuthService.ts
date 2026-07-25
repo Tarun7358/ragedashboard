@@ -248,7 +248,7 @@ export class OAuthService {
         avatar: discordUser.avatar,
         managedGuildIds: manageableGuilds.map(g => g.id)
       },
-      process.env.JWT_SECRET || 'fallback_secret',
+      process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
 

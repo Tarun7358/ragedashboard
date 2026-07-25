@@ -1,0 +1,202 @@
+import { Message, EmbedBuilder, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { PrefixCommandMeta } from './PrefixRegistry.js';
+import { PrefixCooldownManager } from './PrefixCooldownManager.js';
+import { PrefixPermissionManager } from './PrefixPermissionManager.js';
+import { PrefixAnalytics } from './PrefixAnalytics.js';
+import { SyntheticInteraction } from './SyntheticInteraction.js';
+import { ParsedCommand } from './PrefixParser.js';
+
+export class CommandContext {
+  public message: Message;
+  public parsed: ParsedCommand;
+  public cmdMeta: PrefixCommandMeta;
+  public guild: any;
+  public channel: any;
+  public executor: any;
+  public member: any;
+  public args: string[];
+  public correlationId: string;
+  public startTime: number;
+  public extra: any;
+
+  constructor(message: Message, parsed: ParsedCommand, cmdMeta: PrefixCommandMeta, extra: any) {
+    this.message = message;
+    this.parsed = parsed;
+    this.cmdMeta = cmdMeta;
+    this.guild = message.guild;
+    this.channel = message.channel;
+    this.executor = message.author;
+    this.member = message.member;
+    this.args = parsed.args || [];
+    this.correlationId = `corr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    this.startTime = Date.now();
+    this.extra = extra;
+  }
+
+  public get(key: string) {
+    return this.extra[key];
+  }
+}
+
+export class CommandPipeline {
+  private static locks = new Set<string>();
+
+  public static async execute(
+    message: Message,
+    parsed: ParsedCommand,
+    cmdMeta: PrefixCommandMeta,
+    manifests: any[],
+    extra: any
+  ): Promise<any> {
+    const ctx = new CommandContext(message, parsed, cmdMeta, extra);
+    const correlationId = ctx.correlationId;
+
+    // BUG-004 FIX: Compute lockKey exactly once, null-safe, so the catch block
+    // always cleans up the same key that was added. Previously guild?.id could be
+    // undefined in the catch block if an early guard threw, producing a different key.
+    // BUG-014 FIX: Include subcommand in lock key so sibling subcommands
+    // (e.g. r!audit export vs r!audit purge) don't block each other.
+    const lockKey = `${ctx.guild?.id ?? 'unknown'}-${cmdMeta.name}-${parsed.subcommand ?? ''}`;
+
+    try {
+      // 1. Guild Validation
+      if (!ctx.guild) {
+        return this.sendError(ctx, 'This command can only be executed within a Discord server.');
+      }
+
+      // 2. Module Validation
+      const modules = ctx.get('getModulesState') ? ctx.get('getModulesState')() : [];
+      const modState = modules.find((m: any) => m.id === cmdMeta.moduleOwnerId);
+      if (cmdMeta.moduleOwnerId !== 'core' && (!modState || modState.status !== 'enabled')) {
+        return this.sendError(ctx, `The backing module **\`${cmdMeta.moduleOwnerId}\`** is currently disabled on this server.`);
+      }
+
+      // 3. Permission Validation
+      const isOwner = PrefixPermissionManager.isDeveloper(ctx.executor.id, ctx.message);
+      const permResult = PrefixPermissionManager.checkPermissions(ctx.message, cmdMeta, modState);
+      if (!permResult.allowed && !isOwner) {
+        PrefixAnalytics.trackFailure('permission');
+        return this.sendError(ctx, permResult.reason || 'You lack the required permissions to execute this command.');
+      }
+
+      // 4. Bot Permission Validation
+      const botMember = ctx.guild.members.me;
+      if (botMember && cmdMeta.botPermissions) {
+        const missingBotPerms = cmdMeta.botPermissions.filter(p => !botMember.permissions.has(p as any));
+        if (missingBotPerms.length > 0) {
+          PrefixAnalytics.trackFailure('permission');
+          return this.sendError(ctx, `Bot is missing required Discord permissions: ${missingBotPerms.map(p => `\`${p}\``).join(', ')}`);
+        }
+      }
+
+      // 5. Cooldown Validation
+      const cdResult = PrefixCooldownManager.checkCooldown(ctx.executor.id, ctx.guild.id, cmdMeta.name, cmdMeta.cooldownSeconds, isOwner);
+      if (cdResult.onCooldown) {
+        PrefixAnalytics.trackFailure('cooldown');
+        const embed = new EmbedBuilder()
+          .setTitle('⏱️ Command Cooldown')
+          .setDescription(`Please wait **${cdResult.retryAfter}s** before using \`${cmdMeta.name}\` again.`)
+          .setColor('#f59e0b')
+          .setFooter({ text: `Correlation ID: ${correlationId}` });
+        return ctx.message.reply({ embeds: [embed] }).catch(() => {});
+      }
+
+      // 6. Concurrency / Execution Locking
+      if (cmdMeta.confirmationRequired && this.locks.has(lockKey)) {
+        return this.sendError(ctx, 'A duplicate instance of this execution command is already running on this server.');
+      }
+
+      // 7. Interactive Confirmation Validation (if required)
+      if (cmdMeta.confirmationRequired) {
+        this.locks.add(lockKey);
+        const confirmed = await this.requestConfirmation(ctx);
+        if (!confirmed) {
+          this.locks.delete(lockKey);
+          return;
+        }
+      }
+
+      // 8. Execute Business Logic Handler
+      const syntheticInteraction = new SyntheticInteraction(ctx.message, ctx.parsed, cmdMeta);
+      let handlerFound = false;
+
+      for (const manifest of manifests) {
+        const eventObj = manifest.events?.find((e: any) => e.name === `command_${cmdMeta.name}`);
+        if (eventObj) {
+          handlerFound = true;
+          await eventObj.handler(ctx.message.client, syntheticInteraction, ctx.extra);
+          break;
+        }
+      }
+
+      this.locks.delete(lockKey);
+
+      if (!handlerFound) {
+        return this.sendError(ctx, 'Command registered in registry but no command handler was found.');
+      }
+
+      // 9. Post-Execution Telemetry & Success Logs
+      const elapsed = Date.now() - ctx.startTime;
+      PrefixAnalytics.trackExecution(cmdMeta.name, cmdMeta.category, elapsed, true);
+      ctx.extra.logSyncEvent(`Prefix command executed: r!${cmdMeta.name} by ${ctx.executor.username} (Duration: ${elapsed}ms)`, 'info');
+
+    } catch (err: any) {
+      this.locks.delete(lockKey);
+
+      console.error(`[CommandPipeline] Error executing prefix command ${cmdMeta.name}:`, err);
+      PrefixAnalytics.trackExecution(cmdMeta.name, cmdMeta.category, Date.now() - ctx.startTime, false);
+
+      const errEmbed = new EmbedBuilder()
+        .setTitle('❌ Command Execution Failed')
+        .setDescription(err.message || 'An internal server error occurred during validation or execution of this command.')
+        .setColor('#ff4444')
+        .setFooter({ text: `Correlation ID: ${correlationId}` })
+        .setTimestamp();
+      await ctx.message.reply({ embeds: [errEmbed] }).catch(() => {});
+    }
+  }
+
+  private static async requestConfirmation(ctx: CommandContext): Promise<boolean> {
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('confirm_yes').setLabel('Confirm Action').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('confirm_no').setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+    );
+
+    const embed = new EmbedBuilder()
+      .setTitle('🚨 Confirmation Required')
+      .setDescription(`Are you sure you want to execute **\`r!${ctx.cmdMeta.name} ${ctx.args.join(' ')}\`**?\nThis is classified as a high-risk operational command.`)
+      .setColor('#f59e0b')
+      .setFooter({ text: `Correlation ID: ${ctx.correlationId}` })
+      .setTimestamp();
+
+    const response = await ctx.message.reply({ embeds: [embed], components: [row] });
+    
+    try {
+      const confirmation = await response.awaitMessageComponent({
+        filter: i => i.user.id === ctx.executor.id,
+        time: 15000
+      });
+
+      if (confirmation.customId === 'confirm_yes') {
+        await confirmation.update({ content: '✅ Command confirmed. Starting execution...', embeds: [], components: [] });
+        return true;
+      } else {
+        await confirmation.update({ content: '❌ Command cancelled.', embeds: [], components: [] });
+        return false;
+      }
+    } catch {
+      await response.edit({ content: '⏰ Command timed out due to inactivity.', embeds: [], components: [] }).catch(() => {});
+      return false;
+    }
+  }
+
+  private static sendError(ctx: CommandContext, message: string) {
+    const embed = new EmbedBuilder()
+      .setTitle('❌ Command Pipeline Error')
+      .setDescription(message)
+      .setColor('#ff4444')
+      .setFooter({ text: `Correlation ID: ${ctx.correlationId}` })
+      .setTimestamp();
+    return ctx.message.reply({ embeds: [embed] }).catch(() => {});
+  }
+}

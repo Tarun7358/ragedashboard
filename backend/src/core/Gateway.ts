@@ -15,6 +15,7 @@ import { PrefixCooldownManager } from './prefix/PrefixCooldownManager.js';
 import { FuzzySuggestions } from './prefix/FuzzySuggestions.js';
 import { PrefixAnalytics } from './prefix/PrefixAnalytics.js';
 import { PrefixHelpCenter } from './prefix/PrefixHelpCenter.js';
+import { CommandPipeline } from './prefix/CommandPipeline.js';
 
 export function wrapInteraction(interaction: any) {
   if (!interaction) return interaction;
@@ -174,6 +175,7 @@ export class Gateway {
   }>();
 
   private voiceSessions = new Map<string, number>();
+  private recentSoundboardDedupe = new Set<string>();
 
   private getVoiceState(guildId: string) {
     if (!this.guildVoiceState.has(guildId)) {
@@ -466,6 +468,8 @@ export class Gateway {
     this.client.on('interactionCreate', async (interaction) => {
       if (interaction.isStringSelectMenu() && interaction.customId === 'help_category_select') {
         await PrefixHelpCenter.handleSelectMenuInteraction(interaction).catch(console.error);
+      } else if (interaction.isButton() && interaction.customId.startsWith('help_')) {
+        await PrefixHelpCenter.handleButtonInteraction(interaction).catch(console.error);
       }
     });
 
@@ -642,90 +646,31 @@ export class Gateway {
         return;
       }
 
-      // Check permissions
-      const guildState = message.guildId ? this.getModulesState(message.guildId) : [];
-      const modState = guildState.find((m: any) => m.id === cmdMeta.moduleOwnerId);
-      const permResult = PrefixPermissionManager.checkPermissions(message, cmdMeta, modState);
-
-      if (!permResult.allowed) {
-        PrefixAnalytics.trackFailure('permission');
-        const permEmbed = new EmbedBuilder()
-          .setTitle('🔒 Access Denied')
-          .setDescription(permResult.reason || 'You do not have permission to execute this command.')
-          .setColor('#ff4444');
-        await message.reply({ embeds: [permEmbed] }).catch(() => {});
-        return;
-      }
-
-      // Check cooldown
-      const isOwner = PrefixPermissionManager.isDeveloper(message.author.id, message);
-      const cdResult = PrefixCooldownManager.checkCooldown(message.author.id, message.guildId, cmdMeta.name, cmdMeta.cooldownSeconds, isOwner);
-
-      if (cdResult.onCooldown) {
-        PrefixAnalytics.trackFailure('cooldown');
-        const cdEmbed = new EmbedBuilder()
-          .setTitle('⏱️ Command Cooldown')
-          .setDescription(`Please wait **${cdResult.retryAfter}s** before using \`${cmdMeta.name}\` again.`)
-          .setColor('#f59e0b');
-        await message.reply({ embeds: [cdEmbed] }).catch(() => {});
-        return;
-      }
-
-      // Dispatch to Module Event Handler using SyntheticInteraction
-      const syntheticInteraction = new SyntheticInteraction(message, parsed, cmdMeta);
-      const execStart = performance.now();
-
-      for (const manifest of this.manifests) {
-        const eventObj = manifest.events?.find(e => e.name === `command_${cmdMeta.name}`);
-        if (eventObj) {
-              try {
-                const cmdGuildId = message.guildId || undefined;
-                await eventObj.handler(this.client, syntheticInteraction, {
-                  guildId: cmdGuildId,
-                  client: this.client,
-                  logSyncEvent: (msgOrGuildId: string | undefined, msgOrType?: string, type?: 'info' | 'warn' | 'success') => {
-                    if (type !== undefined) {
-                      this.logSyncEvent(msgOrGuildId, msgOrType, type);
-                    } else {
-                      this.logSyncEvent(cmdGuildId, msgOrGuildId, msgOrType as any);
-                    }
-                  },
-                  getModulesState: (gId?: string) => this.getModulesState(gId || cmdGuildId),
-                  getRegistry: () => this.getRegistry(cmdGuildId),
-                  getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId || cmdGuildId),
-                  updateModuleConfig: (id: string, config: Record<string, any>) => this.updateModuleConfig(cmdGuildId, id, config),
-                  registry: {
-                    logWhitelistAudit: (gId: string | undefined, audit: any) => {
-                      this.logSyncEvent(gId || cmdGuildId, `[Audit] ${audit.action || 'whitelist change'}`, 'info');
-                    },
-                    logWhitelistActivity: (gId: string | undefined, activity: any) => {
-                      this.logSyncEvent(gId || cmdGuildId, `[Activity] ${activity.action || ''} ${activity.target || ''}`.trim(), 'info');
-                    }
-                  }
-                });
-
-                const execTime = performance.now() - execStart;
-                PrefixAnalytics.trackExecution(cmdMeta.name, cmdMeta.category, execTime, true);
-                this.logSyncEvent(message.guildId || undefined, `Prefix command executed: r!${cmdMeta.name} by ${message.author.username}`, 'info');
-                return;
-              } catch (err: any) {
-                console.error(`Error executing prefix command ${cmdMeta.name}:`, err);
-                PrefixAnalytics.trackExecution(cmdMeta.name, cmdMeta.category, performance.now() - execStart, false);
-                const errEmbed = new EmbedBuilder()
-                  .setTitle('❌ Command Execution Failed')
-                  .setDescription('An internal error occurred while executing this prefix command.')
-                await message.reply({ embeds: [errEmbed] }).catch(() => {});
-                return;
-              }
-            }
+      // Execute through standard pipeline
+      const cmdGuildId = message.guildId || undefined;
+      await CommandPipeline.execute(message, parsed, cmdMeta, this.manifests, {
+        guildId: cmdGuildId,
+        client: this.client,
+        logSyncEvent: (msgOrGuildId: string | undefined, msgOrType?: string, type?: 'info' | 'warn' | 'success') => {
+          if (type !== undefined) {
+            this.logSyncEvent(msgOrGuildId, msgOrType, type);
+          } else {
+            this.logSyncEvent(cmdGuildId, msgOrGuildId, msgOrType as any);
           }
-
-      // Command registered in registry but no module handler active
-      const unavailEmbed = new EmbedBuilder()
-        .setTitle('❌ Command Unavailable')
-        .setDescription(`Command \`${cmdMeta.name}\` is registered, but its module handler is currently inactive.`)
-        .setColor('#ff4444');
-      await message.reply({ embeds: [unavailEmbed] }).catch(() => {});
+        },
+        getModulesState: (gId?: string) => this.getModulesState(gId || cmdGuildId),
+        getRegistry: () => this.getRegistry(cmdGuildId),
+        getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId || cmdGuildId),
+        updateModuleConfig: (id: string, config: Record<string, any>) => this.updateModuleConfig(cmdGuildId, id, config),
+        registry: {
+          logWhitelistAudit: (gId: string | undefined, audit: any) => {
+            this.logSyncEvent(gId || cmdGuildId, `[Audit] ${audit.action || 'whitelist change'}`, 'info');
+          },
+          logWhitelistActivity: (gId: string | undefined, activity: any) => {
+            this.logSyncEvent(gId || cmdGuildId, `[Activity] ${activity.action || ''} ${activity.target || ''}`.trim(), 'info');
+          }
+        }
+      });
     });
 
     this.client.on('voiceStateUpdate', (oldState, newState) => {
@@ -823,8 +768,14 @@ export class Gateway {
       this.dispatchEvent('guildUpdate', oldGuild, newGuild);
     });
 
-    this.client.on('webhookUpdate', (channel) => {
-      this.dispatchEvent('webhookUpdate', channel);
+    // BUG-007 FIX: 'webhookUpdate' is a deprecated alias that mapped to channelUpdate.
+    // 'webhooksUpdate' is the correct Discord.js v14 event for webhook CRUD operations.
+    this.client.on('webhooksUpdate', (channel) => {
+      this.dispatchEvent('webhooksUpdate', channel);
+    });
+
+    this.client.on('guildDelete', (guild) => {
+      this.dispatchEvent('guildDelete', guild);
     });
 
     this.client.on('emojiCreate', (emoji) => {
@@ -849,6 +800,87 @@ export class Gateway {
 
     this.client.on('stickerUpdate', (oldSticker, newSticker) => {
       this.dispatchEvent('stickerUpdate', oldSticker, newSticker);
+    });
+
+    const handleSoundboardEffect = async (data: any) => {
+      if (!data) return;
+      let guildId = data.guildId || data.guild_id || data.guild?.id || data.channel?.guild?.id;
+      const channelId = data.channel_id || data.channelId || data.channel?.id;
+      const userId = data.userId || data.user_id || data.user?.id || data.member?.user?.id;
+      const soundId = data.soundId || data.sound_id || 'unknown';
+
+      // Fallback guildId resolution if missing in raw WS payload
+      if (!guildId && channelId) {
+        const ch = this.client.channels.cache.get(channelId) as any;
+        if (ch && ch.guild) {
+          guildId = ch.guild.id;
+        } else {
+          for (const g of this.client.guilds.cache.values()) {
+            if (g.channels.cache.has(channelId)) {
+              guildId = g.id;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!guildId) {
+        guildId = process.env.GUILD_ID || Array.from(this.client.guilds.cache.keys())[0];
+      }
+      if (!guildId) return;
+
+      const dedupeKey = `${guildId}_${userId || 'anon'}_${soundId}_${Math.floor(Date.now() / 2500)}`;
+      if (this.recentSoundboardDedupe.has(dedupeKey)) return;
+      this.recentSoundboardDedupe.add(dedupeKey);
+      setTimeout(() => this.recentSoundboardDedupe.delete(dedupeKey), 4000);
+
+      try {
+        const guild = data.guild || this.client.guilds.cache.get(guildId) || await this.client.guilds.fetch(guildId).catch(() => null);
+        if (!guild) return;
+
+        const channel = data.channel || (channelId ? (guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null)) : null);
+        const user = data.user || (userId ? (this.client.users.cache.get(userId) || await this.client.users.fetch(userId).catch(() => null)) : null);
+        const member = data.member || (user ? await guild.members.fetch(user.id).catch(() => null) : null);
+
+        let soundName = data.soundboardSound?.name || data.name || data.soundName;
+        if (!soundName && soundId !== 'unknown' && (guild as any).sounds) {
+          const soundObj = (guild as any).sounds?.cache?.get(soundId);
+          if (soundObj) soundName = soundObj.name;
+        }
+        if (!soundName) soundName = `Soundboard Sound (${soundId})`;
+
+        const effectObj = {
+          guild,
+          channel,
+          user,
+          member,
+          soundId,
+          soundName,
+          soundboardSound: { name: soundName }
+        };
+
+        this.dispatchEvent('voiceChannelEffectSend', effectObj);
+      } catch (err) {
+        console.error('[Gateway] Error handling soundboard effect event:', err);
+      }
+    };
+
+    this.client.on('voiceChannelEffectSend', (effect) => {
+      handleSoundboardEffect(effect);
+    });
+
+    this.client.on('raw', (packet: any) => {
+      if (packet && packet.t) {
+        if (
+          packet.t.includes('SOUNDBOARD') || 
+          packet.t.includes('EFFECT') ||
+          packet.t === 'VOICE_CHANNEL_EFFECT_SEND' ||
+          packet.t === 'GUILD_SOUNDBOARD_SOUND_PLAY'
+        ) {
+          console.log(`[Gateway] Intercepted soundboard raw packet: ${packet.t}`);
+          handleSoundboardEffect(packet.d);
+        }
+      }
     });
 
     // Slash Command & Component Button routing

@@ -3,9 +3,6 @@ import { REST, Routes } from 'discord.js';
 
 // Import individual manifests directly to avoid running index.ts bootstrap()
 import { SecurityManifest } from '../modules/security/manifest.js';
-import { ModerationManifest } from '../modules/moderation/manifest.js';
-import { TicketsManifest } from '../modules/tickets/manifest.js';
-import { VerificationManifest } from '../modules/verification/manifest.js';
 import { LoggingManifest } from '../modules/logging/manifest.js';
 import { BackupsManifest } from '../modules/backups/manifest.js';
 import { AutomationManifest } from '../modules/automation/manifest.js';
@@ -17,7 +14,6 @@ import { AutomodManifest } from '../modules/automod/manifest.js';
 import { DiscordDashboardManifest } from '../modules/discord-dashboard/manifest.js';
 import { MusicManifest } from '../modules/music/manifest.js';
 
-import { BlacklistManifest } from '../modules/blacklist/manifest.js';
 import { GiveawayManifest } from '../modules/giveaway/manifest.js';
 import { RemindersManifest } from '../modules/reminders/manifest.js';
 import { AnnouncementsManifest } from '../modules/announcements/manifest.js';
@@ -27,9 +23,11 @@ import { BulkOpsManifest } from '../modules/bulk_ops/manifest.js';
 import { DiagnosticsManifest } from '../modules/diagnostics/manifest.js';
 import { VoiceProtectionManifest } from '../modules/voice-protection/index.js';
 import { WelcomeV2Manifest } from '../modules/welcome-v2/manifest.js';
-import { TicketsV2Manifest } from '../modules/tickets-v2/manifest.js';import { CommunityManifest } from '../modules/community/manifest.js';
+import { TicketsV2Manifest } from '../modules/tickets-v2/manifest.js';
 import { JoinRoleAssignmentGuardManifest } from '../modules/join-role-guard/manifest.js';
 import { SocialUpdatesManifest } from '../modules/social-updates/manifest.js';
+import { AnalyticsManifest } from '../modules/analytics/manifest.js';
+import { AuditManifest } from '../modules/audit/manifest.js';
 
 
 dotenv.config();
@@ -48,9 +46,6 @@ const guildStr = guildId as string;
 
 const manifests = [
   SecurityManifest,
-  ModerationManifest,
-  TicketsManifest,
-  VerificationManifest,
   LoggingManifest,
   BackupsManifest,
   AutomationManifest,
@@ -61,8 +56,6 @@ const manifests = [
   AutomodManifest,
   DiscordDashboardManifest,
   MusicManifest,
-  CommunityManifest,
-  BlacklistManifest,
   GiveawayManifest,
   RemindersManifest,
   AnnouncementsManifest,
@@ -75,6 +68,8 @@ const manifests = [
   SocialUpdatesManifest,
   WelcomeV2Manifest,
   TicketsV2Manifest,
+  AnalyticsManifest,
+  AuditManifest,
 ];
 
 

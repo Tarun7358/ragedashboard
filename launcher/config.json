@@ -4,12 +4,10 @@
   "ports": {
     "dashboard": 4680,
     "backend": 5000,
-    "websocket": 5001,
-    "gateway": 6002
+    "websocket": 5001
   },
   "paths": {
     "backend": "backend",
-    "gateway": "gateway",
     "dashboard": "frontend",
     "logs": "logs",
     "backups": "backups",

@@ -225,6 +225,14 @@ export class ModuleRegistry {
             title = '🔨 Moderation Action';
             color = '#f1c40f';
           } else if (
+            msgLower.includes('soundboard') || 
+            msgLower.includes('voice log') || 
+            msgLower.includes('voice presence')
+          ) {
+            resolvedCategory = 'voice';
+            title = '🎙️ Voice & Soundboard Log';
+            color = '#9b59b6';
+          } else if (
             msgLower.includes('joined') || 
             msgLower.includes('left') || 
             msgLower.includes('login') || 
@@ -314,11 +322,14 @@ export class ModuleRegistry {
         mod.progress = progress;
         mod.errors = errors;
 
-        // M-4 FIX: Preserve 'disabled' status — do NOT force-enable modules that
-        // an admin has deliberately turned off via the toggle endpoint.
-        // Only transition modules that are not explicitly disabled.
+        // BUG-010 FIX: Preserve 'disabled' AND 'error' states.
+        // Previously, any module not in 'disabled' status was forced to 'enabled',
+        // which silently re-enabled modules that were in an 'error' or 'pending' state.
+        // Now we only transition modules that are not explicitly disabled:
+        //   - if progress > 0 and no errors → 'enabled'
+        //   - otherwise → 'error'
         if (mod.status !== 'disabled') {
-          mod.status = 'enabled';
+          mod.status = (progress > 0 && errors.length === 0) ? 'enabled' : 'error';
         }
       }
     });

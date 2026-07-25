@@ -22,7 +22,7 @@ const CATEGORIES = [
   { id: 'antiNuke', name: 'Anti-Nuke Logs', icon: Bomb, desc: 'Mass deletions, raid detections, emergency locks.', color: '#ff0055' },
   { id: 'botProtection', name: 'Bot Protection', icon: Bot, desc: 'Unauthorized bots added, dangerous permissions.', color: 'var(--accent-primary)' },
   { id: 'webhook', name: 'Webhook Logs', icon: Link, desc: 'Webhook creations, deletions, suspicious activity.', color: '#a855f7' },
-  { id: 'voice', name: 'Voice Security', icon: Mic, desc: 'Loud audio, auto-mutes, channel hopping.', color: 'var(--color-success)' },
+  { id: 'voice', name: 'Voice Security', icon: Mic, desc: 'Soundboard usage, voice joins/leaves, moderator moves, mutes.', color: 'var(--color-success)' },
   { id: 'audit', name: 'Audit Logs', icon: ClipboardList, desc: 'Dashboard changes, message edits/deletions.', color: 'var(--text-secondary)' },
   { id: 'system', name: 'System Logs', icon: Settings, desc: 'Bot startups, module failures, database errors.', color: '#64748b' }
 ];
@@ -135,16 +135,25 @@ export function Logging({
                   Event Triggers
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {['Default Events', 'High Severity Alerts', 'Administrative Actions', 'Automated Bot Actions'].map(eventName => {
-                     const key = eventName.toLowerCase().replace(/ /g, '_');
-                     const isChecked = catConfig.events?.[key] ?? true; // default true
+                  {(cat.id === 'voice' ? [
+                    { name: 'Voice Join / Leave / Switch', key: 'join_leave_switch' },
+                    { name: 'Soundboard Usage', key: 'soundboard' },
+                    { name: 'Moderator Moves (Drag Logs)', key: 'moderator_moves' },
+                    { name: 'Server Mutes & Deafens', key: 'server_mute_deafen' }
+                  ] : [
+                    { name: 'Default Events', key: 'default_events' },
+                    { name: 'High Severity Alerts', key: 'high_severity_alerts' },
+                    { name: 'Administrative Actions', key: 'administrative_actions' },
+                    { name: 'Automated Bot Actions', key: 'automated_bot_actions' }
+                  ]).map(trigger => {
+                     const isChecked = catConfig.events?.[trigger.key] ?? true; // default true
                      return (
-                       <label key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-                         <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{eventName}</span>
+                       <label key={trigger.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+                         <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{trigger.name}</span>
                          <input 
                            type="checkbox" 
                            checked={isChecked} 
-                           onChange={e => handleUpdateCategory(cat.id, { events: { ...catConfig.events, [key]: e.target.checked }})}
+                           onChange={e => handleUpdateCategory(cat.id, { events: { ...catConfig.events, [trigger.key]: e.target.checked }})}
                            style={{ accentColor: 'var(--accent-primary)' }}
                          />
                        </label>

@@ -101,8 +101,7 @@ export const LevelingManifest: ModuleManifest = {
         const nextLevelXp = Math.pow((level + 1) / 0.1, 2);
         
         await interaction.reply({
-          content: `📊 **Rank for ${target.username}**\n- **Level**: \`${level}\`\n- **XP**: \`${xp} / ${nextLevelXp}\``,
-          ephemeral: false
+          content: `📊 **Rank for ${target.username}**\n- **Level**: \`${level}\`\n- **XP**: \`${xp} / ${nextLevelXp}\``
         });
       }
     },
@@ -123,7 +122,7 @@ export const LevelingManifest: ModuleManifest = {
           lines.push(`**#${i+1}** <@${id}> — Level **${level}** (${xp} XP)`);
         }
 
-        await interaction.reply({ content: lines.join('\n'), ephemeral: false });
+        await interaction.reply({ content: lines.join('\n') });
       }
     },
     {

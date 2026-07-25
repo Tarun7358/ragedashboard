@@ -11,14 +11,12 @@ class ProcessManager {
 
     this.processes = {
       backend: null,
-      gateway: null,
       musicBot: null,
       dashboard: null
     };
 
     this.restartCounts = {
       backend: [],
-      gateway: [],
       musicBot: [],
       dashboard: []
     };
@@ -26,118 +24,7 @@ class ProcessManager {
     this.shuttingDown = false;
   }
 
-  // ─── GATEWAY ─────────────────────────────────────────────────────────────────
 
-  async spawnGateway(basePath) {
-    const gatewayPath = path.resolve(basePath, this.config.paths.gateway || 'gateway');
-    this.logger.info(`Starting gateway from: ${gatewayPath}`);
-
-    return new Promise((resolve, reject) => {
-      const envFile = path.join(gatewayPath, '.env');
-      if (!fs.existsSync(envFile)) {
-        return reject(new Error(`Gateway .env not found at: ${envFile}`));
-      }
-
-      const proc = spawn('node', ['node_modules/tsx/dist/cli.mjs', 'src/index.ts'], {
-        cwd: gatewayPath,
-        env: { ...process.env, FORCE_COLOR: '0' },
-        shell: false,
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-
-      this.processes.gateway = proc;
-      let resolved = false;
-
-      const onData = (data) => {
-        const text = data.toString();
-        this.logger.info(`[GATEWAY] ${text.trim()}`);
-        this.onEvent('gateway:log', text.trim());
-
-        if (!resolved && (text.includes('Listening on PORT') || text.includes('Gateway Ready'))) {
-          resolved = true;
-          const port = this.config.ports.gateway || 6002;
-          let attempts = 0;
-          const checkReady = setInterval(async () => {
-            attempts++;
-            try {
-              await this._ping(`http://localhost:${port}/api/health`);
-              clearInterval(checkReady);
-              resolve(proc);
-            } catch (e) {
-              if (attempts >= 15) {
-                clearInterval(checkReady);
-                resolve(proc);
-              }
-            }
-          }, 200);
-        }
-      };
-
-      proc.stdout.on('data', onData);
-      proc.stderr.on('data', (data) => {
-        const text = data.toString();
-        if (!text.includes('[tsx]') && !resolved && (text.includes('Listening on PORT') || text.includes('Gateway Ready'))) {
-          resolved = true;
-          const port = this.config.ports.gateway || 6002;
-          let attempts = 0;
-          const checkReady = setInterval(async () => {
-            attempts++;
-            try {
-              await this._ping(`http://localhost:${port}/api/health`);
-              clearInterval(checkReady);
-              resolve(proc);
-            } catch (e) {
-              if (attempts >= 15) {
-                clearInterval(checkReady);
-                resolve(proc);
-              }
-            }
-          }, 200);
-        }
-        this.logger.debug(`[GATEWAY:STDERR] ${text.trim()}`);
-        this.onEvent('gateway:log', text.trim());
-      });
-
-      proc.on('error', (err) => {
-        this.logger.error(`Gateway spawn error: ${err.message}`);
-        if (!resolved) reject(err);
-      });
-
-      proc.on('exit', (code, signal) => {
-        this.logger.warn(`Gateway exited (code=${code}, signal=${signal})`);
-        this.processes.gateway = null;
-        this.onEvent('gateway:crashed', { code, signal });
-        if (!this.shuttingDown) {
-          this._handleCrash('gateway', basePath);
-        }
-      });
-
-      // Poll HTTP endpoint as secondary startup detection
-      const startTime = Date.now();
-      const timeout = this.config.health.startupTimeoutMs || 60000;
-      const poll = setInterval(async () => {
-        if (resolved || this.shuttingDown) { clearInterval(poll); return; }
-        if (Date.now() - startTime > timeout) {
-          clearInterval(poll);
-          if (!resolved) {
-            resolved = true;
-            resolve(proc);
-          }
-          return;
-        }
-        try {
-          await this._ping(`http://localhost:${this.config.ports.gateway || 6002}/api/health`);
-          if (!resolved) {
-            resolved = true;
-            clearInterval(poll);
-            resolve(proc);
-          }
-        } catch (e) {
-          // still starting
-        }
-      }, 1000);
-    });
-  }
 
   // ─── BACKEND ─────────────────────────────────────────────────────────────────
 
@@ -388,7 +275,6 @@ class ProcessManager {
     setTimeout(async () => {
       try {
         if (name === 'backend') await this.spawnBackend(basePath);
-        if (name === 'gateway') await this.spawnGateway(basePath);
         if (name === 'musicBot') await this.spawnMusicBot(basePath);
         if (name === 'dashboard') await this.spawnDashboard(basePath);
         this.logger.success(`${name} restarted successfully.`);
@@ -415,7 +301,6 @@ class ProcessManager {
     }
     this.restartCounts[name] = []; // Reset crash counter for manual restart
     if (name === 'backend') return this.spawnBackend(basePath);
-    if (name === 'gateway') return this.spawnGateway(basePath);
     if (name === 'musicBot') return this.spawnMusicBot(basePath);
     if (name === 'dashboard') return this.spawnDashboard(basePath);
   }
@@ -458,7 +343,6 @@ class ProcessManager {
     await shutdownProcess('dashboard', tout);
     await shutdownProcess('musicBot', tout);
     await shutdownProcess('backend', tout);
-    await shutdownProcess('gateway', tout);
     this.logger.success('All processes stopped. Launcher exiting.');
   }
 
@@ -477,11 +361,9 @@ class ProcessManager {
   getStatus() {
     return {
       backend: !!this.processes.backend,
-      gateway: !!this.processes.gateway,
       musicBot: !!this.processes.musicBot,
       dashboard: !!this.processes.dashboard,
       backendPid: this.processes.backend?.pid || null,
-      gatewayPid: this.processes.gateway?.pid || null,
       musicBotPid: this.processes.musicBot?.pid || null,
       dashboardPid: this.processes.dashboard?.pid || null
     };
