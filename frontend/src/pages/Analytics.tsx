@@ -46,13 +46,19 @@ export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
     return () => { active = false; };
   }, [days, token, activeGuildId]);
 
-  const totalMembers = registry.memberCount ?? 0;
-  const onlineMembers = registry.onlineCount ?? 0;
-  const enabledModules = modules.filter(m => m.status === 'enabled').length;
-  const errorModules = modules.filter(m => m.status === 'validation_failed' || m.errors.length > 0).length;
-  const totalRoles = registry.roles.length;
-  const totalChannels = registry.channels.length;
-  const recentIncidents = syncLogs.filter(l => l.type === 'warn').slice(0, 10);
+  const safeModules = Array.isArray(modules) ? modules : [];
+  const safeRoles = Array.isArray(registry?.roles) ? registry.roles : [];
+  const safeChannels = Array.isArray(registry?.channels) ? registry.channels : [];
+  const safeSyncLogs = Array.isArray(syncLogs) ? syncLogs : [];
+  const safeData = Array.isArray(data) ? data : [];
+
+  const totalMembers = registry?.memberCount ?? 0;
+  const onlineMembers = registry?.onlineCount ?? 0;
+  const enabledModules = safeModules.filter(m => m?.status === 'enabled').length;
+  const errorModules = safeModules.filter(m => m?.status === 'validation_failed' || (Array.isArray(m?.errors) && m.errors.length > 0)).length;
+  const totalRoles = safeRoles.length;
+  const totalChannels = safeChannels.length;
+  const recentIncidents = safeSyncLogs.filter(l => l?.type === 'warn').slice(0, 10);
 
   // SVG Line Chart Helpers
   const chartWidth = 500;
@@ -65,12 +71,12 @@ export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
   const pointsWidth = chartWidth - paddingLeft - paddingRight;
   const pointsHeight = chartHeight - paddingTop - paddingBottom;
 
-  const maxVal = Math.max(...(data.map(d => d.joins + d.leaves) || [10])) || 10;
+  const maxVal = Math.max(...(safeData.map(d => (d?.joins || 0) + (d?.leaves || 0)) || [10])) || 10;
 
   // Generate SVG coordinates for Join/Leave line
-  const pointsList = data.map((d, index) => {
-    const x = paddingLeft + (index / (data.length - 1 || 1)) * pointsWidth;
-    const y = chartHeight - paddingBottom - ((d.joins || 0) / maxVal) * pointsHeight;
+  const pointsList = safeData.map((d, index) => {
+    const x = paddingLeft + (index / (safeData.length - 1 || 1)) * pointsWidth;
+    const y = chartHeight - paddingBottom - ((d?.joins || 0) / maxVal) * pointsHeight;
     return { x, y, data: d };
   });
 
@@ -84,8 +90,8 @@ export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
 
   // Command usage totals
   const commandTotals: Record<string, number> = {};
-  data.forEach(d => {
-    if (d.commands) {
+  safeData.forEach(d => {
+    if (d?.commands) {
       Object.entries(d.commands).forEach(([name, count]) => {
         commandTotals[name] = (commandTotals[name] || 0) + (count as number);
       });
@@ -125,7 +131,7 @@ export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
         {[
           { label: 'Total Members', val: totalMembers || '—', icon: <Users size={18} />, color: 'var(--accent-primary)', sub: `${onlineMembers} online` },
-          { label: 'Active Modules', val: `${enabledModules} / ${modules.length}`, icon: <Zap size={18} />, color: 'var(--color-success)', sub: `${errorModules} warnings` },
+          { label: 'Active Modules', val: `${enabledModules} / ${safeModules.length}`, icon: <Zap size={18} />, color: 'var(--color-success)', sub: `${errorModules} warnings` },
           { label: 'Server Roles', val: totalRoles, icon: <Shield size={18} />, color: 'var(--accent-purple)', sub: 'live from Discord' },
           { label: 'Channels', val: totalChannels, icon: <Server size={18} />, color: 'var(--color-warning)', sub: 'all types' },
         ].map((kpi, i) => (
@@ -168,10 +174,10 @@ export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
                     );
                   })}
                   {/* Date labels */}
-                  {data.map((d, i) => {
-                    if (i === 0 || i === data.length - 1 || (data.length > 7 && i === Math.floor(data.length / 2))) {
-                      const x = paddingLeft + (i / (data.length - 1 || 1)) * pointsWidth;
-                      const displayDate = d.date.split('-').slice(1).join('/');
+                  {safeData.map((d, i) => {
+                    if (i === 0 || i === safeData.length - 1 || (safeData.length > 7 && i === Math.floor(safeData.length / 2))) {
+                      const x = paddingLeft + (i / (safeData.length - 1 || 1)) * pointsWidth;
+                      const displayDate = d?.date ? d.date.split('-').slice(1).join('/') : '';
                       return (
                         <text key={i} x={x} y={chartHeight - 8} textAnchor="middle" fontSize={9} fill="var(--text-muted)" fontFamily="inherit">{displayDate}</text>
                       );
@@ -205,16 +211,16 @@ export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
                 </svg>
 
                 {/* Tooltip */}
-                {activeHoverIdx !== null && data[activeHoverIdx] && (
+                {activeHoverIdx !== null && safeData[activeHoverIdx] && (
                   <div style={{
                     position: 'absolute', top: 0, left: 50, background: 'rgba(30, 31, 34, 0.95)',
                     border: '1px solid rgba(124,92,252,0.3)', borderRadius: 6, padding: '8px 12px',
                     pointerEvents: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', zIndex: 10
                   }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{data[activeHoverIdx].date}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{safeData[activeHoverIdx].date}</div>
                     <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                      <span style={{ fontSize: 12, color: 'var(--color-success)', fontWeight: 700 }}>+{data[activeHoverIdx].joins} Joins</span>
-                      <span style={{ fontSize: 12, color: 'var(--color-danger)', fontWeight: 700 }}>-{data[activeHoverIdx].leaves} Leaves</span>
+                      <span style={{ fontSize: 12, color: 'var(--color-success)', fontWeight: 700 }}>+{safeData[activeHoverIdx].joins || 0} Joins</span>
+                      <span style={{ fontSize: 12, color: 'var(--color-danger)', fontWeight: 700 }}>-{safeData[activeHoverIdx].leaves || 0} Leaves</span>
                     </div>
                   </div>
                 )}
@@ -264,8 +270,8 @@ export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
             <div className="panel-title"><Activity size={16} color="var(--color-success)" /><span>Activity Heatmap</span></div>
           </div>
           <div className="panel-body" style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: 14 }}>
-            {data.map((d, i) => {
-              const totalAct = d.messages + d.voiceMinutes + (d.joins * 2);
+            {safeData.map((d, i) => {
+              const totalAct = (d?.messages || 0) + (d?.voiceMinutes || 0) + ((d?.joins || 0) * 2);
               const opacity = Math.min(1, Math.max(0.1, totalAct / 500));
               return (
                 <div key={i} style={{
@@ -273,7 +279,7 @@ export function Analytics({ modules, registry, syncLogs }: AnalyticsProps) {
                   textAlign: 'center', border: '1px solid rgba(34,197,94,0.1)'
                 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{totalAct}</div>
-                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{d.date.split('-').slice(2).join('/')}</div>
+                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{d?.date ? d.date.split('-').slice(2).join('/') : ''}</div>
                 </div>
               );
             })}
