@@ -65,7 +65,7 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
     handleUpdate('ignoredRoles', ignoredRoles.filter((id: string) => id !== roleId));
   };
 
-  const textChannels = (registry.channels || []).filter(c => !c.type || c.type === 'text' || c.type === '0');
+  const textChannels = (registry.channels || []).filter(c => !c.type || c.type === 'text');
   const serverRoles = registry.roles || [];
 
   return (
