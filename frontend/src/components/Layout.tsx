@@ -4,7 +4,7 @@ import {
   LineChart, Settings, ShieldAlert, Bell, Search, Play, Pause, 
   Terminal, Server, Activity, ChevronDown, Menu, X, AlertTriangle,
   Volume2, ShieldCheck, LogOut, LayoutTemplate, Music, RefreshCw,
-  Gift, Send, Sparkles, Award, Radio, MessageSquare, CreditCard, Bot
+  Gift, Send, Sparkles, Award, Radio, MessageSquare, CreditCard, Bot, Layers
 } from 'lucide-react';
 import type { NotificationItem } from '../hooks/useActivityFeed';
 import { NotificationsMenu } from './NotificationsMenu';
@@ -51,50 +51,38 @@ export function Layout({
     ? `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png`
     : null;
 
-  const navigationItems = [
+  const overviewItems = [
     { id: 'dashboard', label: 'Web Dashboard', icon: <LayoutDashboard size={18} /> },
     { id: 'discord-dashboard', label: 'Discord Dashboard', icon: <LayoutTemplate size={18} /> },
     { id: 'health', label: 'Config Health', icon: <AlertTriangle size={18} color="var(--color-warning)" /> },
-    { id: 'security', label: 'Security Panel', icon: <Shield size={18} /> },
+    { id: 'security', label: 'Security Panel', icon: <Shield size={18} color="#ef4444" /> },
+  ];
+
+  const modProtectionItems = [
     { id: 'automod', label: 'AI Automod & AntiLink', icon: <Bot size={18} color="#7c5cfc" /> },
-    { id: 'payment', label: 'Enterprise Payment QR', icon: <CreditCard size={18} color="#10b981" /> },
-    { id: 'giveaway', label: 'Giveaways', icon: <Gift size={18} /> },
-    { id: 'announcements', label: 'Announcements', icon: <Send size={18} /> },
-    { id: 'join_to_create', label: 'Join To Create', icon: <Volume2 size={18} /> },
-    { id: 'reaction_roles', label: 'Reaction Roles', icon: <Sparkles size={18} /> },
-    { id: 'leveling', label: 'Leveling & XP', icon: <Award size={18} /> },
-    { id: 'reminders', label: 'Reminder System', icon: <Bell size={18} /> },
-    { id: 'welcome', label: 'Welcome System V2', icon: <Sparkles size={18} color="#d4af37" /> },
-    { id: 'tickets', label: 'Tickets System V2', icon: <MessageSquare size={18} color="#d4af37" /> },
+    { id: 'whitelist-overview', label: 'Whitelist & Trust Center', icon: <ShieldCheck size={18} color="#10b981" /> },
+    { id: 'payment', label: 'Enterprise Payment QR', icon: <CreditCard size={18} color="#f59e0b" /> },
     { id: 'roles', label: 'Roles Manager', icon: <span style={{ fontSize: 14 }}>🎭</span> },
   ];
 
-  const whitelistItems = [
-    { id: 'whitelist-overview', label: 'Overview', icon: <ShieldCheck size={18} /> },
-    { id: 'whitelist-bots', label: 'Bot Whitelist', icon: <Zap size={18} /> },
-    { id: 'whitelist-members', label: 'Member Whitelist', icon: <Users size={18} /> },
-    { id: 'whitelist-roles', label: 'Role Whitelist', icon: <Shield size={18} /> },
-    { id: 'whitelist-activity', label: 'Activity Logs', icon: <FileText size={18} /> },
-    { id: 'whitelist-audit', label: 'Audit Log', icon: <AlertTriangle size={18} /> },
-    { id: 'whitelist-settings', label: 'Settings', icon: <Settings size={18} /> },
-  ];
-
   const automationItems = [
-    { id: 'incidents', label: 'Incident Center', icon: <AlertTriangle size={18} /> },
-    { id: 'automation', label: 'Automation', icon: <Zap size={18} /> },
+    { id: 'automation', label: 'Automation Studio', icon: <Zap size={18} color="#3b82f6" /> },
+    { id: 'welcome', label: 'Welcome System V2', icon: <Sparkles size={18} color="#d4af37" /> },
+    { id: 'tickets', label: 'Tickets System V2', icon: <MessageSquare size={18} color="#d4af37" /> },
+    { id: 'reaction_roles', label: 'Reaction Roles', icon: <Sparkles size={18} /> },
+    { id: 'leveling', label: 'Leveling & XP', icon: <Award size={18} color="#ec4899" /> },
+    { id: 'giveaway', label: 'Giveaways', icon: <Gift size={18} /> },
+    { id: 'announcements', label: 'Announcements', icon: <Send size={18} /> },
+    { id: 'reminders', label: 'Reminder System', icon: <Bell size={18} /> },
     { id: 'social_updates', label: 'Social Updates', icon: <Radio size={18} /> },
-    { id: 'logs', label: 'Logs Timeline', icon: <FileText size={18} /> },
-    { id: 'audit', label: 'Audit Timeline', icon: <FileText size={18} color="#60a5fa" /> },
-    { id: 'bulk_ops', label: 'Bulk Operations', icon: <FileText size={18} color="#f59e0b" /> },
-    { id: 'analytics', label: 'Analytics', icon: <LineChart size={18} /> },
   ];
 
-  const controlPanelItems = [
-    { id: 'voice', label: 'Voice Presence', icon: <Volume2 size={18} /> },
-    { id: 'voice-protection', label: 'Voice Protection', icon: <ShieldAlert size={18} /> },
-    { id: 'voice_manager', label: 'Voice Manager', icon: <Volume2 size={18} color="#a855f7" /> },
-    { id: 'diagnostics', label: 'System Diagnostics', icon: <Activity size={18} color="#10b981" /> },
-    { id: 'music', label: 'Music System', icon: <Music size={18} /> },
+  const systemAudioItems = [
+    { id: 'voice', label: 'Voice Presence & Audio', icon: <Volume2 size={18} color="#a855f7" /> },
+    { id: 'music', label: 'Music System', icon: <Music size={18} color="#6366f1" /> },
+    { id: 'logs', label: 'System Logs & Audits', icon: <FileText size={18} color="#60a5fa" /> },
+    { id: 'bulk_ops', label: 'Bulk Operations', icon: <Layers size={18} color="#f59e0b" /> },
+    { id: 'analytics', label: 'Analytics & Health', icon: <LineChart size={18} color="#10b981" /> },
     { id: 'settings', label: 'Global Settings', icon: <Settings size={18} /> },
   ];
 
@@ -174,8 +162,8 @@ export function Layout({
         </div>
 
         <nav className="sidebar-nav">
-          <div className="nav-section-title">Operations</div>
-          {navigationItems.map(item => (
+          <div className="nav-section-title">Overview & Controls</div>
+          {overviewItems.map(item => (
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}
@@ -187,21 +175,20 @@ export function Layout({
             </button>
           ))}
 
-          <div className="nav-section-title">Whitelist & Trust</div>
-          {whitelistItems.map(item => (
+          <div className="nav-section-title">Moderation & Security</div>
+          {modProtectionItems.map(item => (
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}
               className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-              style={{ paddingLeft: '24px' }}
             >
               {item.icon}
-              <span style={{ fontSize: '13px' }}>{item.label}</span>
+              <span>{item.label}</span>
               {getModuleBadge(item.id)}
             </button>
           ))}
 
-          <div className="nav-section-title">Automations & Analysis</div>
+          <div className="nav-section-title">Automations & Features</div>
           {automationItems.map(item => (
             <button
               key={item.id}
@@ -214,8 +201,8 @@ export function Layout({
             </button>
           ))}
 
-          <div className="nav-section-title">Control Panel</div>
-          {controlPanelItems.map(item => (
+          <div className="nav-section-title">System & Audio Suite</div>
+          {systemAudioItems.map(item => (
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}

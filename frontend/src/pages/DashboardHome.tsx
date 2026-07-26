@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   ShieldCheck, Users, Activity, ShieldAlert, Award, Clock, ArrowUpRight, 
-  Settings2, ChevronRight, CheckCircle2, ShieldOff, AlertTriangle
+  Settings2, ChevronRight, CheckCircle2, ShieldOff, AlertTriangle, Search,
+  Sliders, Bot, CreditCard, Sparkles, MessageSquare, Volume2, Music, LineChart, FileText, Gift, Send, Bell, Radio, Zap
 } from 'lucide-react';
 import type { ActivityEvent } from '../hooks/useActivityFeed';
 import type { ModuleState, DiscordResourceRegistry } from '../hooks/useDiscordSync';
@@ -18,6 +19,8 @@ interface DashboardHomeProps {
 }
 
 export function DashboardHome({ events, latency, uptime, onNavigate, onManualTrigger, modules, registry }: DashboardHomeProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Compute numbers from active events
   const quarantinedCount = events.filter(e => e.message.includes('quarantine') || e.message.includes('revoked') || e.message.includes('banned')).length;
   const resolvedCount = events.filter(e => e.message.toLowerCase().includes('restore') || e.message.toLowerCase().includes('resolved') || e.message.toLowerCase().includes('success') || e.message.toLowerCase().includes('complete')).length;
@@ -30,9 +33,8 @@ export function DashboardHome({ events, latency, uptime, onNavigate, onManualTri
 
   // Compute live users and staff from registry
   const liveTotalMembers = registry.memberCount || (registry.roles ? registry.roles.find(r => r.id === 'r-5')?.membersCount : 0) || 842;
-  const liveOnlineMembers = registry.onlineCount || Math.round(liveTotalMembers * 0.15); // Fallback to 15% online
+  const liveOnlineMembers = registry.onlineCount || Math.round(liveTotalMembers * 0.15);
   
-  // Staff are roles with administration permissions
   const staffRoles = registry.roles ? registry.roles.filter(r => 
     r.permissions && (
       r.permissions.includes('ADMINISTRATOR') || 
@@ -42,7 +44,30 @@ export function DashboardHome({ events, latency, uptime, onNavigate, onManualTri
     )
   ) : [];
   const totalStaffCount = staffRoles.reduce((acc, r) => acc + (r.membersCount || 0), 0);
-  const onlineStaffCount = totalStaffCount > 0 ? Math.max(1, Math.round(totalStaffCount * 0.6)) : 0; // Estimate 60% online staff
+  const onlineStaffCount = totalStaffCount > 0 ? Math.max(1, Math.round(totalStaffCount * 0.6)) : 0;
+
+  // Deduplicate modules list for UI presentation
+  const hiddenModuleIds = new Set(['bot_whitelist', 'role_whitelist', 'tickets', 'welcome']);
+
+  const getPageRoute = (modId: string) => {
+    switch (modId) {
+      case 'welcome-v2': return 'welcome';
+      case 'tickets-v2': return 'tickets';
+      case 'member_whitelist': return 'whitelist-overview';
+      case 'logging': return 'logs';
+      case 'voice-protection':
+      case 'voice_manager': return 'voice';
+      default: return modId;
+    }
+  };
+
+  const filteredModules = (modules || [])
+    .filter(m => !hiddenModuleIds.has(m.id))
+    .filter(m => 
+      !searchQuery.trim() || 
+      m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      m.id.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -77,7 +102,7 @@ export function DashboardHome({ events, latency, uptime, onNavigate, onManualTri
         <div className="page-title-row">
           <div>
             <h1 className="page-title">Operational Overview</h1>
-            <p className="page-subtitle">Real-time status check of your server security layers.</p>
+            <p className="page-subtitle">Real-time status check and module management suite.</p>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button className="btn btn-secondary" onClick={() => onNavigate('health')}>
@@ -146,6 +171,97 @@ export function DashboardHome({ events, latency, uptime, onNavigate, onManualTri
         </div>
       </div>
 
+      {/* Module Operations Hub with Live Search */}
+      <div className="section-panel">
+        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sliders size={18} color="var(--accent-primary)" />
+            <span>Registered Modules Control Hub</span>
+          </div>
+          
+          <div style={{ position: 'relative', width: '260px' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input 
+              type="text"
+              className="form-input"
+              placeholder="Search modules..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingLeft: '32px', paddingRight: '12px', height: '34px', fontSize: '12px', borderRadius: '20px' }}
+            />
+          </div>
+        </div>
+
+        <div className="panel-body" style={{ padding: '20px' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '16px'
+          }}>
+            {filteredModules.map((mod) => {
+              const route = getPageRoute(mod.id);
+              const isOnline = mod.status === 'enabled' || mod.status === 'ready';
+
+              return (
+                <div 
+                  key={mod.id}
+                  onClick={() => onNavigate(route)}
+                  style={{
+                    padding: '16px',
+                    borderRadius: '12px',
+                    backgroundColor: 'var(--bg-secondary)',
+                    border: `1px solid ${isOnline ? 'rgba(16, 185, 129, 0.25)' : 'var(--border-color)'}`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    transition: 'transform 0.15s, border-color 0.15s',
+                    boxShadow: isOnline ? '0 0 12px rgba(16, 185, 129, 0.04)' : 'none'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.borderColor = 'var(--accent-primary)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.borderColor = isOnline ? 'rgba(16, 185, 129, 0.25)' : 'var(--border-color)';
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{mod.name}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace' }}>id: {mod.id}</div>
+                    </div>
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                      color: isOnline ? '#10b981' : 'var(--text-muted)',
+                      border: `1px solid ${isOnline ? 'rgba(16, 185, 129, 0.3)' : 'transparent'}`
+                    }}>
+                      {isOnline ? 'ACTIVE' : 'STANDBY'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--accent-primary)', fontWeight: 600 }}>
+                      <span>Manage Settings</span>
+                      <ChevronRight size={14} />
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Progress: {mod.progress}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Secondary Dashboard Grid */}
       <div className="dashboard-layout-grid">
         
@@ -197,79 +313,19 @@ export function DashboardHome({ events, latency, uptime, onNavigate, onManualTri
           </div>
         </div>
 
-        {/* Sidebar Right Pane: Health dials and shortcuts */}
+        {/* Sidebar Right Pane: Quick Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* Voice Presence Status Widget */}
-          <div className="section-panel" style={{ background: 'linear-gradient(135deg, rgba(79,140,255,0.05) 0%, rgba(139,92,246,0.05) 100%)', border: '1px solid rgba(79,140,255,0.15)' }}>
-            <div className="panel-header" style={{ borderBottom: '1px solid rgba(79,140,255,0.1)' }}>
-              <span className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                <span className="ping-dot" style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: (modules?.find(m => m.id === 'voice')?.connectionStatus || 'disconnected') === 'connected' ? 'var(--color-success)' : ((modules?.find(m => m.id === 'voice')?.connectionStatus || 'disconnected') === 'connecting' ? 'var(--color-warning)' : 'var(--text-muted)'),
-                  boxShadow: (modules?.find(m => m.id === 'voice')?.connectionStatus || 'disconnected') === 'connected' ? '0 0 8px var(--color-success)' : 'none'
-                }}></span>
-                Voice Presence (24/7)
-              </span>
-              <button className="btn-link" onClick={() => onNavigate('voice')} style={{ fontSize: '11px', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '2px', border: 'none', background: 'none', cursor: 'pointer' }}>
-                View Monitor <ChevronRight size={10} />
-              </button>
-            </div>
-            <div className="panel-body" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</span>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: (modules?.find(m => m.id === 'voice')?.connectionStatus || 'disconnected') === 'connected' ? 'var(--color-success)' : 'var(--text-secondary)' }}>
-                    {(modules?.find(m => m.id === 'voice')?.connectionStatus || 'disconnected').toUpperCase()}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Channel</span>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {modules?.find(m => m.id === 'voice')?.connectedChannelId 
-                      ? `🔊 ${registry.channels?.find((c: any) => c.id === (modules || []).find(m => m.id === 'voice')?.connectedChannelId)?.name || 'Unknown'}`
-                      : 'None'}
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '10px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Duration</span>
-                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)' }}>
-                    {modules?.find(m => m.id === 'voice')?.connectionDuration || '0s'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gateway</span>
-                  <span style={{ 
-                    fontSize: '11px', 
-                    fontWeight: 700, 
-                    color: (modules?.find(m => m.id === 'voice')?.voiceGatewayStatus || 'healthy') === 'healthy' ? 'var(--color-success)' : 'var(--color-danger)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    {(modules?.find(m => m.id === 'voice')?.voiceGatewayStatus || 'healthy').toUpperCase()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Access panel */}
           <div className="section-panel">
             <div className="panel-header">
-              <span className="panel-title">Quick Actions</span>
+              <span className="panel-title">Quick Operational Actions</span>
             </div>
             <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[
+                { label: 'Configure AntiLink Ignored Rules', page: 'automod' },
+                { label: 'Setup Enterprise Payment QR', page: 'payment' },
                 { label: 'Resolve Validation Warnings', page: 'health' },
                 { label: 'Create Instant Server Backup', page: 'backups' },
                 { label: 'Modify Anti-Raid Thresholds', page: 'security' },
-                { label: 'Verify User Entry Gate', page: 'verification' },
                 { label: 'Export Current System Logs', page: 'logs' }
               ].map((act, i) => (
                 <button
@@ -304,37 +360,6 @@ export function DashboardHome({ events, latency, uptime, onNavigate, onManualTri
               ))}
             </div>
           </div>
-
-          {/* Active Security Modules status */}
-          <div className="section-panel">
-            <div className="panel-header">
-              <span className="panel-title">Active Security Policies</span>
-            </div>
-            <div className="panel-body" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {modules.map((mod, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                  <span style={{ color: mod.status === 'enabled' ? 'var(--text-primary)' : 'var(--text-muted)' }}>{mod.name}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {mod.status === 'enabled' ? (
-                      <CheckCircle2 size={12} color="var(--color-success)" />
-                    ) : mod.status === 'validation_failed' ? (
-                      <AlertTriangle size={12} color="var(--color-danger)" />
-                    ) : (
-                      <ShieldOff size={12} color="var(--text-muted)" />
-                    )}
-                    <span style={{ 
-                      fontSize: '11px', 
-                      fontWeight: 600, 
-                      color: mod.status === 'enabled' ? 'var(--color-success)' : mod.status === 'validation_failed' ? 'var(--color-danger)' : 'var(--text-muted)' 
-                    }}>
-                      {mod.status === 'enabled' ? 'MONITORING' : mod.status === 'validation_failed' ? 'WARNING' : 'INACTIVE'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
         </div>
 
       </div>
