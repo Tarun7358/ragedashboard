@@ -69,6 +69,14 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
       rulesList: [
         { key: 'anti_bot_add', name: 'Anti Bot Add', desc: 'Blocks rogue bot invites without owner approval' }
       ]
+    },
+    {
+      id: 'content',
+      name: 'Content & Link Protection (Anti-Link)',
+      desc: 'Controls and filters message content to prevent link spam or malicious server invites.',
+      rulesList: [
+        { key: 'anti_link', name: 'Anti Link & Invite Guard', desc: 'Blocks unauthorized sharing of HTTP/HTTPS web links and Discord server invite links' }
+      ]
     }
   ];
 
@@ -187,6 +195,19 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
                 <label className="form-label">Time Window (Seconds)</label>
                 <input type="number" className="form-input" value={editRuleData.window} onChange={e => setEditRuleData({ ...editRuleData, window: parseInt(e.target.value) || 10 })} />
               </div>
+              {editRuleData.key === 'anti_link' && (
+                <div className="form-group">
+                  <label className="form-label">Ignored Whitelisted Domains (Comma separated)</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="e.g. youtube.com, spotify.com, tenor.com"
+                    value={editRuleData.ignoredDomains || ''} 
+                    onChange={e => setEditRuleData({ ...editRuleData, ignoredDomains: e.target.value })} 
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Domains entered here will bypass anti-link filtering.</span>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
                 <button className="btn btn-secondary" onClick={() => setEditRuleData(null)}>Cancel</button>
                 <button className="btn btn-primary" onClick={saveRuleConfig}>Save Rule</button>
