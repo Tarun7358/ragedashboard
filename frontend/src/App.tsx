@@ -45,6 +45,11 @@ const JoinToCreate = React.lazy(() => import('./pages/JoinToCreate').then(m => (
 const ReactionRoles = React.lazy(() => import('./pages/ReactionRoles').then(m => ({ default: m.ReactionRoles })));
 const Leveling = React.lazy(() => import('./pages/Leveling').then(m => ({ default: m.Leveling })));
 const Reminders = React.lazy(() => import('./pages/Reminders').then(m => ({ default: m.Reminders })));
+const Payment = React.lazy(() => import('./pages/Payment').then(m => ({ default: m.Payment })));
+const Audit = React.lazy(() => import('./pages/Audit').then(m => ({ default: m.Audit })));
+const BulkOps = React.lazy(() => import('./pages/BulkOps').then(m => ({ default: m.BulkOps })));
+const Diagnostics = React.lazy(() => import('./pages/Diagnostics').then(m => ({ default: m.Diagnostics })));
+const VoiceManager = React.lazy(() => import('./pages/VoiceManager').then(m => ({ default: m.VoiceManager })));
 import { useAuth } from './hooks/useAuth';
 
 interface ToastItem {
@@ -390,6 +395,37 @@ function App() {
       // C-6 FIX: Removed dead bot_whitelist/member_whitelist/role_whitelist cases.
       // These were unreachable (sidebar uses 'whitelist-bots' etc.) AND missing
       // the required onUpdateConfig prop which would cause a crash if reached.
+      case 'payment':
+        return (
+          <Payment
+            onSaveConfig={triggerToast}
+            modules={modules}
+            registry={registry}
+            onUpdateConfig={updateModuleConfig}
+          />
+        );
+      case 'audit':
+        return <Audit modules={modules} registry={registry} syncLogs={syncLogs} />;
+      case 'bulk_ops':
+        return (
+          <BulkOps
+            onSaveConfig={triggerToast}
+            modules={modules}
+            registry={registry}
+            onUpdateConfig={updateModuleConfig}
+          />
+        );
+      case 'diagnostics':
+        return <Diagnostics modules={modules} registry={registry} syncLogs={syncLogs} />;
+      case 'voice_manager':
+        return (
+          <VoiceManager
+            onSaveConfig={triggerToast}
+            modules={modules}
+            registry={registry}
+            onUpdateConfig={updateModuleConfig}
+          />
+        );
       default:
         return (
           <DashboardHome

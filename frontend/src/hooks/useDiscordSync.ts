@@ -62,13 +62,21 @@ export const INITIAL_MODULES: ModuleState[] = [
   { id: 'reaction_roles', name: 'Reaction Roles', status: 'not_configured', progress: 100, errors: [], config: {} },
   { id: 'leveling', name: 'Leveling & XP', status: 'not_configured', progress: 100, errors: [], config: {} },
   { id: 'reminders', name: 'Reminder System', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'automod', name: 'AI Automod', status: 'not_configured', progress: 0, errors: [], config: {} },
+  { id: 'automod', name: 'AI Automod & AntiLink', status: 'not_configured', progress: 100, errors: [], config: {} },
   { id: 'music', name: 'Music System', status: 'not_configured', progress: 0, errors: [], config: {} },
   { id: 'voice-protection', name: 'Voice Protection', status: 'not_configured', progress: 100, errors: [], config: {} },
   { id: 'discord-dashboard', name: 'Discord Dashboard', status: 'config_required', progress: 0, errors: ['No target channel configured'], config: {} },
   { id: 'join_role_guard', name: 'Join Role Guard', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'social_updates', name: 'Social Updates', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'join_to_create', name: 'Join To Create', status: 'not_configured', progress: 0, errors: [], config: {} }
+  { id: 'join_to_create', name: 'Join To Create', status: 'not_configured', progress: 0, errors: [], config: {} },
+  { id: 'giveaway', name: 'Giveaways', status: 'not_configured', progress: 100, errors: [], config: {} },
+  { id: 'announcements', name: 'Announcements', status: 'not_configured', progress: 100, errors: [], config: {} },
+  { id: 'voice_manager', name: 'Voice Manager', status: 'not_configured', progress: 100, errors: [], config: {} },
+  { id: 'bulk_ops', name: 'Bulk Operations', status: 'not_configured', progress: 100, errors: [], config: {} },
+  { id: 'diagnostics', name: 'System Diagnostics', status: 'not_configured', progress: 100, errors: [], config: {} },
+  { id: 'analytics', name: 'Analytics Tracker', status: 'not_configured', progress: 100, errors: [], config: {} },
+  { id: 'audit', name: 'Audit Timeline', status: 'not_configured', progress: 100, errors: [], config: {} },
+  { id: 'payment', name: 'Enterprise Payment QR', status: 'not_configured', progress: 100, errors: [], config: {} }
 ];
 
 export function useDiscordSync() {

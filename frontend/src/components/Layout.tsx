@@ -4,7 +4,7 @@ import {
   LineChart, Settings, ShieldAlert, Bell, Search, Play, Pause, 
   Terminal, Server, Activity, ChevronDown, Menu, X, AlertTriangle,
   Volume2, ShieldCheck, LogOut, LayoutTemplate, Music, RefreshCw,
-  Gift, Send, Sparkles, Award, Radio, MessageSquare
+  Gift, Send, Sparkles, Award, Radio, MessageSquare, CreditCard, Bot
 } from 'lucide-react';
 import type { NotificationItem } from '../hooks/useActivityFeed';
 import { NotificationsMenu } from './NotificationsMenu';
@@ -56,6 +56,8 @@ export function Layout({
     { id: 'discord-dashboard', label: 'Discord Dashboard', icon: <LayoutTemplate size={18} /> },
     { id: 'health', label: 'Config Health', icon: <AlertTriangle size={18} color="var(--color-warning)" /> },
     { id: 'security', label: 'Security Panel', icon: <Shield size={18} /> },
+    { id: 'automod', label: 'AI Automod & AntiLink', icon: <Bot size={18} color="#7c5cfc" /> },
+    { id: 'payment', label: 'Enterprise Payment QR', icon: <CreditCard size={18} color="#10b981" /> },
     { id: 'giveaway', label: 'Giveaways', icon: <Gift size={18} /> },
     { id: 'announcements', label: 'Announcements', icon: <Send size={18} /> },
     { id: 'join_to_create', label: 'Join To Create', icon: <Volume2 size={18} /> },
@@ -80,16 +82,18 @@ export function Layout({
   const automationItems = [
     { id: 'incidents', label: 'Incident Center', icon: <AlertTriangle size={18} /> },
     { id: 'automation', label: 'Automation', icon: <Zap size={18} /> },
-    // H-1 FIX: ID must match the module manifest ID ('social_updates' with underscore)
-    // The sidebar nav uses this id both for active-state highlighting AND for getModuleBadge() lookup.
     { id: 'social_updates', label: 'Social Updates', icon: <Radio size={18} /> },
     { id: 'logs', label: 'Logs Timeline', icon: <FileText size={18} /> },
+    { id: 'audit', label: 'Audit Timeline', icon: <FileText size={18} color="#60a5fa" /> },
+    { id: 'bulk_ops', label: 'Bulk Operations', icon: <FileText size={18} color="#f59e0b" /> },
     { id: 'analytics', label: 'Analytics', icon: <LineChart size={18} /> },
   ];
 
   const controlPanelItems = [
     { id: 'voice', label: 'Voice Presence', icon: <Volume2 size={18} /> },
     { id: 'voice-protection', label: 'Voice Protection', icon: <ShieldAlert size={18} /> },
+    { id: 'voice_manager', label: 'Voice Manager', icon: <Volume2 size={18} color="#a855f7" /> },
+    { id: 'diagnostics', label: 'System Diagnostics', icon: <Activity size={18} color="#10b981" /> },
     { id: 'music', label: 'Music System', icon: <Music size={18} /> },
     { id: 'settings', label: 'Global Settings', icon: <Settings size={18} /> },
   ];
