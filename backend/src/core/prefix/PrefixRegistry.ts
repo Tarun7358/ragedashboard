@@ -162,32 +162,33 @@ export class PrefixRegistry {
       'tickets': 'Tickets',
       'tickets-v2': 'Tickets',
       'verification': 'System',
-      'welcome-v2': 'System',
+      'welcome-v2': 'Welcome',
       'logging': 'Logging',
       'backups': 'Backups',
-      'automation': 'System',
+      'automation': 'Automations',
       'voice': 'Voice',
-      'voice-protection': 'Voice',
+      'voice-protection': 'Voice Protection',
       'member_whitelist': 'Security',
-      'reaction-roles': 'General',
-      'leveling': 'Economy',
-      'automod': 'Security',
+      'reaction-roles': 'Reaction Roles',
+      'leveling': 'Leveling & Economy',
+      'automod': 'AutoMod',
       'music': 'Voice',
       'blacklist': 'Security',
       'giveaway': 'Giveaways',
-      'reminders': 'General',
+      'reminders': 'Reminders',
       'announcements': 'Announcements',
       'joinToCreate': 'Join To Create',
       'voice_manager': 'Voice',
-      'bulk_ops': 'System',
+      'bulk_ops': 'Bulk Operations',
       'diagnostics': 'Diagnostics',
       'join-role-guard': 'Security',
-      'social-updates': 'General',
+      'social-updates': 'Social Updates',
       'analytics': 'Analytics',
-      'audit': 'Audit'
+      'audit': 'Audit',
+      'payment': 'Payment QR'
     };
 
-    return map[moduleId] || 'General';
+    return map[moduleId] || 'System';
   }
 
   private static formatUsage(cmd: any): string {

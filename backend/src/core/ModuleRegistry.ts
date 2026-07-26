@@ -159,7 +159,8 @@ export class ModuleRegistry {
     const id = finalGuildId || process.env.GUILD_ID || 'default_guild';
     const state = this.getGuildState(id);
     const time = new Date().toTimeString().split(' ')[0];
-    const log: LogEntry = { time, msg: finalMsg, type: finalType };
+    const cleanMsg = finalMsg.replace(/\[DashboardOnly\]\s*/g, '').replace(/\[Internal\]\s*/g, '');
+    const log: LogEntry = { time, msg: cleanMsg, type: finalType };
     state.syncLogs.unshift(log);
     if (state.syncLogs.length > 100) state.syncLogs.pop();
     this.broadcast({ type: 'SYNC_LOG', log, guildId: id });
@@ -169,7 +170,7 @@ export class ModuleRegistry {
     if (db && id !== 'default_guild') {
       db.run(
         'INSERT INTO sync_logs (guildId, time, msg, type) VALUES (?, ?, ?, ?)',
-        [id, time, finalMsg, finalType]
+        [id, time, cleanMsg, finalType]
       ).catch(() => {
         // Non-critical — in-memory log already written
       });
@@ -186,7 +187,12 @@ export class ModuleRegistry {
     if (this.client && id && id !== 'default_guild') {
       (async () => {
         try {
-          if (finalMsg.startsWith('[DashboardOnly]') || finalMsg.startsWith('[Internal]')) {
+          if (
+            finalMsg.includes('[DashboardOnly]') ||
+            finalMsg.includes('[Internal]') ||
+            finalMsg.startsWith('Discord Event:') ||
+            finalMsg.toLowerCase().includes('[dashboardonly]')
+          ) {
             return;
           }
 
@@ -234,7 +240,7 @@ export class ModuleRegistry {
             msgLower.includes('voice presence')
           ) {
             resolvedCategory = 'voice';
-            title = '🎙️ Voice & Soundboard Log';
+            title = '🔊 Voice & Soundboard Log';
             color = '#9b59b6';
           } else if (
             msgLower.includes('joined') || 

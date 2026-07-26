@@ -210,8 +210,34 @@ export class SyntheticInteraction {
       if (flagVal !== undefined && !isNaN(Number(flagVal))) {
         return parseInt(String(flagVal), 10);
       }
+      if (this.commandDef && Array.isArray(this.commandDef.options)) {
+        const optIndex = this.commandDef.options.findIndex((o: any) => o.name === name);
+        if (optIndex !== -1 && this.parsed.args[optIndex]) {
+          const num = parseInt(this.parsed.args[optIndex], 10);
+          if (!isNaN(num)) return num;
+        }
+      }
       for (const arg of this.parsed.args) {
         const num = parseInt(arg, 10);
+        if (!isNaN(num)) return num;
+      }
+      return null;
+    },
+
+    getNumber: (name: string, required?: boolean): number | null => {
+      const flagVal = this.parsed.flags[name.toLowerCase()];
+      if (flagVal !== undefined && !isNaN(Number(flagVal))) {
+        return Number(flagVal);
+      }
+      if (this.commandDef && Array.isArray(this.commandDef.options)) {
+        const optIndex = this.commandDef.options.findIndex((o: any) => o.name === name);
+        if (optIndex !== -1 && this.parsed.args[optIndex]) {
+          const num = Number(this.parsed.args[optIndex]);
+          if (!isNaN(num)) return num;
+        }
+      }
+      for (const arg of this.parsed.args) {
+        const num = Number(arg);
         if (!isNaN(num)) return num;
       }
       return null;
@@ -237,6 +263,14 @@ export class SyntheticInteraction {
       return null;
     },
 
+    getMentionable: (name: string, required?: boolean): any => {
+      const mentionedUser = this.message.mentions.users.first();
+      if (mentionedUser) return mentionedUser;
+      const mentionedRole = this.message.mentions.roles.first();
+      if (mentionedRole) return mentionedRole;
+      return null;
+    },
+
     getChannel: (name: string, required?: boolean): Channel | null => {
       const mentionedChannel = this.message.mentions.channels.first();
       if (mentionedChannel) return mentionedChannel;
@@ -247,6 +281,14 @@ export class SyntheticInteraction {
           return this.guild.channels.cache.get(idMatch[0]) || null;
         }
       }
+      return null;
+    },
+
+    getAttachment: (name: string, required?: boolean): any => {
+      return this.message.attachments.first() || null;
+    },
+
+    getSubcommandGroup: (required?: boolean): string | null => {
       return null;
     },
 

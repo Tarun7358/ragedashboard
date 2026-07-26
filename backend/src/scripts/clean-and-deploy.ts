@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 import { REST, Routes } from 'discord.js';
 
-// Import individual manifests directly to avoid running index.ts bootstrap()
 import { SecurityManifest } from '../modules/security/manifest.js';
 import { LoggingManifest } from '../modules/logging/manifest.js';
 import { BackupsManifest } from '../modules/backups/manifest.js';
@@ -13,7 +12,6 @@ import { LevelingManifest } from '../modules/leveling/manifest.js';
 import { AutomodManifest } from '../modules/automod/manifest.js';
 import { DiscordDashboardManifest } from '../modules/discord-dashboard/manifest.js';
 import { MusicManifest } from '../modules/music/manifest.js';
-
 import { GiveawayManifest } from '../modules/giveaway/manifest.js';
 import { RemindersManifest } from '../modules/reminders/manifest.js';
 import { AnnouncementsManifest } from '../modules/announcements/manifest.js';
@@ -30,20 +28,15 @@ import { AnalyticsManifest } from '../modules/analytics/manifest.js';
 import { AuditManifest } from '../modules/audit/manifest.js';
 import { PaymentManifest } from '../modules/payment/manifest.js';
 
-
 dotenv.config();
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
-const guildId = process.env.GUILD_ID;
 
 if (!token || !clientId) {
-  console.error('❌ DISCORD_TOKEN and CLIENT_ID must be specified in the environment.');
+  console.error('❌ DISCORD_TOKEN and CLIENT_ID must be specified in .env');
   process.exit(1);
 }
-
-const clientStr = clientId as string;
-const guildStr = guildId as string;
 
 const manifests = [
   SecurityManifest,
@@ -74,8 +67,6 @@ const manifests = [
   PaymentManifest,
 ];
 
-
-// Recursively serialize options, preserving channel_types, autocomplete, min/max
 const serializeOption = (opt: any): any => {
   const out: any = {
     name: opt.name,
@@ -97,11 +88,8 @@ const seenNames = new Set<string>();
 
 manifests.forEach(m => {
   if (m.commands) {
-    m.commands.forEach((c: { name: string; description: string; options?: any[] }) => {
-      if (seenNames.has(c.name)) {
-        console.warn(`⚠️ Warning: Duplicate command name detected and skipped: /${c.name} in manifest "${m.name}" (${m.id})`);
-        return;
-      }
+    m.commands.forEach((c: any) => {
+      if (seenNames.has(c.name)) return;
       seenNames.add(c.name);
       commands.push({
         name: c.name,
@@ -111,39 +99,31 @@ manifests.forEach(m => {
     });
   }
 });
-console.log('Registering commands:', Array.from(seenNames));
-
 
 const rest = new REST({ version: '10' }).setToken(token);
 
-async function deploy() {
+async function cleanAndDeploy() {
   try {
-    if (guildStr) {
-      console.log(`🚀 Deploying ${commands.length} application commands to target Guild ${guildStr}...`);
-      await rest.put(
-        Routes.applicationGuildCommands(clientStr, guildStr),
-        { body: commands }
-      );
-      console.log('✅ Slash commands successfully registered for target guild.');
+    console.log('1️⃣ Clearing ALL Global Commands from Discord API to prevent duplicates...');
+    await rest.put(Routes.applicationCommands(clientId as string), { body: [] });
+    console.log('✅ Global commands completely cleared (0 global commands).');
 
-      console.log('🧹 Clearing legacy global commands to prevent duplicate command entries in Discord UI...');
+    const userGuilds: any = await rest.get(Routes.userGuilds());
+    console.log(`2️⃣ Found ${userGuilds.length} guilds. Deploying clean deduplicated command set (${commands.length} commands) per guild...`);
+
+    for (const g of userGuilds) {
+      console.log(`   ➜ Deploying to guild "${g.name}" (${g.id})...`);
       await rest.put(
-        Routes.applicationCommands(clientStr),
-        { body: [] }
-      );
-      console.log('✅ Global commands cleared. Duplicates eliminated!');
-    } else {
-      console.log(`🚀 Deploying ${commands.length} application commands globally across all servers...`);
-      await rest.put(
-        Routes.applicationCommands(clientStr),
+        Routes.applicationGuildCommands(clientId as string, g.id),
         { body: commands }
       );
-      console.log('✅ Slash commands successfully registered globally on Discord REST API.');
     }
-  } catch (error) {
-    console.error('❌ Failed to deploy slash commands:', error);
+
+    console.log('🎉 SUCCESS: All command duplicates cleared and clean commands deployed across all guilds!');
+  } catch (err: any) {
+    console.error('❌ Error during clean and deploy:', err);
     process.exit(1);
   }
 }
 
-deploy();
+cleanAndDeploy();

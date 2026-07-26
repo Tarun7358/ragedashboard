@@ -145,6 +145,20 @@ export const BulkOpsManifest: ModuleManifest = {
 
         const sub = interaction.options.getSubcommand(false);
         const guild = interaction.guild;
+        if (!sub) {
+          const embed = new EmbedBuilder()
+            .setTitle('🛠️ Bulk Operations Manager')
+            .setDescription('Run bulk server operations across roles, channels, messages, and members.')
+            .addFields(
+              { name: '🏷️ Role Operations', value: '`r!bulk role-add` • `r!bulk role-remove` • `r!bulk role-purge`', inline: false },
+              { name: '💬 Channel & Messages', value: '`r!bulk channel-purge` • `r!bulk message-purge`', inline: false },
+              { name: '👤 Member Management', value: '`r!bulk nickname-reset` • `r!bulk member-kick` • `r!bulk member-ban`', inline: false }
+            )
+            .setColor('#7c5cfc')
+            .setFooter({ text: 'Rage Optimiser • Bulk Operations Engine' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
+        }
+
         await interaction.deferReply({ flags: 64 });
 
         const logBulk = (action: string, count: number) => {

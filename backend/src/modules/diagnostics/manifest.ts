@@ -94,7 +94,7 @@ export const DiagnosticsManifest: ModuleManifest = {
     {
       name: 'command_diagnostics',
       handler: async (client: any, interaction: any, context: any) => {
-        const sub = interaction.options.getSubcommand(false);
+        const sub = interaction.options.getSubcommand(false) || 'health';
 
         if (sub === 'ping') {
           const start = Date.now();

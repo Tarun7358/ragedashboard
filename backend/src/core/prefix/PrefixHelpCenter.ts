@@ -14,23 +14,29 @@ import { PrefixPermissionManager } from './PrefixPermissionManager.js';
 export class PrefixHelpCenter {
   private static categoryIcons: Record<string, string> = {
     'AntiNuke': '🛡️',
-    'AutoMod': '⚙️',
-    'Ticket': '🎫',
-    'Welcome': '👋',
-    'Utility': '🛠️',
-    'Music': '🎵',
-    'Moderation': '🔨',
-    'Logging': '📜',
-    'Giveaway': '🎉',
-    'Leaderboard': '🏆',
-    'Leveling': '🏆',
-    'Voice Protection': '🎤',
-    'VoiceMaster': '🎙️',
-    'Reaction Roles': '🎭',
-    'Custom Roles': '⭐',
-    'Automations': '🤖',
-    'Backup': '📦',
     'Security': '🔐',
+    'AutoMod': '⚙️',
+    'Voice Protection': '🎤',
+    'Logging': '📜',
+    'Backups': '📦',
+    'Audit': '📋',
+    'Bulk Operations': '🛠️',
+    'Diagnostics': '🩺',
+    'Leveling & Economy': '🏆',
+    'Welcome': '👋',
+    'Giveaways': '🎉',
+    'Tickets': '🎫',
+    'Reaction Roles': '🎭',
+    'Social Updates': '📡',
+    'Announcements': '📢',
+    'Automations': '🤖',
+    'Reminders': '⏰',
+    'Join To Create': '🎙️',
+    'Voice': '🔊',
+    'Music': '🎵',
+    'Analytics': '📊',
+    'Payment QR': '💳',
+    'System': '⚙️',
     'Core': '👑',
     'Administration': '⚙️'
   };
@@ -111,9 +117,9 @@ export class PrefixHelpCenter {
 
     // Organized Matrix Grouping
     const securityGroup = ['AntiNuke', 'Security', 'AutoMod', 'Voice Protection'].filter(c => categories.includes(c as any));
-    const modGroup = ['Administration', 'Moderation', 'Backup', 'Logging'].filter(c => categories.includes(c as any));
-    const commGroup = ['Leveling', 'Welcome', 'Giveaway', 'Ticket', 'Reaction Roles'].filter(c => categories.includes(c as any));
-    const autoGroup = ['Automations', 'VoiceMaster', 'Utility', 'Music', 'Core'].filter(c => categories.includes(c as any));
+    const modGroup = ['Logging', 'Backups', 'Audit', 'Bulk Operations', 'Diagnostics'].filter(c => categories.includes(c as any));
+    const commGroup = ['Leveling & Economy', 'Welcome', 'Giveaways', 'Tickets', 'Reaction Roles', 'Social Updates', 'Announcements'].filter(c => categories.includes(c as any));
+    const autoGroup = ['Automations', 'Reminders', 'Join To Create', 'Voice', 'Music', 'Analytics', 'Payment QR', 'System'].filter(c => categories.includes(c as any));
 
     // Fallback for remaining uncategorized modules
     const mapped = new Set([...securityGroup, ...modGroup, ...commGroup, ...autoGroup]);

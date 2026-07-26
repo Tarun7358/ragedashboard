@@ -1000,15 +1000,24 @@ export class Gateway {
         if (interaction.customId.startsWith('tickets_v2_')) {
           this.dispatchEvent('button_tickets_v2_generic', interaction);
         }
+        if (interaction.customId.startsWith('payment_')) {
+          this.dispatchEvent('button_payment_generic', interaction);
+        }
       } else if (interaction.isAnySelectMenu()) {
         this.dispatchEvent(`select_${interaction.customId}`, interaction);
         if (interaction.customId.startsWith('tickets_v2_')) {
           this.dispatchEvent('select_tickets_v2_generic', interaction);
         }
+        if (interaction.customId.startsWith('payment_')) {
+          this.dispatchEvent('select_payment_generic', interaction);
+        }
       } else if (interaction.isModalSubmit()) {
         this.dispatchEvent(`modal_${interaction.customId}`, interaction);
         if (interaction.customId.startsWith('tickets_v2_')) {
           this.dispatchEvent('modal_tickets_v2_generic', interaction);
+        }
+        if (interaction.customId.startsWith('payment_')) {
+          this.dispatchEvent('modal_payment_generic', interaction);
         }
       }
     });
@@ -1156,9 +1165,12 @@ export class Gateway {
     };
 
     const commands: any[] = [];
+    const seenNames = new Set<string>();
     this.manifests.forEach(m => {
       if (m.commands) {
         m.commands.forEach(c => {
+          if (seenNames.has(c.name)) return;
+          seenNames.add(c.name);
           commands.push({
             name: c.name,
             description: c.description,

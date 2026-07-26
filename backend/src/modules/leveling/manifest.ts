@@ -127,7 +127,7 @@ export const LevelingManifest: ModuleManifest = {
     { name: 'leaderboard', description: 'View the top active members in the server.' },
     { name: 'daily', description: 'Claim your daily reward' },
     { name: 'work', description: 'Work to earn coins' },
-    { name: 'pay', description: 'Pay another user', options: [{ name: 'user', type: 6, description: 'User to pay', required: true }, { name: 'amount', type: 4, description: 'Amount to pay', required: true }] },
+    { name: 'transfer', description: 'Transfer coins to another user', options: [{ name: 'user', type: 6, description: 'User to transfer to', required: true }, { name: 'amount', type: 4, description: 'Amount to transfer', required: true }] },
     { name: 'balance', description: 'Check your or another user\'s balance', options: [{ name: 'user', type: 6, description: 'User to check', required: false }] },
     { name: 'shop', description: 'View the server shop' },
     { name: 'inventory', description: 'View your inventory' },
@@ -326,7 +326,7 @@ export const LevelingManifest: ModuleManifest = {
       }
     },
     {
-      name: 'command_pay',
+      name: 'command_transfer',
       handler: async (client: any, interaction: any, context: any) => {
         const target = interaction.options.getUser('user');
         const amount = interaction.options.getInteger('amount');

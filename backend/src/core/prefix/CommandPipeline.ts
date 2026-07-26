@@ -67,8 +67,12 @@ export class CommandPipeline {
       // 2. Module Validation
       const modules = ctx.get('getModulesState') ? ctx.get('getModulesState')() : [];
       const modState = modules.find((m: any) => m.id === cmdMeta.moduleOwnerId);
-      if (cmdMeta.moduleOwnerId !== 'core' && (!modState || modState.status !== 'enabled')) {
-        return this.sendError(ctx, `The backing module **\`${cmdMeta.moduleOwnerId}\`** is currently disabled on this server.`);
+      
+      const isManagementCmd = ['setup', 'enable', 'config', 'settings', 'profile', 'role', 'branding', 'preset'].includes(parsed.subcommand || '') ||
+        ['payment', 'setup-tickets', 'setup-discord-dashboard', 'security', 'logs', 'backup', 'audit', 'diagnostics', 'automod', 'automation'].includes(cmdMeta.name);
+
+      if (cmdMeta.moduleOwnerId !== 'core' && !isManagementCmd && (!modState || modState.status !== 'enabled')) {
+        return this.sendError(ctx, `The backing module **\`${cmdMeta.moduleOwnerId}\`** is currently disabled on this server. Run \`r!${cmdMeta.name} enable\` or use setup commands to activate it.`);
       }
 
       // 3. Permission Validation

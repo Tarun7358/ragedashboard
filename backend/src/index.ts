@@ -123,6 +123,7 @@ import { WelcomeV2Manifest } from './modules/welcome-v2/manifest.js';
 import { TicketsV2Manifest } from './modules/tickets-v2/manifest.js';
 import { AnalyticsManifest } from './modules/analytics/manifest.js';
 import { AuditManifest } from './modules/audit/manifest.js';
+import { PaymentManifest } from './modules/payment/manifest.js';
 
 
 
@@ -156,6 +157,7 @@ export const ALL_MANIFESTS = [
   TicketsV2Manifest,
   AnalyticsManifest,
   AuditManifest,
+  PaymentManifest,
 ];
 
 // Web-server excluded manifests (no routes needed for some)

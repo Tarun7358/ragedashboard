@@ -49,7 +49,7 @@ export const AuditManifest: any = {
     {
       name: 'command_audit',
       handler: async (client: any, interaction: any, context: any) => {
-        const sub = interaction.options.getSubcommand(false);
+        const sub = interaction.options.getSubcommand(false) || 'timeline';
 
         if (sub === 'timeline') {
           const embed = new EmbedBuilder()
