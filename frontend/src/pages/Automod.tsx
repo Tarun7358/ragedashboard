@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, Shield, Plus, X, Link, Type, Save } from 'lucide-react';
+import { Bot, Shield, Plus, X, Link, Type, Save, Hash, ShieldCheck } from 'lucide-react';
 import type { ModuleState, DiscordResourceRegistry } from '../hooks/useDiscordSync';
 
 interface AutomodProps {
@@ -15,6 +15,8 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
   const isEnabled = amModule.status === 'enabled';
 
   const [newWord, setNewWord] = useState('');
+  const [selectedChannelToAdd, setSelectedChannelToAdd] = useState('');
+  const [selectedRoleToAdd, setSelectedRoleToAdd] = useState('');
 
   const handleToggleEnable = () => {
     onUpdateConfig('automod', {}, !isEnabled);
@@ -40,7 +42,31 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
     handleUpdate('badWords', currentWords.filter((w: string) => w !== word));
   };
 
-  const textChannels = registry.channels.filter(c => c.type === 'text'); // Guild Text
+  const ignoredChannels: string[] = config.ignoredChannels || [];
+  const ignoredRoles: string[] = config.ignoredRoles || [];
+
+  const handleAddChannel = () => {
+    if (!selectedChannelToAdd || ignoredChannels.includes(selectedChannelToAdd)) return;
+    handleUpdate('ignoredChannels', [...ignoredChannels, selectedChannelToAdd]);
+    setSelectedChannelToAdd('');
+  };
+
+  const handleRemoveChannel = (channelId: string) => {
+    handleUpdate('ignoredChannels', ignoredChannels.filter((id: string) => id !== channelId));
+  };
+
+  const handleAddRole = () => {
+    if (!selectedRoleToAdd || ignoredRoles.includes(selectedRoleToAdd)) return;
+    handleUpdate('ignoredRoles', [...ignoredRoles, selectedRoleToAdd]);
+    setSelectedRoleToAdd('');
+  };
+
+  const handleRemoveRole = (roleId: string) => {
+    handleUpdate('ignoredRoles', ignoredRoles.filter((id: string) => id !== roleId));
+  };
+
+  const textChannels = (registry.channels || []).filter(c => !c.type || c.type === 'text' || c.type === '0');
+  const serverRoles = registry.roles || [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -49,8 +75,8 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
       <div className="page-header">
         <div className="page-title-row">
           <div>
-            <h1 className="page-title">AI Automod Settings</h1>
-            <p className="page-subtitle">Configure intelligent chat filters, spam protection, and automated punishments.</p>
+            <h1 className="page-title">AI Automod & AntiLink Settings</h1>
+            <p className="page-subtitle">Configure intelligent chat filters, anti-link rules, ignored channels, and role bypasses.</p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
             <button 
@@ -126,14 +152,14 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
                 <div className="setting-info">
                   <div className="setting-title">
                     <Link size={16} color="var(--accent-primary)" />
-                    Block Unauthorized Links
+                    Block Unauthorized Links (AntiLink)
                   </div>
-                  <div className="setting-desc">Auto-deletes messages containing `http://` or `https://` (Admins and Mods bypass this).</div>
+                  <div className="setting-desc">Auto-deletes messages containing `http://` or `https://` (Ignored channels and roles bypass this).</div>
                 </div>
                 <label className="switch">
                   <input 
                     type="checkbox" 
-                    checked={config.blockLinks || false}
+                    checked={config.blockLinks !== false}
                     onChange={(e) => handleUpdate('blockLinks', e.target.checked)}
                   />
                   <span className="slider round"></span>
@@ -156,6 +182,159 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
                   />
                   <span className="slider round"></span>
                 </label>
+              </div>
+
+            </div>
+          </div>
+
+          {/* AntiLink Channel & Role Bypasses */}
+          <div className="section-panel">
+            <div className="panel-header">
+              <span className="panel-title">AntiLink Channel & Role Bypasses</span>
+              <ShieldCheck size={16} color="var(--accent-primary)" />
+            </div>
+            <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Messages posted in ignored channels, or sent by members holding an ignored role, will automatically bypass AntiLink link purges.
+              </div>
+
+              {/* Ignored Channels */}
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Hash size={14} color="var(--accent-primary)" />
+                  Ignored Channels (Links Allowed)
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select 
+                    className="form-select"
+                    value={selectedChannelToAdd}
+                    onChange={(e) => setSelectedChannelToAdd(e.target.value)}
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">Select a text channel to ignore...</option>
+                    {textChannels
+                      .filter(c => !ignoredChannels.includes(c.id))
+                      .map(c => (
+                        <option key={c.id} value={c.id}>#{c.name}</option>
+                      ))}
+                  </select>
+                  <button 
+                    type="button" 
+                    className="btn btn-primary"
+                    disabled={!selectedChannelToAdd}
+                    onClick={handleAddChannel}
+                  >
+                    <Plus size={16} />
+                    <span>Add</span>
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+                  {ignoredChannels.length === 0 ? (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      No channels ignored yet. AntiLink filters all channels.
+                    </div>
+                  ) : (
+                    ignoredChannels.map(id => {
+                      const ch = textChannels.find(c => c.id === id);
+                      return (
+                        <div 
+                          key={id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: 'rgba(124, 92, 252, 0.12)',
+                            color: 'var(--accent-primary)',
+                            padding: '4px 10px',
+                            borderRadius: '16px',
+                            fontSize: '13px',
+                            border: '1px solid rgba(124, 92, 252, 0.3)',
+                            fontWeight: 600
+                          }}
+                        >
+                          <Hash size={12} />
+                          <span>{ch ? ch.name : id}</span>
+                          <button 
+                            onClick={() => handleRemoveChannel(id)}
+                            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', padding: 0 }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Ignored Roles */}
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ShieldCheck size={14} color="var(--accent-purple)" />
+                  Ignored Roles (Links Allowed Server-Wide)
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select 
+                    className="form-select"
+                    value={selectedRoleToAdd}
+                    onChange={(e) => setSelectedRoleToAdd(e.target.value)}
+                    style={{ flex: 1 }}
+                  >
+                    <option value="">Select a role to ignore...</option>
+                    {serverRoles
+                      .filter(r => !ignoredRoles.includes(r.id))
+                      .map(r => (
+                        <option key={r.id} value={r.id}>@{r.name}</option>
+                      ))}
+                  </select>
+                  <button 
+                    type="button" 
+                    className="btn btn-primary"
+                    disabled={!selectedRoleToAdd}
+                    onClick={handleAddRole}
+                  >
+                    <Plus size={16} />
+                    <span>Add</span>
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+                  {ignoredRoles.length === 0 ? (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      No roles ignored yet. Only Server Owner and Admins bypass AntiLink.
+                    </div>
+                  ) : (
+                    ignoredRoles.map(id => {
+                      const r = serverRoles.find(role => role.id === id);
+                      return (
+                        <div 
+                          key={id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: 'rgba(52, 211, 153, 0.12)',
+                            color: '#10b981',
+                            padding: '4px 10px',
+                            borderRadius: '16px',
+                            fontSize: '13px',
+                            border: '1px solid rgba(52, 211, 153, 0.3)',
+                            fontWeight: 600
+                          }}
+                        >
+                          <span>@{r ? r.name : id}</span>
+                          <button 
+                            onClick={() => handleRemoveRole(id)}
+                            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', padding: 0 }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
             </div>
