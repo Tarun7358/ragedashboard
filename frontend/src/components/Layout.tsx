@@ -55,7 +55,15 @@ export function Layout({
     { id: 'dashboard', label: 'Web Dashboard', icon: <LayoutDashboard size={18} /> },
     { id: 'discord-dashboard', label: 'Discord Dashboard', icon: <LayoutTemplate size={18} /> },
     { id: 'health', label: 'Config Health', icon: <AlertTriangle size={18} color="var(--color-warning)" /> },
-    { id: 'security', label: 'Security Panel', icon: <Shield size={18} color="#ef4444" /> },
+  ];
+
+  const securitySectorItems = [
+    { id: 'security', label: 'Security Threat Analysis & SOC', icon: <Shield size={18} color="#ef4444" /> },
+    { id: 'anti-nuke', label: 'Anti-Nuke & Threat Rules', icon: <ShieldCheck size={18} color="#7c5cfc" /> },
+    { id: 'upm', label: 'Ultra Protection (UPM)', icon: <Zap size={18} color="#ef4444" /> },
+    { id: 'whitelist-overview', label: 'Smart Whitelist & Trust', icon: <ShieldCheck size={18} color="#10b981" /> },
+    { id: 'vulnerability-scan', label: 'Vulnerability Scanner', icon: <Activity size={18} color="#3b82f6" /> },
+    { id: 'security-logs', label: 'Security Timeline Logs', icon: <FileText size={18} color="#a855f7" /> },
   ];
 
   const modProtectionItems = [
@@ -162,8 +170,21 @@ export function Layout({
         </div>
 
         <nav className="sidebar-nav">
-          <div className="nav-section-title">Overview & Controls</div>
+          <div className="nav-section-title">Overview & Control</div>
           {overviewItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => handleNavClick(item.id)}
+              className={`nav-item ${activePage === item.id ? 'active' : ''}`}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+              {getModuleBadge(item.id)}
+            </button>
+          ))}
+
+          <div className="nav-section-title">Security Operations & Defense</div>
+          {securitySectorItems.map(item => (
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}

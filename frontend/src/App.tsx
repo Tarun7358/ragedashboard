@@ -50,6 +50,10 @@ const Audit = React.lazy(() => import('./pages/Audit').then(m => ({ default: m.A
 const BulkOps = React.lazy(() => import('./pages/BulkOps').then(m => ({ default: m.BulkOps })));
 const Diagnostics = React.lazy(() => import('./pages/Diagnostics').then(m => ({ default: m.Diagnostics })));
 const VoiceManager = React.lazy(() => import('./pages/VoiceManager').then(m => ({ default: m.VoiceManager })));
+const AntiNuke = React.lazy(() => import('./pages/AntiNuke').then(m => ({ default: m.AntiNuke })));
+const UpmEngine = React.lazy(() => import('./pages/UpmEngine').then(m => ({ default: m.UpmEngine })));
+const VulnerabilityScan = React.lazy(() => import('./pages/VulnerabilityScan').then(m => ({ default: m.VulnerabilityScan })));
+const SecurityLogs = React.lazy(() => import('./pages/SecurityLogs').then(m => ({ default: m.SecurityLogs })));
 import { useAuth } from './hooks/useAuth';
 
 interface ToastItem {
@@ -173,15 +177,42 @@ function App() {
       case 'security':
         return (
           <Security
-            initialTab={activeTab}
             onSaveConfig={triggerToast}
             onManualTrigger={pushManualEvent}
             modules={modules}
             registry={registry}
             onUpdateConfig={updateModuleConfig}
             syncLogs={syncLogs}
+            onNavigate={handleNavigate}
           />
         );
+      case 'anti-nuke':
+        return (
+          <AntiNuke
+            onSaveConfig={triggerToast}
+            modules={modules}
+            registry={registry}
+            onUpdateConfig={updateModuleConfig}
+          />
+        );
+      case 'upm':
+        return (
+          <UpmEngine
+            onSaveConfig={triggerToast}
+            modules={modules}
+            onUpdateConfig={updateModuleConfig}
+          />
+        );
+      case 'vulnerability-scan':
+        return (
+          <VulnerabilityScan
+            modules={modules}
+            registry={registry}
+            onSaveConfig={triggerToast}
+          />
+        );
+      case 'security-logs':
+        return <SecurityLogs syncLogs={syncLogs} />;
       case 'automod':
         return (
           <Automod
