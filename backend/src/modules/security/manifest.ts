@@ -2137,10 +2137,28 @@ export const SecurityManifest: ModuleManifest = {
         const content = message.content.toLowerCase();
         const hasLink = content.includes('http://') || content.includes('https://') || content.includes('discord.gg/');
 
-        if (!hasLink) return;
-
         const isBypassed = await isExecutorBypassed(message.guild, message.author.id, config, context, 'anti_link');
         if (isBypassed) return;
+
+        // Ignored Channels & Ignored Roles Check
+        const automodModule = (context.getModulesState ? context.getModulesState() : []).find((m: any) => m.id === 'automod');
+        const automodConfig = automodModule?.config || {};
+
+        const ignoredChannels: string[] = [
+          ...(rule.ignoredChannels || []),
+          ...(config.ignoredChannels || []),
+          ...(automodConfig.ignoredChannels || [])
+        ];
+        const ignoredRoles: string[] = [
+          ...(rule.ignoredRoles || []),
+          ...(config.ignoredRoles || []),
+          ...(automodConfig.ignoredRoles || [])
+        ];
+
+        const isChannelIgnored = ignoredChannels.includes(message.channel.id);
+        const hasIgnoredRole = message.member?.roles?.cache?.some((r: any) => ignoredRoles.includes(r.id));
+
+        if (isChannelIgnored || hasIgnoredRole) return;
 
         // Domain Whitelist Check
         const ignoredString = rule.ignoredDomains || '';
