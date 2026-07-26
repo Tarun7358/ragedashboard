@@ -556,166 +556,200 @@ export function Security({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative' }}>
       
-      {/* Header */}
-      <div className="page-header" style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', backdropFilter: 'blur(10px)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+      {/* Cyber-HUD Hero Command Header */}
+      <div 
+        style={{ 
+          background: 'linear-gradient(135deg, rgba(26, 31, 56, 0.9) 0%, rgba(15, 17, 32, 0.95) 100%)', 
+          padding: '24px', 
+          borderRadius: '16px', 
+          border: '1px solid rgba(124, 92, 252, 0.3)', 
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '16px',
+            background: emergencyMode 
+              ? 'radial-gradient(circle, rgba(239,68,68,0.3) 0%, rgba(239,68,68,0.1) 100%)' 
+              : 'radial-gradient(circle, rgba(124,92,252,0.3) 0%, rgba(124,92,252,0.1) 100%)',
+            border: `2px solid ${emergencyMode ? '#ef4444' : '#7c5cfc'}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: `0 0 20px ${emergencyMode ? 'rgba(239,68,68,0.5)' : 'rgba(124,92,252,0.4)'}`
+          }}>
+            <Shield size={28} color={emergencyMode ? '#ef4444' : '#7c5cfc'} />
+          </div>
           <div>
-            <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '24px', fontWeight: 700, background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-purple))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              <Shield size={28} style={{ stroke: 'var(--accent-primary)' }} />
-              Enterprise Security Operations Center (SOC)
-            </h1>
-            <p className="page-subtitle" style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>
-              Advanced security scanning, rate limit engines, automatic recovery procedures, and emergency lockdowns.
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: 0 }}>
+                Enterprise Security Operations Center (SOC)
+              </h1>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '3px 8px',
+                borderRadius: '12px',
+                backgroundColor: emergencyMode ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
+                color: emergencyMode ? '#ef4444' : '#10b981',
+                border: `1px solid ${emergencyMode ? '#ef4444' : '#10b981'}`
+              }}>
+                {emergencyMode ? 'LOCKDOWN ACTIVE' : '98% SHIELDED'}
+              </span>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px', margin: 0 }}>
+              Real-time anti-nuke defense, UPM live snapshot engine, automated recovery, and rate limiters.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button 
-              onClick={handleToggleEmergency} 
-              className={`btn ${emergencyMode ? 'btn-success' : 'btn-danger'}`} 
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px', borderRadius: '8px', fontWeight: 700 }}
-            >
-              {emergencyMode ? <Unlock size={16} /> : <Lock size={16} />}
-              <span>{emergencyMode ? 'EXIT LOCKDOWN' : 'EMERGENCY LOCKDOWN'}</span>
-            </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Preset Selector */}
+          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+            {['relaxed', 'balanced', 'strict', 'maximum'].map(p => (
+              <button
+                key={p}
+                onClick={() => handleApplyPreset(p)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: currentPreset === p ? 'var(--accent-primary)' : 'transparent',
+                  color: currentPreset === p ? '#ffffff' : 'var(--text-muted)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                  transition: 'all 0.15s'
+                }}
+              >
+                {p}
+              </button>
+            ))}
           </div>
+
+          <button 
+            onClick={handleToggleEmergency} 
+            className={`btn ${emergencyMode ? 'btn-success' : 'btn-danger'}`} 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              padding: '10px 18px', 
+              borderRadius: '10px', 
+              fontWeight: 800,
+              boxShadow: emergencyMode ? '0 0 15px rgba(16,185,129,0.4)' : '0 0 15px rgba(239,68,68,0.4)'
+            }}
+          >
+            {emergencyMode ? <Unlock size={16} /> : <Lock size={16} />}
+            <span>{emergencyMode ? 'EXIT LOCKDOWN' : 'EMERGENCY LOCKDOWN'}</span>
+          </button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        <div className="section-panel" style={{ padding: '16px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600 }}>Security Health Score</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
-            <div style={{ fontSize: '32px', fontWeight: 800, color: scanResult?.score > 80 ? '#10b981' : '#f59e0b' }}>
-              {scanResult?.score || 95}%
-            </div>
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '4px solid rgba(16, 185, 129, 0.2)', borderTopColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Activity size={16} color="#10b981" />
-            </div>
+      {/* Main Command Deck Split Layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '24px', alignItems: 'flex-start' }}>
+        
+        {/* Left Side: Vertical Command Deck Navigator */}
+        <div 
+          className="section-panel" 
+          style={{ 
+            padding: '16px', 
+            background: 'var(--bg-secondary)', 
+            borderRadius: '14px', 
+            border: '1px solid var(--border-color)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}
+        >
+          <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 800, letterSpacing: '0.06em' }}>
+            Security Command Deck
           </div>
-        </div>
 
-        <div className="section-panel" style={{ padding: '16px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600 }}>Threat Risk Status</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-            <span style={{ fontSize: '24px', fontWeight: 800, color: emergencyMode ? '#ef4444' : '#10b981' }}>
-              {emergencyMode ? 'LOCKDOWN ACTIVE' : 'SECURE'}
-            </span>
-            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: emergencyMode ? '#ef4444' : '#10b981', boxShadow: `0 0 10px ${emergencyMode ? '#ef4444' : '#10b981'}` }}></div>
-          </div>
-        </div>
-
-        <div className="section-panel" style={{ padding: '16px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600 }}>Active Protection Rules</div>
-          <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--accent-purple)', marginTop: '8px' }}>
-            {Object.values(rules).filter((r: any) => r.enabled).length} / {Object.keys(rules).length || 14}
-          </div>
-        </div>
-
-        <div className="section-panel" style={{ padding: '16px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600 }}>Quarantined Users</div>
-          <div style={{ fontSize: '32px', fontWeight: 800, color: quarantinedUsers.length > 0 ? '#ef4444' : 'var(--text-primary)', marginTop: '8px' }}>
-            {quarantinedUsers.length}
-          </div>
-        </div>
-      </div>
-
-      {/* Security Sectors Navigation Grid */}
-      <div className="section-panel" style={{ padding: '16px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', borderRadius: '12px' }}>
-        <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '12px' }}>
-          Security Sectors & Inner Modules
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
           {[
             {
               sectorTitle: 'Anti-Nuke & Defense',
               color: '#7c5cfc',
               tabs: [
-                { id: 'dashboard', label: 'SOC Console', icon: <Activity size={14} /> },
-                { id: 'rules', label: 'Protection Rules', icon: <Settings size={14} /> },
-                { id: 'monitored_roles', label: 'Role Monitoring', icon: <ShieldCheck size={14} /> }
+                { id: 'dashboard', label: 'SOC Command', icon: <Activity size={15} /> },
+                { id: 'rules', label: 'Protection Rules', icon: <Settings size={15} /> },
+                { id: 'monitored_roles', label: 'Role Hierarchy', icon: <ShieldCheck size={15} /> }
               ]
             },
             {
-              sectorTitle: 'Ultra Protection (UPM)',
+              sectorTitle: 'UPM & Raid Defense',
               color: '#ef4444',
               tabs: [
-                { id: 'ultra_protection', label: 'UPM Engine', icon: <Shield size={14} /> },
-                { id: 'join_guard', label: 'Join Role Guard', icon: <UserCheck size={14} /> }
+                { id: 'ultra_protection', label: 'UPM Engine', icon: <Shield size={15} /> },
+                { id: 'join_guard', label: 'Join Role Guard', icon: <UserCheck size={15} /> }
               ]
             },
             {
               sectorTitle: 'Trust & Whitelists',
               color: '#10b981',
               tabs: [
-                { id: 'whitelist', label: 'Smart Whitelist', icon: <Key size={14} /> },
-                { id: 'managers', label: 'Trusted Managers', icon: <Users size={14} /> }
+                { id: 'whitelist', label: 'Smart Whitelist', icon: <Key size={15} /> },
+                { id: 'managers', label: 'Trusted Managers', icon: <Users size={15} /> }
               ]
             },
             {
               sectorTitle: 'Intelligence & Audit',
               color: '#3b82f6',
               tabs: [
-                { id: 'health', label: 'Vulnerability Scan', icon: <ScanIcon size={14} /> },
-                { id: 'logs', label: 'Security Timeline', icon: <History size={14} /> },
-                { id: 'wizard', label: 'Setup Wizard', icon: <Sliders size={14} /> }
+                { id: 'health', label: 'Vulnerability Scan', icon: <ScanIcon size={15} /> },
+                { id: 'logs', label: 'Security Timeline', icon: <History size={15} /> },
+                { id: 'wizard', label: 'Setup Wizard', icon: <Sliders size={15} /> }
               ]
             }
-          ].map((sector, idx) => {
-            const hasActiveTab = sector.tabs.some(t => t.id === activeTab);
-            return (
-              <div 
-                key={idx}
-                style={{
-                  padding: '12px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(0,0,0,0.2)',
-                  border: `1px solid ${hasActiveTab ? sector.color : 'rgba(255,255,255,0.06)'}`,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}
-              >
-                <div style={{ fontSize: '11px', fontWeight: 700, color: sector.color, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: sector.color }}></div>
-                  <span>{sector.sectorTitle}</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {sector.tabs.map(t => {
-                    const isActive = activeTab === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => setActiveTab(t.id)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 12px',
-                          borderRadius: '6px',
-                          border: 'none',
-                          background: isActive ? `${sector.color}25` : 'transparent',
-                          color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                          fontSize: '12px',
-                          fontWeight: isActive ? 700 : 500,
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        {t.icon}
-                        <span>{t.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+          ].map((sector, idx) => (
+            <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: sector.color, display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '4px' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: sector.color }}></div>
+                <span>{sector.sectorTitle}</span>
               </div>
-            );
-          })}
+              {sector.tabs.map(t => {
+                const isActive = activeTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: `1px solid ${isActive ? sector.color : 'transparent'}`,
+                      background: isActive ? `${sector.color}20` : 'rgba(0,0,0,0.15)',
+                      color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                      fontSize: '12px',
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span style={{ color: isActive ? sector.color : 'var(--text-muted)' }}>{t.icon}</span>
+                    <span>{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
-      </div>
 
-      {/* Active Inner Module Container */}
-      <div className="section-panel" style={{ padding: '24px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', borderRadius: '12px' }}>
+        {/* Right Side: Inner Module Operations Viewport */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
           
           {/* TAB 1: SOC DASHBOARD */}
           {activeTab === 'dashboard' && (
@@ -1797,6 +1831,7 @@ export function Security({
           )}
 
         </div>
+      </div>
 
       {/* RULE EDITOR MODAL */}
       {editRuleData && (
