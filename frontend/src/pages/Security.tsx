@@ -619,46 +619,103 @@ export function Security({
         </div>
       </div>
 
-      {/* Tabs navigation */}
-      <div className="section-panel" style={{ padding: '0px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', background: 'rgba(0, 0, 0, 0.1)' }}>
-          {[
-            { id: 'dashboard', label: 'SOC Dashboard', icon: <Activity size={16} /> },
-            { id: 'wizard', label: 'Setup Wizard', icon: <Sliders size={16} /> },
-            { id: 'monitored_roles', label: 'Role Monitoring', icon: <ShieldCheck size={16} /> },
-            { id: 'rules', label: 'Protection Rules', icon: <Settings size={16} /> },
-            { id: 'whitelist', label: 'Smart Whitelist', icon: <Key size={16} /> },
-            { id: 'managers', label: 'Trusted Managers', icon: <Users size={16} /> },
-            { id: 'ultra_protection', label: 'Ultra Protection (UPM)', icon: <Shield size={16} /> },
-            { id: 'join_guard', label: 'Join Role Guard', icon: <UserCheck size={16} /> },
-            { id: 'health', label: 'Vulnerability Scan', icon: <ScanIcon size={16} /> },
-            { id: 'logs', label: 'Security Timeline', icon: <History size={16} /> }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '16px 20px',
-                border: 'none',
-                background: activeTab === tab.id ? 'rgba(79, 140, 255, 0.08)' : 'transparent',
-                color: activeTab === tab.id ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                borderBottom: activeTab === tab.id ? '3px solid var(--accent-primary)' : '3px solid transparent',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
+      {/* Security Sectors Navigation Grid */}
+      <div className="section-panel" style={{ padding: '16px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', borderRadius: '12px' }}>
+        <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '12px' }}>
+          Security Sectors & Inner Modules
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+          {[
+            {
+              sectorTitle: 'Anti-Nuke & Defense',
+              color: '#7c5cfc',
+              tabs: [
+                { id: 'dashboard', label: 'SOC Console', icon: <Activity size={14} /> },
+                { id: 'rules', label: 'Protection Rules', icon: <Settings size={14} /> },
+                { id: 'monitored_roles', label: 'Role Monitoring', icon: <ShieldCheck size={14} /> }
+              ]
+            },
+            {
+              sectorTitle: 'Ultra Protection (UPM)',
+              color: '#ef4444',
+              tabs: [
+                { id: 'ultra_protection', label: 'UPM Engine', icon: <Shield size={14} /> },
+                { id: 'join_guard', label: 'Join Role Guard', icon: <UserCheck size={14} /> }
+              ]
+            },
+            {
+              sectorTitle: 'Trust & Whitelists',
+              color: '#10b981',
+              tabs: [
+                { id: 'whitelist', label: 'Smart Whitelist', icon: <Key size={14} /> },
+                { id: 'managers', label: 'Trusted Managers', icon: <Users size={14} /> }
+              ]
+            },
+            {
+              sectorTitle: 'Intelligence & Audit',
+              color: '#3b82f6',
+              tabs: [
+                { id: 'health', label: 'Vulnerability Scan', icon: <ScanIcon size={14} /> },
+                { id: 'logs', label: 'Security Timeline', icon: <History size={14} /> },
+                { id: 'wizard', label: 'Setup Wizard', icon: <Sliders size={14} /> }
+              ]
+            }
+          ].map((sector, idx) => {
+            const hasActiveTab = sector.tabs.some(t => t.id === activeTab);
+            return (
+              <div 
+                key={idx}
+                style={{
+                  padding: '12px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(0,0,0,0.2)',
+                  border: `1px solid ${hasActiveTab ? sector.color : 'rgba(255,255,255,0.06)'}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                <div style={{ fontSize: '11px', fontWeight: 700, color: sector.color, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: sector.color }}></div>
+                  <span>{sector.sectorTitle}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {sector.tabs.map(t => {
+                    const isActive = activeTab === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setActiveTab(t.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: isActive ? `${sector.color}25` : 'transparent',
+                          color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                          fontSize: '12px',
+                          fontWeight: isActive ? 700 : 500,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {t.icon}
+                        <span>{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-        <div style={{ padding: '24px' }}>
+      {/* Active Inner Module Container */}
+      <div className="section-panel" style={{ padding: '24px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', borderRadius: '12px' }}>
           
           {/* TAB 1: SOC DASHBOARD */}
           {activeTab === 'dashboard' && (
@@ -1740,7 +1797,6 @@ export function Security({
           )}
 
         </div>
-      </div>
 
       {/* RULE EDITOR MODAL */}
       {editRuleData && (
