@@ -1,8 +1,9 @@
-import { PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { PermissionFlagsBits, MessageFlags, EmbedBuilder } from 'discord.js';
 import { updateVoiceChannelConnection } from './detector.js';
 import { checkWhitelistPermission } from '../../utils/whitelistCheck.js';
 import { joinVoiceChannel, getVoiceConnection } from '@discordjs/voice';
 import { stopMonitoringAllInGuild, startMonitoringUser } from './analyzer.js';
+import { Embeds, Colors, buildRichCard, buildStatusCard, buildSuccessCard, buildErrorCard, buildPermCard, buildWarnCard } from '../../core/UIFactory.js';
 
 export const VoiceProtectionCommands = [
   {
@@ -189,7 +190,7 @@ export async function handleVoiceProtectionSlashCommand(
                         interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ||
                         interaction.user.id === interaction.guild?.ownerId;
   if (!hasPermission) {
-    return interaction.reply({ content: '🔒 Only the Server Owner, whitelisted administrators, or members with **Manage Server** permissions can execute this command.', flags: 64 });
+    return interaction.reply(buildPermCard('Manage Server'));
   }
 
   const sub = interaction.options.getSubcommand(true);
@@ -197,7 +198,7 @@ export async function handleVoiceProtectionSlashCommand(
   const vpMod = modules.find((m: any) => m.id === 'voice-protection');
 
   if (!vpMod) {
-    return interaction.reply({ content: '❌ Voice Protection module is not registered on this server.', flags: 64 });
+    return interaction.reply({ ...buildErrorCard('Voice Protection module is not registered on this server.'), flags: 64 });
   }
 
   const config = vpMod.config || {};
@@ -205,7 +206,7 @@ export async function handleVoiceProtectionSlashCommand(
   // 1. ENABLE
   if (sub === 'enable') {
     if (config.enabled) {
-      return interaction.reply({ content: '🎙️ **Voice Protection Engine** is already online and active.', flags: 64 });
+      return interaction.reply({ ...buildStatusCard({ emoji: '🎙️', title: 'Voice Protection Active', body: 'Voice Protection Engine is already online and monitoring.', accentColor: Colors.SUCCESS }), flags: MessageFlags.IsComponentsV2 });
     }
     await context.updateModuleConfig('voice-protection', { enabled: true });
     
@@ -217,20 +218,21 @@ export async function handleVoiceProtectionSlashCommand(
       await updateVoiceChannelConnection(guild, updatedConfig, context);
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle('🛡️ Voice Protection Suite')
-      .setDescription('**Acoustic shield initialized successfully.** Real-time decibel analysis and automated spike suppression are now online.')
-      .setColor(0x2ecc71)
-      .setTimestamp()
-      .setFooter({ text: 'Rage Optimiser Premium Security' });
+    const { components, flags } = buildRichCard({
+      emoji: '🛡️',
+      title: 'Voice Protection Suite Initialized',
+      description: 'Acoustic shield initialized successfully. Real-time decibel analysis and automated spike suppression are now online.',
+      accentColor: Colors.SUCCESS,
+      footerNote: 'Rage Optimiser Enterprise  •  🎙️ Voice Protection',
+    });
 
-    return interaction.reply({ embeds: [embed], flags: 64 });
+    return interaction.reply({ components, flags });
   }
 
   // 2. DISABLE
   if (sub === 'disable') {
     if (!config.enabled) {
-      return interaction.reply({ content: '🎙️ **Voice Protection Engine** is currently offline.', flags: 64 });
+      return interaction.reply({ ...buildStatusCard({ emoji: '🎙️', title: 'Voice Protection Offline', body: 'Voice Protection Engine is currently offline.', accentColor: Colors.MUTED }), flags: MessageFlags.IsComponentsV2 });
     }
     await context.updateModuleConfig('voice-protection', { enabled: false });
 
@@ -242,35 +244,37 @@ export async function handleVoiceProtectionSlashCommand(
       await updateVoiceChannelConnection(guild, updatedConfig, context);
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle('🛡️ Voice Protection Suite')
-      .setDescription('**Acoustic shield offline.** Voice auditing has been suspended, and connection loops are terminated.')
-      .setColor(0x95a5a6)
-      .setTimestamp()
-      .setFooter({ text: 'Rage Optimiser Premium Security' });
+    const { components, flags } = buildRichCard({
+      emoji: '🛡️',
+      title: 'Voice Protection Suite Disabled',
+      description: 'Acoustic shield offline. Voice auditing has been suspended, and connection loops are terminated.',
+      accentColor: Colors.MUTED,
+      footerNote: 'Rage Optimiser Enterprise  •  🎙️ Voice Protection',
+    });
 
-    return interaction.reply({ embeds: [embed], flags: 64 });
+    return interaction.reply({ components, flags });
   }
 
   // 3. STATUS
   if (sub === 'status') {
-    const embed = new EmbedBuilder()
-      .setTitle('🎙️ Voice Protection — Operational Registry')
-      .setDescription('Live auditory screening engine parameters and shielding matrix status.')
-      .setColor(config.enabled ? 0x2ecc71 : 0x95a5a6)
-      .addFields(
-        { name: '⚡ System Status', value: config.enabled ? '🟢 **SHIELD ACTIVE**' : '⚪ **SHIELD OFFLINE**', inline: true },
-        { name: '🔊 Loudness Ceiling', value: `\`${config.threshold ?? 85}%\` RMS`, inline: true },
-        { name: '⏳ Audit Duration', value: `\`${config.duration ?? 3}s\``, inline: true },
-        { name: '⚖️ Enforcement Action', value: `\`${(config.punishment ?? 'servermute').toUpperCase()}\``, inline: true },
-        { name: '🔇 Mute Duration', value: `\`${config.muteDuration ?? 30}s\``, inline: true },
-        { name: '🌀 Penalty Cooldown', value: `\`${config.cooldown ?? 60}s\``, inline: true },
-        { name: '📁 Audit Log Channel', value: config.logChannel ? `<#${config.logChannel}>` : '`Not Configured`', inline: false }
-      )
-      .setTimestamp()
-      .setFooter({ text: 'Rage Optimiser Premium Security • Voice Protection Suite' });
+    const { components, flags } = buildRichCard({
+      emoji: '🎙️',
+      title: 'Voice Protection — Operational Registry',
+      description: 'Live auditory screening engine parameters and shielding matrix status.',
+      accentColor: config.enabled ? Colors.SUCCESS : Colors.MUTED,
+      fields: [
+        { label: '⚡ System Status',        value: config.enabled ? '🟢 **SHIELD ACTIVE**' : '⚪ **SHIELD OFFLINE**' },
+        { label: '🔊 Loudness Ceiling',     value: `\`${config.threshold ?? 85}%\` RMS` },
+        { label: '⏳ Audit Duration',       value: `\`${config.duration ?? 3}s\`` },
+        { label: '⚖️ Enforcement Action',   value: `\`${(config.punishment ?? 'servermute').toUpperCase()}\`` },
+        { label: '🔇 Mute Duration',        value: `\`${config.muteDuration ?? 30}s\`` },
+        { label: '🌀 Penalty Cooldown',     value: `\`${config.cooldown ?? 60}s\`` },
+        { label: '📁 Audit Log Channel',    value: config.logChannel ? `<#${config.logChannel}>` : '`Not Configured`' },
+      ],
+      footerNote: 'Rage Optimiser Enterprise  •  🎙️ Voice Protection Suite',
+    });
 
-    return interaction.reply({ embeds: [embed], flags: 64 });
+    return interaction.reply({ components, flags });
   }
 
   // 4. CONFIG

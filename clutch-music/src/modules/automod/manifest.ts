@@ -50,7 +50,8 @@ export const AutomodManifest: ModuleManifest = {
     {
       name: 'messageCreate',
       handler: async (client: any, message: any, context: any) => {
-        if (message.author.bot) return;
+        if (message.author?.bot) return;
+        if ((message as any)._antiLinkHandled) return;
         
         const modules = context.getModulesState();
         const amMod = modules.find((m: any) => m.id === 'automod');
@@ -93,8 +94,20 @@ export const AutomodManifest: ModuleManifest = {
         if (deleted) {
           try {
             await message.delete();
-            await message.channel.send(`${message.author}, your message was removed. Reason: **${reason}**`)
-              .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 5000));
+            (message as any)._antiLinkHandled = true;
+
+            if (reason === 'Posting unauthorized links') {
+              const dmEmbed = new EmbedBuilder()
+                .setTitle(`🔗 Anti-Link Enforcement — ${message.guild.name}`)
+                .setDescription(`Your message in **#${message.channel.name || 'channel'}** was removed because it contained an unauthorized link.\n\n**Server**: ${message.guild.name}\n**Action**: Message removed & link blocked.`)
+                .setColor(0xF59E0B)
+                .setFooter({ text: `${message.guild.name} • AutoMod Protection` })
+                .setTimestamp();
+              await message.member?.send({ embeds: [dmEmbed] }).catch(() => {});
+            } else {
+              await message.channel.send(`${message.author}, your message was removed. Reason: **${reason}**`)
+                .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 5000));
+            }
             
             context.logSyncEvent(`AutoMod: Removed message from ${message.author.tag} in #${message.channel.name} (${reason})`, 'warn');
             

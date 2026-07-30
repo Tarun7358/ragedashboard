@@ -751,50 +751,46 @@ export class GuildQueue {
       const components: any[] = [];
 
       if (!this.currentTrack) {
-        // No song is currently playing
-        embed.setTitle('🎵 Spotify Persistent Engine')
-          .setDescription('**No music is currently playing in this guild.**\n\nInvite users to join a voice channel and play a track via `r!play <query>` or add songs from the dashboard.')
-          .setColor('#1DB954')
-          .setTimestamp()
-          .setFooter({ text: 'Rage Optimiser Audio Engine' });
-
-        embed.addFields({
-          name: '🎵 Discover Trending',
-          value: '🔹 `1.` Chill Lofi Beats to Study/Relax\n🔹 `2.` Synthwave Neon Drive Mix\n🔹 `3.` Cyberpunk Tokyo Drift Theme',
-          inline: false
-        });
+        // ─── IDLE PANEL ───────────────────────────────────────────────
+        embed
+          .setColor(0x57F287)
+          .setTitle('🎵 Rage Music — Audio Engine')
+          .setDescription(
+            '> **No music is currently playing.**\n' +
+            '> Start a session by joining a voice channel and using `/play` or `r!play <query>`.\n\n' +
+            '**🔥 Trending Picks**\n' +
+            '`01.` Chill Lofi Beats · Study & Focus\n' +
+            '`02.` Synthwave Neon Drive Mix\n' +
+            '`03.` Cyberpunk Tokyo Drift Theme'
+          )
+          .addFields(
+            { name: '📡 Engine Status', value: '```Connected — Idle```', inline: true },
+            { name: '🎚️ DSP Filters', value: '```None Active```', inline: true },
+            { name: '🔁 Loop Mode', value: '```Off```', inline: true }
+          )
+          .setFooter({ text: 'Rage Optimiser • Audio System', iconURL: client.user?.displayAvatarURL() })
+          .setTimestamp();
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder().setCustomId('music_view_playlists').setLabel('📥 View Playlists').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('music_trending_songs').setLabel('🔥 Trending').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('music_discover').setLabel('🎵 Discover').setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId('music_view_playlists').setLabel('Playlists').setEmoji('📥').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('music_trending_songs').setLabel('Trending').setEmoji('🔥').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('music_discover').setLabel('Discover').setEmoji('🎵').setStyle(ButtonStyle.Secondary)
         );
         components.push(row);
+
       } else {
+
         if (this.viewMode === 'player') {
+          // ─── NOW PLAYING ──────────────────────────────────────────────
           const { elapsedStr, durationStr, bar } = getPlaybackProgress(this);
-          
-          embed.setTitle('🎵 NOW PLAYING')
-            .setColor('#1DB954')
-            .setTimestamp()
-            .setFooter({ text: 'Rage Optimiser • Audio System' });
-
-          if (this.currentTrack.url && this.currentTrack.url.startsWith('http')) {
-            embed.setURL(this.currentTrack.url);
-          }
-
+          const isPaused = this.player.state.status === AudioPlayerStatus.Paused;
           const hasValidUrl = this.currentTrack.url && this.currentTrack.url.startsWith('http');
-          const titleMarkdown = hasValidUrl ? `**[${this.currentTrack.title}](${this.currentTrack.url})**` : `**${this.currentTrack.title}**`;
-
-          embed.setDescription(`${titleMarkdown}\nby **${this.currentTrack.artist || 'Various Artists'}**\n\n${bar}\n\`${elapsedStr} / ${durationStr}\` • Requested by: **${this.currentTrack.requester}**`);
-
-          if (this.currentTrack.thumbnail) {
-            embed.setImage(this.currentTrack.thumbnail);
-          }
+          const titleLink = hasValidUrl
+            ? `[${this.currentTrack.title}](${this.currentTrack.url})`
+            : `**${this.currentTrack.title}**`;
 
           let voiceChannelName = 'Disconnected';
           let listeners = 0;
-          
           if (this.connection?.joinConfig.channelId) {
             const vc = await client.channels.fetch(this.connection.joinConfig.channelId).catch(() => null);
             if (vc) {
@@ -803,60 +799,66 @@ export class GuildQueue {
             }
           }
 
-          const platform = this.currentTrack.platform || (this.currentTrack.url.includes('spotify') ? 'Spotify' : this.currentTrack.url.includes('soundcloud') ? 'SoundCloud' : 'YouTube');
+          const platform = this.currentTrack.platform ||
+            (this.currentTrack.url.includes('spotify') ? 'Spotify'
+              : this.currentTrack.url.includes('soundcloud') ? 'SoundCloud'
+              : 'YouTube');
 
-          embed.addFields(
-            { name: '🔊 Connection', value: `Voice: **🔊 ${voiceChannelName}**\nListeners: **${listeners}**`, inline: true },
-            { name: '⚙️ Control Matrix', value: `Volume: **${this.volume}%**\nSpeed: **${this.speed}x** | Pitch: **${this.pitch}x**\nLoop: **${this.loopMode}**`, inline: true },
-            { name: '💿 Platform', value: `Source: **${platform}**\nQueue: **${this.queue.length} tracks**`, inline: true }
-          );
+          const loopLabel = this.loopMode === 'track' ? '🔂 Track' : this.loopMode === 'queue' ? '🔁 Queue' : '➡️ Off';
+          const statusLabel = isPaused ? '⏸️ Paused' : '▶️ Playing';
 
-          // Row 1: Primary Controls
+          embed
+            .setColor(0x57F287)
+            .setTitle(`${statusLabel} — Now Playing`)
+            .setDescription(
+              `> ### ${titleLink}\n` +
+              `> by **${this.currentTrack.artist || 'Various Artists'}** • Requested by **${this.currentTrack.requester}**\n\n` +
+              `${bar}\n` +
+              `\`${elapsedStr} / ${durationStr}\``
+            )
+            .addFields(
+              { name: '🔊 Voice Channel', value: `\`${voiceChannelName}\`\n**${listeners}** listener${listeners !== 1 ? 's' : ''}`, inline: true },
+              { name: '⚙️ Controls', value: `Volume: **${this.volume}%**\nSpeed: **${this.speed}x** | Pitch: **${this.pitch}x**`, inline: true },
+              { name: '💿 Session', value: `Platform: **${platform}**\nQueue: **${this.queue.length}** tracks\nLoop: **${loopLabel}**`, inline: true }
+            )
+            .setFooter({ text: 'Rage Optimiser • Audio System', iconURL: client.user?.displayAvatarURL() })
+            .setTimestamp();
+
+          if (hasValidUrl) embed.setURL(this.currentTrack.url);
+          if (this.currentTrack.thumbnail) embed.setThumbnail(this.currentTrack.thumbnail);
+
+          // Row 1 — Playback
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_prev').setLabel('⏮ Previous').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_play_pause').setLabel(this.player.state.status === AudioPlayerStatus.Paused ? '▶️ Resume' : '⏸️ Pause').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('music_skip').setLabel('⏭ Skip').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_stop').setLabel('⏹ Stop').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('music_loop').setLabel('🔁 Loop').setStyle(this.loopMode !== 'off' ? ButtonStyle.Success : ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId('music_prev').setLabel('Previous').setEmoji('⏮').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_play_pause').setLabel(isPaused ? 'Resume' : 'Pause').setEmoji(isPaused ? '▶️' : '⏸️').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('music_skip').setLabel('Skip').setEmoji('⏭').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_stop').setLabel('Stop').setEmoji('⏹').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('music_loop').setLabel('Loop').setEmoji('🔁').setStyle(this.loopMode !== 'off' ? ButtonStyle.Success : ButtonStyle.Secondary)
           );
 
-          // Row 2: Secondary Controls
+          // Row 2 — Utilities
           const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_queue_btn').setLabel('📜 Queue').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_filters_btn').setLabel('🎚 Filters').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_volume_btn').setLabel('🔊 Volume').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_lyrics').setLabel('🎤 Lyrics').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_settings').setLabel('⚙ Settings').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId('music_queue_btn').setLabel('Queue').setEmoji('📜').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_filters_btn').setLabel('Filters').setEmoji('🎚').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_volume_btn').setLabel('Volume').setEmoji('🔊').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_lyrics').setLabel('Lyrics').setEmoji('🎤').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_settings').setLabel('Settings').setEmoji('⚙').setStyle(ButtonStyle.Secondary)
           );
 
           components.push(row1, row2);
 
         } else if (this.viewMode === 'queue') {
+          // ─── QUEUE VIEW ───────────────────────────────────────────────
           const hasValidUrl = this.currentTrack.url && this.currentTrack.url.startsWith('http');
-          const titleMarkdown = hasValidUrl ? `[${this.currentTrack.title}](${this.currentTrack.url})` : `**${this.currentTrack.title}**`;
-          embed.setTitle('📋 CURRENT PLAYBACK QUEUE')
-            .setDescription(`▶️ **Now Playing**: ${titleMarkdown} (Duration: \`${this.currentTrack.duration}\` • Requested by: **${this.currentTrack.requester}**)\n\n**Upcoming Tracks:**`)
-            .setColor('#1DB954');
+          const titleLink = hasValidUrl
+            ? `[${this.currentTrack.title}](${this.currentTrack.url})`
+            : `**${this.currentTrack.title}**`;
 
           const itemsPerPage = 6;
           const totalPages = Math.ceil(this.queue.length / itemsPerPage) || 1;
           const page = Math.min(this.queuePage, totalPages - 1);
-          
           const startIdx = page * itemsPerPage;
-          const endIdx = startIdx + itemsPerPage;
-          const pageTracks = this.queue.slice(startIdx, endIdx);
-
-          if (pageTracks.length === 0) {
-            embed.addFields({ name: 'Upcoming Queue', value: '*No upcoming songs. Use commands or dashboard to add tracks.*' });
-          } else {
-            pageTracks.forEach((t, i) => {
-              embed.addFields({
-                name: `${startIdx + i + 1}. ${t.title.slice(0, 75)}`,
-                value: `Duration: \`${t.duration}\` • Requested By: **${t.requester}**`,
-                inline: false
-              });
-            });
-          }
+          const pageTracks = this.queue.slice(startIdx, startIdx + itemsPerPage);
 
           let totalSecs = 0;
           this.queue.forEach(track => {
@@ -867,50 +869,66 @@ export class GuildQueue {
           const estHrs = Math.floor(totalSecs / 3600);
           const estMins = Math.floor((totalSecs % 3600) / 60);
 
-          embed.addFields({
-            name: '⏱️ Queue Estimations',
-            value: `• **Total Duration**: ${estHrs > 0 ? `${estHrs}h ` : ''}${estMins}m\n• **Est. Finish Time**: <t:${Math.floor((Date.now() + totalSecs * 1000) / 1000)}:t> (<t:${Math.floor((Date.now() + totalSecs * 1000) / 1000)}:R>)`,
-            inline: false
-          });
+          const queueLines = pageTracks.length > 0
+            ? pageTracks.map((t, i) =>
+                `\`${String(startIdx + i + 1).padStart(2, '0')}\` **${t.title.slice(0, 55)}** — \`${t.duration}\` by **${t.requester}**`
+              ).join('\n')
+            : '*No upcoming tracks. Add songs via `/play` or the dashboard.*';
 
-          embed.setFooter({ text: `Page ${page + 1} of ${totalPages}` });
+          embed
+            .setColor(0x57F287)
+            .setTitle('📋 Playback Queue')
+            .setDescription(
+              `> ▶️ **Now Playing**: ${titleLink}\n` +
+              `> Duration: \`${this.currentTrack.duration}\` • By: **${this.currentTrack.requester}**\n\n` +
+              `**Upcoming Tracks**\n${queueLines}`
+            )
+            .addFields({
+              name: '⏱️ Queue Summary',
+              value: `• **Total Duration**: ${estHrs > 0 ? `${estHrs}h ` : ''}${estMins}m\n• **Est. End**: <t:${Math.floor((Date.now() + totalSecs * 1000) / 1000)}:t> (<t:${Math.floor((Date.now() + totalSecs * 1000) / 1000)}:R>)`,
+              inline: false
+            })
+            .setFooter({ text: `Page ${page + 1} / ${totalPages} • Rage Optimiser`, iconURL: client.user?.displayAvatarURL() })
+            .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_queue_prev').setLabel('⬅️ Previous').setStyle(ButtonStyle.Secondary).setDisabled(page === 0),
-            new ButtonBuilder().setCustomId('music_queue_next').setLabel('➡️ Next').setStyle(ButtonStyle.Secondary).setDisabled(page >= totalPages - 1),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('🔙 Back to Player').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_queue_prev').setLabel('Previous').setEmoji('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(page === 0),
+            new ButtonBuilder().setCustomId('music_queue_next').setLabel('Next').setEmoji('➡️').setStyle(ButtonStyle.Secondary).setDisabled(page >= totalPages - 1),
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
 
         } else if (this.viewMode === 'filters') {
-          embed.setTitle('🎚️ DSP AUDIO EFFECTS BOARD')
-            .setDescription(`Configure DSP filters for real-time frequency modification.\n\nActive Filters: ${this.activeFilters.length > 0 ? this.activeFilters.map(f => `\`${f}\``).join(', ') : 'None'}`)
-            .setColor('#1DB954');
-
+          // ─── DSP FILTERS VIEW ─────────────────────────────────────────
           const filtersList = [
-            { name: 'Bass Boost', key: 'bassboost', desc: 'Amplifies low-end frequencies.' },
-            { name: 'Nightcore', key: 'nightcore', desc: 'Increases speed and pitch.' },
-            { name: '8D Audio', key: '8d', desc: 'Rotary surround sound pan.' },
-            { name: 'Vaporwave', key: 'vaporwave', desc: 'Slows down pitch & tempo.' },
-            { name: 'Treble Boost', key: 'treble', desc: 'Enhances high-end clarity.' },
-            { name: 'Reverb', key: 'reverb', desc: 'Simulates spatial audio echo.' }
+            { name: 'Bass Boost', key: 'bassboost', emoji: '🔉', desc: 'Amplifies low-end frequencies' },
+            { name: 'Nightcore', key: 'nightcore', emoji: '⚡', desc: 'Faster speed & higher pitch' },
+            { name: '8D Audio', key: '8d', emoji: '🌀', desc: 'Rotary surround sound pan' },
+            { name: 'Vaporwave', key: 'vaporwave', emoji: '🌊', desc: 'Slows pitch & tempo' },
+            { name: 'Treble Boost', key: 'treble', emoji: '🔊', desc: 'High-end frequency clarity' },
+            { name: 'Reverb', key: 'reverb', emoji: '🏔️', desc: 'Spatial audio echo simulation' }
           ];
 
-          filtersList.forEach(f => {
-            const isEnabled = this.activeFilters.includes(f.key);
-            embed.addFields({
-              name: `${isEnabled ? '🟢' : '⚫'} ${f.name}`,
-              value: `${f.desc}`,
-              inline: true
-            });
-          });
+          const filterStatus = filtersList.map(f => {
+            const on = this.activeFilters.includes(f.key);
+            return `${on ? '🟢' : '⚫'} **${f.emoji} ${f.name}** — ${f.desc}`;
+          }).join('\n');
 
-          // Show speed & pitch status in description/fields
-          embed.addFields({
-            name: '⚡ Speed & Pitch Tweaks',
-            value: `Speed multiplier: **${this.speed}x** • Pitch multiplier: **${this.pitch}x**`,
-            inline: false
-          });
+          embed
+            .setColor(0x57F287)
+            .setTitle('🎚️ DSP Audio Effects Board')
+            .setDescription(
+              `> Configure real-time frequency modification filters.\n` +
+              `> **Active**: ${this.activeFilters.length > 0 ? this.activeFilters.map(f => `\`${f}\``).join(', ') : 'None'}\n\n` +
+              filterStatus
+            )
+            .addFields({
+              name: '⚡ Speed & Pitch',
+              value: `Speed: **${this.speed}x** | Pitch: **${this.pitch}x**`,
+              inline: false
+            })
+            .setFooter({ text: 'Rage Optimiser • DSP Engine', iconURL: client.user?.displayAvatarURL() })
+            .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder().setCustomId('music_toggle_bassboost').setLabel('Bass Boost').setStyle(this.activeFilters.includes('bassboost') ? ButtonStyle.Success : ButtonStyle.Secondary),
@@ -922,76 +940,112 @@ export class GuildQueue {
 
           const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder().setCustomId('music_toggle_reverb').setLabel('Reverb').setStyle(this.activeFilters.includes('reverb') ? ButtonStyle.Success : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_toggle_speed_plus').setLabel('Speed +0.1').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_toggle_speed_minus').setLabel('Speed -0.1').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_toggle_pitch_plus').setLabel('Pitch +0.1').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_toggle_pitch_minus').setLabel('Pitch -0.1').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId('music_toggle_speed_plus').setLabel('Speed +').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_toggle_speed_minus').setLabel('Speed −').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_toggle_pitch_plus').setLabel('Pitch +').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_toggle_pitch_minus').setLabel('Pitch −').setStyle(ButtonStyle.Secondary)
           );
 
           const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_reset_filters').setLabel('Reset Filters').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('🔙 Back to Player').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_reset_filters').setLabel('Reset All').setEmoji('♻️').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
           );
 
           components.push(row1, row2, row3);
 
         } else if (this.viewMode === 'volume') {
-          const barLength = 10;
+          // ─── VOLUME VIEW ──────────────────────────────────────────────
+          const barLength = 12;
           const filledLength = Math.round((this.volume / 200) * barLength);
-          let volBar = '';
-          for (let i = 0; i < barLength; i++) {
-            if (i < filledLength) volBar += '█';
-            else volBar += '░';
-          }
-          
-          embed.setTitle('🔊 VOLUME MATRIX')
-            .setDescription(`Adjust playback volume output levels.\n\nVolume: \`[${volBar}] ${this.volume}%\``)
-            .setColor('#1DB954');
+          const volBar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
+          const volPercent = this.volume;
+
+          embed
+            .setColor(0x57F287)
+            .setTitle('🔊 Volume Control')
+            .setDescription(
+              `> Adjust the playback output level.\n\n` +
+              `**Current Volume**\n\`\`\`\n[${volBar}] ${volPercent}%\n\`\`\``
+            )
+            .addFields(
+              { name: '🔉 Min', value: '`0%`', inline: true },
+              { name: '🔊 Current', value: `\`${volPercent}%\``, inline: true },
+              { name: '📢 Max', value: '`200%`', inline: true }
+            )
+            .setFooter({ text: 'Rage Optimiser • Audio System', iconURL: client.user?.displayAvatarURL() })
+            .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_volume_minus').setLabel('-10%').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_volume_plus').setLabel('+10%').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_volume_mute').setLabel(this.volume === 0 ? '🔊 Unmute' : '🔇 Mute').setStyle(this.volume === 0 ? ButtonStyle.Success : ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('music_volume_100').setLabel('100%').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('🔙 Back').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_volume_minus').setLabel('-10%').setEmoji('🔉').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_volume_plus').setLabel('+10%').setEmoji('🔊').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_volume_mute').setLabel(this.volume === 0 ? 'Unmute' : 'Mute').setEmoji(this.volume === 0 ? '🔊' : '🔇').setStyle(this.volume === 0 ? ButtonStyle.Success : ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('music_volume_100').setLabel('Reset 100%').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back').setEmoji('🔙').setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
 
         } else if (this.viewMode === 'lyrics') {
-          embed.setTitle('🎤 SYNCED LYRICS')
-            .setDescription(`**Now Playing**: [${this.currentTrack.title}](${this.currentTrack.url})\n\n*Instrumental / Lyrics fetching is currently operating in local mode.*\n\n🎵 *La la la...* (Connect your Genius API key in dashboard settings for full real-time lyric scrolling integrations).`)
-            .setColor('#1DB954');
+          // ─── LYRICS VIEW ──────────────────────────────────────────────
+          const hasValidUrl = this.currentTrack.url && this.currentTrack.url.startsWith('http');
+          const titleLink = hasValidUrl
+            ? `[${this.currentTrack.title}](${this.currentTrack.url})`
+            : `**${this.currentTrack.title}**`;
+
+          embed
+            .setColor(0x57F287)
+            .setTitle('🎤 Synced Lyrics')
+            .setDescription(
+              `> **Now Playing**: ${titleLink}\n\n` +
+              `*Connect a Genius API key in dashboard settings for real-time lyrics.*\n\n` +
+              `🎵 *Instrumental / lyrics not available for this track.*`
+            )
+            .setFooter({ text: 'Rage Optimiser • Lyrics Engine', iconURL: client.user?.displayAvatarURL() })
+            .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('🔙 Back to Player').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
 
         } else if (this.viewMode === 'settings') {
-          embed.setTitle('⚙️ PLAYER CONFIGURATION')
-            .setDescription(`Configure operational options.\n\n` +
+          // ─── SETTINGS VIEW ────────────────────────────────────────────
+          embed
+            .setColor(0x57F287)
+            .setTitle('⚙️ Player Configuration')
+            .setDescription(
+              `> Configure player operational settings.\n\n` +
               `• **Autoplay**: ${this.autoplay ? '🟢 Enabled' : '⚫ Disabled'}\n` +
-              `• **Loop Mode**: \`${this.loopMode}\``)
-            .setColor('#1DB954');
+              `• **Loop Mode**: \`${this.loopMode}\`\n` +
+              `• **Volume**: \`${this.volume}%\`\n` +
+              `• **Speed**: \`${this.speed}x\` | **Pitch**: \`${this.pitch}x\``
+            )
+            .setFooter({ text: 'Rage Optimiser • Audio System', iconURL: client.user?.displayAvatarURL() })
+            .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_settings').setLabel(this.autoplay ? 'Disable Autoplay' : 'Enable Autoplay').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_loop').setLabel('Cycle Loop Mode').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('🔙 Back to Player').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_settings').setLabel(this.autoplay ? 'Disable Autoplay' : 'Enable Autoplay').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_loop').setLabel('Cycle Loop').setEmoji('🔁').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
 
         } else if (this.viewMode === 'playlists') {
-          embed.setTitle('📥 PLAYLIST ENGINE')
-            .setDescription(`Manage server and personal saved music sequences.\n\n` +
+          // ─── PLAYLISTS VIEW ───────────────────────────────────────────
+          embed
+            .setColor(0x57F287)
+            .setTitle('📥 Playlist Engine')
+            .setDescription(
+              `> Manage saved playlists and liked tracks.\n\n` +
               `• **Saved Playlists**: ${this.playlists.length} playlists stored\n` +
-              `• **Favorites**: ${this.favorites.length} tracks liked`)
-            .setColor('#1DB954');
+              `• **Favorites**: ${this.favorites.length} tracks liked`
+            )
+            .setFooter({ text: 'Rage Optimiser • Playlist Engine', iconURL: client.user?.displayAvatarURL() })
+            .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_save_playlist').setLabel('📥 Save Current Queue').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_favorite').setLabel('❤️ Favorite Current').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('🔙 Back to Player').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_save_playlist').setLabel('Save Queue').setEmoji('📥').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_favorite').setLabel('Favorite').setEmoji('❤️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
         }
@@ -1016,6 +1070,8 @@ export class GuildQueue {
       console.error('[Music] Error rendering control panel:', err);
     }
   }
+
+
 }
 
 export class QueueManager {

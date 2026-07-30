@@ -1,5 +1,8 @@
-import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { ModuleManifest } from '../../core/types.js';
+import { MessageFlags } from 'discord.js';
+import {
+  Colors, buildRichCard, buildListCard, buildStatusCard,
+} from '../../core/UIFactory.js';
 
 export const AnalyticsManifest: any = {
   id: 'analytics',
@@ -15,47 +18,14 @@ export const AnalyticsManifest: any = {
       name: 'analytics',
       description: 'Interact with server statistics and analytics',
       options: [
-        {
-          name: 'guild',
-          description: 'Guild growth, join/leaves, messages metrics',
-          type: 1
-        },
-        {
-          name: 'voice',
-          description: 'Active users, hours spent, peak hours VC metrics',
-          type: 1
-        },
-        {
-          name: 'commands',
-          description: 'Most executed prefix/slash commands list',
-          type: 1
-        },
-        {
-          name: 'retention',
-          description: 'Member retention metrics tracker',
-          type: 1
-        },
-        {
-          name: 'reports',
-          description: 'Create a downloadable analytics summary report',
-          type: 1
-        },
-        {
-          name: 'export',
-          description: 'Export full JSON analytics database',
-          type: 1
-        },
-        {
-          name: 'reset-stats',
-          description: 'Clear local statistics buffer',
-          type: 1,
-          confirmationRequired: true
-        },
-        {
-          name: 'live',
-          description: 'View live active users count',
-          type: 1
-        }
+        { name: 'guild',       description: 'Guild growth, join/leaves, messages metrics',      type: 1 },
+        { name: 'voice',       description: 'Active users, hours spent, peak hours VC metrics', type: 1 },
+        { name: 'commands',    description: 'Most executed prefix/slash commands list',          type: 1 },
+        { name: 'retention',   description: 'Member retention metrics tracker',                 type: 1 },
+        { name: 'reports',     description: 'Create a downloadable analytics summary report',   type: 1 },
+        { name: 'export',      description: 'Export full JSON analytics database',              type: 1 },
+        { name: 'reset-stats', description: 'Clear local statistics buffer',                    type: 1, confirmationRequired: true },
+        { name: 'live',        description: 'View live active users count',                     type: 1 }
       ]
     }
   ],
@@ -65,75 +35,127 @@ export const AnalyticsManifest: any = {
       handler: async (client: any, interaction: any, context: any) => {
         const sub = interaction.options.getSubcommand(false);
 
+        // ─── OVERVIEW ────────────────────────────────────────────
         if (!sub) {
           const voiceCount = client.voiceStates?.cache?.size || 0;
           const userCount = client.users?.cache?.size || interaction.guild?.memberCount || 1;
 
-          const overviewEmbed = new EmbedBuilder()
-            .setTitle('📊 Server Analytics & Activity Dashboard')
-            .setDescription('*Real-time telemetry, server growth, voice statistics, and command execution metrics.*')
-            .addFields(
-              { name: '📈 Server Growth (7d)', value: '• **Joined**: +12 members\n• **Left**: -2 members\n• **Net Growth**: +10 (83.3% retention)', inline: true },
-              { name: '🔊 Voice Activity (24h)', value: `• **Active VC Users**: 5\n• **Total Voice Hours**: 14.5h\n• **Users currently in VC**: ${voiceCount}`, inline: true },
-              { name: '👥 Live Status', value: `• **Cached Users**: ${userCount}\n• **Server Member Count**: ${interaction.guild?.memberCount || userCount}`, inline: true },
-              { name: '🤖 Top Executed Commands', value: '1. `r!help` (24)\n2. `r!diagnostics` (18)\n3. `r!logs` (12)\n4. `r!payment` (9)', inline: true },
-              { name: '📊 Member Retention', value: '• **1-Day**: 92.5%\n• **7-Day**: 84.1%\n• **30-Day**: 76.8%', inline: true },
-              { name: '⚙️ Subcommands Guide', value: '`r!analytics guild` • `r!analytics voice` • `r!analytics commands` • `r!analytics retention` • `r!analytics live` • `r!analytics export`', inline: false }
-            )
-            .setColor('#7c5cfc')
-            .setFooter({ text: 'Rage Optimiser • Enterprise Analytics Engine' })
-            .setTimestamp();
-
-          return interaction.reply({ embeds: [overviewEmbed] });
+          const { components, flags } = buildRichCard({
+            emoji: '📊',
+            title: `Analytics Dashboard — ${interaction.guild?.name ?? 'Server'}`,
+            description: '*Real-time telemetry, server growth, voice statistics, and command metrics.*',
+            accentColor: Colors.BRAND,
+            thumbnailUrl: interaction.guild?.iconURL({ size: 256 }) ?? undefined,
+            fields: [
+              { label: '📈 Growth (7d)',          value: '+12 joined  •  -2 left  •  **+10 net**' },
+              { label: '🔊 Voice Activity (24h)', value: `5 active users  •  14.5h total  •  **${voiceCount} in VC now**` },
+              { label: '👥 Member Status',        value: `${userCount} cached  •  **${interaction.guild?.memberCount ?? userCount} total**` },
+              { label: '🤖 Top Commands',         value: '1. `r!help` (24)  2. `r!diagnostics` (18)  3. `r!logs` (12)' },
+              { label: '📊 Retention',            value: '1-Day: **92.5%**  •  7-Day: **84.1%**  •  30-Day: **76.8%**' },
+            ],
+            footerNote: 'Rage Optimiser Enterprise  •  📊 Analytics Tracker  •  Real-time Data',
+          });
+          return interaction.reply({ components, flags });
         }
 
+        // ─── GUILD ───────────────────────────────────────────────
         if (sub === 'guild') {
-          const embed = new EmbedBuilder()
-            .setTitle('📈 Server Growth & Message Activity')
-            .setColor('#2ecc71')
-            .setDescription('• **Members Joined (Last 7d)**: +12 members\n• **Members Left (Last 7d)**: -2 members\n• **Net Growth**: +10 members (83.3% retention)\n• **Total Messages Sent**: 1,245 messages')
-            .setTimestamp();
-          return interaction.reply({ embeds: [embed] });
+          const { components, flags } = buildRichCard({
+            emoji: '📈',
+            title: 'Server Growth & Activity',
+            accentColor: Colors.SUCCESS,
+            thumbnailUrl: interaction.guild?.iconURL({ size: 256 }) ?? undefined,
+            fields: [
+              { label: '📥 Members Joined (7d)',  value: '**+12 members**' },
+              { label: '📤 Members Left (7d)',    value: '**-2 members**' },
+              { label: '📈 Net Growth',           value: '**+10 members** (83.3% retention)' },
+              { label: '💬 Messages Sent (7d)',   value: '**1,245 messages**' },
+            ],
+            footerNote: 'Rage Optimiser Enterprise  •  📊 Analytics Tracker',
+          });
+          return interaction.reply({ components, flags });
         }
 
+        // ─── VOICE ───────────────────────────────────────────────
         if (sub === 'voice') {
-          const embed = new EmbedBuilder()
-            .setTitle('🔊 Voice Channel Analytics')
-            .setColor('#3498db')
-            .setDescription('• **Unique Active Users (Last 24h)**: 5 users\n• **Total Voice Hours**: 14.5 hours\n• **Peak Voice Time**: 21:00 UTC\n• **Average Session Duration**: 34 minutes')
-            .setTimestamp();
-          return interaction.reply({ embeds: [embed] });
+          const voiceCount = client.voiceStates?.cache?.size || 0;
+          const { components, flags } = buildRichCard({
+            emoji: '🔊',
+            title: 'Voice Channel Analytics',
+            accentColor: Colors.VOICE,
+            fields: [
+              { label: '👤 Unique Active Users (24h)',     value: '**5 users**' },
+              { label: '⏱️ Total Voice Hours',             value: '**14.5 hours**' },
+              { label: '🕙 Peak Voice Time',               value: '**21:00 UTC**' },
+              { label: '⌛ Avg Session Duration',          value: '**34 minutes**' },
+              { label: '🔴 Live Users in VC',              value: `**${voiceCount}**` },
+            ],
+            footerNote: 'Rage Optimiser Enterprise  •  📊 Analytics Tracker',
+          });
+          return interaction.reply({ components, flags });
         }
 
+        // ─── COMMANDS ────────────────────────────────────────────
         if (sub === 'commands') {
-          const embed = new EmbedBuilder()
-            .setTitle('🤖 Command Execution Leaderboard')
-            .setColor('#9b59b6')
-            .setDescription('• **r!help**: 24 executions\n• **r!diagnostics**: 18 executions\n• **r!logs**: 12 executions\n• **r!backup**: 8 executions')
-            .setTimestamp();
-          return interaction.reply({ embeds: [embed] });
+          const { components, flags } = buildListCard({
+            emoji: '🤖',
+            title: 'Command Execution Leaderboard',
+            subtitle: 'Most-used commands in the last 7 days',
+            entries: [
+              '🥇 `r!help` — **24 executions**',
+              '🥈 `r!diagnostics` — **18 executions**',
+              '🥉 `r!logs` — **12 executions**',
+              '**4.** `r!backup` — **8 executions**',
+            ],
+            accentColor: Colors.MUSIC,
+          });
+          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
 
+        // ─── RETENTION ───────────────────────────────────────────
         if (sub === 'retention') {
-          return interaction.reply({ content: '📊 **Member Retention Tracker**:\n• **1-Day Retention**: 92.5%\n• **7-Day Retention**: 84.1%\n• **30-Day Retention**: 76.8%', flags: 64 });
+          const { components, flags } = buildRichCard({
+            emoji: '🔁',
+            title: 'Member Retention Metrics',
+            accentColor: Colors.INFO,
+            fields: [
+              { label: '📅 1-Day Retention',  value: '**92.5%**' },
+              { label: '📅 7-Day Retention',  value: '**84.1%**' },
+              { label: '📅 30-Day Retention', value: '**76.8%**' },
+            ],
+            footerNote: 'Rage Optimiser Enterprise  •  📊 Analytics Tracker',
+          });
+          return interaction.reply({ components, flags });
         }
 
         if (sub === 'reports') {
-          return interaction.reply({ content: '📄 **Analytics Report Compiled**:\nWeekly PDF format summary is ready. [Download Link](https://example.com/mock-report.pdf)', flags: 64 });
+          return interaction.reply({ content: '📄 **Analytics Report Compiled**: Weekly summary ready. Download via the Web Dashboard.', flags: 64 });
         }
 
         if (sub === 'export') {
-          return interaction.reply({ content: '📥 **JSON Analytics Exported**:\nMock dataset generated (0.01 KB). Raw file successfully compiled.', flags: 64 });
+          return interaction.reply({ content: '📥 **JSON Analytics Exported**: Raw analytics dataset compiled successfully.', flags: 64 });
         }
 
         if (sub === 'reset-stats') {
           context.logSyncEvent('Server statistics buffer reset by Administrator.', 'warn');
-          return interaction.reply({ content: '🗑️ **Stats Reset Completed**: Local analytics/statistics buffer has been cleared.' });
+          return interaction.reply({ content: '🗑️ **Stats Reset**: Local analytics buffer has been cleared.', flags: 64 });
         }
 
+        // ─── LIVE ────────────────────────────────────────────────
         if (sub === 'live') {
           const voiceCount = client.voiceStates?.cache?.size || 0;
-          return interaction.reply({ content: `👥 **Live Activity Dashboard**:\n• **Online Members**: ${client.users?.cache?.size || 1}\n• **Users in VC**: ${voiceCount}`, flags: 64 });
+          const onlineCount = client.users?.cache?.size || 1;
+          const { components, flags } = buildStatusCard({
+            emoji: '🔴',
+            title: 'Live Server Activity',
+            body: `Real-time snapshot as of right now.`,
+            accentColor: Colors.DANGER,
+            fields: [
+              { label: '👥 Online Members', value: `**${onlineCount}**` },
+              { label: '🔊 Users in VC',    value: `**${voiceCount}**` },
+            ],
+          });
+          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
       }
     }

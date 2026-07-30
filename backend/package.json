@@ -19,7 +19,7 @@
     "@distube/ytdl-core": "^4.16.12",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "discord.js": "^14.14.1",
+    "discord.js": "14.27.0",
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
     "express-rate-limit": "^8.5.2",

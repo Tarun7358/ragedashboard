@@ -10,6 +10,7 @@ import {
 import { PrefixRegistry, PrefixCommandMeta } from './PrefixRegistry.js';
 import { PrefixResolver } from './PrefixResolver.js';
 import { PrefixPermissionManager } from './PrefixPermissionManager.js';
+import { Embeds, Colors, Components } from '../UIFactory.js';
 
 export class PrefixHelpCenter {
   private static categoryIcons: Record<string, string> = {
@@ -73,11 +74,11 @@ export class PrefixHelpCenter {
     }
 
     // Unknown module/command fallback
-    const embed = new EmbedBuilder()
-      .setTitle('🔍 Command Engine — No Match Found')
-      .setDescription(`No module or command matching **\`${query}\`** was found.\n\nType **\`${currentPrefix}help\`** to open the Command Matrix or use the dropdown menu below.`)
-      .setColor('#ff4444')
-      .setFooter({ text: 'Rage Optimiser • Command Engine' });
+    const embed = Embeds.error(
+      '🔍 Command Engine — No Match Found',
+      `No module or command matching **\`${query}\`** was found.\n\nType **\`${currentPrefix}help\`** to open the Command Matrix or use the dropdown menu below.`,
+      { module: 'help' }
+    );
 
     return message.reply({ embeds: [embed] });
   }
@@ -100,13 +101,12 @@ export class PrefixHelpCenter {
   }
 
   private static async sendSearchResults(message: Message, query: string, results: PrefixCommandMeta[], prefix: string): Promise<any> {
-    const embed = new EmbedBuilder()
-      .setTitle(`🔍 Search Results: "${query}"`)
-      .setDescription(`Found **${results.length}** commands matching your query:\n\n` + 
-        results.map(c => `• **\`${prefix}${c.name}\`** — ${c.description} (\`${c.category}\`)`).join('\n'))
-      .setColor('#7c5cfc')
-      .setFooter({ text: 'Rage Optimiser • Search Index Engine' })
-      .setTimestamp();
+    const embed = Embeds.info(
+      `🔍 Search Results: "${query}"`,
+      `Found **${results.length}** commands matching your query:\n\n` + 
+        results.map(c => `<a:animatedarrowwhite:1527647357473132554> **\`${prefix}${c.name}\`** — ${c.description} (\`${c.category}\`)`).join('\n'),
+      { module: 'help' }
+    );
 
     return message.reply({ embeds: [embed] });
   }
@@ -114,54 +114,27 @@ export class PrefixHelpCenter {
   public static async sendRootHelp(message: Message, prefix: string, latency: number, updateInteraction?: any): Promise<any> {
     const categories = PrefixRegistry.getCategories();
     const totalCommands = PrefixRegistry.getAllCommands().length;
-
-    // Organized Matrix Grouping
-    const securityGroup = ['AntiNuke', 'Security', 'AutoMod', 'Voice Protection'].filter(c => categories.includes(c as any));
-    const modGroup = ['Logging', 'Backups', 'Audit', 'Bulk Operations', 'Diagnostics'].filter(c => categories.includes(c as any));
-    const commGroup = ['Leveling & Economy', 'Welcome', 'Giveaways', 'Tickets', 'Reaction Roles', 'Social Updates', 'Announcements'].filter(c => categories.includes(c as any));
-    const autoGroup = ['Automations', 'Reminders', 'Join To Create', 'Voice', 'Music', 'Analytics', 'Payment QR', 'System'].filter(c => categories.includes(c as any));
-
-    // Fallback for remaining uncategorized modules
-    const mapped = new Set([...securityGroup, ...modGroup, ...commGroup, ...autoGroup]);
-    const extraGroup = categories.filter(c => !mapped.has(c));
-
-    const formatGroupPills = (list: string[]) => list.map(c => `\`${c}\``).join('  •  ');
+    const botUser = message.client.user;
+    const verifiedIcon = '<a:approved:1532390590707142956>';
 
     const descLines = [
-      `*Enterprise Guild Protection & Command Center*\n`,
-      `> 💬 **Prefix:** \`${prefix}\`   •   🤖 **Slash:** \`/\``,
-      `> 🏓 **Latency:** \`${latency}ms\`   •   🧩 **Modules:** \`${categories.length}\`   •   ⚡ **Commands:** \`${totalCommands > 0 ? totalCommands : '85+'}\`\n`,
-      `🛡️ **Security & AntiNuke**`,
-      `${formatGroupPills(securityGroup) || '`None`'}\n`,
-      `🔨 **Moderation & Management**`,
-      `${formatGroupPills(modGroup) || '`None`'}\n`,
-      `🎁 **Community & Engagement**`,
-      `${formatGroupPills(commGroup) || '`None`'}\n`,
-      `🤖 **Automations & Utilities**`,
-      `${formatGroupPills(autoGroup) || '`None`'}`
+      `### Hey !!! , I am ${botUser} ,\n`,
+      `> » **Welcome to Security 2.0** A bot which is made for unbypassable security features and community management! View down and see our server management modules listed below: **Total Commands: ${totalCommands > 0 ? totalCommands : '981'}**\n`,
+      `> » **To set Custom Prefix use** ${botUser} **prefix " your custom prefix "**\n`,
+      ...categories.map(c => `> <a:animatedarrowwhite:1527647357473132554> __**${c}**__`)
     ];
 
-    if (extraGroup.length > 0) {
-      descLines.push(`\n📁 **Other Modules**\n${formatGroupPills(extraGroup)}`);
-    }
-
-    descLines.push(`\n*Select a command module from the dropdown below or run \`${prefix}help <query>\` to filter syntax.*`);
-
     const embed = new EmbedBuilder()
-      .setTitle('⚡ Rage Optimiser Command Hub')
+      .setColor(0x84cc16)
       .setDescription(descLines.join('\n'))
-      .setColor('#7c5cfc')
-      .setThumbnail(message.client.user?.displayAvatarURL() || null)
-      .setFooter({
-        text: `Rage Optimiser Enterprise • Engine v3.0`,
-        iconURL: message.client.user?.displayAvatarURL()
-      })
+      .setThumbnail(botUser?.displayAvatarURL({ size: 256 }) ?? null)
+      .setFooter({ text: 'Rage Optimiser • Security Engine' })
       .setTimestamp();
 
     // Select Menu for categories
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('help_category_select')
-      .setPlaceholder('Select a Command Module...')
+      .setPlaceholder('Click to view modules')
       .addOptions(
         {
           label: 'Back to Home Center',
@@ -180,11 +153,10 @@ export class PrefixHelpCenter {
     const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
     const btnDashboard = new ButtonBuilder().setLabel('Dashboard').setStyle(ButtonStyle.Link).setURL('https://rageoptimiser.com/dashboard');
-    const btnInvite = new ButtonBuilder().setLabel('Invite Bot').setStyle(ButtonStyle.Link).setURL(`https://discord.com/api/oauth2/authorize?client_id=${message.client.user?.id}&permissions=8&scope=bot%20applications.commands`);
+    const btnInvite = new ButtonBuilder().setLabel('Invite Bot').setStyle(ButtonStyle.Link).setURL(`https://discord.com/api/oauth2/authorize?client_id=${botUser?.id}&permissions=8&scope=bot%20applications.commands`);
     const btnSupport = new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/rageoptimiser');
-    const btnWebsite = new ButtonBuilder().setLabel('Website').setStyle(ButtonStyle.Link).setURL('https://rageoptimiser.com');
 
-    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnDashboard, btnInvite, btnSupport, btnWebsite);
+    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnDashboard, btnInvite, btnSupport);
 
     if (updateInteraction) {
       return updateInteraction.update({ embeds: [embed], components: [row1, row2] });
@@ -194,26 +166,34 @@ export class PrefixHelpCenter {
 
   public static async sendModuleHelp(message: Message, category: string, prefix: string, page = 1, updateInteraction?: any): Promise<any> {
     const commands = PrefixRegistry.getCommandsByCategory(category);
-    const pageSize = 10;
+    const pageSize = 12;
     const totalPages = Math.max(1, Math.ceil(commands.length / pageSize));
     const currentPage = Math.min(Math.max(1, page), totalPages);
+    const verifiedIcon = '<a:approved:1532390590707142956>';
 
     const pageCmds = commands.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-    const cmdList = pageCmds.map(c => `🔹 **\`${prefix}${c.name}\`** — ${c.description}`).join('\n');
+    const cmdList = pageCmds.map(c => `> ${verifiedIcon} __**${c.name}**__`);
+
+    const embedDesc = [
+      `> • **${category.toUpperCase()} STATUS**`,
+      `> • **RAGE OPTIMISER**`,
+      `> `,
+      ...(cmdList.length > 0 ? cmdList : [`> ${verifiedIcon} __**No Commands Registered**__`])
+    ].join('\n');
 
     const embed = new EmbedBuilder()
-      .setTitle(`${this.categoryIcons[category] || '📁'} Module: ${category}`)
-      .setDescription(`Available commands in this module (**Page ${currentPage}/${totalPages}**):\n\n${cmdList || 'No commands registered.'}`)
-      .setColor('#7c5cfc')
-      .setFooter({ text: `Use ${prefix}help <command> for detailed parameter guide` })
+      .setColor(0x84cc16)
+      .setDescription(embedDesc)
+      .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
+      .setFooter({ text: 'Rage Optimiser • Security Engine' })
       .setTimestamp();
 
     // Select Menu
     const categories = PrefixRegistry.getCategories();
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('help_category_select')
-      .setPlaceholder('Select a Command Module...')
+      .setPlaceholder('Click to view modules')
       .addOptions(
         {
           label: 'Back to Home Center',
@@ -232,26 +212,36 @@ export class PrefixHelpCenter {
 
     const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
-    // Pagination buttons
+    // Buttons
     const btnHome = new ButtonBuilder()
       .setCustomId('help_btn_home')
-      .setLabel('Home')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('🏠');
+      .setLabel('Open Modules Manager')
+      .setStyle(ButtonStyle.Success);
 
-    const btnPrev = new ButtonBuilder()
-      .setCustomId(`help_btn_prev_${category.replace(/\s+/g, '_')}_${currentPage}`)
-      .setLabel('Previous')
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(currentPage <= 1);
+    const btnClose = new ButtonBuilder()
+      .setCustomId('help_btn_close')
+      .setLabel('Close')
+      .setStyle(ButtonStyle.Secondary);
 
-    const btnNext = new ButtonBuilder()
-      .setCustomId(`help_btn_next_${category.replace(/\s+/g, '_')}_${currentPage}`)
-      .setLabel('Next')
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(currentPage >= totalPages);
+    const btnComponents: ButtonBuilder[] = [btnHome, btnClose];
 
-    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnHome, btnPrev, btnNext);
+    if (totalPages > 1) {
+      const btnPrev = new ButtonBuilder()
+        .setCustomId(`help_btn_prev_${category.replace(/\s+/g, '_')}_${currentPage}`)
+        .setLabel('Previous')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage <= 1);
+
+      const btnNext = new ButtonBuilder()
+        .setCustomId(`help_btn_next_${category.replace(/\s+/g, '_')}_${currentPage}`)
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage >= totalPages);
+
+      btnComponents.push(btnPrev, btnNext);
+    }
+
+    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnComponents);
 
     if (updateInteraction) {
       return updateInteraction.update({ embeds: [embed], components: [row1, row2] });
@@ -261,10 +251,16 @@ export class PrefixHelpCenter {
 
   public static async sendCommandHelp(message: Message, cmd: PrefixCommandMeta, prefix: string): Promise<any> {
     const hasPermission = message.member ? PrefixPermissionManager.checkPermissions(message, cmd).allowed : true;
+    const verifiedIcon = '<a:approved:1532390590707142956>';
+    const wrongIcon = '<:wrong:1532390628330307634>';
 
     const embed = new EmbedBuilder()
-      .setTitle(`📖 Command Manual: ${prefix}${cmd.name}`)
-      .setDescription(`*${cmd.description}*` + (hasPermission ? '' : '\n\n⚠️ **WARNING**: You lack the required server permissions to run this command.'))
+      .setColor(hasPermission ? 0x84cc16 : 0xef4444)
+      .setDescription([
+        `### ${hasPermission ? verifiedIcon : wrongIcon} **COMMAND MANUAL**: \`${prefix}${cmd.name}\`\n`,
+        `> » **Description**: ${cmd.description}`,
+        !hasPermission ? `> » ⚠️ **Permission Warning**: You lack required server permissions to run this command.` : ''
+      ].filter(Boolean).join('\n'))
       .addFields(
         { name: '🏷️ Command', value: `\`${cmd.name}\``, inline: true },
         { name: '📁 Category', value: `\`${cmd.category}\``, inline: true },
@@ -274,8 +270,8 @@ export class PrefixHelpCenter {
         { name: '🔒 User Required Permission', value: cmd.userPermissions && cmd.userPermissions.length > 0 ? cmd.userPermissions.map(p => `\`${p}\``).join(', ') : '`Everyone`', inline: true },
         { name: '🤖 Bot Required Permission', value: cmd.botPermissions && cmd.botPermissions.length > 0 ? cmd.botPermissions.map(p => `\`${p}\``).join(', ') : '`SendMessages`', inline: true }
       )
-      .setColor(hasPermission ? '#7c5cfc' : '#f59e0b')
-      .setFooter({ text: 'Rage Optimiser • Enterprise Documentation Engine' })
+      .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
+      .setFooter({ text: 'Rage Optimiser • Security Engine' })
       .setTimestamp();
 
     if (cmd.examples && cmd.examples.length > 0) {
@@ -308,6 +304,10 @@ export class PrefixHelpCenter {
 
   public static async handleButtonInteraction(interaction: any): Promise<any> {
     if (!interaction.isButton() || !interaction.customId.startsWith('help_btn_')) return;
+
+    if (interaction.customId === 'help_btn_close') {
+      return interaction.message.delete().catch(() => {});
+    }
 
     const prefix = PrefixResolver.getPrefix(interaction.guildId || undefined);
 

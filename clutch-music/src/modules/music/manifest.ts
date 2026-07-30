@@ -172,6 +172,25 @@ export const MusicManifest: ModuleManifest = {
     {
       name: 'music-247-disable',
       description: 'Disable 24/7 mode and restore default voice connection behavior.'
+    },
+    {
+      name: 'equalizer',
+      description: 'Apply audio equalizer preset or DSP filter.',
+      options: [
+        {
+          name: 'preset',
+          description: 'Equalizer preset or DSP filter',
+          type: 3,
+          required: true,
+          choices: [
+            { name: 'Bass Boost', value: 'bassboost' },
+            { name: 'Treble Boost', value: 'treble' },
+            { name: 'Nightcore', value: 'nightcore' },
+            { name: 'Vaporwave', value: 'vaporwave' },
+            { name: 'Flat (Off)', value: 'off' }
+          ]
+        }
+      ]
     }
   ],
   routes: [
@@ -783,6 +802,49 @@ export const MusicManifest: ModuleManifest = {
             { name: 'r!help', value: 'Display this help message.', inline: true }
           )
           .setFooter({ text: 'Rage Optimiser Audio Engine' })
+          .setTimestamp();
+
+        return interaction.reply({ embeds: [embed] });
+      }
+    },
+    {
+      name: 'command_equalizer',
+      handler: async (client: any, interaction: any, context: any) => {
+        const queue = QueueManager.getQueue(interaction.guild.id);
+        if (!checkVoicePermissions(interaction, queue)) return;
+
+        const preset = interaction.options.getString('preset');
+        if (!preset) return interaction.reply({ content: '❌ Please select a valid equalizer preset.', flags: 64 });
+
+        if (preset === 'off') {
+          queue.activeFilters = [];
+          queue.speed = 1.0;
+          queue.pitch = 1.0;
+        } else if (preset === 'bassboost') {
+          if (!queue.activeFilters.includes('bassboost')) queue.activeFilters.push('bassboost');
+        } else if (preset === 'treble') {
+          if (!queue.activeFilters.includes('treble')) queue.activeFilters.push('treble');
+        } else if (preset === 'nightcore') {
+          queue.speed = 1.25;
+          queue.pitch = 1.25;
+          if (!queue.activeFilters.includes('nightcore')) queue.activeFilters.push('nightcore');
+        } else if (preset === 'vaporwave') {
+          queue.speed = 0.85;
+          queue.pitch = 0.8;
+          if (!queue.activeFilters.includes('vaporwave')) queue.activeFilters.push('vaporwave');
+        }
+
+        const elapsed = queue.getElapsedSeconds();
+        if (queue.currentTrack) {
+          queue.queue.unshift(queue.currentTrack);
+          queue.currentTrack = null;
+        }
+        await queue.playNext(elapsed);
+
+        const embed = new EmbedBuilder()
+          .setTitle('🎛️ Equalizer & DSP Filter Updated')
+          .setDescription(`Active Preset: **\`${preset.toUpperCase()}\`**`)
+          .setColor('#7C5CFC')
           .setTimestamp();
 
         return interaction.reply({ embeds: [embed] });
@@ -1524,6 +1586,8 @@ export const MusicManifest: ModuleManifest = {
       name: 'button_music_open_controls',
       handler: async (client: any, interaction: any, context: any) => {
         const queue = QueueManager.getQueue(interaction.guildId);
+        // Always sync the text channel to wherever the button was clicked
+        queue.textChannelId = interaction.channelId;
         await queue.openControls(client);
         await interaction.deferUpdate().catch(() => {});
       }

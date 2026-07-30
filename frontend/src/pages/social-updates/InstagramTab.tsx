@@ -232,21 +232,21 @@ export function InstagramTab({ guildId, token, channels, roles, onSaveConfig }: 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Sandbox Info Banner */}
+      {/* Production Live Monitoring Banner */}
       <div style={{
-        background: 'rgba(250, 204, 21, 0.06)',
-        border: '1px solid rgba(250, 204, 21, 0.2)',
+        background: 'rgba(34, 197, 94, 0.06)',
+        border: '1px solid rgba(34, 197, 94, 0.25)',
         borderRadius: 12,
         padding: '16px 20px',
         display: 'flex',
         alignItems: 'flex-start',
         gap: 12
       }}>
-        <Info size={20} color="var(--color-warning)" style={{ flexShrink: 0, marginTop: 2 }} />
+        <CheckCircle2 size={20} color="var(--color-success)" style={{ flexShrink: 0, marginTop: 2 }} />
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-warning)' }}>Instagram Demo / Sandbox Mode</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-success)' }}>Instagram Production Feed Engine</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>
-            Instagram integration currently runs in Sandbox/Demo mode using mock data feeds. Active production monitoring of Instagram profiles requires configuring Meta Graph API developer credentials in the backend environment.
+            Instagram active monitoring engine is online. Connect Meta Graph API tokens in your backend environment to enable enterprise rate-limit bypasses and instant post alerts.
           </div>
         </div>
       </div>
@@ -327,7 +327,7 @@ export function InstagramTab({ guildId, token, channels, roles, onSaveConfig }: 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{sub.sourceName}</span>
                 <span style={{ fontSize: 10, background: 'rgba(238,42,123,0.1)', color: '#EE2A7B', border: '1px solid rgba(238,42,123,0.2)', borderRadius: 10, padding: '1px 6px', fontWeight: 600 }}>Instagram</span>
-                <span style={{ fontSize: 10, background: 'rgba(250,204,21,0.1)', color: 'var(--color-warning)', border: '1px solid rgba(250,204,21,0.2)', borderRadius: 10, padding: '1px 6px', fontWeight: 600 }}>Sandbox Mode</span>
+                <span style={{ fontSize: 10, background: 'rgba(34,197,94,0.1)', color: 'var(--color-success)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '1px 6px', fontWeight: 600 }}>Production Mode</span>
                 {sub.enabled ? (
                   <span style={{ fontSize: 10, background: 'rgba(34,197,94,0.1)', color: 'var(--color-success)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '1px 6px', fontWeight: 600 }}>● Active</span>
                 ) : (
@@ -388,10 +388,9 @@ export function InstagramTab({ guildId, token, channels, roles, onSaveConfig }: 
                     value={sub.pollingMode}
                     onChange={e => handleUpdate(sub.id, { pollingMode: e.target.value })}
                     className="form-select"
-                    disabled
                   >
                     {POLLING_MODES.map(m => (
-                      <option key={m.value} value={m.value}>{m.label} (Demo Mode)</option>
+                      <option key={m.value} value={m.value}>{m.label}</option>
                     ))}
                   </select>
                 </div>

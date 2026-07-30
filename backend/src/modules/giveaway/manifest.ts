@@ -1,6 +1,13 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, PermissionFlagsBits } from 'discord.js';
+import {
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
+} from 'discord.js';
 import { IGiveaway } from '../../models/index.js';
+import {
+  Colors, Embeds, Components,
+  buildRichCard, buildListCard, buildStatusCard,
+  fmt, ts,
+} from '../../core/UIFactory.js';
 
 const activeGiveaways: Map<string, NodeJS.Timeout> = new Map();
 
@@ -36,18 +43,24 @@ async function endGiveaway(client: any, giveaway: IGiveaway, context: any, reaso
     if (!channel || !channel.isTextBased()) return;
 
     const msg = gw.messageId ? await channel.messages.fetch(gw.messageId).catch(() => null) : null;
-
     const winnerMentions = winners.length > 0 ? winners.map((id: string) => `<@${id}>`).join(', ') : 'No valid entries';
 
-    const embed = new EmbedBuilder()
-      .setTitle('🎉 Giveaway Ended!')
-      .setDescription(`**Prize:** ${gw.prize}\n**Winners:** ${winnerMentions}`)
-      .setColor('#f1c40f')
-      .setFooter({ text: `Hosted by ${gw.hostTag} • ${reason}` })
-      .setTimestamp();
+    // End card — Components V2
+    const { components, flags } = buildRichCard({
+      emoji: '🏆',
+      title: `Giveaway Ended — ${gw.prize}`,
+      accentColor: Colors.GOLD,
+      fields: [
+        { label: '🏆 Winners',  value: winnerMentions },
+        { label: '📦 Prize',    value: gw.prize },
+        { label: '👤 Hosted by', value: gw.hostTag },
+        { label: '📋 Reason',   value: reason },
+      ],
+      footerNote: `Rage Optimiser Enterprise  •  🎉 Giveaway Manager`,
+    });
 
     if (msg) {
-      await msg.edit({ embeds: [embed], components: [] }).catch(() => {});
+      await msg.edit({ components, flags, embeds: [] }).catch(() => {});
     }
 
     if (winners.length > 0) {
@@ -178,9 +191,9 @@ export const GiveawayManifest: ModuleManifest = {
         let giveaways: IGiveaway[] = gwMod.config?.giveaways || [];
         const saveGiveaways = (updated: IGiveaway[]) => context.updateModuleConfig('giveaway', { giveaways: updated });
 
-        // CREATE
+        // ─── CREATE ───────────────────────────────────────────────
         if (sub === 'create') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          if (!interaction.memberPermissions?.has('ManageGuild')) {
             return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
           }
           const durationStr = interaction.options.getString('duration');
@@ -194,23 +207,31 @@ export const GiveawayManifest: ModuleManifest = {
           const endsAt = new Date(Date.now() + ms);
           const gwId = makeId();
 
-          const embed = new EmbedBuilder()
-            .setTitle(`🎉 GIVEAWAY — ${prize}`)
-            .setDescription(`${description ? description + '\n\n' : ''}🏆 **${winnerCount} winner${winnerCount > 1 ? 's' : ''}**\n📅 **Ends:** <t:${Math.floor(endsAt.getTime() / 1000)}:R>\n👤 **Hosted by:** ${interaction.user}${requiredRole ? `\n🎭 **Required Role:** ${requiredRole}` : ''}\n\nClick 🎉 to enter!`)
-            .setColor('#f1c40f')
-            .setFooter({ text: `ID: ${gwId} • ${winnerCount} winner(s)` })
-            .setTimestamp(endsAt);
-
-          const btn = new ButtonBuilder()
-            .setCustomId(`gw_enter_${gwId}`)
-            .setLabel('Enter Giveaway')
-            .setEmoji('🎉')
-            .setStyle(ButtonStyle.Success);
-
-          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btn);
+          // Giveaway panel — Components V2 with enter button
+          const { components, flags } = buildRichCard({
+            emoji: '🎉',
+            title: `GIVEAWAY — ${prize}`,
+            description: description || undefined,
+            accentColor: Colors.GOLD,
+            fields: [
+              { label: '🏆 Winners',         value: `**${winnerCount}** winner${winnerCount > 1 ? 's' : ''}` },
+              { label: '⏰ Ends',            value: ts(Math.floor(endsAt.getTime() / 1000)) },
+              { label: '👤 Hosted By',       value: `${interaction.user}` },
+              ...(requiredRole ? [{ label: '🎭 Required Role', value: `${requiredRole}` }] : []),
+              { label: '🆔 Giveaway ID',     value: `\`${gwId}\`` },
+            ],
+            footerNote: `Rage Optimiser Enterprise  •  🎉 Giveaway Manager  •  Click Enter to participate!`,
+            actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`gw_enter_${gwId}`)
+                .setLabel('Enter Giveaway')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('🎉')
+            ) as any,
+          });
 
           await interaction.deferReply({ flags: 64 });
-          const msg = await targetChannel.send({ embeds: [embed], components: [row] });
+          const msg = await targetChannel.send({ components, flags });
 
           const giveaway: IGiveaway = {
             id: gwId,
@@ -233,16 +254,15 @@ export const GiveawayManifest: ModuleManifest = {
           saveGiveaways(giveaways);
           context.logSyncEvent(`[Giveaway] Created giveaway "${prize}" by ${interaction.user.username}.`, 'success');
 
-          // Schedule auto-end
           const timeout = setTimeout(() => endGiveaway(client, giveaway, context), ms);
           activeGiveaways.set(gwId, timeout);
 
           await interaction.editReply({ content: `✅ Giveaway started in ${targetChannel}! ID: \`${gwId}\`` });
         }
 
-        // END
+        // ─── END ──────────────────────────────────────────────────
         else if (sub === 'end') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          if (!interaction.memberPermissions?.has('ManageGuild')) {
             return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
           }
           const id = interaction.options.getString('id');
@@ -257,9 +277,9 @@ export const GiveawayManifest: ModuleManifest = {
           await interaction.reply({ content: `✅ Giveaway \`${id}\` ended early.`, flags: 64 });
         }
 
-        // REROLL
+        // ─── REROLL ───────────────────────────────────────────────
         else if (sub === 'reroll') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          if (!interaction.memberPermissions?.has('ManageGuild')) {
             return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
           }
           const id = interaction.options.getString('id');
@@ -273,20 +293,34 @@ export const GiveawayManifest: ModuleManifest = {
           saveGiveaways(giveaways);
 
           const mentions = newWinners.map((id: string) => `<@${id}>`).join(', ');
-          await interaction.reply({ content: `🔄 **Reroll Complete!** New winner(s): ${mentions}` });
+          const { components, flags } = buildStatusCard({
+            emoji: '🔄',
+            title: 'Reroll Complete!',
+            body: `New winner(s): ${mentions}`,
+            accentColor: Colors.BRAND,
+          });
+          await interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
 
-        // LIST
+        // ─── LIST ─────────────────────────────────────────────────
         else if (sub === 'list') {
           const active = giveaways.filter(g => !g.ended);
           if (active.length === 0) return interaction.reply({ content: '📋 No active giveaways.', flags: 64 });
-          const lines = active.map(g => `• **${g.prize}** — Ends <t:${Math.floor(new Date(g.endsAt).getTime() / 1000)}:R> — ID: \`${g.id}\``);
-          await interaction.reply({ content: `🎉 **Active Giveaways (${active.length}):**\n${lines.join('\n')}`, flags: 64 });
+          const lines = active.map(g =>
+            `🎉 **${g.prize}** — Ends ${ts(Math.floor(new Date(g.endsAt).getTime() / 1000))} — ID: \`${g.id}\``
+          );
+          const { components, flags } = buildListCard({
+            emoji: '🎉',
+            title: `Active Giveaways (${active.length})`,
+            entries: lines,
+            accentColor: Colors.GOLD,
+          });
+          await interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
 
-        // DELETE
+        // ─── DELETE ───────────────────────────────────────────────
         else if (sub === 'delete') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          if (!interaction.memberPermissions?.has('ManageGuild')) {
             return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
           }
           const id = interaction.options.getString('id');
@@ -298,32 +332,35 @@ export const GiveawayManifest: ModuleManifest = {
           await interaction.reply({ content: `🗑️ Giveaway \`${id}\` deleted.`, flags: 64 });
         }
 
-        // INFO
+        // ─── INFO ─────────────────────────────────────────────────
         else if (sub === 'info') {
           const id = interaction.options.getString('id');
           const gw = giveaways.find(g => g.id === id);
           if (!gw) return interaction.reply({ content: `❌ Giveaway \`${id}\` not found.`, flags: 64 });
 
-          const embed = new EmbedBuilder()
-            .setTitle(`🎉 Giveaway: ${gw.prize}`)
-            .setColor('#f1c40f')
-            .addFields(
-              { name: 'Status', value: gw.ended ? '✅ Ended' : '🟢 Active', inline: true },
-              { name: 'Winner Count', value: `${gw.winnerCount}`, inline: true },
-              { name: 'Entries', value: `${(gw.entries || []).length}`, inline: true },
-              { name: 'Host', value: `${gw.hostTag}`, inline: true },
-              { name: 'Ends/Ended', value: `<t:${Math.floor(new Date(gw.endsAt).getTime() / 1000)}:F>`, inline: true },
-              { name: 'ID', value: `\`${gw.id}\``, inline: true }
-            );
-
-          if (gw.ended && gw.winnerIds && gw.winnerIds.length > 0) {
-            embed.addFields({ name: 'Winners', value: gw.winnerIds.map((id: string) => `<@${id}>`).join(', ') });
-          }
-
-          await interaction.reply({ embeds: [embed], flags: 64 });
+          const statusIcon = (gw as any).paused ? '⏸️ Paused' : gw.ended ? '✅ Ended' : '🟢 Active';
+          const { components, flags } = buildRichCard({
+            emoji: '🎉',
+            title: `Giveaway Info — ${gw.prize}`,
+            accentColor: Colors.GOLD,
+            fields: [
+              { label: '📋 Status',       value: statusIcon },
+              { label: '🏆 Winners',      value: `${gw.winnerCount}` },
+              { label: '📝 Entries',      value: `${(gw.entries || []).length}` },
+              { label: '👤 Host',         value: gw.hostTag },
+              { label: '⏰ Ends / Ended', value: ts(Math.floor(new Date(gw.endsAt).getTime() / 1000), 'F') },
+              { label: '🆔 ID',           value: `\`${gw.id}\`` },
+              ...(gw.ended && gw.winnerIds && gw.winnerIds.length > 0
+                ? [{ label: '🎖️ Winners', value: gw.winnerIds.map((id: string) => `<@${id}>`).join(', ') }]
+                : []),
+            ],
+            footerNote: `Rage Optimiser Enterprise  •  🎉 Giveaway Manager`,
+          });
+          await interaction.reply({ components, flags });
         }
+
         else if (sub === 'pause') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          if (!interaction.memberPermissions?.has('ManageGuild')) {
             return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
           }
           const id = interaction.options.getString('id');
@@ -338,8 +375,9 @@ export const GiveawayManifest: ModuleManifest = {
           context.logSyncEvent(`[Giveaway] Paused giveaway "${id}".`, 'warn');
           return interaction.reply({ content: `⏸️ Giveaway \`${id}\` has been paused.`, flags: 64 });
         }
+
         else if (sub === 'resume') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          if (!interaction.memberPermissions?.has('ManageGuild')) {
             return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
           }
           const id = interaction.options.getString('id');
@@ -359,8 +397,9 @@ export const GiveawayManifest: ModuleManifest = {
           context.logSyncEvent(`[Giveaway] Resumed giveaway "${id}".`, 'success');
           return interaction.reply({ content: `▶️ Giveaway \`${id}\` has been resumed.`, flags: 64 });
         }
+
         else if (sub === 'edit') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          if (!interaction.memberPermissions?.has('ManageGuild')) {
             return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
           }
           const id = interaction.options.getString('id');
@@ -382,8 +421,9 @@ export const GiveawayManifest: ModuleManifest = {
           context.logSyncEvent(`[Giveaway] Edited giveaway "${id}".`, 'info');
           return interaction.reply({ content: `📝 Giveaway \`${id}\` has been edited.`, flags: 64 });
         }
+
         else if (sub === 'cancel') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          if (!interaction.memberPermissions?.has('ManageGuild')) {
             return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
           }
           const id = interaction.options.getString('id');
@@ -394,16 +434,38 @@ export const GiveawayManifest: ModuleManifest = {
           context.logSyncEvent(`[Giveaway] Canceled giveaway "${id}".`, 'warn');
           return interaction.reply({ content: `❌ Giveaway \`${id}\` has been canceled.`, flags: 64 });
         }
+
         else if (sub === 'history') {
           const past = giveaways.filter(g => g.ended);
           if (past.length === 0) return interaction.reply({ content: '📋 No giveaway history cached.', flags: 64 });
-          const lines = past.slice(0, 10).map(g => `• **${g.prize}** — Won by ${g.winnerIds?.map(w => `<@${w}>`).join(', ') || 'no one'} — ID: \`${g.id}\``);
-          return interaction.reply({ content: `⏳ **Recent Giveaways History:**\n${lines.join('\n')}`, flags: 64 });
+          const lines = past.slice(0, 10).map(g =>
+            `🏆 **${g.prize}** — Won by ${g.winnerIds?.map(w => `<@${w}>`).join(', ') || 'no one'} — \`${g.id}\``
+          );
+          const { components, flags } = buildListCard({
+            emoji: '⏳',
+            title: 'Giveaway History',
+            subtitle: `Last ${Math.min(10, past.length)} giveaways`,
+            entries: lines,
+            accentColor: Colors.MUTED,
+          });
+          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
+
         else if (sub === 'stats') {
           const total = giveaways.length;
           const active = giveaways.filter(g => !g.ended).length;
-          return interaction.reply({ content: `📊 **Giveaway System Statistics**:\n• Active Giveaways: **${active}**\n• Ended Giveaways: **${total - active}**\n• Total Hosted: **${total}**`, flags: 64 });
+          const { components, flags } = buildRichCard({
+            emoji: '📊',
+            title: 'Giveaway System Statistics',
+            accentColor: Colors.BRAND,
+            fields: [
+              { label: '🟢 Active Giveaways', value: `**${active}**` },
+              { label: '✅ Ended Giveaways',  value: `**${total - active}**` },
+              { label: '📦 Total Hosted',     value: `**${total}**` },
+            ],
+            footerNote: `Rage Optimiser Enterprise  •  🎉 Giveaway Manager`,
+          });
+          return interaction.reply({ components, flags });
         }
       }
     },
@@ -423,7 +485,6 @@ export const GiveawayManifest: ModuleManifest = {
           return interaction.reply({ content: '❌ This giveaway has already ended.', flags: 64 });
         }
 
-        // Required role check
         if (gw.requiredRoleId) {
           const hasr = interaction.member?.roles?.cache?.has(gw.requiredRoleId);
           if (!hasr) return interaction.reply({ content: `❌ You need <@&${gw.requiredRoleId}> to enter this giveaway.`, flags: 64 });
@@ -443,7 +504,6 @@ export const GiveawayManifest: ModuleManifest = {
     {
       name: 'ready',
       handler: async (client: any, _: any, context: any) => {
-        // Restore timers for active giveaways on startup
         const modules = context.getModulesState ? context.getModulesState() : [];
         const gwMod = modules.find((m: any) => m.id === 'giveaway');
         if (!gwMod) return;

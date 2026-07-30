@@ -1,6 +1,9 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { MessageFlags } from 'discord.js';
 import { IAnnouncement } from '../../models/index.js';
+import {
+  Colors, Embeds, buildRichCard, buildListCard, buildStatusCard, fmt, ts,
+} from '../../core/UIFactory.js';
 
 export const AnnouncementsManifest: ModuleManifest = {
   id: 'announcements',
@@ -64,11 +67,7 @@ export const AnnouncementsManifest: ModuleManifest = {
             { name: 'ping_everyone', type: 5, description: 'Ping @everyone?', required: false }
           ]
         },
-        {
-          name: 'history',
-          description: 'View announcement history',
-          type: 1
-        },
+        { name: 'history',   description: 'View announcement history',                   type: 1 },
         {
           name: 'preview',
           description: 'Preview an announcement embed before sending',
@@ -88,11 +87,7 @@ export const AnnouncementsManifest: ModuleManifest = {
             { name: 'time', type: 3, description: 'When to send (e.g. 5m, 1h)', required: true }
           ]
         },
-        {
-          name: 'list',
-          description: 'List all scheduled announcements',
-          type: 1
-        },
+        { name: 'list',   description: 'List all scheduled announcements',               type: 1 },
         {
           name: 'delete',
           description: 'Delete a scheduled announcement',
@@ -108,16 +103,8 @@ export const AnnouncementsManifest: ModuleManifest = {
             { name: 'message', type: 3, description: 'New message', required: true }
           ]
         },
-        {
-          name: 'stats',
-          description: 'Announcements category usage statistics',
-          type: 1
-        },
-        {
-          name: 'templates',
-          description: 'Show layout templates preset designs',
-          type: 1
-        }
+        { name: 'stats',     description: 'Announcements category usage statistics',     type: 1 },
+        { name: 'templates', description: 'Show layout templates preset designs',         type: 1 }
       ]
     }
   ],
@@ -125,7 +112,7 @@ export const AnnouncementsManifest: ModuleManifest = {
     {
       name: 'command_announce',
       handler: async (client: any, interaction: any, context: any) => {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        if (!interaction.memberPermissions?.has('ManageGuild')) {
           return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
         }
 
@@ -138,9 +125,9 @@ export const AnnouncementsManifest: ModuleManifest = {
         const sub = interaction.options.getSubcommand(false);
         let history: IAnnouncement[] = aMod.config?.history || [];
         const defaultChannelId = aMod.config?.defaultChannelId;
-        const saveHistory = (h: IAnnouncement[]) => context.updateModuleConfig('announcements', { history: h.slice(-50) }); // keep last 50
+        const saveHistory = (h: IAnnouncement[]) => context.updateModuleConfig('announcements', { history: h.slice(-50) });
 
-        // SEND
+        // ─── SEND ─────────────────────────────────────────────────
         if (sub === 'send') {
           const message = interaction.options.getString('message');
           const targetChannel = interaction.options.getChannel('channel') || (defaultChannelId ? interaction.guild.channels.cache.get(defaultChannelId) : interaction.channel);
@@ -148,28 +135,27 @@ export const AnnouncementsManifest: ModuleManifest = {
           const pingRole = interaction.options.getRole('ping_role');
           const useEmbed = interaction.options.getBoolean('embed') || false;
           const title = interaction.options.getString('title') || undefined;
-          const color = interaction.options.getString('color') || '#4f8cff';
+          const color = interaction.options.getString('color') || '#06B6D4';
 
           if (!targetChannel) return interaction.reply({ content: '❌ No target channel found or configured.', flags: 64 });
 
           await interaction.deferReply({ flags: 64 });
 
-          let content = '';
-          if (pingEveryone) content = '@everyone ';
-          else if (pingRole) content = `<@&${pingRole.id}> `;
+          let pingContent = '';
+          if (pingEveryone) pingContent = '@everyone ';
+          else if (pingRole) pingContent = `<@&${pingRole.id}> `;
 
-          const payload: any = { content: content || undefined };
+          const payload: any = {};
 
           if (useEmbed || title) {
-            const embed = new EmbedBuilder()
-              .setColor(color as any)
-              .setDescription(message)
-              .setTimestamp()
-              .setFooter({ text: `Announced by ${interaction.user.username}` });
-            if (title) embed.setTitle(title);
+            const embed = Embeds.info(title || '📢 Announcement', message, {
+              module: 'announcements',
+              footer: `Announced by ${interaction.user.username}`,
+            });
             payload.embeds = [embed];
+            if (pingContent) payload.content = pingContent.trim();
           } else {
-            payload.content = (content + message).trim();
+            payload.content = (pingContent + message).trim();
           }
 
           try {
@@ -199,12 +185,12 @@ export const AnnouncementsManifest: ModuleManifest = {
           }
         }
 
-        // EMBED
+        // ─── EMBED ────────────────────────────────────────────────
         else if (sub === 'embed') {
           const title = interaction.options.getString('title');
           const description = interaction.options.getString('description');
           const targetChannel = interaction.options.getChannel('channel') || (defaultChannelId ? interaction.guild.channels.cache.get(defaultChannelId) : interaction.channel);
-          const color = interaction.options.getString('color') || '#4f8cff';
+          const color = interaction.options.getString('color') || '#06B6D4';
           const image = interaction.options.getString('image');
           const thumbnail = interaction.options.getString('thumbnail');
           const footer = interaction.options.getString('footer');
@@ -212,18 +198,15 @@ export const AnnouncementsManifest: ModuleManifest = {
 
           if (!targetChannel) return interaction.reply({ content: '❌ No target channel found.', flags: 64 });
 
-          const embed = new EmbedBuilder()
-            .setTitle(title)
-            .setDescription(description)
-            .setColor(color as any)
-            .setTimestamp()
-            .setFooter({ text: footer || `Announced by ${interaction.user.username}` });
-
-          if (image) embed.setImage(image);
-          if (thumbnail) embed.setThumbnail(thumbnail);
+          const embed = Embeds.info(title, description, {
+            module: 'announcements',
+            image: image || null,
+            thumbnail: thumbnail || null,
+            footer: footer || `Announced by ${interaction.user.username}`,
+          });
+          (embed as any).setColor(parseInt(color.replace('#', ''), 16) || Colors.INFO);
 
           await interaction.deferReply({ flags: 64 });
-
           try {
             await targetChannel.send({ content: pingEveryone ? '@everyone' : undefined, embeds: [embed] });
             context.logSyncEvent(`[Announcements] Sent rich embed to #${targetChannel.name} by ${interaction.user.username}.`, 'success');
@@ -233,84 +216,119 @@ export const AnnouncementsManifest: ModuleManifest = {
           }
         }
 
-        // DM
+        // ─── DM ──────────────────────────────────────────────────
         else if (sub === 'dm') {
           const message = interaction.options.getString('message');
           const role = interaction.options.getRole('role');
 
           await interaction.deferReply({ flags: 64 });
-
           try {
             const members = await interaction.guild.members.fetch();
             let targets = members.filter((m: any) => !m.user.bot);
             if (role) targets = targets.filter((m: any) => m.roles.cache.has(role.id));
 
             let sent = 0, failed = 0;
-            const embed = new EmbedBuilder()
-              .setTitle(`📢 Announcement from ${interaction.guild.name}`)
-              .setDescription(message)
-              .setColor('#4f8cff')
-              .setTimestamp();
+            const embed = Embeds.info(
+              `📢 Announcement from ${interaction.guild.name}`,
+              message,
+              { module: 'announcements' }
+            );
 
             for (const [, member] of targets) {
               await member.send({ embeds: [embed] }).then(() => sent++).catch(() => failed++);
-              await new Promise(r => setTimeout(r, 300)); // rate limit protection
+              await new Promise(r => setTimeout(r, 300));
             }
 
             context.logSyncEvent(`[Announcements] DM blast: sent ${sent}, failed ${failed} by ${interaction.user.username}.`, 'info');
-            await interaction.editReply({ content: `✅ DM sent to **${sent}** members. Failed: **${failed}** (DMs closed).` });
+            await interaction.editReply({ content: `✅ DM sent to **${sent}** members. Failed: **${failed}** (closed DMs).` });
           } catch (err) {
             await interaction.editReply({ content: '❌ Failed to send DMs.' });
           }
         }
 
-        // PREVIEW
+        // ─── PREVIEW ─────────────────────────────────────────────
         else if (sub === 'preview') {
           const title = interaction.options.getString('title');
           const description = interaction.options.getString('description');
-          const color = interaction.options.getString('color') || '#4f8cff';
+          const color = interaction.options.getString('color') || '#06B6D4';
 
-          const embed = new EmbedBuilder()
-            .setTitle(`👁️ Preview — ${title}`)
-            .setDescription(description)
-            .setColor(color as any)
-            .setFooter({ text: 'This is a preview — not sent to any channel.' })
-            .setTimestamp();
-
-          return interaction.reply({ content: '📋 **Preview:**', embeds: [embed], flags: 64 });
+          const { components, flags } = buildRichCard({
+            emoji: '👁️',
+            title: `Preview — ${title}`,
+            description,
+            accentColor: Colors.MUTED,
+            footerNote: 'This is a preview — not sent to any channel. Rage Optimiser Enterprise  •  📢 Announcements',
+          });
+          return interaction.reply({ components, flags });
         }
+
+        // ─── HISTORY ─────────────────────────────────────────────
         else if (sub === 'history') {
           const history = aMod.config?.history || [];
           if (history.length === 0) return interaction.reply({ content: '📋 No announcement history.', flags: 64 });
           const lines = history.slice(-10).reverse().map((a: any, i: number) =>
-            `**${i + 1}.** <t:${Math.floor(new Date(a.sentAt || a.createdAt).getTime() / 1000)}:R> — ${a.title || a.content.substring(0, 40)} by **${a.authorTag}**`
+            `**${i + 1}.** ${ts(Math.floor(new Date(a.sentAt || a.createdAt).getTime() / 1000))} — **${a.title || a.content.substring(0, 40)}...** by *${a.authorTag}*`
           );
-          return interaction.reply({ content: `📢 **Recent Announcements (last 10):**\n${lines.join('\n')}`, flags: 64 });
+          const { components, flags } = buildListCard({
+            emoji: '📢',
+            title: 'Recent Announcements',
+            subtitle: 'Last 10 broadcasts',
+            entries: lines,
+            accentColor: Colors.INFO,
+          });
+          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
+
         else if (sub === 'schedule') {
           const msg = interaction.options.getString('message');
           const time = interaction.options.getString('time');
           context.logSyncEvent(`[Announcements] Scheduled announcement to send in ${time}.`, 'success');
-          return interaction.reply({ content: `📅 **Announcement Scheduled**: Will dispatch in **${time}**.\nMessage: "${msg}"`, flags: 64 });
+          return interaction.reply({ content: `📅 **Announcement Scheduled** — Will dispatch in **${time}**.\nMessage: "${msg}"`, flags: 64 });
         }
+
         else if (sub === 'list') {
-          return interaction.reply({ content: '📋 **Scheduled Announcements Queue**:\nNo pending scheduled announcements queued.', flags: 64 });
+          return interaction.reply({ content: '📋 **Scheduled Queue**: No pending scheduled announcements.', flags: 64 });
         }
+
         else if (sub === 'delete') {
           const index = interaction.options.getInteger('index');
-          return interaction.reply({ content: `🗑️ **Scheduled Announcement Deleted**: Index **${index}** removed from the schedule queue.`, flags: 64 });
+          return interaction.reply({ content: `🗑️ Scheduled Announcement at index **${index}** deleted.`, flags: 64 });
         }
+
         else if (sub === 'edit') {
           const index = interaction.options.getInteger('index');
           const message = interaction.options.getString('message');
-          return interaction.reply({ content: `📝 **Scheduled Announcement Edited** at Index **${index}**.\nNew message: "${message}"`, flags: 64 });
+          return interaction.reply({ content: `📝 Scheduled Announcement at index **${index}** updated.`, flags: 64 });
         }
+
         else if (sub === 'stats') {
           const history = aMod.config?.history || [];
-          return interaction.reply({ content: `📊 **Announcements Statistics**:\n• Total Broadcasted: **${history.length}**\n• Scheduled Pending: **0**\n• DMs Blasts Sent: **0**`, flags: 64 });
+          const { components, flags } = buildRichCard({
+            emoji: '📊',
+            title: 'Announcements Statistics',
+            accentColor: Colors.INFO,
+            fields: [
+              { label: '📢 Total Broadcasted',  value: `**${history.length}**` },
+              { label: '📅 Scheduled Pending', value: '**0**' },
+              { label: '📬 DM Blasts Sent',    value: '**0**' },
+            ],
+            footerNote: 'Rage Optimiser Enterprise  •  📢 Announcements',
+          });
+          return interaction.reply({ components, flags });
         }
+
         else if (sub === 'templates') {
-          return interaction.reply({ content: '🗂️ **Announcements Design Templates presets**:\n• **Gaming**: Dark purple theme with custom highlight fields.\n• **Rules Update**: Orange warning block layout.\n• **Event Schedule**: Teal timetable grid format.', flags: 64 });
+          const { components, flags } = buildListCard({
+            emoji: '🗂️',
+            title: 'Announcement Design Templates',
+            entries: [
+              '🎮 **Gaming** — Dark purple theme with highlight fields',
+              '📋 **Rules Update** — Orange warning block layout',
+              '📅 **Event Schedule** — Teal timetable grid format',
+            ],
+            accentColor: Colors.MUTED,
+          });
+          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
       }
     }

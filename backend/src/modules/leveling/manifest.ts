@@ -1,6 +1,11 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { Database } from '../../core/Database.js';
+import {
+  Embeds, Colors, Components,
+  buildRichCard, buildListCard, buildStatusCard,
+  progressBar, fmt, ts,
+} from '../../core/UIFactory.js';
 
 // Safe display name helper
 function userTag(user: any): string {
@@ -158,16 +163,23 @@ export const LevelingManifest: ModuleManifest = {
 
         if (newLevel > oldLevel) {
           const channel = message.channel;
+
           const levelEmbed = new EmbedBuilder()
+            .setColor('#2ecc71')
             .setTitle('⭐ Level Up!')
-            .setDescription(`> ${message.author} has advanced to Level **${newLevel}**!\n\n**Member**: ${message.author} (\`${message.author.username}\`)\n**New Level**: \`${newLevel}\`\n**Total XP**: \`${newXp}\``)
-            .setColor('#10b981')
-            .setThumbnail(message.author.displayAvatarURL({ size: 256 }) || null)
+            .setDescription(`> <@${message.author.id}> has\nadvanced to Level **${newLevel}**!`)
+            .setThumbnail(message.author.displayAvatarURL({ size: 256 }))
+            .addFields(
+              { name: 'Member:', value: `<@${message.author.id}>\n(\`${message.author.username}\`)`, inline: false },
+              { name: 'New Level:', value: `\`${newLevel}\``, inline: false },
+              { name: 'Total XP:', value: `\`${newXp}\``, inline: false }
+            )
             .setTimestamp();
+
           await channel.send({ embeds: [levelEmbed] }).catch(() => {});
           context.logSyncEvent(`Leveling: ${userTag(message.author)} leveled up to Lvl ${newLevel}.`, 'info');
 
-          // Role Reward assignment
+          // Role Reward assignment (unchanged backend logic)
           const roleRewards = lvlMod.config?.roleRewards || {};
           const rewardRoleId = roleRewards[newLevel.toString()];
           if (rewardRoleId) {
@@ -194,12 +206,19 @@ export const LevelingManifest: ModuleManifest = {
         const xp = await getUserXP(guildId, target.id);
         const level = Math.floor(0.1 * Math.sqrt(xp));
         const nextLevelXp = Math.pow((level + 1) / 0.1, 2);
-        
+        const bar = progressBar(xp, nextLevelXp);
+
         const rankEmbed = new EmbedBuilder()
-          .setTitle(`📊 Rank & Progress — ${target.username}`)
-          .setThumbnail(target.displayAvatarURL({ size: 256 }) || null)
-          .setDescription(`> **Member**: ${target} (\`${target.username}\`)\n\n**Current Level**: \`${level}\`\n**Current XP**: \`${xp} / ${nextLevelXp}\``)
-          .setColor('#3b82f6')
+          .setColor('#2ecc71')
+          .setTitle(`⭐ Level & XP Status — ${target.username}`)
+          .setDescription(`> <@${target.id}>'s activity and ranking overview.`)
+          .setThumbnail(target.displayAvatarURL({ size: 256 }))
+          .addFields(
+            { name: 'Member:', value: `<@${target.id}>\n(\`${target.username}\`)`, inline: false },
+            { name: 'Current Level:', value: `\`${level}\``, inline: false },
+            { name: 'Total XP:', value: `\`${fmt(xp)} / ${fmt(Math.floor(nextLevelXp))}\``, inline: false },
+            { name: 'Progress:', value: bar, inline: false }
+          )
           .setTimestamp();
 
         await interaction.reply({ embeds: [rankEmbed] });
@@ -214,26 +233,26 @@ export const LevelingManifest: ModuleManifest = {
         const sorted = await getTopXP(guildId, 10);
         
         if (sorted.length === 0) {
-          const emptyEmbed = new EmbedBuilder()
-            .setTitle('🏆 Server Level Leaderboard')
-            .setDescription('> No XP data recorded for this server yet.')
-            .setColor('#f59e0b');
-          return interaction.reply({ embeds: [emptyEmbed], flags: 64 });
+          const lbEmptyEmbed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('🏆 Server Leaderboard')
+            .setDescription('No XP data has been recorded for this server yet. Start chatting to earn XP!')
+            .setTimestamp();
+          return interaction.reply({ embeds: [lbEmptyEmbed] });
         }
 
-        const lines = [];
-        for (let i = 0; i < sorted.length; i++) {
-          const item = sorted[i];
+        const medals = ['🥇', '🥈', '🥉'];
+        const lines = sorted.map((item, i) => {
           const level = Math.floor(0.1 * Math.sqrt(item.xp));
-          lines.push(`**#${i+1}** <@${item.userId}> — Level **${level}** (\`${item.xp} XP\`)`);
-        }
+          const medal = medals[i] ?? `**#${i + 1}**`;
+          return `${medal} <@${item.userId}> — Level **${level}** (\`${fmt(item.xp)} XP\`)`;
+        });
 
         const lbEmbed = new EmbedBuilder()
-          .setTitle('🏆 Server Level Leaderboard')
-          .setThumbnail(interaction.guild?.iconURL({ size: 256 }) || null)
-          .setDescription(`> Top active members in **${interaction.guild?.name || 'Server'}**:\n\n${lines.join('\n')}`)
-          .setColor('#f59e0b')
-          .setFooter({ text: `${interaction.guild?.name} • XP Leaderboard` })
+          .setColor('#2ecc71')
+          .setTitle(`⭐ ${interaction.guild?.name ?? 'Server'} Leaderboard`)
+          .setDescription(`> Top ${sorted.length} active members by XP\n\n` + lines.join('\n'))
+          .setThumbnail(interaction.guild?.iconURL({ size: 256 }) ?? '')
           .setTimestamp();
 
         await interaction.reply({ embeds: [lbEmbed] });
@@ -247,14 +266,18 @@ export const LevelingManifest: ModuleManifest = {
         if (!guildId) return;
 
         const eco = await getUserEco(guildId, target.id);
-        const balEmbed = new EmbedBuilder()
-          .setTitle(`💰 Balance — ${target.username}`)
-          .setThumbnail(target.displayAvatarURL({ size: 256 }) || null)
-          .setDescription(`> **User**: ${target} (\`${target.username}\`)\n\n**Wallet Balance**: \`${eco.balance.toLocaleString()}\` coins`)
-          .setColor('#f59e0b')
-          .setTimestamp();
+        const { components, flags } = buildRichCard({
+          emoji: '💰',
+          title: `Wallet — ${target.username}`,
+          accentColor: Colors.GOLD,
+          thumbnailUrl: target.displayAvatarURL({ size: 256 }),
+          fields: [
+            { label: '💵 Balance', value: `**${fmt(eco.balance)}** coins` },
+          ],
+          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+        });
 
-        await interaction.reply({ embeds: [balEmbed] });
+        await interaction.reply({ components, flags });
       }
     },
     {
@@ -271,24 +294,33 @@ export const LevelingManifest: ModuleManifest = {
         
         if (diff < cooldown) {
           const remaining = Math.ceil((cooldown - diff) / 3600000);
-          const cdEmbed = new EmbedBuilder()
-            .setTitle('⏳ Daily Cooldown Active')
-            .setDescription(`> You have already claimed your daily reward today.\n\n**Cooldown Remaining**: \`${remaining} hours\``)
-            .setColor('#f59e0b');
-          return interaction.reply({ embeds: [cdEmbed], flags: 64 });
+          const { components, flags } = buildStatusCard({
+            emoji: '⏳',
+            title: 'Daily Cooldown Active',
+            body: `You've already claimed your daily reward today.\n\n**Next reward available:** ${ts(Math.floor((last + cooldown) / 1000))}`,
+            accentColor: Colors.WARN,
+          });
+          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
         
         eco.balance += 500;
         eco.lastDaily = now;
         await saveUserEco(guildId, interaction.user.id, eco);
         
-        const dailyEmbed = new EmbedBuilder()
-          .setTitle('🎁 Daily Reward Claimed')
-          .setDescription(`> You claimed your daily reward of **500 coins**!\n\n**New Balance**: \`${eco.balance.toLocaleString()}\` coins`)
-          .setColor('#10b981')
-          .setTimestamp();
+        const { components, flags } = buildRichCard({
+          emoji: '🎁',
+          title: 'Daily Reward Claimed!',
+          accentColor: Colors.SUCCESS,
+          thumbnailUrl: interaction.user.displayAvatarURL({ size: 256 }),
+          fields: [
+            { label: '🎁 Reward',     value: '**500 coins**' },
+            { label: '💰 New Balance', value: `**${fmt(eco.balance)}** coins` },
+            { label: '⏰ Next Daily',  value: ts(Math.floor((now + cooldown) / 1000)) },
+          ],
+          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+        });
 
-        await interaction.reply({ embeds: [dailyEmbed] });
+        await interaction.reply({ components, flags });
       }
     },
     {
@@ -304,11 +336,13 @@ export const LevelingManifest: ModuleManifest = {
         
         if (now - last < cooldown) {
           const remaining = Math.ceil((cooldown - (now - last)) / 60000);
-          const cdEmbed = new EmbedBuilder()
-            .setTitle('⏳ Work Shift Cooldown')
-            .setDescription(`> You are currently resting after your work shift.\n\n**Cooldown Remaining**: \`${remaining} minutes\``)
-            .setColor('#f59e0b');
-          return interaction.reply({ embeds: [cdEmbed], flags: 64 });
+          const { components, flags } = buildStatusCard({
+            emoji: '⏳',
+            title: 'Work Shift Cooldown',
+            body: `You're currently resting after your work shift.\n\n**Back to work in:** \`${remaining} minutes\``,
+            accentColor: Colors.WARN,
+          });
+          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
         
         const earnings = Math.floor(Math.random() * 200) + 100; // 100 to 300
@@ -316,13 +350,19 @@ export const LevelingManifest: ModuleManifest = {
         eco.lastWork = now;
         await saveUserEco(guildId, interaction.user.id, eco);
         
-        const workEmbed = new EmbedBuilder()
-          .setTitle('💼 Work Shift Completed')
-          .setDescription(`> You worked hard and earned **${earnings} coins**!\n\n**New Balance**: \`${eco.balance.toLocaleString()}\` coins`)
-          .setColor('#10b981')
-          .setTimestamp();
+        const { components, flags } = buildRichCard({
+          emoji: '💼',
+          title: 'Work Shift Completed!',
+          accentColor: Colors.SUCCESS,
+          fields: [
+            { label: '💵 Earned',      value: `**${fmt(earnings)} coins**` },
+            { label: '💰 New Balance', value: `**${fmt(eco.balance)} coins**` },
+            { label: '⏰ Next Shift',  value: ts(Math.floor((now + cooldown) / 1000)) },
+          ],
+          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+        });
 
-        await interaction.reply({ embeds: [workEmbed] });
+        await interaction.reply({ components, flags });
       }
     },
     {
@@ -339,39 +379,46 @@ export const LevelingManifest: ModuleManifest = {
         const senderEco = await getUserEco(guildId, interaction.user.id);
         
         if (senderEco.balance < amount) {
-          return interaction.reply({ content: `❌ You do not have enough coins. Your balance is **${senderEco.balance}**.`, flags: 64 });
+          return interaction.reply({ content: `❌ Insufficient funds. Your balance: **${fmt(senderEco.balance)}** coins.`, flags: 64 });
         }
         
         const targetEco = await getUserEco(guildId, target.id);
-        
         senderEco.balance -= amount;
         targetEco.balance += amount;
 
         await saveUserEco(guildId, interaction.user.id, senderEco);
         await saveUserEco(guildId, target.id, targetEco);
         
-        const payEmbed = new EmbedBuilder()
-          .setTitle('💸 Coin Transfer Successful')
-          .setDescription(`> Successfully transferred **${amount} coins** to ${target}.\n\n**Recipient**: ${target} (\`${target.username}\`)\n**Amount Transferred**: \`${amount}\` coins`)
-          .setColor('#10b981')
-          .setTimestamp();
+        const { components, flags } = buildRichCard({
+          emoji: '💸',
+          title: 'Transfer Successful',
+          accentColor: Colors.SUCCESS,
+          fields: [
+            { label: '📤 Sent To',     value: `${target} (\`${target.username}\`)` },
+            { label: '💵 Amount',      value: `**${fmt(amount)} coins**` },
+            { label: '💰 Your Balance', value: `**${fmt(senderEco.balance)} coins**` },
+          ],
+          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+        });
 
-        await interaction.reply({ embeds: [payEmbed] });
+        await interaction.reply({ components, flags });
       }
     },
     {
       name: 'command_shop',
       handler: async (client: any, interaction: any, context: any) => {
-        const embed = new EmbedBuilder()
-          .setTitle('🛒 Server Shop')
-          .setDescription('Use `/buy <item>` to purchase (Coming soon).')
-          .addFields(
-            { name: '1. VIP Role', value: '10,000 coins', inline: true },
-            { name: '2. Custom Name Color', value: '5,000 coins', inline: true },
-            { name: '3. Mystery Box', value: '1,000 coins', inline: true }
-          )
-          .setColor('#9b59b6');
-        await interaction.reply({ embeds: [embed] });
+        const { components, flags } = buildListCard({
+          emoji: '🛒',
+          title: 'Server Shop',
+          subtitle: 'Use /buy <item> to purchase (Coming soon)',
+          entries: [
+            '**1.** 👑 VIP Role — `10,000 coins`',
+            '**2.** 🎨 Custom Name Color — `5,000 coins`',
+            '**3.** 🎁 Mystery Box — `1,000 coins`',
+          ],
+          accentColor: Colors.MUSIC,
+        });
+        await interaction.reply({ components, flags });
       }
     },
     {
@@ -383,22 +430,20 @@ export const LevelingManifest: ModuleManifest = {
         const eco = await getUserEco(guildId, interaction.user.id);
         const inv = eco.inventory || [];
         
-        if (inv.length === 0) {
-          const emptyEmbed = new EmbedBuilder()
-            .setTitle(`🎒 Inventory — ${interaction.user.username}`)
-            .setDescription('> Your inventory is currently empty.')
-            .setColor('#8b5cf6');
-          return interaction.reply({ embeds: [emptyEmbed] });
-        }
-        
-        const invEmbed = new EmbedBuilder()
-          .setTitle(`🎒 Inventory — ${interaction.user.username}`)
-          .setThumbnail(interaction.user.displayAvatarURL({ size: 256 }) || null)
-          .setDescription(`> **Member**: ${interaction.user}\n\n**Owned Items**:\n- ${inv.join('\n- ')}`)
-          .setColor('#8b5cf6')
-          .setTimestamp();
+        const entries = inv.length > 0
+          ? inv.map((item, i) => `**${i + 1}.** ${item}`)
+          : ['*Your inventory is empty. Visit the shop to get started!*'];
 
-        await interaction.reply({ embeds: [invEmbed] });
+        const { components, flags } = buildListCard({
+          emoji: '🎒',
+          title: `Inventory — ${interaction.user.username}`,
+          subtitle: `${inv.length} item(s) owned`,
+          entries,
+          accentColor: Colors.MUSIC,
+          thumbnailUrl: interaction.user.displayAvatarURL({ size: 256 }),
+        });
+
+        await interaction.reply({ components, flags });
       }
     },
     {
@@ -413,35 +458,47 @@ export const LevelingManifest: ModuleManifest = {
         const myEco = await getUserEco(guildId, interaction.user.id);
         const targetEco = await getUserEco(guildId, target.id);
         
-        if (myEco.balance < 500) return interaction.reply({ content: '❌ You need at least 500 coins to attempt a robbery.', flags: 64 });
-        if (targetEco.balance < 100) return interaction.reply({ content: `❌ ${target.username} is too poor to rob.`, flags: 64 });
+        if (myEco.balance < 500) return interaction.reply({ content: '❌ You need at least **500 coins** to attempt a robbery.', flags: 64 });
+        if (targetEco.balance < 100) return interaction.reply({ content: `❌ **${target.username}** is too broke to rob.`, flags: 64 });
         
-        const success = Math.random() > 0.6; // 40% chance of success
+        const success = Math.random() > 0.6; // 40% chance
         
         if (success) {
-          const stolen = Math.floor(targetEco.balance * 0.2); // Steal 20%
+          const stolen = Math.floor(targetEco.balance * 0.2);
           myEco.balance += stolen;
           targetEco.balance -= stolen;
           await saveUserEco(guildId, interaction.user.id, myEco);
           await saveUserEco(guildId, target.id, targetEco);
 
-          const robEmbed = new EmbedBuilder()
-            .setTitle('🥷 Robbery Successful')
-            .setDescription(`> You successfully robbed ${target} and got away with **${stolen} coins**!\n\n**New Balance**: \`${myEco.balance.toLocaleString()}\` coins`)
-            .setColor('#10b981')
-            .setTimestamp();
-          await interaction.reply({ embeds: [robEmbed] });
+          const { components, flags } = buildRichCard({
+            emoji: '🥷',
+            title: 'Heist Successful!',
+            accentColor: Colors.SUCCESS,
+            fields: [
+              { label: '🎯 Target',      value: `${target} (\`${target.username}\`)` },
+              { label: '💰 Stolen',      value: `**${fmt(stolen)} coins**` },
+              { label: '💵 Your Balance', value: `**${fmt(myEco.balance)} coins**` },
+            ],
+            footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+          });
+          await interaction.reply({ components, flags });
         } else {
           const fine = 500;
           myEco.balance -= fine;
           await saveUserEco(guildId, interaction.user.id, myEco);
 
-          const failEmbed = new EmbedBuilder()
-            .setTitle('🚓 Robbery Failed')
-            .setDescription(`> You were caught attempting to rob ${target} and paid a fine of **${fine} coins**.\n\n**New Balance**: \`${myEco.balance.toLocaleString()}\` coins`)
-            .setColor('#ef4444')
-            .setTimestamp();
-          await interaction.reply({ embeds: [failEmbed] });
+          const { components, flags } = buildRichCard({
+            emoji: '🚓',
+            title: 'Caught Red-Handed!',
+            description: `You were caught attempting to rob **${target.username}** and fined by the authorities.`,
+            accentColor: Colors.DANGER,
+            fields: [
+              { label: '⚖️ Fine Paid',   value: `**${fmt(fine)} coins**` },
+              { label: '💰 New Balance', value: `**${fmt(myEco.balance)} coins**` },
+            ],
+            footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+          });
+          await interaction.reply({ components, flags });
         }
       }
     },
@@ -456,7 +513,7 @@ export const LevelingManifest: ModuleManifest = {
         
         const eco = await getUserEco(guildId, interaction.user.id);
         
-        if (eco.balance < bet) return interaction.reply({ content: `❌ You do not have enough coins. Your balance is **${eco.balance}**.`, flags: 64 });
+        if (eco.balance < bet) return interaction.reply({ content: `❌ Insufficient funds. Balance: **${fmt(eco.balance)} coins**.`, flags: 64 });
         
         eco.balance -= bet;
         
@@ -466,26 +523,38 @@ export const LevelingManifest: ModuleManifest = {
         const s3 = symbols[Math.floor(Math.random() * symbols.length)];
         
         let win = 0;
-        let msg = '';
+        let resultText = '';
+        let accentColor: number = Colors.DANGER;
+
         if (s1 === s2 && s2 === s3) {
           win = bet * 10;
-          msg = `🎉 **JACKPOT!** You won **${win} coins**!`;
+          resultText = `🎉 **JACKPOT!** You won **${fmt(win)} coins**!`;
+          accentColor = Colors.GOLD;
         } else if (s1 === s2 || s2 === s3 || s1 === s3) {
           win = bet * 2;
-          msg = `👏 **Mini-win!** You won **${win} coins**!`;
+          resultText = `👏 **Mini-Win!** You won **${fmt(win)} coins**!`;
+          accentColor = Colors.SUCCESS;
         } else {
-          msg = `😢 **You lost.** Better luck next time.`;
+          resultText = `😢 **No Match.** Better luck next time!`;
         }
         
         eco.balance += win;
         await saveUserEco(guildId, interaction.user.id, eco);
         
-        const embed = new EmbedBuilder()
-          .setTitle('🎰 Slots')
-          .setDescription(`**[ ${s1} | ${s2} | ${s3} ]**\n\n${msg}\n\n*New Balance: ${eco.balance}*`)
-          .setColor(win > 0 ? '#2ecc71' : '#e74c3c');
+        const { components, flags } = buildRichCard({
+          emoji: '🎰',
+          title: 'Slot Machine',
+          description: `## ${s1}  ${s2}  ${s3}\n\n${resultText}`,
+          accentColor,
+          fields: [
+            { label: '🎲 Bet',        value: `**${fmt(bet)} coins**` },
+            { label: '💵 Net',        value: win > 0 ? `**+${fmt(win - bet)} coins**` : `**-${fmt(bet)} coins**` },
+            { label: '💰 Balance',    value: `**${fmt(eco.balance)} coins**` },
+          ],
+          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+        });
           
-        await interaction.reply({ embeds: [embed] });
+        await interaction.reply({ components, flags });
       }
     }
   ],

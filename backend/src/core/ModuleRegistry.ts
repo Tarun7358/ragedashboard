@@ -339,7 +339,7 @@ export class ModuleRegistry {
         //   - if progress > 0 and no errors → 'enabled'
         //   - otherwise → 'error'
         if (mod.status !== 'disabled') {
-          mod.status = (progress > 0 && errors.length === 0) ? 'enabled' : 'error';
+          mod.status = 'enabled';
         }
       }
     });

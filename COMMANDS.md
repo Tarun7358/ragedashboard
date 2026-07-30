@@ -98,6 +98,23 @@ Rage Optimiser supports two types of command execution:
 
 *Permissions Required:* Administrator permission or Owner status.
 
+### `/addrole`
+* **Description:** Assign a role to a server member with custom audit reason, optional temporary duration, and premium interactive UI controls (Undo, Member Roles, Role Info).
+* **Parameters:**
+  * `user` (Required, USER): Target member to receive the role.
+  * `role` (Required, ROLE): Role to assign.
+  * `reason` (Optional, STRING): Audit log reason.
+  * `duration` (Optional, STRING): Temporary role duration (e.g. `10m`, `1h`, `1d`).
+* **Usage:** `/addrole user:@Member role:@VIP reason:Event Winner duration:7d`
+
+### `/removerole`
+* **Description:** Remove a role from a server member with custom audit reason and premium confirmation UI.
+* **Parameters:**
+  * `user` (Required, USER): Target member to remove the role from.
+  * `role` (Required, ROLE): Role to remove.
+  * `reason` (Optional, STRING): Audit log reason.
+* **Usage:** `/removerole user:@Member role:@VIP reason:Expired membership`
+
 ### `/quarantine`
 * **Description:** Manually isolate a suspicious server member. Removes all administrative roles and adds the designated quarantine role.
 * **Parameters:**

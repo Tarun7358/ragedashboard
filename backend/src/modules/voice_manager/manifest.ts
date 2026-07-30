@@ -1,5 +1,6 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { EmbedBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
+import { PermissionFlagsBits, ChannelType, MessageFlags } from 'discord.js';
+import { Colors, buildRichCard, buildListCard, buildStatusCard, buildSuccessCard, buildErrorCard, buildPermCard } from '../../core/UIFactory.js';
 
 export const VoiceManagerManifest: ModuleManifest = {
   id: 'voice_manager',
@@ -194,7 +195,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         }
 
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.MoveMembers)) {
-          return interaction.reply({ content: '🔒 Move Members permission required.', flags: 64 });
+          return interaction.reply(buildPermCard('Move Members'));
         }
 
         const logVoiceAction = (action: string, details: string) => {
@@ -370,29 +371,43 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'info') {
           const channel = interaction.options.getChannel('channel') || interaction.member.voice?.channel;
           if (!channel) return interaction.reply({ content: '❌ No voice channel specified or you\'re not in one.', flags: 64 });
-          const embed = new EmbedBuilder()
-            .setTitle(`🎙️ Voice Channel: ${channel.name}`)
-            .setColor('#4f8cff')
-            .addFields(
-              { name: 'Members', value: `${channel.members.size}${channel.userLimit ? ` / ${channel.userLimit}` : ''}`, inline: true },
-              { name: 'Bitrate', value: `${channel.bitrate ? channel.bitrate / 1000 : '?'}kbps`, inline: true },
-              { name: 'ID', value: channel.id, inline: true }
-            );
-          if (channel.members.size > 0) {
-            embed.addFields({ name: 'Users', value: [...channel.members.values()].map((m: any) => m.user.username).join(', ').substring(0, 1024) });
-          }
-          return interaction.reply({ embeds: [embed], flags: 64 });
+
+          const memberList = channel.members.size > 0
+            ? [...channel.members.values()].map((m: any) => `• ${m.user.username}`).join('\n').substring(0, 900)
+            : '*No members currently in channel.*';
+
+          const { components, flags } = buildRichCard({
+            emoji: '🎙️',
+            title: `Voice Channel — ${channel.name}`,
+            accentColor: Colors.VOICE,
+            fields: [
+              { label: '👥 Members',  value: `**${channel.members.size}**${channel.userLimit ? ` / ${channel.userLimit}` : ''}` },
+              { label: '📡 Bitrate',  value: `**${channel.bitrate ? Math.round(channel.bitrate / 1000) : '?'} kbps**` },
+              { label: '🆔 ID',       value: `\`${channel.id}\`` },
+              { label: '👤 Users',    value: memberList },
+            ],
+            footerNote: 'Rage Optimiser Enterprise  •  🎙️ Voice Manager',
+          });
+          return interaction.reply({ components, flags });
         }
 
         // STATUS
         if (sub === 'status') {
           const voiceChannels = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildVoice && c.members.size > 0);
-          if (voiceChannels.size === 0) return interaction.reply({ content: '📋 No active voice channels.', flags: 64 });
-          const embed = new EmbedBuilder()
-            .setTitle('🎙️ Active Voice Channels')
-            .setColor('#4f8cff')
-            .setDescription(voiceChannels.map((c: any) => `**${c.name}** — ${c.members.size} member(s)`).join('\n'));
-          return interaction.reply({ embeds: [embed], flags: 64 });
+          if (voiceChannels.size === 0) return interaction.reply({ content: '📋 No active voice channels right now.', flags: 64 });
+
+          const lines = voiceChannels.map((c: any) =>
+            `🔊 **${c.name}** — ${c.members.size} member${c.members.size !== 1 ? 's' : ''}`
+          );
+
+          const { components, flags } = buildListCard({
+            emoji: '🎙️',
+            title: 'Active Voice Channels',
+            subtitle: `${voiceChannels.size} channel(s) with active members`,
+            entries: [...lines],
+            accentColor: Colors.VOICE,
+          });
+          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
 
         // SPLIT GROUP
@@ -519,7 +534,13 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'sessions') {
           const voiceStates = guild.voiceStates.cache;
           const activeSessions = voiceStates.filter((v: any) => v.channelId).size;
-          return interaction.reply({ content: `🔊 **Voice Sessions Stats**:\nTotal active voice sessions on the server: **${activeSessions}**`, flags: 64 });
+          const { components, flags } = buildStatusCard({
+            emoji: '🔊',
+            title: 'Live Voice Sessions',
+            body: `There are currently **${activeSessions}** active voice session${activeSessions !== 1 ? 's' : ''} across all channels.`,
+            accentColor: Colors.VOICE,
+          });
+          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
         }
 
         // HISTORY

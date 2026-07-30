@@ -44,33 +44,235 @@ const PUNISHMENTS = [
 const P_EMOJI: Record<string, string> = { quarantine: '🔒', ban: '🔨', kick: '👟', strip_roles: '🪄', timeout: '⏱️' };
 
 function buildPunishEmbed(guild: any, rules: Record<string, any>) {
+  const verifiedIcon = '<a:approved:1532390590707142956>';
   const midPoint = Math.ceil(protections.length / 2);
   const leftRules = protections.slice(0, midPoint);
   const rightRules = protections.slice(midPoint);
 
   const leftLines = leftRules.map(p => {
     const action = rules[p.key]?.action || 'quarantine';
-    const on = rules[p.key]?.enabled !== false ? '🟢' : '🔴';
+    const on = rules[p.key]?.enabled !== false ? verifiedIcon : '🔴';
     return `${on} **${p.label}** — ${P_EMOJI[action] || '🔒'} \`${action.toUpperCase()}\``;
   }).join('\n');
 
   const rightLines = rightRules.map(p => {
     const action = rules[p.key]?.action || 'quarantine';
-    const on = rules[p.key]?.enabled !== false ? '🟢' : '🔴';
+    const on = rules[p.key]?.enabled !== false ? verifiedIcon : '🔴';
     return `${on} **${p.label}** — ${P_EMOJI[action] || '🔒'} \`${action.toUpperCase()}\``;
   }).join('\n');
 
   return new EmbedBuilder()
-    .setTitle('⚔️  Whitelist Violation Punishments')
-    .setColor(0x7C5CFC)
+    .setColor(0x84cc16)
     .setThumbnail(guild.iconURL({ size: 256 }) || null)
-    .setDescription('> Configure the punishment applied to **non-whitelisted** members who trigger Anti-Nuke rules.\n> Use the menu to change a rule\'s punishment type.\n\u200b')
+    .setDescription([
+      `__**WHITELIST VIOLATION PUNISHMENTS**__\n`,
+      `**RAGE OPTIMISER** • **${guild.name}**\n`,
+      `> Configure the punishment applied to **non-whitelisted** members who trigger Anti-Nuke rules.`,
+      `> Use the select menu below to change a rule's punishment type.`
+    ].join('\n'))
     .addFields(
       { name: '🛡️ Rules & Punishments (Part 1)', value: leftLines || 'No rules configured.', inline: true },
       { name: '🛡️ Rules & Punishments (Part 2)', value: rightLines || 'No rules configured.', inline: true }
     )
-    .setFooter({ text: `${guild.name} • Rage Optimiser Security` })
+    .setFooter({ text: 'Rage Optimiser • Security Engine' })
     .setTimestamp();
+}
+
+async function renderWhitelistConfigUI(
+  interaction: any,
+  context: any,
+  target: any,
+  notesInput?: string
+) {
+  const targetId = target.id;
+  const isRole = target instanceof Role || (target && (target.constructor?.name === 'Role' || (typeof target === 'object' && 'name' in target && !('user' in target) && !('username' in target))));
+  const userOrRole = isRole ? target : (target.user || target);
+  const type: 'member' | 'bot' | 'role' = isRole ? 'role' : (userOrRole.bot ? 'bot' : 'member');
+  const tagOrName = isRole ? resolveRoleName(target) : resolveUserTag(userOrRole);
+
+  const modules = context.getModulesState ? context.getModulesState() : [];
+  const mwModule = modules.find((m: any) => m && m.id === 'member_whitelist');
+  let members = [...(mwModule?.config?.members || [])].filter(Boolean);
+  const allBypasses = [...protections.map(p => p.key), 'voice_protection'];
+
+  let record = members.find((e: any) => 
+    isRole 
+      ? (e.type === 'role' && (e.roleId === targetId || e.id === targetId))
+      : (e.type !== 'role' && (e.userId === targetId || e.id === targetId))
+  );
+
+  let isNew = false;
+  if (!record) {
+    isNew = true;
+    record = {
+      id: targetId,
+      ...(isRole ? { roleId: targetId, name: tagOrName } : { userId: targetId, tag: tagOrName, username: tagOrName }),
+      status: 'active',
+      type,
+      enabledModules: allBypasses,
+      notes: notesInput || '',
+      createdDate: new Date().toISOString()
+    };
+    members.push(record);
+    const sanitized = sanitizeWhitelistMembers(members);
+    context.updateModuleConfig('member_whitelist', { members: sanitized });
+    context.logSyncEvent(`[Global Whitelist] Added ${type} ${tagOrName} via unified command.`, 'success');
+
+    if (type !== 'bot' && !isRole) {
+      const secModule = modules.find((m: any) => m && m.id === 'security');
+      if (secModule) {
+        const secWhitelist = [...(secModule.config?.whitelist || [])].filter(Boolean);
+        const isPresent = secWhitelist.some((w: any) => {
+          if (!w) return false;
+          const id = typeof w === 'string' ? w : w.targetId;
+          return id === targetId;
+        });
+        if (!isPresent) {
+          secWhitelist.push({
+            targetId: targetId,
+            tag: tagOrName,
+            addedAt: new Date().toISOString()
+          });
+          context.updateModuleConfig('security', { ...secModule.config, whitelist: secWhitelist });
+        }
+      }
+    }
+  } else if (notesInput && !record.notes) {
+    record.notes = notesInput;
+    const sanitized = sanitizeWhitelistMembers(members);
+    context.updateModuleConfig('member_whitelist', { members: sanitized });
+  }
+
+  let currentBypasses = Array.isArray(record.enabledModules) ? record.enabledModules : allBypasses;
+
+  const buildEmbed = (bypasses: string[]) => {
+    const verifiedIcon = '<a:approved:1532390590707142956>';
+    const wrongIcon = '<:wrong:1532390628330307634>';
+
+    const activeCount = bypasses.length;
+    const totalCount = protections.length;
+    const isAll = activeCount >= totalCount;
+
+    let bypassSummary = '';
+    if (isAll) {
+      bypassSummary = `> ${verifiedIcon} **FULL BYPASS GRANTED** (All ${totalCount} protections bypassed)`;
+    } else if (activeCount === 0) {
+      bypassSummary = `> ${wrongIcon} **NO BYPASS PERMISSIONS** (Standard security limits apply)`;
+    } else {
+      const activeLabels = protections.filter(p => bypasses.includes(p.key)).map(p => p.label);
+      bypassSummary = `> ${verifiedIcon} **Active Bypasses (${activeCount}/${totalCount})**:\n> ` + activeLabels.map(l => `\`${l}\``).join(', ');
+    }
+
+    const embedDesc = [
+      `__**WHITELIST CONFIGURATION**__\n`,
+      `**RAGE OPTIMISER** • **${interaction.guild.name}**\n`,
+      `**Target Entity**: ${isRole ? `<@&${targetId}>` : `<@${targetId}>`}`,
+      `**Entry Status**: ${isNew ? '✨ Newly Whitelisted' : '⚙️ Active Whitelist Entry'}`,
+      `**Audit Notes**: ${record.notes || notesInput || '*None provided*'}\n`,
+      `**Protection Bypass Overview**`,
+      bypassSummary
+    ].join('\n');
+
+    return new EmbedBuilder()
+      .setColor(0x84cc16)
+      .setDescription(embedDesc)
+      .setThumbnail(interaction.guild.iconURL({ size: 256 }) || null)
+      .setFooter({ text: 'Rage Optimiser • Security Engine' })
+      .setTimestamp();
+  };
+
+  const buildComponents = (bypasses: string[]) => {
+    const selectedVals = resolveSelectedOptions(bypasses);
+
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`wl_config_select_${targetId}_${interaction.user.id}`)
+      .setPlaceholder('⚙️ Choose Permissions to Grant')
+      .setMinValues(0)
+      .setMaxValues(WHITELIST_MENU_OPTIONS.length)
+      .addOptions(
+        WHITELIST_MENU_OPTIONS.map(opt => {
+          const option = new StringSelectMenuOptionBuilder()
+            .setLabel(opt.label)
+            .setValue(opt.value)
+            .setDescription(opt.desc)
+            .setEmoji('<:shield:1532403012751065179>');
+          if (selectedVals.includes(opt.value)) {
+            option.setDefault(true);
+          }
+          return option;
+        })
+      );
+
+    const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+    const hasAll = allBypasses.every(k => bypasses.includes(k));
+
+    const button = new ButtonBuilder()
+      .setCustomId(`wl_config_btn_${targetId}_${interaction.user.id}`)
+      .setLabel(hasAll ? 'Revoke All Permissions' : 'Grant All Permissions')
+      .setStyle(hasAll ? ButtonStyle.Danger : ButtonStyle.Success);
+
+    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
+
+    return [selectRow, buttonRow];
+  };
+
+  const reply = await interaction.editReply({
+    embeds: [buildEmbed(currentBypasses)],
+    components: buildComponents(currentBypasses)
+  });
+
+  const collector = reply.createMessageComponentCollector({
+    time: 600000 // 10 minutes
+  });
+
+  collector.on('collect', async (rawI: any) => {
+    const i = wrapInteraction(rawI);
+    if (i.user.id !== interaction.user.id) {
+      const embedErr = new EmbedBuilder()
+        .setTitle('❌ Interactivity Denied')
+        .setColor(0xEF4444)
+        .setDescription('Only the command executor can interact with this configuration.')
+        .setTimestamp();
+      return i.reply({ embeds: [embedErr], flags: 64 });
+    }
+
+    const freshModules = context.getModulesState ? context.getModulesState() : [];
+    const freshMw = freshModules.find((m: any) => m.id === 'member_whitelist');
+    let freshMembers = [...(freshMw?.config?.members || [])].filter(Boolean);
+
+    let currentRecord = freshMembers.find((m: any) => 
+      isRole
+        ? (m.type === 'role' && (m.roleId === targetId || m.id === targetId))
+        : (m.type !== 'role' && (m.userId === targetId || m.id === targetId))
+    );
+
+    if (!currentRecord) {
+      return i.reply({ content: '❌ Whitelist record not found.', flags: 64 });
+    }
+
+    let newBypasses = [...(currentRecord.enabledModules || [])];
+
+    if (i.isStringSelectMenu()) {
+      const selectedVals = i.values || [];
+      newBypasses = mapSelectedOptionsToRules(selectedVals);
+    } else if (i.isButton()) {
+      const hasAll = allBypasses.every(k => newBypasses.includes(k));
+      newBypasses = hasAll ? [] : allBypasses;
+    }
+
+    currentRecord.enabledModules = newBypasses;
+    freshMembers = freshMembers.map((m: any) => 
+      (m.id === targetId || m.roleId === targetId || m.userId === targetId) ? currentRecord : m
+    );
+    context.updateModuleConfig('member_whitelist', { members: sanitizeWhitelistMembers(freshMembers) });
+    context.logSyncEvent(`[Global Whitelist] Updated permissions for ${type} ${tagOrName} via Discord UI.`, 'success');
+
+    await i.update({
+      embeds: [buildEmbed(newBypasses)],
+      components: buildComponents(newBypasses)
+    });
+  });
 }
 
 export interface MemberWhitelistRecord {
@@ -114,6 +316,22 @@ export const MemberWhitelistManifest: ModuleManifest = {
           options: [
             { name: 'target', type: 9, description: 'The user or role to whitelist', required: true },
             { name: 'notes', type: 3, description: 'Optional purpose note', required: false }
+          ]
+        },
+        {
+          name: 'config',
+          description: '⚙️ Configure permissions for a whitelisted user or role',
+          type: 1,
+          options: [
+            { name: 'target', type: 9, description: 'The user or role to configure', required: true }
+          ]
+        },
+        {
+          name: 'edit',
+          description: '✏️ Edit permissions for a whitelisted user or role',
+          type: 1,
+          options: [
+            { name: 'target', type: 9, description: 'The user or role to edit', required: true }
           ]
         },
         {
@@ -378,55 +596,22 @@ export const MemberWhitelistManifest: ModuleManifest = {
           }
         }
 
-        if (sub === 'list') {
+        if (sub === 'list' || sub === 'overview') {
           const mwMod = modules.find((m: any) => m.id === 'member_whitelist');
           const secMod = modules.find((m: any) => m.id === 'security');
           const vpMod = modules.find((m: any) => m.id === 'voice-protection');
 
-          const userSet = new Map<string, string>(); // userId -> tag
-          const botSet = new Map<string, string>();  // userId -> tag
-          const roleSet = new Map<string, string>(); // roleId -> name
-
-          // Helper to register user
-          const registerUser = (userId: string, tag?: string) => {
-            if (!userId || userId === 'undefined' || userId === 'null') return;
-            const existing = userSet.get(userId);
-            const cleanTag = (tag && tag !== 'undefined' && tag !== 'null' && !tag.includes('[object Object]')) ? tag : `User-${userId}`;
-            if (!existing || existing.startsWith('User-')) {
-              userSet.set(userId, cleanTag);
-            }
-          };
-
-          // Helper to register bot
-          const registerBot = (userId: string, tag?: string) => {
-            if (!userId || userId === 'undefined' || userId === 'null') return;
-            const existing = botSet.get(userId);
-            const cleanTag = (tag && tag !== 'undefined' && tag !== 'null' && !tag.includes('[object Object]')) ? tag : `Bot-${userId}`;
-            if (!existing || existing.startsWith('Bot-')) {
-              botSet.set(userId, cleanTag);
-            }
-          };
-
-          // Helper to register role
-          const registerRole = (roleId: string, name?: string) => {
-            if (!roleId || roleId === 'undefined' || roleId === 'null') return;
-            const existing = roleSet.get(roleId);
-            const cleanName = (name && name !== 'undefined' && name !== 'null' && !name.includes('[object Object]')) ? name : `Role-${roleId}`;
-            if (!existing || existing.startsWith('Role-')) {
-              roleSet.set(roleId, cleanName);
-            }
-          };
+          const userSet = new Map<string, string>();
+          const roleSet = new Map<string, string>();
 
           // Process unified member_whitelist config
           const mwMembers = mwMod?.config?.members || [];
           for (const entry of mwMembers) {
             if (entry && entry.status === 'active') {
-              if (entry.type === 'bot') {
-                registerBot(entry.userId, entry.username);
-              } else if (entry.type === 'role') {
-                registerRole(entry.roleId || entry.id, entry.name);
+              if (entry.type === 'role') {
+                roleSet.set(entry.roleId || entry.id, entry.name || `Role-${entry.roleId || entry.id}`);
               } else {
-                registerUser(entry.userId || entry.id, entry.username);
+                userSet.set(entry.userId || entry.id, entry.username || `User-${entry.userId || entry.id}`);
               }
             }
           }
@@ -437,279 +622,62 @@ export const MemberWhitelistManifest: ModuleManifest = {
           for (const w of secWhitelist) {
             if (w) {
               const uId = typeof w === 'string' ? w : w.targetId;
-              const tag = typeof w === 'string' ? undefined : w.username;
-              registerUser(uId, tag);
+              userSet.set(uId, typeof w === 'string' ? `User-${uId}` : (w.username || `User-${uId}`));
             }
           }
 
-          // Process security exception roles
-          const exceptionRoleIds: string[] = secConfig.exceptionRoleIds || secConfig.whitelistRoles || [];
-          for (const rId of exceptionRoleIds) {
-            registerRole(rId);
-          }
-
-          // Process UPM users & roles
-          const upm = secConfig.upm || {};
-          const upmUsers = upm.whitelistUsers || [];
-          for (const uId of upmUsers) {
-            registerUser(uId);
-          }
-          const upmRoles = upm.whitelistRoles || [];
-          for (const rId of upmRoles) {
-            registerRole(rId);
-          }
-
-          // Process voice protection
+          // Process voice protection whitelist
           const vpConfig = vpMod?.config || {};
-          const vpUsers = vpConfig.whitelistedUsers || [];
-          for (const uId of vpUsers) {
-            registerUser(uId);
-          }
-          const vpRoles = vpConfig.whitelistedRoles || [];
-          for (const rId of vpRoles) {
-            registerRole(rId);
-          }
+          for (const uId of (vpConfig.whitelistedUsers || [])) userSet.set(uId, `User-${uId}`);
+          for (const rId of (vpConfig.whitelistedRoles || [])) roleSet.set(rId, `Role-${rId}`);
 
-          // Render names safely
-          const memberLinesArr: string[] = [];
-          for (const [uId, tag] of userSet.entries()) {
-            const cached = interaction.guild.members.cache.get(uId);
-            const nameStr = cached ? `@${cached.user.username}` : (tag && tag !== 'undefined' && tag !== 'null' && !tag.includes('[object Object]') ? tag : `User-${uId}`);
-            memberLinesArr.push(`<@${uId}> (\`${nameStr}\`)`);
-          }
+          const userMentions = [...userSet.keys()].map(uId => `<@${uId}>`).join('\n') || '*No users whitelisted.*';
+          const roleMentions = [...roleSet.keys()].map(rId => `<@&${rId}>`).join('\n') || '*No roles whitelisted.*';
 
-          const botLinesArr: string[] = [];
-          for (const [uId, tag] of botSet.entries()) {
-            const cached = interaction.guild.members.cache.get(uId);
-            const nameStr = cached ? `@${cached.user.username}` : (tag && tag !== 'undefined' && tag !== 'null' && !tag.includes('[object Object]') ? tag : `Bot-${uId}`);
-            botLinesArr.push(`<@${uId}> (\`${nameStr}\`)`);
-          }
-
-          const roleLinesArr: string[] = [];
-          for (const [rId, name] of roleSet.entries()) {
-            const cached = interaction.guild.roles.cache.get(rId);
-            const nameStr = cached ? cached.name : (name && name !== 'undefined' && name !== 'null' && !name.includes('[object Object]') ? name : `Role-${rId}`);
-            roleLinesArr.push(`<@&${rId}> (\`${nameStr}\`)`);
-          }
-
-          const memberLines = memberLinesArr.join('\n') || '*None*';
-          const botLines = botLinesArr.join('\n') || '*None*';
-          const roleLines = roleLinesArr.join('\n') || '*None*';
+          const embedDesc = [
+            `__**WL OVERVIEW**__\n`,
+            `**RAGE OPTIMISER**\n`,
+            `**Users Whitelisted**\n`,
+            `> ` + userMentions.split('\n').join('\n> ') + `\n`,
+            `**Roles Whitelisted**\n`,
+            `> ` + roleMentions.split('\n').join('\n> ')
+          ].join('\n');
 
           const embed = new EmbedBuilder()
-            .setTitle('🛡️ Server Global Whitelist')
-            .setDescription('These users, bots, and roles bypass all protection and security modules.')
-            .setColor(0x7C5CFC)
-            .addFields(
-              { name: `👥 Whitelisted Members (${userSet.size})`, value: memberLines, inline: false },
-              { name: `🤖 Whitelisted Bots (${botSet.size})`, value: botLines, inline: false },
-              { name: `🎖️ Whitelisted Roles (${roleSet.size})`, value: roleLines, inline: false }
-            )
-            .setFooter({ text: `${interaction.guild.name} • Rage Optimiser` })
+            .setColor(0x84cc16)
+            .setDescription(embedDesc)
+            .setThumbnail(interaction.guild.iconURL({ size: 256 }) || client.user?.displayAvatarURL({ size: 256 }) || null)
+            .setFooter({ text: 'Rage Optimiser • Security Engine' })
             .setTimestamp();
 
-          return interaction.editReply({ embeds: [embed] }).catch(() => {});
+          const btnRow1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId('wl_manage_users').setLabel('Manage Users').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('wl_remove_user').setLabel('Remove User').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('wl_add_user').setLabel('Add User').setStyle(ButtonStyle.Secondary)
+          );
+
+          const btnRow2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId('wl_manage_roles').setLabel('Manage Roles').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('wl_remove_role').setLabel('Remove Role').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('wl_add_role').setLabel('Add Role').setStyle(ButtonStyle.Secondary)
+          );
+
+          const btnRow3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId('wl_close').setLabel('Close').setStyle(ButtonStyle.Secondary)
+          );
+
+          return interaction.editReply({ embeds: [embed], components: [btnRow1, btnRow2, btnRow3] }).catch(() => {});
         }
 
         if (sub === 'add') {
           const target = interaction.options.getMentionable('target', true);
           const notes = interaction.options.getString('notes') || '';
+          return renderWhitelistConfigUI(interaction, context, target, notes);
+        }
 
-          const mwModule = modules.find((m: any) => m && m.id === 'member_whitelist');
-          let members = [...(mwModule?.config?.members || [])].filter(Boolean);
-          const allBypasses = [...protections.map(p => p.key), 'voice_protection'];
-
-          let tagOrName = '';
-          let type: 'member' | 'bot' | 'role' = 'member';
-          let isAlready = false;
-
-          const isRole = target instanceof Role || (target && (target.constructor?.name === 'Role' || (typeof target === 'object' && 'name' in target && !('user' in target) && !('username' in target))));
-
-          if (isRole) {
-            type = 'role';
-            tagOrName = resolveRoleName(target);
-            isAlready = members.some((e: any) => target.id && e.type === 'role' && (e.roleId === target.id || e.id === target.id));
-            if (!isAlready) {
-              members.push({
-                id: target.id,
-                roleId: target.id,
-                name: tagOrName,
-                status: 'active',
-                type: 'role',
-                enabledModules: allBypasses,
-                notes,
-                createdDate: new Date().toISOString()
-              });
-
-            }
-          } else {
-            const user = target.user || target;
-            type = user.bot ? 'bot' : 'member';
-            tagOrName = resolveUserTag(user);
-            isAlready = members.some((e: any) => user.id && e.type !== 'role' && (e.userId === user.id || e.id === user.id));
-            if (!isAlready) {
-              members.push({
-                id: user.id,
-                userId: user.id,
-                tag: tagOrName,
-                status: 'active',
-                type,
-                enabledModules: allBypasses,
-                notes,
-                createdDate: new Date().toISOString()
-              });
-
-              if (type !== 'bot') {
-                // Downward Sync: security config update
-                const secModule = modules.find((m: any) => m && m.id === 'security');
-                if (secModule) {
-                  const secWhitelist = [...(secModule.config?.whitelist || [])].filter(Boolean);
-                  const isPresent = secWhitelist.some((w: any) => {
-                    if (!w) return false;
-                    const id = typeof w === 'string' ? w : w.targetId;
-                    return id === user.id;
-                  });
-                  if (!isPresent) {
-                    secWhitelist.push({
-                      targetId: user.id,
-                      tag: tagOrName,
-                      addedAt: new Date().toISOString()
-                    });
-                    context.updateModuleConfig('security', { ...secModule.config, whitelist: secWhitelist });
-                  }
-                }
-              }
-            }
-          }
-
-          if (isAlready) {
-            const embedErr = new EmbedBuilder()
-              .setTitle('❌ Already Whitelisted')
-              .setColor(0xEF4444)
-              .setDescription(`**${tagOrName}** is already present in the global whitelist.`)
-              .setTimestamp();
-            return interaction.editReply({ embeds: [embedErr] }).catch(() => {});
-          }
-
-          const sanitizedMembers = sanitizeWhitelistMembers(members);
-          context.updateModuleConfig('member_whitelist', { members: sanitizedMembers });
-          context.logSyncEvent(`[Global Whitelist] Added ${type} ${tagOrName} via unified command.`, 'success');
-
-          const targetId = target.id;
-          const buildEmbed = (currentBypasses: string[]) => {
-            const lines = protections.map(p => {
-              const active = currentBypasses.includes(p.key);
-              return `${active ? '✅' : '❌'} : **${p.label}**`;
-            }).join('\n');
-
-            return new EmbedBuilder()
-              .setTitle(`Whitelist Configuration for ${interaction.guild.name}`)
-              .setThumbnail(interaction.guild.iconURL({ size: 256 }) || null)
-              .setColor(0x7C5CFC)
-              .setDescription(lines)
-              .addFields(
-                { name: 'Target', value: isRole ? `<@&${targetId}>` : `<@${targetId}>`, inline: true },
-                { name: 'Notes', value: notes || '*None provided*', inline: true }
-              )
-              .setFooter({ text: 'Powered by Rage Optimiser Security' })
-              .setTimestamp();
-          };
-
-          const buildComponents = (currentBypasses: string[]) => {
-            const selectedVals = resolveSelectedOptions(currentBypasses);
-
-            const selectMenu = new StringSelectMenuBuilder()
-              .setCustomId(`wl_config_select_${targetId}_${interaction.user.id}`)
-              .setPlaceholder('⚙️ Choose Permissions to Grant')
-              .setMinValues(0)
-              .setMaxValues(WHITELIST_MENU_OPTIONS.length)
-              .addOptions(
-                WHITELIST_MENU_OPTIONS.map(opt => {
-                  const option = new StringSelectMenuOptionBuilder()
-                    .setLabel(opt.label)
-                    .setValue(opt.value)
-                    .setDescription(opt.desc);
-                  if (selectedVals.includes(opt.value)) {
-                    option.setDefault(true);
-                  }
-                  return option;
-                })
-              );
-
-            const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
-
-            const allKeys = [...protections.map(p => p.key), 'voice_protection'];
-            const hasAll = allKeys.every(k => currentBypasses.includes(k));
-
-            const button = new ButtonBuilder()
-              .setCustomId(`wl_config_btn_${targetId}_${interaction.user.id}`)
-              .setLabel(hasAll ? 'Revoke All Permissions' : 'Grant All Permissions')
-              .setStyle(hasAll ? ButtonStyle.Danger : ButtonStyle.Success);
-
-            const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
-
-            return [selectRow, buttonRow];
-          };
-
-          const reply = await interaction.editReply({
-            embeds: [buildEmbed(allBypasses)],
-            components: buildComponents(allBypasses)
-          });
-
-          const collector = reply.createMessageComponentCollector({
-            time: 600000 // 10 minutes
-          });
-
-          collector.on('collect', async (rawI: any) => {
-            const i = wrapInteraction(rawI);
-            if (i.user.id !== interaction.user.id) {
-              const embedErr = new EmbedBuilder()
-                .setTitle('❌ Interactivity Denied')
-                .setColor(0xEF4444)
-                .setDescription('Only the command executor can interact with this configuration.')
-                .setTimestamp();
-              return i.reply({ embeds: [embedErr], flags: 64 });
-            }
-
-            // Fetch fresh configuration state
-            const freshModules = context.getModulesState ? context.getModulesState() : [];
-            const freshMw = freshModules.find((m: any) => m.id === 'member_whitelist');
-            let freshMembers = [...(freshMw?.config?.members || [])].filter(Boolean);
-
-            let currentRecord = freshMembers.find((m: any) => m.id === targetId);
-            if (!currentRecord) {
-              return i.reply({ content: '❌ Whitelist record not found.', flags: 64 });
-            }
-
-            let newBypasses = [...currentRecord.enabledModules];
-
-            if (i.isStringSelectMenu()) {
-              const selectedVals = i.values || [];
-              newBypasses = mapSelectedOptionsToRules(selectedVals);
-            } else if (i.isButton()) {
-              const allKeys = [...protections.map(p => p.key), 'voice_protection'];
-              const hasAll = allKeys.every(k => newBypasses.includes(k));
-              if (hasAll) {
-                newBypasses = [];
-              } else {
-                newBypasses = allKeys;
-              }
-            }
-
-            // Update member_whitelist record
-            currentRecord.enabledModules = newBypasses;
-            freshMembers = freshMembers.map((m: any) => m.id === targetId ? currentRecord : m);
-            context.updateModuleConfig('member_whitelist', { members: sanitizeWhitelistMembers(freshMembers) });
-
-
-
-            context.logSyncEvent(`[Global Whitelist] Updated permissions for ${type} ${tagOrName} via Discord UI.`, 'success');
-
-            await i.update({
-              embeds: [buildEmbed(newBypasses)],
-              components: buildComponents(newBypasses)
-            });
-          });
+        if (sub === 'config' || sub === 'edit') {
+          const target = interaction.options.getMentionable('target', true);
+          return renderWhitelistConfigUI(interaction, context, target);
         }
 
         if (sub === 'remove') {
@@ -755,10 +723,8 @@ export const MemberWhitelistManifest: ModuleManifest = {
 
           if (!found) {
             const embedErr = new EmbedBuilder()
-              .setTitle('❌ Not Whitelisted')
               .setColor(0xEF4444)
-              .setDescription(`**${tagOrName}** was not found in the global whitelist.`)
-              .setTimestamp();
+              .setDescription(`❌ ${interaction.user} **${tagOrName}** was not found in the global whitelist.`);
             return interaction.editReply({ embeds: [embedErr] }).catch(() => {});
           }
 
@@ -766,11 +732,10 @@ export const MemberWhitelistManifest: ModuleManifest = {
           context.updateModuleConfig('member_whitelist', { members: sanitizedMembers });
           context.logSyncEvent(`[Global Whitelist] Removed ${tagOrName} via unified command.`, 'info');
 
+          const verifiedIcon = '<a:approved:1532390590707142956>';
           const embedSuccess = new EmbedBuilder()
-            .setTitle('🗑️ Removed from Whitelist')
-            .setColor(0x7C5CFC)
-            .setDescription(`Successfully removed **${tagOrName}** from the global whitelist.`)
-            .setTimestamp();
+            .setColor(0x84cc16)
+            .setDescription(`${verifiedIcon} ${interaction.user} **Has Unwhitelisted** ${target}`);
           return interaction.editReply({ embeds: [embedSuccess] }).catch(() => {});
         }
 
@@ -813,6 +778,44 @@ export const MemberWhitelistManifest: ModuleManifest = {
           .setTimestamp();
 
         return interaction.editReply({ embeds: [embed] }).catch(() => {});
+      }
+    },
+    {
+      name: 'button_wl_generic',
+      handler: async (client: any, interaction: any, context: any) => {
+        const customId = interaction.customId;
+        const verifiedIcon = '<a:approved:1532390590707142956>';
+
+        if (customId === 'wl_close') {
+          await interaction.deferUpdate().catch(() => {});
+          return interaction.deleteReply().catch(() => {
+            return interaction.editReply({ components: [] }).catch(() => {});
+          });
+        }
+
+        if (customId === 'wl_add_user' || customId === 'wl_add_role') {
+          const isRole = customId === 'wl_add_role';
+          const embed = new EmbedBuilder()
+            .setColor(0x84cc16)
+            .setDescription(`${verifiedIcon} ${interaction.user} **To add a ${isRole ? 'role' : 'user'} to whitelist**:\n> Use \`/whitelist add target:@${isRole ? 'Role' : 'User'}\` or \`r!whitelist add @${isRole ? 'Role' : 'User'}\``);
+          return interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
+        }
+
+        if (customId === 'wl_remove_user' || customId === 'wl_remove_role') {
+          const isRole = customId === 'wl_remove_role';
+          const embed = new EmbedBuilder()
+            .setColor(0x84cc16)
+            .setDescription(`${verifiedIcon} ${interaction.user} **To remove a ${isRole ? 'role' : 'user'} from whitelist**:\n> Use \`/whitelist remove target:@${isRole ? 'Role' : 'User'}\` or \`r!whitelist remove @${isRole ? 'Role' : 'User'}\``);
+          return interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
+        }
+
+        if (customId === 'wl_manage_users' || customId === 'wl_manage_roles') {
+          const isRole = customId === 'wl_manage_roles';
+          const embed = new EmbedBuilder()
+            .setColor(0x84cc16)
+            .setDescription(`${verifiedIcon} ${interaction.user} **To manage permissions for a ${isRole ? 'role' : 'user'}**:\n> Use \`/whitelist config target:@${isRole ? 'Role' : 'User'}\` or \`r!whitelist edit @${isRole ? 'Role' : 'User'}\``);
+          return interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
+        }
       }
     }
   ],

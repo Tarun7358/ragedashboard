@@ -197,6 +197,7 @@ export class PrefixRegistry {
   }
 
   private static inferUserPermissions(commandName: string): string[] {
+    if (['addrole', 'removerole', 'temprole', 'role'].includes(commandName)) return ['ManageRoles'];
     if (['ban', 'softban', 'hackban', 'tempban', 'unban'].includes(commandName)) return ['BanMembers'];
     if (['kick', 'mute', 'unmute', 'timeout', 'untimeout', 'warn', 'clearwarn'].includes(commandName)) return ['ModerateMembers'];
     if (['purge', 'clear'].includes(commandName)) return ['ManageMessages'];

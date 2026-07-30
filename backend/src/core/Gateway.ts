@@ -1,8 +1,9 @@
-import { Client, GatewayIntentBits, REST, Routes, PermissionFlagsBits, ChannelType, Events } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } from '@discordjs/voice';
 import { DiscordResourceRegistry, ModuleManifest, ModuleState } from './types.js';
 import { Database } from './Database.js';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { Embeds, Colors, Components, buildRichCard, buildStatusCard } from './UIFactory.js';
 import type { PublicFeedManager } from './PublicFeedManager.js';
 import { AnalyticsService } from './AnalyticsService.js';
 import { protections } from '../utils/whitelistCheck.js';
@@ -16,6 +17,101 @@ import { FuzzySuggestions } from './prefix/FuzzySuggestions.js';
 import { PrefixAnalytics } from './prefix/PrefixAnalytics.js';
 import { PrefixHelpCenter } from './prefix/PrefixHelpCenter.js';
 import { CommandPipeline } from './prefix/CommandPipeline.js';
+
+function stripEphemeral(options?: any) {
+  if (options && typeof options === 'object') {
+    if (options.flags === 64 || options.flags === MessageFlags.Ephemeral) {
+      delete options.flags;
+    }
+    if (options.ephemeral) {
+      delete options.ephemeral;
+    }
+  }
+  return options;
+}
+
+function transformContentToLimeCard(options: any, user: any) {
+  if (!options) return options;
+  if (typeof options === 'string') {
+    options = { content: options };
+  }
+  if (typeof options === 'object') {
+    stripEphemeral(options);
+
+    const verifiedIcon = '<a:approved:1532390590707142956>';
+    const wrongIcon = '<:wrong:1532390628330307634>';
+
+    // Case 1: Convert raw string content to reference Lime single-line card
+    if (options.content && (typeof options.content === 'string') && (!options.embeds || options.embeds.length === 0)) {
+      const isErr = options.content.includes('❌') || 
+                    options.content.includes('🔒') || 
+                    options.content.toLowerCase().includes('failed') || 
+                    options.content.toLowerCase().includes('error') || 
+                    options.content.toLowerCase().includes('denied') ||
+                    options.content.toLowerCase().includes('invalid');
+
+      const cleanContent = options.content.replace(/^[❌✅🔒⚠️🧊🌡️🔓🧹🔨✏️⏱️🔕👁️📋📜📈📝🔗🏓🪙🎲😂☀️💡]+\s*/, '').trim();
+      const icon = isErr ? wrongIcon : verifiedIcon;
+      const color = isErr ? 0xef4444 : 0x84cc16;
+      const userTag = user ? `${user}` : '';
+
+      options.embeds = [
+        new EmbedBuilder()
+          .setColor(color)
+          .setDescription(`${icon} ${userTag} ${cleanContent}`.trim())
+      ];
+      delete options.content;
+    }
+    // Case 2: Embeds array provided -> Sanitize icons & colors to match Lime GG reference UI
+    else if (Array.isArray(options.embeds)) {
+      options.embeds = options.embeds.map((emb: any) => {
+        if (!emb) return emb;
+        let json = typeof emb.toJSON === 'function' ? emb.toJSON() : { ...emb };
+
+        // Clean description
+        if (json.description) {
+          json.description = json.description
+            .replace(/<a:verifiedtwitter:\d+>/g, verifiedIcon)
+            .replace(/• ᴵˢ ɢʟᴏʙᴀʟ/g, '')
+            .replace(/✅/g, verifiedIcon)
+            .replace(/❌/g, wrongIcon)
+            .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])+/g, (match: string) => {
+              if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️') || match.includes('🔒')) {
+                return wrongIcon;
+              }
+              return verifiedIcon;
+            });
+        }
+
+        // Clean title
+        if (json.title) {
+          json.title = json.title
+            .replace(/✅/g, verifiedIcon)
+            .replace(/❌/g, wrongIcon)
+            .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])+/g, (match: string) => {
+              if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️') || match.includes('🔒')) {
+                return wrongIcon;
+              }
+              return verifiedIcon;
+            });
+        }
+
+        // Clean footer
+        if (json.footer && json.footer.text) {
+          json.footer.text = json.footer.text.replace(/Unbypassable Security \| Menu Expired Rescue it/gi, 'Rage Optimiser • Security Engine');
+        }
+
+        // Replace default violet color #7c5cfc with Lime Green #84cc16
+        if (!json.color || json.color === 0x7c5cfc || json.color === 8150268) {
+          json.color = 0x84cc16;
+        }
+
+        return EmbedBuilder.from(json);
+      });
+    }
+  }
+  return options;
+}
 
 export function wrapInteraction(interaction: any) {
   if (!interaction) return interaction;
@@ -32,7 +128,7 @@ export function wrapInteraction(interaction: any) {
     interaction.deferReply = async function(options?: any) {
       if (interaction.deferred || interaction.replied) return;
       try {
-        return await originalDeferReply(options);
+        return await originalDeferReply(stripEphemeral(options));
       } catch (err: any) {
         interaction._defer_failed = true;
         console.warn('[wrapInteraction] deferReply failed:', err.message);
@@ -42,6 +138,7 @@ export function wrapInteraction(interaction: any) {
 
   if (originalReply) {
     interaction.reply = async function(options?: any) {
+      options = transformContentToLimeCard(options, interaction.user);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] reply skipped: interaction is dead (deferReply failed previously)');
         return;
@@ -84,6 +181,7 @@ export function wrapInteraction(interaction: any) {
 
   if (originalEditReply) {
     interaction.editReply = async function(options?: any) {
+      options = stripEphemeral(options);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] editReply skipped: interaction is dead (deferReply failed previously)');
         return;
@@ -114,6 +212,7 @@ export function wrapInteraction(interaction: any) {
 
   if (originalFollowUp) {
     interaction.followUp = async function(options?: any) {
+      options = stripEphemeral(options);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] followUp skipped: interaction is dead (deferReply failed previously)');
         return;
@@ -294,17 +393,10 @@ export class Gateway {
       await this.client.application?.fetch().catch(() => null);
       this.syncRegistry();
       
-      // Deploy commands to all guilds the bot is currently in on startup.
-      // Staggered with a 2-second delay between each guild to avoid burst rate limits
-      // on the Discord REST API when the bot is in many guilds simultaneously.
-      const guildIds = Array.from(this.client.guilds.cache.keys());
-      for (const guildId of guildIds) {
-        await this.forceDeployCommands(guildId).catch((err) => {
-          console.error(`[Gateway] Startup deploy failed for guild ${guildId}:`, err);
-        });
-        // Small delay between deploys to avoid 429 rate limits
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+      // Deploy commands globally across all servers on startup.
+      await this.forceDeployCommands().catch((err) => {
+        console.error('[Gateway] Global startup deploy failed:', err);
+      });
 
       const readyGuildIds = Array.from(this.client.guilds.cache.keys());
       for (const gId of readyGuildIds) {
@@ -333,10 +425,20 @@ export class Gateway {
     this.client.on('guildCreate', async (guild) => {
       this.logSyncEvent(`Discord Event: Bot joined new guild "${guild.name}" (${guild.id}).`, 'success');
 
-      // Deploy slash commands to the newly joined guild instantly
-      await this.forceDeployCommands(guild.id).catch((err) => {
-        console.error(`[Gateway] Failed to deploy commands for new guild ${guild.id}:`, err);
+      // Broadcast real-time update to web dashboard
+      this.broadcast({
+        type: 'GUILD_JOINED',
+        guildId: guild.id,
+        guildName: guild.name
       });
+
+      // Synchronize SQLite approvals table if record exists
+      try {
+        const db = Database.getDb();
+        if (db) {
+          await db.run('UPDATE approvals set status = ? WHERE guildId = ?', ['Approved', guild.id]);
+        }
+      } catch (e) {}
 
       // Send a welcome DM to the server owner
       try {
@@ -371,6 +473,12 @@ export class Gateway {
       } catch (e) {
         console.error('[Gateway] Error handling guildCreate welcome DM:', e);
       }
+    });
+
+    this.client.on('roleCreate', (role) => {
+      const guildId = role.guild.id;
+      this.syncRegistry(guildId);
+      this.dispatchEvent('roleCreate', role);
     });
 
     this.client.on('roleDelete', (role) => {
@@ -489,26 +597,38 @@ export class Gateway {
         
         // DM notify users who were tagged/mentioned directly
         if (message.mentions.users.size > 0 && message.guild) {
+          const verifiedIcon = '<a:approved:1532390590707142956>';
+          const shieldIcon = '<:shield:1532403012751065179>';
           message.mentions.users.forEach(async (user) => {
             if (user.id === message.author.id || user.bot) return;
             try {
-              const guildIcon = message.guild?.iconURL({ size: 256 }) || null;
+              const guildIcon = message.guild?.iconURL({ size: 256 }) ?? undefined;
+              const msgContext = message.content
+                ? (message.content.length > 500 ? message.content.substring(0, 500) + '…' : message.content)
+                : '*(No text content)*';
+              
               const dmEmbed = new EmbedBuilder()
-                .setTitle('🔔 New Mention Alert')
-                .setDescription(`You have been mentioned by **${message.author.username}** in **${message.guild?.name}**!`)
-                .setColor('#7C5CFC')
-                .setThumbnail(guildIcon)
-                .addFields(
-                  { name: '📍 Server', value: `\`${message.guild?.name}\``, inline: true },
-                  { name: '💬 Channel', value: `${message.channel.toString()}`, inline: true },
-                  { name: '👤 Mentioned By', value: `${message.author.toString()} (\`${message.author.username}\`)`, inline: false },
-                  { name: '📝 Message Context', value: message.content ? (message.content.length > 800 ? message.content.substring(0, 800) + '...' : message.content) : '*(No text content)*', inline: false }
-                )
-                .setFooter({ text: 'Rage Optimiser Premium • Real-time Alerts', iconURL: this.client.user?.displayAvatarURL() })
+                .setColor(0x84cc16)
+                .setThumbnail(guildIcon || message.author.displayAvatarURL({ size: 256 }) || null)
+                .setDescription([
+                  `> • **MENTION ALERT NOTIFICATION**`,
+                  `> • **RAGE OPTIMISER ALERT SYSTEM**`,
+                  `> `,
+                  `> ${verifiedIcon} **Mentioned By**: ${message.author} (\`${message.author.username}\`)`,
+                  `> ${shieldIcon} **Server**: **${message.guild?.name}**`,
+                  `> ${shieldIcon} **Channel**: ${message.channel.toString()}`,
+                  `> `,
+                  `> ${verifiedIcon} __**Message Content**__`,
+                  `> ${msgContext}`
+                ].join('\n'))
+                .setFooter({ text: 'Rage Optimiser • Mention Alert Engine' })
                 .setTimestamp();
-              const jumpButton = new ButtonBuilder().setLabel('Go to Message').setStyle(ButtonStyle.Link).setURL(message.url);
-              const row = new ActionRowBuilder<ButtonBuilder>().addComponents(jumpButton);
-              await user.send({ embeds: [dmEmbed], components: [row] });
+
+              const jumpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder().setLabel('Jump to Message').setURL(message.url).setStyle(ButtonStyle.Link)
+              );
+
+              await user.send({ embeds: [dmEmbed], components: [jumpRow] }).catch(() => {});
             } catch (err) {}
           });
         }
@@ -523,13 +643,69 @@ export class Gateway {
       // Handle standalone bot mention
       if (resolveResult.isMentionOnly) {
         const curPrefix = PrefixResolver.getPrefix(message.guildId || undefined);
+        const verifiedIcon = '<a:approved:1532390590707142956>';
+        const shieldIcon = '<:shield:1532403012751065179>';
         const greetingEmbed = new EmbedBuilder()
-          .setTitle('👋 Hello!')
-          .setDescription(`My Prefix is **\`${curPrefix}\`**\n\nUse **\`${curPrefix}help\`** or **\`/help\`** to view commands.`)
-          .setColor('#7c5cfc')
-          .setThumbnail(this.client.user?.displayAvatarURL() || null)
-          .setFooter({ text: 'Rage Optimiser • Command System' });
-        await message.reply({ embeds: [greetingEmbed] }).catch(() => {});
+          .setColor(0x84cc16)
+          .setDescription([
+            `### Hey !!! , I am ${this.client.user} ,\n`,
+            `> » **Welcome to Security 2.0** A bot which is made for unbypassable features and community management!\n`,
+            `> » **Server Prefix**: \`${curPrefix}\`   •   **Slash Commands**: \`/\``,
+            `> » **To set Custom Prefix use** ${this.client.user} **prefix " your custom prefix "**\n`,
+            `> » **Type \`${curPrefix}help\` or \`/help\` to view all modules.**`
+          ].join('\n'))
+          .setThumbnail(this.client.user?.displayAvatarURL({ size: 256 }) ?? null)
+          .setFooter({ text: 'Rage Optimiser • Command Engine' })
+          .setTimestamp();
+
+        const btnDashboard = new ButtonBuilder().setLabel('Dashboard').setStyle(ButtonStyle.Link).setURL('https://rageoptimiser.com/dashboard');
+        const btnInvite = new ButtonBuilder().setLabel('Invite Bot').setStyle(ButtonStyle.Link).setURL(`https://discord.com/api/oauth2/authorize?client_id=${this.client.user?.id}&permissions=8&scope=bot%20applications.commands`);
+        const btnSupport = new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/rageoptimiser');
+        const greetRow = new ActionRowBuilder<ButtonBuilder>().addComponents(btnDashboard, btnInvite, btnSupport);
+
+        await message.reply({ embeds: [greetingEmbed], components: [greetRow] }).catch(() => {});
+
+        // Send detailed DM documentation message to message.author
+        try {
+          const botUser = this.client.user;
+          const dmDetailEmbed = new EmbedBuilder()
+            .setColor(0x84cc16)
+            .setThumbnail(botUser?.displayAvatarURL({ size: 256 }) ?? null)
+            .setDescription([
+              `> • **RAGE OPTIMISER COMMAND MANUAL**`,
+              `> • **SYSTEM DOCUMENTATION & CONTROL PANEL**`,
+              `> `,
+              `> ${verifiedIcon} **Bot Tag**: ${botUser} (\`${botUser?.username}\`)`,
+              `> ${verifiedIcon} **Server Prefix**: \`${curPrefix}\` (Default: \`r!\`)`,
+              `> ${shieldIcon} **Slash Commands**: Supported (\`/\`)`,
+              `> `,
+              `> ${shieldIcon} __**Core Security Modules**__`,
+              `> ${verifiedIcon} **Anti-Nuke**: Protection against mass channel, role, ban & kick attacks`,
+              `> ${verifiedIcon} **Unified Whitelist**: Bypass controls for trusted members, bots, and roles`,
+              `> ${verifiedIcon} **Voice Guard**: Anti-ghosting, channel lock, and temporary voice manager`,
+              `> ${verifiedIcon} **AI Automod**: Anti-link filter, spam detection, and word censors`,
+              `> `,
+              `> ${shieldIcon} __**Quick Start Commands**__`,
+              `> • \`${curPrefix}help\` — Open interactive module manager`,
+              `> • \`${curPrefix}whitelist config @user\` — Configure bypass permissions`,
+              `> • \`${curPrefix}antinuke status\` — Check Anti-Nuke protection status`,
+              `> • \`${curPrefix}dashboard\` — Spawn live interactive server control panel`,
+              `> `,
+              `> ${verifiedIcon} __**Need Further Assistance?**__`,
+              `> Visit the web control dashboard or join our support server below!`
+            ].join('\n'))
+            .setFooter({ text: 'Rage Optimiser • Security Engine' })
+            .setTimestamp();
+
+          const rowDm = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setLabel('Web Dashboard').setStyle(ButtonStyle.Link).setURL('https://rageoptimiser.com/dashboard'),
+            new ButtonBuilder().setLabel('Invite Bot').setStyle(ButtonStyle.Link).setURL(`https://discord.com/api/oauth2/authorize?client_id=${botUser?.id}&permissions=8&scope=bot%20applications.commands`),
+            new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/rageoptimiser')
+          );
+
+          await message.author.send({ embeds: [dmDetailEmbed], components: [rowDm] }).catch(() => {});
+        } catch (e) {}
+
         return;
       }
 
@@ -545,10 +721,11 @@ export class Gateway {
       if (settings.maintenanceMode) {
         const isOwner = PrefixPermissionManager.isDeveloper(message.author.id, message);
         if (!isOwner) {
-          const mainEmbed = new EmbedBuilder()
-            .setTitle('🚧 System Maintenance Mode Active')
-            .setDescription('The server is currently in lockdown mode. All public bot commands are temporarily disabled.')
-            .setColor('#ff4444');
+          const mainEmbed = Embeds.warn(
+            '🚧 Maintenance Mode Active',
+            'The server is currently in **lockdown mode**. All public bot commands are temporarily disabled.\n\nPlease check back shortly.',
+            { module: 'system', footer: 'Rage Optimiser Enterprise  •  System Maintenance' }
+          );
           await message.reply({ embeds: [mainEmbed] }).catch(() => {});
           return;
         }
@@ -569,10 +746,11 @@ export class Gateway {
 
         if (!firstArg || firstArg === 'list' || firstArg === 'show') {
           const curPrefix = PrefixResolver.getPrefix(guildId);
-          const embed = new EmbedBuilder()
-            .setTitle('⚙️ Server Prefix Settings')
-            .setDescription(`Current server prefix is **\`${curPrefix}\`**\nDefault fallback is **\`r!\`**\n\nUse \`${curPrefix}prefix set <new_prefix>\` or \`${curPrefix}prefix <new_prefix>\` to change.`)
-            .setColor('#7c5cfc');
+          const embed = Embeds.info(
+            '⚙️ Server Prefix Settings',
+            `Current prefix: **\`${curPrefix}\`**   •   Default fallback: **\`r!\`**\n\nChange with: \`${curPrefix}prefix set <new>\` or \`${curPrefix}prefix <new>\``,
+            { module: 'system' }
+          );
           return message.reply({ embeds: [embed] });
         }
 
@@ -581,10 +759,11 @@ export class Gateway {
             return message.reply('❌ Only the Server Owner or Administrators can reset the server prefix.');
           }
           const updated = await PrefixResolver.resetPrefix(guildId);
-          const embed = new EmbedBuilder()
-            .setTitle('✅ Server Prefix Reset')
-            .setDescription(`Server prefix reset to default **\`${updated}\`**`)
-            .setColor('#10b981');
+          const embed = Embeds.success(
+            '✅ Prefix Reset',
+            `Server prefix has been reset to the default: **\`${updated}\`**`,
+            { module: 'system' }
+          );
           return message.reply({ embeds: [embed] });
         }
 
@@ -600,10 +779,11 @@ export class Gateway {
 
         try {
           const updated = await PrefixResolver.setPrefix(guildId, targetPrefix);
-          const embed = new EmbedBuilder()
-            .setTitle('✅ Server Prefix Updated')
-            .setDescription(`Server prefix for **${message.guild?.name}** successfully changed to **\`${updated}\`**`)
-            .setColor('#10b981');
+          const embed = Embeds.success(
+            '✅ Server Prefix Updated',
+            `Prefix for **${message.guild?.name}** has been changed to **\`${updated}\`**`,
+            { module: 'system' }
+          );
           return message.reply({ embeds: [embed] });
         } catch (err: any) {
           return message.reply(`❌ Failed to update prefix: ${err.message}`);
@@ -612,12 +792,44 @@ export class Gateway {
 
       // Handle built-in prefix command: r!ping
       if (parsed.commandName === 'ping') {
-        const pingMs = Math.round(this.client.ws.ping);
-        const embed = new EmbedBuilder()
-          .setTitle('🏓 Pong!')
-          .setDescription(`Gateway Latency: **\`${pingMs > 0 ? pingMs : 14}ms\`**\nAPI Latency: **\`${Math.max(1, Math.floor(Math.random() * 5 + 10))}ms\`**`)
-          .setColor('#7c5cfc');
-        return message.reply({ embeds: [embed] });
+        const wsPing = Math.max(1, Math.round(this.client.ws.ping));
+        const uptimeSec = process.uptime();
+        const startTime = Math.floor((Date.now() - uptimeSec * 1000) / 1000);
+        const heapMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
+
+        const getStatus = (ms: number) => {
+          if (ms < 100) return '🟢 Ultra Fast';
+          if (ms < 250) return '🟡 Normal Speed';
+          if (ms < 500) return '🟠 Moderate Lag';
+          return '🔴 High Latency';
+        };
+
+        const sentMsg = await message.reply('🏓 Measuring ping...').catch(() => null);
+        const roundTrip = sentMsg ? Math.max(1, sentMsg.createdTimestamp - message.createdTimestamp) : 10;
+        const pingColor = wsPing < 150 ? Colors.SUCCESS : wsPing < 300 ? Colors.WARN : Colors.DANGER;
+
+        const embed = Embeds.info(
+          '🏓 Latency & Speed Monitor',
+          'Live connection speed and performance metrics for **Rage Optimiser**.',
+          {
+            module: 'system',
+            footer: 'Rage Optimiser Enterprise  •  Speed Test',
+            fields: [
+              { name: '📡 WebSocket Latency',    value: `\`${wsPing}ms\` — ${getStatus(wsPing)}`,    inline: true },
+              { name: '⚡ REST Round-Trip',      value: `\`${roundTrip}ms\` — ${getStatus(roundTrip)}`, inline: true },
+              { name: '⏱️ Online Since',         value: `<t:${startTime}:R>`,                         inline: true },
+              { name: '💾 RAM Heap',             value: `\`${heapMb} MB\``,                           inline: true },
+              { name: '🧩 Shard',               value: `\`#0 ONLINE\``,                               inline: true },
+              { name: '⚙️ Node.js',             value: `\`${process.version}\``,                      inline: true },
+            ],
+          }
+        ).setColor(pingColor);
+
+        if (sentMsg) {
+          return sentMsg.edit({ content: null, embeds: [embed] }).catch(() => {});
+        } else {
+          return message.reply({ embeds: [embed] }).catch(() => {});
+        }
       }
 
       // Handle built-in prefix command: r!help
@@ -637,11 +849,11 @@ export class Gateway {
         PrefixAnalytics.trackFailure('unknown');
         const allCmds = PrefixRegistry.getAllCommands().map(c => c.name);
         const suggested = FuzzySuggestions.suggest(parsed.commandName, allCmds);
-
-        const unknownEmbed = new EmbedBuilder()
-          .setTitle('❓ Command Not Found')
-          .setDescription(suggested ? `Command \`${parsed.commandName}\` was not found.\nDid you mean **\`${suggested}\`**?` : `Unknown command \`${PrefixResolver.getPrefix(message.guildId || undefined)}\${parsed.commandName}\`. Type \`${PrefixResolver.getPrefix(message.guildId || undefined)}help\` for a list of commands.`)
-          .setColor('#ff4444');
+        const curPfx = PrefixResolver.getPrefix(message.guildId || undefined);
+        const unknownDesc = suggested
+          ? `Command \`${parsed.commandName}\` was not found.\n\n> 💡 Did you mean **\`${curPfx}${suggested}\`**?`
+          : `Unknown command \`${curPfx}${parsed.commandName}\`.\n\nType **\`${curPfx}help\`** or **\`/help\`** to view all commands.`;
+        const unknownEmbed = Embeds.error('❓ Command Not Found', unknownDesc, { module: 'system' });
         await message.reply({ embeds: [unknownEmbed] }).catch(() => {});
         return;
       }
@@ -749,12 +961,7 @@ export class Gateway {
       this.dispatchEvent('guildIntegrationsUpdate', guild);
     });
 
-    this.client.on('roleCreate', (role) => {
-      // BUG #7 FIX: Pass the guild ID so only this guild's registry is refreshed,
-      // not ALL guilds the bot is in (which was very expensive).
-      this.syncRegistry(role.guild.id);
-      this.dispatchEvent('roleCreate', role);
-    });
+
 
     this.client.on('messageReactionAdd', (reaction, user) => {
       this.dispatchEvent('messageReactionAdd', reaction, user);
@@ -774,8 +981,27 @@ export class Gateway {
       this.dispatchEvent('webhooksUpdate', channel);
     });
 
-    this.client.on('guildDelete', (guild) => {
+    this.client.on('guildDelete', async (guild) => {
+      console.log(`[Gateway] Bot removed from server "${guild.name || guild.id}" (${guild.id})`);
+      this.logSyncEvent(guild.id, `Discord Event: Bot was removed from server "${guild.name || guild.id}".`, 'warn');
       this.dispatchEvent('guildDelete', guild);
+
+      // Broadcast real-time update to web dashboard
+      this.broadcast({
+        type: 'GUILD_REMOVED',
+        guildId: guild.id,
+        guildName: guild.name || guild.id
+      });
+
+      // Synchronize SQLite approvals table if record exists
+      try {
+        const db = Database.getDb();
+        if (db) {
+          await db.run('UPDATE approvals set status = ? WHERE guildId = ?', ['Not Registered', guild.id]);
+        }
+      } catch (e) {
+        console.error('[Gateway] Failed to update approval status on guildDelete:', e);
+      }
     });
 
     this.client.on('emojiCreate', (emoji) => {
@@ -1003,6 +1229,15 @@ export class Gateway {
         if (interaction.customId.startsWith('payment_')) {
           this.dispatchEvent('button_payment_generic', interaction);
         }
+        if (interaction.customId.startsWith('addrole_')) {
+          this.dispatchEvent('button_addrole_generic', interaction);
+        }
+        if (interaction.customId.startsWith('wl_')) {
+          this.dispatchEvent('button_wl_generic', interaction);
+        }
+        if (interaction.customId.startsWith('help_btn_')) {
+          PrefixHelpCenter.handleButtonInteraction(interaction).catch(() => {});
+        }
       } else if (interaction.isAnySelectMenu()) {
         this.dispatchEvent(`select_${interaction.customId}`, interaction);
         if (interaction.customId.startsWith('tickets_v2_')) {
@@ -1010,6 +1245,9 @@ export class Gateway {
         }
         if (interaction.customId.startsWith('payment_')) {
           this.dispatchEvent('select_payment_generic', interaction);
+        }
+        if (interaction.customId === 'help_category_select') {
+          PrefixHelpCenter.handleSelectMenuInteraction(interaction).catch(() => {});
         }
       } else if (interaction.isModalSubmit()) {
         this.dispatchEvent(`modal_${interaction.customId}`, interaction);
@@ -1024,21 +1262,25 @@ export class Gateway {
   }
 
   public async syncRegistry(guildId?: string) {
+    if (!this.client || !this.client.isReady() || !this.client.token) return;
     try {
       if (!guildId) {
         const guilds = Array.from(this.client.guilds.cache.values());
-        for (const g of guilds) {
+        for (const g of (guilds as any[])) {
           await this.syncSingleGuild(g.id);
         }
       } else {
         await this.syncSingleGuild(guildId);
       }
-    } catch (err) {
-      console.error('Failed to sync live Discord resources:', err);
+    } catch (err: any) {
+      if (!err?.message?.includes('Expected token to be set')) {
+        console.error('Failed to sync live Discord resources:', err);
+      }
     }
   }
 
   private async syncSingleGuild(guildId: string) {
+    if (!this.client || !this.client.isReady() || !this.client.token) return;
     try {
       const guild = await this.client.guilds.fetch({ guild: guildId, withCounts: true } as any);
       if (!guild) return;
@@ -1143,9 +1385,8 @@ export class Gateway {
   public async forceDeployCommands(targetGuildId?: string) {
     const token = process.env.DISCORD_TOKEN;
     const clientId = process.env.CLIENT_ID;
-    const guildId = targetGuildId || process.env.GUILD_ID;
 
-    if (!token || !clientId || !guildId) return;
+    if (!token || !clientId) return;
 
     // Recursively serialize options, preserving channel_types, autocomplete, min/max
     const serializeOption = (opt: any): any => {
@@ -1183,29 +1424,25 @@ export class Gateway {
     const rest = new REST({ version: '10' }).setToken(token);
 
     try {
-      console.log(`Deploying ${commands.length} application commands to Guild ${guildId}...`);
+      console.log(`[Gateway] Deploying ${commands.length} application commands GLOBALLY to ALL servers...`);
       await rest.put(
-        Routes.applicationGuildCommands(clientId, guildId),
+        Routes.applicationCommands(clientId),
         { body: commands }
       );
-      this.logSyncEvent('Slash commands successfully registered on Discord REST API.', 'success');
-      console.log('✅ Slash commands successfully registered on Discord REST API.');
-    } catch (error: any) {
-      if (error.code === 50001 || error.status === 403) {
-        console.warn(`[Gateway] Guild command registration failed with Missing Access (50001). Retrying globally...`);
-        try {
-          await rest.put(
-            Routes.applicationCommands(clientId),
-            { body: commands }
-          );
-          this.logSyncEvent('Slash commands successfully registered globally as fallback.', 'success');
-          console.log('✅ Slash commands successfully registered globally as fallback.');
-        } catch (globalErr) {
-          console.error('[Gateway] Failed to deploy slash commands globally:', globalErr);
-        }
-      } else {
-        console.error('Failed to deploy slash commands:', error);
+      this.logSyncEvent('Slash commands successfully registered globally for all servers.', 'success');
+      console.log('✅ Slash commands successfully registered globally for all servers.');
+
+      // Clear legacy per-guild command overrides across ALL servers to prevent duplicate commands
+      const cachedGuilds = Array.from(this.client.guilds.cache.values());
+      for (const g of cachedGuilds as any[]) {
+        await rest.put(
+          Routes.applicationGuildCommands(clientId, g.id),
+          { body: [] }
+        ).catch(() => {});
       }
+      console.log(`✅ Cleared per-guild command overrides across ${cachedGuilds.length} servers to eliminate duplicate commands.`);
+    } catch (error: any) {
+      console.error('[Gateway] Failed to deploy slash commands globally:', error);
     }
   }
 

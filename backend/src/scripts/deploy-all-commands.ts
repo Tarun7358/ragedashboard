@@ -118,27 +118,20 @@ const rest = new REST({ version: '10' }).setToken(token);
 
 async function deploy() {
   try {
+    console.log(`🚀 Deploying ${commands.length} application commands GLOBALLY across ALL servers...`);
+    await rest.put(
+      Routes.applicationCommands(clientStr),
+      { body: commands }
+    );
+    console.log('✅ Slash commands successfully registered globally on Discord API. Every server can now use all commands!');
+
     if (guildStr) {
-      console.log(`🚀 Deploying ${commands.length} application commands to target Guild ${guildStr}...`);
+      console.log(`🧹 Clearing legacy single-guild commands for guild ${guildStr} to prevent duplicates in Discord UI...`);
       await rest.put(
         Routes.applicationGuildCommands(clientStr, guildStr),
-        { body: commands }
-      );
-      console.log('✅ Slash commands successfully registered for target guild.');
-
-      console.log('🧹 Clearing legacy global commands to prevent duplicate command entries in Discord UI...');
-      await rest.put(
-        Routes.applicationCommands(clientStr),
         { body: [] }
-      );
-      console.log('✅ Global commands cleared. Duplicates eliminated!');
-    } else {
-      console.log(`🚀 Deploying ${commands.length} application commands globally across all servers...`);
-      await rest.put(
-        Routes.applicationCommands(clientStr),
-        { body: commands }
-      );
-      console.log('✅ Slash commands successfully registered globally on Discord REST API.');
+      ).catch(() => {});
+      console.log('✅ Legacy single-guild commands cleared.');
     }
   } catch (error) {
     console.error('❌ Failed to deploy slash commands:', error);

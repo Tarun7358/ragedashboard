@@ -335,6 +335,30 @@ export class Database {
         guildId TEXT PRIMARY KEY,
         prefix TEXT NOT NULL,
         updatedAt INTEGER NOT NULL
+      );`,
+      `CREATE TABLE IF NOT EXISTS moderation_cases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        caseId INTEGER NOT NULL,
+        targetId TEXT NOT NULL,
+        targetTag TEXT NOT NULL,
+        moderatorId TEXT NOT NULL,
+        moderatorTag TEXT NOT NULL,
+        action TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        duration INTEGER,
+        expiresAt INTEGER,
+        status TEXT DEFAULT 'active',
+        createdAt INTEGER NOT NULL
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_mod_cases_guild ON moderation_cases (guildId, caseId DESC);`,
+      `CREATE TABLE IF NOT EXISTS persistent_music_queues (
+        guildId TEXT PRIMARY KEY,
+        channelId TEXT NOT NULL,
+        textChannelId TEXT NOT NULL,
+        queueJson TEXT NOT NULL,
+        loopMode TEXT DEFAULT 'off',
+        updatedAt INTEGER NOT NULL
       );`
     ];
 

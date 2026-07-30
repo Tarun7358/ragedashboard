@@ -107,14 +107,25 @@ export const LoggingManifest: ModuleManifest = {
           validCategories.forEach(cat => {
             const catConfig = config[cat];
             if (catConfig && catConfig.enabled && catConfig.channelId) {
-              desc += `**${cat}**: 🟢 Enabled (<#${catConfig.channelId}>)\n`;
+              desc += `🟢 **${cat.toUpperCase()}**: <#${catConfig.channelId}> (\`${catConfig.channelId}\`)\n`;
             } else {
-              desc += `**${cat}**: 🔴 Disabled or Unconfigured\n`;
+              desc += `🔴 **${cat.toUpperCase()}**: *Unconfigured / Disabled*\n`;
             }
           });
-          if (!desc) desc = 'No categories configured.';
+          if (!desc) desc = '*No categories configured.*';
           
-          await interaction.reply({ content: `📋 **Logging Center Status**\n\n${desc}`, flags: 64 });
+          const embed = new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle('🛡️ Advanced Logging Center — Telemetry Matrix')
+            .setDescription(
+              `> ### Server Audit Distribution Configuration\n` +
+              `> Real-time event logging pipelines and assigned Discord channel targets.\n\n` +
+              desc
+            )
+            .setFooter({ text: 'Rage Optimiser • Advanced Audit System', iconURL: client.user?.displayAvatarURL() })
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed], flags: 64 });
         } else {
           const category = interaction.options.getString('category')?.toLowerCase();
           
@@ -132,13 +143,31 @@ export const LoggingManifest: ModuleManifest = {
             newConfig[actualCategory].channelId = ch.id;
             
             context.logSyncEvent(`Logging Center: ${actualCategory} log channel updated to #${ch.name} via slash command.`, 'success');
-            await interaction.reply({ content: `✅ **${actualCategory}** log channel set to ${ch}. Save this in the Dashboard to persist permanently across restarts.`, flags: 64 });
+            const embed = new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle(`✅ Logging Channel Updated — ${actualCategory.toUpperCase()}`)
+              .setDescription(`> ### Target Channel Assigned\n> **Category**: \`${actualCategory.toUpperCase()}\` → Target: ${ch} (\`${ch.id}\`)`)
+              .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
+              .setTimestamp();
+            await interaction.reply({ embeds: [embed], flags: 64 });
           } else if (subcommand === 'enable' || subcommand === 'disable') {
             const enabled = subcommand === 'enable';
             context.logSyncEvent(`Logging Center: ${actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
-            await interaction.reply({ content: `✅ **${actualCategory}** logs have been **${enabled ? 'ENABLED' : 'DISABLED'}**. Update Dashboard to persist.`, flags: 64 });
+            const embed = new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle(`${enabled ? '🟢' : '🔴'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${actualCategory.toUpperCase()}`)
+              .setDescription(`> ### Telemetry Pipeline Status\n> Category **${actualCategory.toUpperCase()}** logging is now **${enabled ? 'ENABLED' : 'DISABLED'}**.`)
+              .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
+              .setTimestamp();
+            await interaction.reply({ embeds: [embed], flags: 64 });
           } else if (subcommand === 'reset') {
-            await interaction.reply({ content: `✅ **${actualCategory}** configuration reset to defaults. Update Dashboard to persist.`, flags: 64 });
+            const embed = new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle(`♻️ Category Reset — ${actualCategory.toUpperCase()}`)
+              .setDescription(`> ### Configuration Restored\n> Category **${actualCategory.toUpperCase()}** configuration has been reset to defaults.`)
+              .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
+              .setTimestamp();
+            await interaction.reply({ embeds: [embed], flags: 64 });
           } else if (subcommand === 'test') {
             const catConfig = config[actualCategory];
             if (!catConfig || !catConfig.channelId) {
@@ -148,9 +177,19 @@ export const LoggingManifest: ModuleManifest = {
               const channel = await interaction.guild?.channels.fetch(catConfig.channelId).catch(() => null);
               if (channel && channel.isTextBased()) {
                 const embed = new EmbedBuilder()
-                  .setTitle(`🧪 Test Log: ${actualCategory.toUpperCase()}`)
-                  .setDescription(`This is a test event for the **${actualCategory}** log category triggered by ${interaction.user}.`)
-                  .setColor('#3498db')
+                  .setColor(0x57F287)
+                  .setTitle(`🧪 Audit Verification — ${actualCategory.toUpperCase()}`)
+                  .setDescription(
+                    `> ### Test Log Telemetry Event\n` +
+                    `> Triggered by ${interaction.user} (\`${interaction.user.id}\`)\n\n` +
+                    `**Category**: \`${actualCategory.toUpperCase()}\`\n` +
+                    `**Status**: \`Operational — 200 OK\``
+                  )
+                  .addFields(
+                    { name: '📡 System Check', value: '```Event Pipeline Validated```', inline: true },
+                    { name: '⏱️ Timestamp', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
+                  )
+                  .setFooter({ text: 'Rage Optimiser • Audit System Test', iconURL: client.user?.displayAvatarURL() })
                   .setTimestamp();
                 await channel.send({ embeds: [embed] });
                 await interaction.reply({ content: `✅ Test log dispatched to ${channel}.`, flags: 64 });
@@ -182,10 +221,21 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await message.guild?.channels.fetch(auditConfig.channelId).catch(() => null);
           
           if (channel && channel.isTextBased()) {
+            const authorText = message.author ? `${message.author} (\`${message.author?.id}\`)` : 'Unknown User (Uncached Message)';
+            const contentText = (message.content || 'No text content cached').slice(0, 1000);
             const embed = new EmbedBuilder()
-              .setTitle('🗑️ Message Deleted')
-              .setDescription(`**Author**: ${message.author} (\`${message.author?.id}\`)\n**Channel**: ${message.channel}\n\n**Content**:\n${message.content || '*No text content*'}`)
-              .setColor('#ff4444')
+              .setColor(0x57F287)
+              .setTitle('🗑️ Audit Event — Message Deleted')
+              .setDescription(
+                `> ### Message Removed in ${message.channel}\n` +
+                `> **Author**: ${authorText}\n\n` +
+                `**Message Content**\n\`\`\`\n${contentText}\n\`\`\``
+              )
+              .addFields(
+                { name: '📍 Channel', value: `${message.channel} (\`${message.channel?.id}\`)`, inline: true },
+                { name: '👤 Author ID', value: `\`${message.author?.id || 'Unknown'}\``, inline: true }
+              )
+              .setFooter({ text: 'Rage Optimiser • Content Audit', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
@@ -212,10 +262,21 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await newMessage.guild?.channels.fetch(auditConfig.channelId).catch(() => null);
           
           if (channel && channel.isTextBased()) {
+            const authorText = newMessage.author ? `${newMessage.author} (\`${newMessage.author?.id}\`)` : 'Unknown User';
             const embed = new EmbedBuilder()
-              .setTitle('✏️ Message Edited')
-              .setDescription(`**Author**: ${newMessage.author} (\`${newMessage.author?.id}\`)\n**Channel**: ${newMessage.channel}\n\n**Before**:\n${oldMessage.content || '*None*'}\n\n**After**:\n${newMessage.content || '*None*'}`)
-              .setColor('#ffaa00')
+              .setColor(0x57F287)
+              .setTitle('✏️ Audit Event — Message Edited')
+              .setDescription(
+                `> ### Message Updated in ${newMessage.channel}\n` +
+                `> **Author**: ${authorText}\n\n` +
+                `**Before Edit**\n\`\`\`\n${(oldMessage.content || 'None / Uncached').slice(0, 800)}\n\`\`\`\n` +
+                `**After Edit**\n\`\`\`\n${(newMessage.content || 'None').slice(0, 800)}\n\`\`\``
+              )
+              .addFields(
+                { name: '📍 Channel', value: `${newMessage.channel} (\`${newMessage.channel?.id}\`)`, inline: true },
+                { name: '🔗 Message Link', value: newMessage.url ? `[Jump to Message](${newMessage.url})` : '`N/A`', inline: true }
+              )
+              .setFooter({ text: 'Rage Optimiser • Content Audit', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
@@ -238,17 +299,41 @@ export const LoggingManifest: ModuleManifest = {
         if (!member || member.user.bot) return;
 
         try {
-          let logMsg = '';
-          let color = '#3498db';
+          let embed: EmbedBuilder;
 
           if (!oldState.channelId && newState.channelId) {
-            logMsg = `🎙️ ${member.user} joined voice channel **#${newState.channel?.name || 'unknown'}**`;
-            color = '#2ecc71';
+            embed = new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle('🟢 Voice Event — Member Connected')
+              .setDescription(
+                `> ### Joined Voice Channel\n` +
+                `> **User**: ${member.user} (\`${member.user.id}\`)\n` +
+                `> **Channel**: **#${newState.channel?.name || 'unknown'}** (\`${newState.channelId}\`)`
+              )
+              .setFooter({ text: 'Rage Optimiser • Voice Telemetry', iconURL: client.user?.displayAvatarURL() })
+              .setTimestamp();
           } else if (oldState.channelId && !newState.channelId) {
-            logMsg = `🎙️ ${member.user} left voice channel **#${oldState.channel?.name || 'unknown'}**`;
-            color = '#e74c3c';
+            embed = new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle('🔴 Voice Event — Member Disconnected')
+              .setDescription(
+                `> ### Left Voice Channel\n` +
+                `> **User**: ${member.user} (\`${member.user.id}\`)\n` +
+                `> **Channel**: **#${oldState.channel?.name || 'unknown'}** (\`${oldState.channelId}\`)`
+              )
+              .setFooter({ text: 'Rage Optimiser • Voice Telemetry', iconURL: client.user?.displayAvatarURL() })
+              .setTimestamp();
           } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-            logMsg = `🎙️ ${member.user} switched voice channel from **#${oldState.channel?.name || 'unknown'}** to **#${newState.channel?.name || 'unknown'}**`;
+            embed = new EmbedBuilder()
+              .setColor(0x57F287)
+              .setTitle('🔵 Voice Event — Channel Switched')
+              .setDescription(
+                `> ### Switched Voice Channel\n` +
+                `> **User**: ${member.user} (\`${member.user.id}\`)\n\n` +
+                `**From**: \`#${oldState.channel?.name || 'unknown'}\` → **To**: \`#${newState.channel?.name || 'unknown'}\``
+              )
+              .setFooter({ text: 'Rage Optimiser • Voice Telemetry', iconURL: client.user?.displayAvatarURL() })
+              .setTimestamp();
           } else {
             return; 
           }
@@ -257,11 +342,6 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await newState.guild?.channels.fetch(voiceConfig.channelId).catch(() => null);
           
           if (channel && channel.isTextBased()) {
-            const embed = new EmbedBuilder()
-              .setTitle('🎙️ Voice State Update')
-              .setDescription(logMsg)
-              .setColor(color as any)
-              .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
         } catch (err) {}
@@ -279,9 +359,15 @@ export const LoggingManifest: ModuleManifest = {
           const channel = member.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('👋 Member Joined')
-              .setDescription(`${member.user} (\`${member.user.id}\`) joined the server.`)
-              .setColor('#2ecc71')
+              .setColor(0x57F287)
+              .setTitle('👋 System Event — Member Joined')
+              .setDescription(
+                `> ### Welcome New Member\n` +
+                `> **User**: ${member.user} (\`${member.user.id}\`)\n` +
+                `> **Created**: <t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`
+              )
+              .setThumbnail(member.user.displayAvatarURL())
+              .setFooter({ text: 'Rage Optimiser • System Telemetry', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
@@ -300,9 +386,15 @@ export const LoggingManifest: ModuleManifest = {
           const channel = member.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🚪 Member Left')
-              .setDescription(`${member.user} (\`${member.user.id}\`) left the server.`)
-              .setColor('#e74c3c')
+              .setColor(0x57F287)
+              .setTitle('🚪 System Event — Member Left')
+              .setDescription(
+                `> ### Member Departure\n` +
+                `> **User**: ${member.user} (\`${member.user.id}\`)\n` +
+                `> **Joined At**: ${member.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : '`Unknown`'}`
+              )
+              .setThumbnail(member.user.displayAvatarURL())
+              .setFooter({ text: 'Rage Optimiser • System Telemetry', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
@@ -321,9 +413,15 @@ export const LoggingManifest: ModuleManifest = {
           const channel = ban.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🔨 Member Banned')
-              .setDescription(`${ban.user} (\`${ban.user.id}\`) was banned.`)
-              .setColor('#ff4444')
+              .setColor(0x57F287)
+              .setTitle('🔨 Moderation Event — Member Banned')
+              .setDescription(
+                `> ### Ban Enforced\n` +
+                `> **User**: ${ban.user} (\`${ban.user.id}\`)\n` +
+                `> **Reason**: ${ban.reason || '*No reason provided*'}`
+              )
+              .setThumbnail(ban.user.displayAvatarURL())
+              .setFooter({ text: 'Rage Optimiser • Moderation Audit', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
@@ -342,9 +440,14 @@ export const LoggingManifest: ModuleManifest = {
           const channel = ban.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🔓 Member Unbanned')
-              .setDescription(`${ban.user} (\`${ban.user.id}\`) was unbanned.`)
-              .setColor('#3498db')
+              .setColor(0x57F287)
+              .setTitle('🔓 Moderation Event — Member Unbanned')
+              .setDescription(
+                `> ### Ban Revoked\n` +
+                `> **User**: ${ban.user} (\`${ban.user.id}\`)`
+              )
+              .setThumbnail(ban.user.displayAvatarURL())
+              .setFooter({ text: 'Rage Optimiser • Moderation Audit', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
@@ -363,9 +466,14 @@ export const LoggingManifest: ModuleManifest = {
           const channel = role.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🛡️ Role Created')
-              .setDescription(`Role <@&${role.id}> (\`${role.name}\`) was created.`)
-              .setColor('#2ecc71')
+              .setColor(0x57F287)
+              .setTitle('🛡️ Security Audit — Role Created')
+              .setDescription(
+                `> ### New Server Role Created\n` +
+                `> **Role**: <@&${role.id}> (\`${role.name}\`)\n` +
+                `> **Role ID**: \`${role.id}\``
+              )
+              .setFooter({ text: 'Rage Optimiser • Security Audit', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
@@ -384,9 +492,14 @@ export const LoggingManifest: ModuleManifest = {
           const channel = role.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('🛡️ Role Deleted')
-              .setDescription(`Role \`${role.name}\` (\`${role.id}\`) was deleted.`)
-              .setColor('#e74c3c')
+              .setColor(0x57F287)
+              .setTitle('🛡️ Security Audit — Role Deleted')
+              .setDescription(
+                `> ### Server Role Removed\n` +
+                `> **Role Name**: \`${role.name}\`\n` +
+                `> **Role ID**: \`${role.id}\``
+              )
+              .setFooter({ text: 'Rage Optimiser • Security Audit', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
@@ -405,9 +518,14 @@ export const LoggingManifest: ModuleManifest = {
           const channel = ch.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('📁 Channel Created')
-              .setDescription(`Channel <#${ch.id}> (\`${ch.name}\`) was created.`)
-              .setColor('#2ecc71')
+              .setColor(0x57F287)
+              .setTitle('📁 Security Audit — Channel Created')
+              .setDescription(
+                `> ### New Channel Created\n` +
+                `> **Channel**: <#${ch.id}> (\`${ch.name}\`)\n` +
+                `> **Type**: \`${ch.type}\``
+              )
+              .setFooter({ text: 'Rage Optimiser • Security Audit', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }
@@ -426,9 +544,14 @@ export const LoggingManifest: ModuleManifest = {
           const channel = ch.guild?.channels.cache.get(config.channelId);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setTitle('📁 Channel Deleted')
-              .setDescription(`Channel \`${ch.name}\` (\`${ch.id}\`) was deleted.`)
-              .setColor('#e74c3c')
+              .setColor(0x57F287)
+              .setTitle('📁 Security Audit — Channel Deleted')
+              .setDescription(
+                `> ### Channel Removed\n` +
+                `> **Channel Name**: \`${ch.name}\`\n` +
+                `> **Channel ID**: \`${ch.id}\``
+              )
+              .setFooter({ text: 'Rage Optimiser • Security Audit', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await channel.send({ embeds: [embed] });
           }

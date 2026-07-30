@@ -1,4 +1,4 @@
-import { Message, User, GuildMember, Channel, Role, TextChannel, MessageReplyOptions } from 'discord.js';
+import { Message, User, GuildMember, Channel, Role, TextChannel, MessageReplyOptions, EmbedBuilder } from 'discord.js';
 import { ParsedCommand } from './PrefixParser.js';
 
 export class SyntheticInteraction {
@@ -75,7 +75,7 @@ export class SyntheticInteraction {
     }
 
     const payload = this.normalizePayload(options);
-    const isEphemeral = Boolean(options && (options.flags === 64 || options.ephemeral));
+    const isEphemeral = false; // Always display responses publicly in channel for everyone
 
     if (isEphemeral) {
       try {
@@ -134,11 +134,83 @@ export class SyntheticInteraction {
 
   private normalizePayload(options: any): MessageReplyOptions {
     if (typeof options === 'string') {
-      return { content: options };
+      options = { content: options };
     }
     const copy = { ...options };
     delete copy.flags;
     delete copy.ephemeral;
+
+    const verifiedIcon = '<a:approved:1532390590707142956>';
+    const wrongIcon = '<:wrong:1532390628330307634>';
+
+    // Case 1: Convert raw string content to reference Lime single-line card
+    if (copy.content && (typeof copy.content === 'string') && (!copy.embeds || copy.embeds.length === 0)) {
+      const isErr = copy.content.includes('❌') || 
+                    copy.content.includes('🔒') || 
+                    copy.content.toLowerCase().includes('failed') || 
+                    copy.content.toLowerCase().includes('error') || 
+                    copy.content.toLowerCase().includes('denied') ||
+                    copy.content.toLowerCase().includes('invalid');
+
+      const cleanContent = copy.content.replace(/^[❌✅🔒⚠️🧊🌡️🔓🧹🔨✏️⏱️🔕👁️📋📜📈📝🔗🏓🪙🎲😂☀️💡]+\s*/, '').trim();
+      const icon = isErr ? wrongIcon : verifiedIcon;
+      const color = isErr ? 0xef4444 : 0x84cc16;
+
+      copy.embeds = [
+        new EmbedBuilder()
+          .setColor(color)
+          .setDescription(`${icon} ${this.user} ${cleanContent}`.trim())
+      ];
+      delete copy.content;
+    }
+    // Case 2: Embeds array provided -> Sanitize icons & colors to match Lime GG reference UI
+    else if (Array.isArray(copy.embeds)) {
+      copy.embeds = copy.embeds.map((emb: any) => {
+        if (!emb) return emb;
+        let json = typeof emb.toJSON === 'function' ? emb.toJSON() : { ...emb };
+
+        // Clean description
+        if (json.description) {
+          json.description = json.description
+            .replace(/<a:verifiedtwitter:\d+>/g, verifiedIcon)
+            .replace(/• ᴵˢ ɢʟᴏʙᴀʟ/g, '')
+            .replace(/✅/g, verifiedIcon)
+            .replace(/❌/g, wrongIcon)
+            .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])+/g, (match: string) => {
+              if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️') || match.includes('🔒')) {
+                return wrongIcon;
+              }
+              return verifiedIcon;
+            });
+        }
+
+        // Clean title
+        if (json.title) {
+          json.title = json.title
+            .replace(/✅/g, verifiedIcon)
+            .replace(/❌/g, wrongIcon)
+            .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])+/g, (match: string) => {
+              if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️') || match.includes('🔒')) {
+                return wrongIcon;
+              }
+              return verifiedIcon;
+            });
+        }
+
+        // Clean footer
+        if (json.footer && json.footer.text) {
+          json.footer.text = json.footer.text.replace(/Unbypassable Security \| Menu Expired Rescue it/gi, 'Rage Optimiser • Security Engine');
+        }
+
+        // Replace default violet color #7c5cfc with Lime Green #84cc16
+        if (!json.color || json.color === 0x7c5cfc || json.color === 8150268) {
+          json.color = 0x84cc16;
+        }
+
+        return EmbedBuilder.from(json);
+      });
+    }
+
     return copy;
   }
 

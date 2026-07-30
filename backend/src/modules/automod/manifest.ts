@@ -1,8 +1,56 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { PermissionFlagsBits, MessageFlags } from 'discord.js';
+import { Embeds, Colors, buildStatusCard } from '../../core/UIFactory.js';
+import { checkWhitelistPermission } from '../../utils/whitelistCheck.js';
+import { isUrlCommandBypass } from '../../utils/antiLinkBypass.js';
 
 function userTag(user: any): string {
   return user?.globalName ?? user?.username ?? user?.tag ?? user?.id ?? 'Unknown';
+}
+
+function sanitizeLinksFromContent(text: string): string {
+  if (!text) return '';
+  const GLOBAL_LINK_REGEX = /(?:https?:\/\/|www\.|discord(?:app)?\.(?:gg|com\/invite)\/|[a-zA-Z0-9-]+\.(?:com|net|org|gg|io|me|xyz|co|uk)\b)[^\s]*/gi;
+  return text.replace(GLOBAL_LINK_REGEX, '`[link removed]`').trim();
+}
+
+async function repostSanitizedContent(message: any, cleanText: string) {
+  try {
+    const channel = message.channel;
+    if (!channel || !channel.isTextBased()) return;
+
+    const textWithoutPlaceholder = cleanText.replace(/`\[link removed\]`/g, '').trim();
+    if (textWithoutPlaceholder.length === 0) {
+      return;
+    }
+
+    if ('createWebhook' in channel && typeof channel.fetchWebhooks === 'function') {
+      const webhooks = await channel.fetchWebhooks().catch(() => null);
+      let webhook = webhooks?.find((w: any) => w.name === 'Rage-AntiLink-Sanitizer');
+      if (!webhook) {
+        webhook = await channel.createWebhook({
+          name: 'Rage-AntiLink-Sanitizer',
+          avatar: message.client.user?.displayAvatarURL()
+        }).catch(() => null);
+      }
+      if (webhook) {
+        await webhook.send({
+          content: cleanText,
+          username: message.member?.displayName || message.author.username,
+          avatarURL: message.author.displayAvatarURL({ size: 256 }),
+          allowedMentions: { parse: [] }
+        });
+        return;
+      }
+    }
+
+    await channel.send({
+      content: `💬 **Message from ${message.author.username}** *(link removed)*:\n${cleanText}`,
+      allowedMentions: { parse: [] }
+    });
+  } catch (e) {
+    console.error('[Anti-Link] Error reposting sanitized content:', e);
+  }
 }
 
 export const AutomodManifest: ModuleManifest = {
@@ -214,20 +262,21 @@ export const AutomodManifest: ModuleManifest = {
         const ignoredChannelsList = (config.ignoredChannels || []).map((id: string) => `<#${id}>`).join(', ') || '*None*';
         const ignoredRolesList = (config.ignoredRoles || []).map((id: string) => `<@&${id}>`).join(', ') || '*None*';
 
-        const statusEmbed = new EmbedBuilder()
-          .setTitle('🤖 AutoMod & AntiLink Protection Center')
-          .setDescription('*Automated chat filtering, anti-link rules, ignored channels, and role bypasses.*')
-          .addFields(
-            { name: '⚡ AutoMod Module Status', value: `\`${amMod?.status || 'enabled'}\``, inline: true },
-            { name: '🔗 AntiLink Filter', value: config.blockLinks !== false ? '🟢 **Enabled**' : '🔴 **Disabled**', inline: true },
-            { name: '⚠️ Punishment Mode', value: `\`${config.punishment || 'warn'}\``, inline: true },
-            { name: '📢 Ignored Channels (Bypassed)', value: ignoredChannelsList, inline: false },
-            { name: '👑 Ignored Roles (Bypassed)', value: ignoredRolesList, inline: false },
-            { name: '📝 Configure Commands Guide', value: '• `r!automod ignore-channel <add|remove|list> #channel`\n• `r!automod ignore-role <add|remove|list> @role`\n• `r!automod antilink <enable|disable>`', inline: false }
-          )
-          .setColor('#7c5cfc')
-          .setFooter({ text: 'Rage Optimiser • AutoMod Engine' })
-          .setTimestamp();
+        const statusEmbed = Embeds.info(
+          '🤖 AutoMod & AntiLink Protection Center',
+          '*Automated chat filtering, anti-link rules, ignored channels, and role bypasses.*',
+          {
+            module: 'automod',
+            fields: [
+              { name: '⚡ AutoMod Status',          value: `\`${amMod?.status || 'enabled'}\``,                     inline: true },
+              { name: '🔗 AntiLink Filter',         value: config.blockLinks !== false ? '🟢 **Enabled**' : '🔴 **Disabled**', inline: true },
+              { name: '⚠️ Punishment Mode',         value: `\`${config.punishment || 'warn'}\``,                  inline: true },
+              { name: '📢 Ignored Channels',        value: ignoredChannelsList,                                    inline: false },
+              { name: '👑 Ignored Roles',           value: ignoredRolesList,                                       inline: false },
+              { name: '📝 Configure Commands',      value: '• `r!automod ignore-channel <add|remove|list> #channel`\n• `r!automod ignore-role <add|remove|list> @role`\n• `r!automod antilink <enable|disable>`', inline: false },
+            ],
+          }
+        );
 
         return interaction.reply({ embeds: [statusEmbed] });
       }
@@ -240,7 +289,16 @@ export const AutomodManifest: ModuleManifest = {
         
         const modules = context.getModulesState ? context.getModulesState() : [];
         const amMod = modules.find((m: any) => m.id === 'automod');
-        if (!amMod || amMod.status !== 'enabled') return;
+
+        // DEBUG: Log automod module state
+        if (!amMod) {
+          console.log(`[AntiLink Debug] automod module NOT found in modules state for guild ${message.guild.id}`);
+          return;
+        }
+        if (amMod.status !== 'enabled') {
+          console.log(`[AntiLink Debug] automod module status is '${amMod.status}' — skipping`);
+          return;
+        }
 
         const config = amMod.config || {};
         const content = message.content.toLowerCase();
@@ -249,32 +307,44 @@ export const AutomodManifest: ModuleManifest = {
 
         // 1. AntiLink Filter with Ignored Channels & Ignored Roles Bypass
         const blockLinks = config.blockLinks !== false;
-        const hasLink = content.includes('http://') || content.includes('https://') || content.includes('discord.gg/');
+        const LINK_REGEX = /(?:https?:\/\/|ftps?:\/\/|www\.|discord(?:app)?\.(?:gg|com|io|me)|dsc\.gg|disboard\.org|[a-zA-Z0-9-]+\.(?:com|net|org|gg|io|me|xyz|co|uk|in|info|online|site|app|tech|store|top|live|shop|vip|fun|club|pro|link|bot|ai|dev|[a-zA-Z]{2,})\b)/i;
+        const hasLink = LINK_REGEX.test(content) || content.includes('http://') || content.includes('https://') || content.includes('www.') || content.includes('discord.gg') || content.includes('discord.com/invite') || content.includes('dsc.gg');
+
+        if (hasLink) {
+          console.log(`[AntiLink Debug] Link detected from ${message.author.username} | blockLinks=${blockLinks} | content="${message.content.substring(0,80)}"`);
+        }
 
         if (blockLinks && hasLink) {
           const ignoredChannels: string[] = config.ignoredChannels || [];
           const ignoredRoles: string[] = config.ignoredRoles || [];
 
-          // Bypass checks:
-          // A) Message is in an ignored channel
           const isChannelIgnored = ignoredChannels.includes(message.channel.id);
-          // B) Member has an ignored role
           const hasIgnoredRole = message.member?.roles?.cache?.some((r: any) => ignoredRoles.includes(r.id));
-          // C) Member is Server Owner or has ManageMessages / Administrator permissions
+          // Server Owner or Administrator bypass only (ManageMessages removed so non-whitelisted staff cannot bypass)
           const isOwnerOrAdmin = message.guild.ownerId === message.author.id ||
-            Boolean(message.member?.permissions?.has?.('ManageMessages')) ||
             Boolean(message.member?.permissions?.has?.(PermissionFlagsBits.Administrator));
 
-          if (!isChannelIgnored && !hasIgnoredRole && !isOwnerOrAdmin) {
+          const isWhitelisted = await checkWhitelistPermission(message.author.id, message.guild, context, 'anti_link');
+          const isUrlCmd = isUrlCommandBypass(message, client?.user?.id);
+
+          console.log(`[AntiLink Debug] Bypass check: channelIgnored=${isChannelIgnored} | roleIgnored=${hasIgnoredRole} | ownerOrAdmin=${isOwnerOrAdmin} | whitelisted=${isWhitelisted} | urlCmd=${isUrlCmd}`);
+
+          if (!isChannelIgnored && !hasIgnoredRole && !isOwnerOrAdmin && !isWhitelisted && !isUrlCmd) {
             deleted = true;
             reason = 'Posting unauthorized links';
+            console.log(`[AntiLink Debug] → DELETING message from ${message.author.username}`);
+          } else {
+            console.log(`[AntiLink Debug] → ALLOWED (one of the bypass conditions is true)`);
           }
+        } else if (hasLink) {
+          console.log(`[AntiLink Debug] blockLinks=false — anti-link disabled in automod config. Set blockLinks=true or run r!automod antilink enable`);
         }
 
         // 2. Bad Words Filter
         if (!deleted && config.badWords && config.badWords.length > 0) {
           for (const word of config.badWords) {
-            if (content.includes(word.toLowerCase())) {
+            const trimmed = (typeof word === 'string' ? word : '').trim().toLowerCase();
+            if (trimmed.length > 0 && content.includes(trimmed)) {
               deleted = true;
               reason = 'Using blacklisted words';
               break;
@@ -291,17 +361,46 @@ export const AutomodManifest: ModuleManifest = {
           }
         }
 
+        // 4. Mention Spam
+        if (!deleted && config.maxMentions && config.maxMentions > 0) {
+          const mentionCount = message.mentions.users.size + message.mentions.roles.size;
+          if (mentionCount > config.maxMentions) {
+            deleted = true;
+            reason = `Excessive mentions (${mentionCount}/${config.maxMentions})`;
+          }
+        }
+
+        // 5. Emoji Spam
+        if (!deleted && config.maxEmojis && config.maxEmojis > 0) {
+          const emojiRegex = /(<a?:[a-zA-Z0-9_]+:[0-9]+>|[\u{1F300}-\u{1F9FF}])/gu;
+          const emojiCount = (message.content.match(emojiRegex) || []).length;
+          if (emojiCount > config.maxEmojis) {
+            deleted = true;
+            reason = `Excessive emojis (${emojiCount}/${config.maxEmojis})`;
+          }
+        }
+
         if (deleted) {
           try {
-            await message.delete();
-            const warningEmbed = new EmbedBuilder()
-              .setTitle('🛡️ AutoMod Enforcement')
-              .setDescription(`**User**: ${message.author} (\`${message.author.id}\`)\n**Reason**: ${reason}\n**Action**: Message removed.`)
-              .setColor('#ff9900')
-              .setTimestamp();
+            await message.delete().catch(() => {});
 
-            await message.channel.send({ embeds: [warningEmbed] })
-              .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 6000));
+            if (reason === 'Posting unauthorized links') {
+              (message as any)._antiLinkHandled = true;
+              const dmEmbed = Embeds.warn(
+                `🔗 Anti-Link Enforcement — ${message.guild.name}`,
+                `Your message in **#${message.channel.name || 'channel'}** was removed because it contained an unauthorized link.\n\n**Server**: ${message.guild.name}\n**Action**: Message removed & link blocked.`,
+                { module: 'automod', footer: `${message.guild.name}  •  Anti-Link Protection` }
+              );
+              await message.member?.send({ embeds: [dmEmbed] }).catch(() => {});
+            } else {
+              const warningEmbed = Embeds.warn(
+                '🛡️ AutoMod Enforcement',
+                `**User**: ${message.author} (\`${message.author.id}\`)\n**Reason**: ${reason}\n**Action**: Message removed.`,
+                { module: 'automod' }
+              );
+              await message.channel.send({ embeds: [warningEmbed] })
+                .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 6000));
+            }
             
             context.logSyncEvent(`AutoMod: Removed message from ${userTag(message.author)} in #${message.channel.name} (${reason})`, 'warn');
             
@@ -309,23 +408,22 @@ export const AutomodManifest: ModuleManifest = {
             if (config.logChannelId) {
               const logChannel = message.guild.channels.cache.get(config.logChannelId);
               if (logChannel && logChannel.isTextBased()) {
-                const embed = new EmbedBuilder()
-                  .setTitle('🛡️ AutoMod Intervention')
-                  .setDescription(`**User**: ${userTag(message.author)} (\`${message.author.id}\`)\n**Channel**: ${message.channel}\n**Reason**: \`${reason}\`\n\n**Content**:\n${message.content.length > 900 ? message.content.substring(0, 900) + '...' : message.content}`)
-                  .setColor('#ff9900')
-                  .setTimestamp();
+                const embed = Embeds.warn(
+                  '🛡️ AutoMod Intervention',
+                  `**User**: ${userTag(message.author)} (\`${message.author.id}\`)\n**Channel**: ${message.channel}\n**Reason**: \`${reason}\`\n\n**Content**:\n${message.content.length > 900 ? message.content.substring(0, 900) + '\u2026' : message.content}`,
+                  { module: 'automod' }
+                );
                 await logChannel.send({ embeds: [embed] });
               }
             }
 
             // Handle punishment
             if (config.punishment === 'warn') {
-              const dmEmbed = new EmbedBuilder()
-                .setTitle(`⚠️ AutoMod Warning — ${message.guild.name}`)
-                .setDescription(`Your message in **#${message.channel.name || 'channel'}** was removed by AutoMod.\n\n**Server**: ${message.guild.name}\n**Reason**: ${reason}`)
-                .setColor('#ff9900')
-                .setFooter({ text: `${message.guild.name} • AutoMod Protection` })
-                .setTimestamp();
+              const dmEmbed = Embeds.warn(
+                `⚠️ AutoMod Warning — ${message.guild.name}`,
+                `Your message in **#${message.channel.name || 'channel'}** was removed by AutoMod.\n\n**Server**: ${message.guild.name}\n**Reason**: ${reason}`,
+                { module: 'automod', footer: `${message.guild.name}  •  AutoMod Protection` }
+              );
               await message.member.send({ embeds: [dmEmbed] }).catch(() => {});
             } else if (config.punishment === 'timeout') {
               await message.member.timeout(5 * 60 * 1000, 'AutoMod Timeout').catch(() => {});

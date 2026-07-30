@@ -22,7 +22,23 @@ const FRONTEND_PROTECTIONS = [
   { key: 'anti_role_create', label: 'Anti Role Create', desc: 'Triggers when a role is created' },
   { key: 'anti_role_delete', label: 'Anti Role Delete', desc: 'Triggers when a role is deleted' },
   { key: 'anti_role_update', label: 'Anti Role Update', desc: 'Triggers when role permissions are modified' },
-  { key: 'anti_member_update', label: 'Anti Member Update', desc: 'Triggers when a member receives administrative roles' },
+  { key: 'anti_role_grant', label: 'Anti Role Assign', desc: 'Triggers when administrative roles are granted' },
+  { key: 'anti_role_remove', label: 'Anti Role Remove', desc: 'Triggers when administrative roles are stripped' },
+  { key: 'anti_member_update', label: 'Anti Member Update', desc: 'Triggers when member properties are updated' },
+  { key: 'anti_emoji_create', label: 'Anti Emoji/Sticker Create', desc: 'Triggers when emojis or stickers are created' },
+  { key: 'anti_emoji_delete', label: 'Anti Emoji/Sticker Delete', desc: 'Triggers when emojis or stickers are deleted' },
+  { key: 'anti_emoji_update', label: 'Anti Emoji/Sticker Update', desc: 'Triggers when emojis or stickers are modified' },
+  { key: 'anti_everyone_ping', label: 'Anti Everyone/Here Ping', desc: 'Triggers on unauthorized @everyone or @here mentions' },
+  { key: 'anti_role_ping', label: 'Anti Role Ping', desc: 'Triggers on unauthorized mass role pings' },
+  { key: 'anti_integration', label: 'Anti Integration', desc: 'Triggers when integrations or bots are modified' },
+  { key: 'anti_guild_update', label: 'Anti Guild Update', desc: 'Triggers when server properties or vanity URL are altered' },
+  { key: 'anti_webhook_create', label: 'Anti Webhook Create', desc: 'Triggers when a webhook is created' },
+  { key: 'anti_webhook_delete', label: 'Anti Webhook Delete', desc: 'Triggers when a webhook is deleted' },
+  { key: 'anti_webhook_update', label: 'Anti Webhook Update', desc: 'Triggers when webhook settings are modified' },
+  { key: 'anti_invite_create', label: 'Anti Invite Create', desc: 'Triggers when invite links are created' },
+  { key: 'anti_invite_delete', label: 'Anti Invite Delete', desc: 'Triggers when invite links are revoked' },
+  { key: 'anti_timeout', label: 'Anti Timeout Abuse', desc: 'Triggers when rapid member timeouts are executed' },
+  { key: 'anti_link', label: 'Anti Link Filter', desc: 'Triggers when unauthorized links or invite URLs are posted' }
 ];
 
 export function WhitelistSettings({ modules, registry, onUpdateConfig, onSave }: WhitelistSettingsProps) {

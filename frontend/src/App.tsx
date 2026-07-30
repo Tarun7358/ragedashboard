@@ -209,6 +209,7 @@ function App() {
             modules={modules}
             registry={registry}
             onSaveConfig={triggerToast}
+            onUpdateConfig={updateModuleConfig}
           />
         );
       case 'security-logs':

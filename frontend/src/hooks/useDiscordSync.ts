@@ -46,37 +46,37 @@ export interface ModuleState {
 
 // Initial empty/zero configurations representing Zero Operational Defaults
 export const INITIAL_MODULES: ModuleState[] = [
-  { id: 'security', name: 'Security Guard', status: 'config_required', progress: 0, errors: ['No Quarantine Role selected', 'No alert channel configured', 'No exceptions defined'], config: {} },
-  { id: 'moderation', name: 'Moderation Console', status: 'config_required', progress: 0, errors: ['No Log Channel configured', 'No Moderator Roles selected'], config: {} },
-  { id: 'welcome-v2', name: 'Welcome System V2', status: 'not_configured', progress: 0, errors: [], config: {} },
-  { id: 'tickets', name: 'Ticket Management', status: 'config_required', progress: 0, errors: ['No Support Category specified', 'No Claimed Staff Roles selected'], config: {} },
-  { id: 'tickets-v2', name: 'Tickets System V2', status: 'not_configured', progress: 0, errors: [], config: {} },
-  { id: 'verification', name: 'Verification Gate', status: 'config_required', progress: 0, errors: ['No Verified Member role selected', 'No Unverified Role selected'], config: {} },
-  { id: 'logging', name: 'System Logs Timeline', status: 'config_required', progress: 0, errors: ['No central log channel configured'], config: {} },
-  { id: 'backups', name: 'Backup Hub', status: 'config_required', progress: 0, errors: ['No status notification channel configured'], config: {} },
-  { id: 'automation', name: 'Automation Studio', status: 'config_required', progress: 0, errors: ['No default Auto Roles configured'], config: {} },
-  { id: 'voice', name: 'Voice Presence', status: 'config_required', progress: 0, errors: ['No dedicated voice channel configured'], config: {} },
-  { id: 'bot_whitelist', name: 'Bot Whitelist', status: 'not_configured', progress: 0, errors: [], config: {} },
-  { id: 'member_whitelist', name: 'Member Whitelist', status: 'not_configured', progress: 0, errors: [], config: {} },
-  { id: 'role_whitelist', name: 'Role Whitelist', status: 'not_configured', progress: 0, errors: [], config: {} },
-  { id: 'reaction_roles', name: 'Reaction Roles', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'leveling', name: 'Leveling & XP', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'reminders', name: 'Reminder System', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'automod', name: 'AI Automod & AntiLink', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'music', name: 'Music System', status: 'not_configured', progress: 0, errors: [], config: {} },
-  { id: 'voice-protection', name: 'Voice Protection', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'discord-dashboard', name: 'Discord Dashboard', status: 'config_required', progress: 0, errors: ['No target channel configured'], config: {} },
+  { id: 'security', name: 'Security Guard', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'moderation', name: 'Moderation Console', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'welcome-v2', name: 'Welcome System V2', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'tickets', name: 'Ticket Management', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'tickets-v2', name: 'Tickets System V2', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'verification', name: 'Verification Gate', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'logging', name: 'System Logs Timeline', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'backups', name: 'Backup Hub', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'automation', name: 'Automation Studio', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'voice', name: 'Voice Presence', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'bot_whitelist', name: 'Bot Whitelist', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'member_whitelist', name: 'Member Whitelist', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'role_whitelist', name: 'Role Whitelist', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'reaction_roles', name: 'Reaction Roles', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'leveling', name: 'Leveling & XP', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'reminders', name: 'Reminder System', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'automod', name: 'AI Automod & AntiLink', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'music', name: 'Music System', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'voice-protection', name: 'Voice Protection', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'discord-dashboard', name: 'Discord Dashboard', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'join_role_guard', name: 'Join Role Guard', status: 'enabled', progress: 100, errors: [], config: {} },
-  { id: 'social_updates', name: 'Social Updates', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'join_to_create', name: 'Join To Create', status: 'not_configured', progress: 0, errors: [], config: {} },
-  { id: 'giveaway', name: 'Giveaways', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'announcements', name: 'Announcements', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'voice_manager', name: 'Voice Manager', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'bulk_ops', name: 'Bulk Operations', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'diagnostics', name: 'System Diagnostics', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'analytics', name: 'Analytics Tracker', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'audit', name: 'Audit Timeline', status: 'not_configured', progress: 100, errors: [], config: {} },
-  { id: 'payment', name: 'Enterprise Payment QR', status: 'not_configured', progress: 100, errors: [], config: {} }
+  { id: 'social_updates', name: 'Social Updates', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'join_to_create', name: 'Join To Create', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'giveaway', name: 'Giveaways', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'announcements', name: 'Announcements', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'voice_manager', name: 'Voice Manager', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'bulk_ops', name: 'Bulk Operations', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'diagnostics', name: 'System Diagnostics', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'analytics', name: 'Analytics Tracker', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'audit', name: 'Audit Timeline', status: 'enabled', progress: 100, errors: [], config: {} },
+  { id: 'payment', name: 'Enterprise Payment QR', status: 'enabled', progress: 100, errors: [], config: {} }
 ];
 
 export function useDiscordSync() {
@@ -199,6 +199,9 @@ export function useDiscordSync() {
             setGlobalSettings(data.settings);
           } else if (data.type === 'MUSIC_STATE_UPDATE') {
             setMusicPlayerState(data.state);
+          } else if (data.type === 'GUILD_REMOVED') {
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            setSyncLogs(prev => [{ time, msg: `⚠️ Bot was removed from server "${data.guildName || data.guildId}".`, type: 'warn' }, ...prev]);
           }
         } catch (e) {
           console.error('WebSocket parsing error:', e);

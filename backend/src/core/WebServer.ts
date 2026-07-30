@@ -686,7 +686,10 @@ function appRoutes(server: WebServer, app: Express, registry: ModuleRegistry, re
   // Step 2: Discord calls back here with ?code=...&state=...
   app.get('/api/auth/discord/callback', async (req, res) => {
     const { code, error, state } = req.query;
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4680';
+    if (frontendUrl.includes('192.168.')) {
+      frontendUrl = 'http://localhost:4680';
+    }
 
     if (error) {
       return res.redirect(`${frontendUrl}/login?error=oauth_denied`);
@@ -761,15 +764,11 @@ function appRoutes(server: WebServer, app: Express, registry: ModuleRegistry, re
         const defaultStatus = isInGuild ? 'Approved' : 'Not Registered';
 
         const row = await db.get<any>('SELECT * FROM approvals WHERE guildId = ?', [guild.id]).catch(() => null);
-        if (row) {
-          let status = row.status;
-          if (status !== 'Blacklisted' && status !== 'Suspended' && status !== 'Rejected') {
-            status = defaultStatus;
-          }
-          approvals[guild.id] = { status, guildName: row.guildName || guild.name };
-        } else {
-          approvals[guild.id] = { status: defaultStatus, guildName: guild.name };
+        let status = defaultStatus;
+        if (row && (row.status === 'Blacklisted' || row.status === 'Suspended' || row.status === 'Rejected')) {
+          status = row.status;
         }
+        approvals[guild.id] = { status, guildName: (row && row.guildName) || guild.name };
       }
 
       // Return refreshed lists

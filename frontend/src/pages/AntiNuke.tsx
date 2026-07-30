@@ -60,13 +60,15 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
     {
       id: 'role',
       name: 'Role Protection',
-      desc: 'Flags unauthorized role creation, position adjustments, deletion, and administrator permission grants.',
+      desc: 'Flags unauthorized role creation, position adjustments, deletion, role assignment, and role removal.',
       icon: <ShieldCheck size={18} color="#f59e0b" />,
       color: '#f59e0b',
       rulesList: [
         { key: 'anti_role_create', name: 'Anti Role Create', desc: 'Blocks unauthorized role creations' },
         { key: 'anti_role_delete', name: 'Anti Role Delete', desc: 'Blocks mass deletion of roles' },
-        { key: 'anti_role_update', name: 'Anti Role Update', desc: 'Flags permission elevations or adjustments' }
+        { key: 'anti_role_update', name: 'Anti Role Update', desc: 'Flags permission elevations or adjustments' },
+        { key: 'anti_role_grant', name: 'Anti Role Assign', desc: 'Blocks unauthorized granting or assignment of roles' },
+        { key: 'anti_role_remove', name: 'Anti Role Remove', desc: 'Blocks unauthorized stripping or removal of roles' }
       ]
     },
     {
@@ -115,6 +117,7 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
         limit: editRuleData.limit || 1,
         window: editRuleData.window || 10,
         action: editRuleData.action || 'quarantine',
+        recovery: editRuleData.recovery ?? true,
         ignoredDomains: editRuleData.ignoredDomains || ''
       }
     };
@@ -344,6 +347,9 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
                           <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
                             ACTION: {(ruleVal.action || 'quarantine').toUpperCase()}
                           </span>
+                          <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px', backgroundColor: (ruleVal.recovery ?? true) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(156, 163, 175, 0.15)', color: (ruleVal.recovery ?? true) ? '#10b981' : '#9ca3af', border: (ruleVal.recovery ?? true) ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(156, 163, 175, 0.3)' }}>
+                            REVERT: {(ruleVal.recovery ?? true) ? 'AUTO' : 'DISABLED'}
+                          </span>
                         </div>
 
                         {/* Ignored Domains Chips Preview */}
@@ -402,6 +408,19 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
                   type="checkbox" 
                   checked={editRuleData.enabled ?? true}
                   onChange={e => setEditRuleData({ ...editRuleData, enabled: e.target.checked })}
+                />
+              </div>
+
+              {/* Auto-Revert / Recovery Switch inside Modal */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderRadius: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-color)' }}>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff' }}>Auto-Revert & Restore</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Automatically recreate or restore unauthorized changes</div>
+                </div>
+                <input 
+                  type="checkbox" 
+                  checked={editRuleData.recovery ?? true}
+                  onChange={e => setEditRuleData({ ...editRuleData, recovery: e.target.checked })}
                 />
               </div>
 

@@ -165,6 +165,13 @@ export const BulkOpsManifest: ModuleManifest = {
           context.logSyncEvent(`[Bulk Ops] ${interaction.user.username} — ${action} (${count} items).`, 'warn');
         };
 
+        const verifiedIcon = '<a:approved:1532390590707142956>';
+        const buildMinimalCard = (action: string, detail: string) => {
+          return new EmbedBuilder()
+            .setColor(0x84cc16)
+            .setDescription(`${verifiedIcon} ${interaction.user} **Has ${action}** ${detail}`);
+        };
+
         // ROLE ADD
         if (sub === 'role-add') {
           const role = interaction.options.getRole('role');
@@ -182,7 +189,7 @@ export const BulkOpsManifest: ModuleManifest = {
             }
           }
           logBulk('Role Add', count);
-          return interaction.editReply({ content: `✅ Added **${role.name}** to **${count}** members.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Added Role', `${role} **to ${count} members**`)] });
         }
 
         // ROLE REMOVE
@@ -200,7 +207,7 @@ export const BulkOpsManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 200));
           }
           logBulk('Role Remove', count);
-          return interaction.editReply({ content: `✅ Removed **${role.name}** from **${count}** members.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Removed Role', `${role} **from ${count} members**`)] });
         }
 
         // CHANNEL LOCK
@@ -215,7 +222,7 @@ export const BulkOpsManifest: ModuleManifest = {
             count++;
           }
           logBulk('Channel Lock', count);
-          return interaction.editReply({ content: `🔒 Locked **${count}** channels.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Locked Channels', `**${count} text channels**`)] });
         }
 
         // CHANNEL UNLOCK
@@ -230,7 +237,7 @@ export const BulkOpsManifest: ModuleManifest = {
             count++;
           }
           logBulk('Channel Unlock', count);
-          return interaction.editReply({ content: `🔓 Unlocked **${count}** channels.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Unlocked Channels', `**${count} text channels**`)] });
         }
 
         // CHANNEL HIDE
@@ -245,7 +252,7 @@ export const BulkOpsManifest: ModuleManifest = {
             count++;
           }
           logBulk('Channel Hide', count);
-          return interaction.editReply({ content: `🔕 Hidden **${count}** channels.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Hidden Channels', `**${count} channels**`)] });
         }
 
         // CHANNEL UNHIDE
@@ -260,7 +267,7 @@ export const BulkOpsManifest: ModuleManifest = {
             count++;
           }
           logBulk('Channel Unhide', count);
-          return interaction.editReply({ content: `👁️ Unhidden **${count}** channels.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Unhidden Channels', `**${count} channels**`)] });
         }
 
         // CHANNEL SLOWMODE
@@ -276,7 +283,7 @@ export const BulkOpsManifest: ModuleManifest = {
             count++;
           }
           logBulk('Channel Slowmode', count);
-          return interaction.editReply({ content: `⏱️ Set **${seconds}s** slowmode on **${count}** channels.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Set Slowmode', `**${seconds}s on ${count} channels**`)] });
         }
 
         // RENAME CHANNELS
@@ -294,7 +301,7 @@ export const BulkOpsManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 300));
           }
           logBulk('Rename Channels', count);
-          return interaction.editReply({ content: `✏️ Renamed **${count}** channels.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Renamed Channels', `**${count} channels**`)] });
         }
 
         // PURGE
@@ -309,10 +316,8 @@ export const BulkOpsManifest: ModuleManifest = {
 
           if (amount > 100) {
             const initEmbed = new EmbedBuilder()
-              .setTitle('⚙️ System Operations: Initializing Purge')
-              .setDescription(`Bulk deletion request of up to **${amount}** messages is currently in progress.\nPlease wait as the security engine clears the channel history in compliance with rate limits.`)
-              .setColor('#eab308')
-              .setFooter({ text: 'Rage Optimiser • Operations Queue' });
+              .setColor(0x84cc16)
+              .setDescription(`${verifiedIcon} ${interaction.user} **Has Initialized Purge** **${amount} messages** in ${target}`);
             await interaction.editReply({ embeds: [initEmbed] });
           }
 
@@ -354,29 +359,16 @@ export const BulkOpsManifest: ModuleManifest = {
             }
 
             if (deleted.size === 0) {
-              break; // Messages are likely too old (> 14 days) or deleted failed
+              break;
             }
 
             if (remaining > 0) {
-              await new Promise(r => setTimeout(r, 1000)); // Sleep 1s to respect API limits
+              await new Promise(r => setTimeout(r, 1000));
             }
           }
 
-          const successEmbed = new EmbedBuilder()
-            .setTitle('🗑️ Security Action: Bulk Message Purge Protocol')
-            .setDescription(`A bulk deletion request was successfully executed and processed by the operations module.`)
-            .addFields(
-              { name: 'Target Channel', value: `${target}`, inline: true },
-              { name: 'Messages Purged', value: `\`${totalDeleted}\` messages`, inline: true },
-              { name: 'Target Filter', value: user ? `${user} (${user.id})` : 'None (All Users)', inline: false },
-              { name: 'Authorized Administrator', value: `${interaction.user}`, inline: true }
-            )
-            .setColor('#10b981')
-            .setTimestamp()
-            .setFooter({ text: 'Rage Optimiser • System Operations Engine' });
-
           logBulk('Purge', totalDeleted);
-          return interaction.editReply({ embeds: [successEmbed] });
+          return interaction.editReply({ embeds: [buildMinimalCard('Purged Messages', `**${totalDeleted} messages in** ${target}`)] });
         }
 
         // BAN LIST
@@ -400,7 +392,7 @@ export const BulkOpsManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 200));
           }
           logBulk('Mass Ban', count);
-          return interaction.editReply({ content: `🔨 Banned **${count}** users.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Mass Banned', `**${count} users**`)] });
         }
 
         // MASS UNBAN
@@ -415,7 +407,7 @@ export const BulkOpsManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 200));
           }
           logBulk('Mass Unban', count);
-          return interaction.editReply({ content: `✅ Unbanned **${count}** users.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Mass Unbanned', `**${count} users**`)] });
         }
 
         // CLONE CHANNEL
@@ -423,7 +415,7 @@ export const BulkOpsManifest: ModuleManifest = {
           const source = interaction.options.getChannel('channel');
           const cloned = await source.clone({ reason: `Cloned by ${interaction.user.username}` });
           logBulk('Clone Channel', 1);
-          return interaction.editReply({ content: `✅ Cloned ${source} → ${cloned}.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Cloned Channel', `${source} → ${cloned}`)] });
         }
 
         // SYNC PERMISSIONS
@@ -447,7 +439,7 @@ export const BulkOpsManifest: ModuleManifest = {
             }
           }
           logBulk('Sync Permissions', count);
-          return interaction.editReply({ content: `✅ Synced permissions on **${count}** channels.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Synced Permissions', `**${count} channels**`)] });
         }
 
         // CREATE CHANNELS
@@ -467,7 +459,7 @@ export const BulkOpsManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 300));
           }
           logBulk('Create Channels', count);
-          return interaction.editReply({ content: `✅ Created **${count}** channels.` });
+          return interaction.editReply({ embeds: [buildMinimalCard('Created Channels', `**${count} channels**`)] });
         }
 
         return interaction.editReply({ content: '❌ Unknown bulk operation.' });

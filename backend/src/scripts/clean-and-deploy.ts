@@ -104,22 +104,23 @@ const rest = new REST({ version: '10' }).setToken(token);
 
 async function cleanAndDeploy() {
   try {
-    console.log('1️⃣ Clearing ALL Global Commands from Discord API to prevent duplicates...');
-    await rest.put(Routes.applicationCommands(clientId as string), { body: [] });
-    console.log('✅ Global commands completely cleared (0 global commands).');
+    console.log(`1️⃣ Deploying ${commands.length} application commands GLOBALLY across ALL servers...`);
+    await rest.put(Routes.applicationCommands(clientId as string), { body: commands });
+    console.log('✅ Global slash commands successfully registered!');
 
-    const userGuilds: any = await rest.get(Routes.userGuilds());
-    console.log(`2️⃣ Found ${userGuilds.length} guilds. Deploying clean deduplicated command set (${commands.length} commands) per guild...`);
-
-    for (const g of userGuilds) {
-      console.log(`   ➜ Deploying to guild "${g.name}" (${g.id})...`);
-      await rest.put(
-        Routes.applicationGuildCommands(clientId as string, g.id),
-        { body: commands }
-      );
+    const userGuilds: any = await rest.get(Routes.userGuilds()).catch(() => []);
+    if (userGuilds && userGuilds.length > 0) {
+      console.log(`2️⃣ Clearing legacy per-guild command overrides across ${userGuilds.length} guilds...`);
+      for (const g of userGuilds) {
+        await rest.put(
+          Routes.applicationGuildCommands(clientId as string, g.id),
+          { body: [] }
+        ).catch(() => {});
+      }
+      console.log('✅ Legacy per-guild command overrides cleared.');
     }
 
-    console.log('🎉 SUCCESS: All command duplicates cleared and clean commands deployed across all guilds!');
+    console.log('🎉 SUCCESS: Global slash commands active in every server!');
   } catch (err: any) {
     console.error('❌ Error during clean and deploy:', err);
     process.exit(1);

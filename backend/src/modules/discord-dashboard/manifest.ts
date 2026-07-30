@@ -1,5 +1,6 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+
 // Helper to get stats
 function getServerStats(guild: any) {
   return {
@@ -10,90 +11,131 @@ function getServerStats(guild: any) {
   };
 }
 
-// Generate the embed based on the page
+// Generate the embed based on the page using Lime GG Reference UI
 function generateDashboardEmbed(guild: any, page: string, client: any, context: any) {
   const stats = getServerStats(guild);
+  const verifiedIcon = '<a:approved:1532390590707142956>';
+  const shieldIcon = '<:shield:1532403012751065179>';
   
   const embed = new EmbedBuilder()
-    .setColor('#4f8cff')
-    .setAuthor({ name: `${guild.name} | Server Dashboard`, iconURL: guild.iconURL() || undefined })
-    .setFooter({ text: `Last Updated • ${new Date().toLocaleTimeString()} | Bot Latency: ${client.ws.ping}ms` })
+    .setColor(0x84cc16)
+    .setThumbnail(guild.iconURL({ size: 256 }) || client.user?.displayAvatarURL({ size: 256 }) || null)
+    .setFooter({ text: 'Rage Optimiser • Security Engine' })
     .setTimestamp();
 
   switch (page) {
     case 'home':
-      embed.setTitle('🏠 **System Overview**')
-        .setDescription('> Welcome to the **Rage Optimiser Control Panel**. Use the interactive console below to navigate through live server telemetry and configurations.')
-        .addFields(
-          { name: '👥 Population', value: `**Total:** \`${stats.totalMembers}\`\n**Online:** \`${stats.onlineMembers}\``, inline: true },
-          { name: '🚀 Server Power', value: `**Boosts:** \`${stats.boosts}\`\n**Tier:** \`Premium\``, inline: true },
-          { name: '📡 Network', value: `**Channels:** \`${stats.channels}\`\n**Ping:** \`${client.ws.ping}ms\``, inline: true },
-          { name: '⚡ Live Feed', value: '```diff\n+ System online and monitoring\n- No new alerts\n```' }
-        );
+      embed.setDescription([
+        `> • **SYSTEM OVERVIEW**`,
+        `> • **RAGE OPTIMISER CONTROL PANEL**`,
+        `> `,
+        `> ${verifiedIcon} **Total Members**: \`${stats.totalMembers}\``,
+        `> ${verifiedIcon} **Online Members**: \`${stats.onlineMembers}\``,
+        `> ${shieldIcon} **Server Boosts**: \`${stats.boosts}\` (Tier: \`Premium\`)`,
+        `> ${shieldIcon} **Channels**: \`${stats.channels}\``,
+        `> ${shieldIcon} **Bot Ping**: \`${client.ws.ping}ms\``,
+        `> `,
+        `> ${verifiedIcon} __**System Status: Online & Monitoring**__`
+      ].join('\n'));
       break;
+
     case 'members':
-      embed.setTitle('👥 **Member Analytics**')
-        .setDescription('> Track real-time community growth, retention, and verification statistics.')
-        .addFields(
-          { name: '📈 Trajectory', value: `**Current Population:** \`${stats.totalMembers}\` users` },
-          { name: '⏱️ Recent Activity', value: '```yaml\nAwaiting new join/leave events...\n```' }
-        );
+      embed.setDescription([
+        `> • **MEMBER ANALYTICS**`,
+        `> • **RAGE OPTIMISER CONTROL PANEL**`,
+        `> `,
+        `> ${verifiedIcon} **Current Population**: \`${stats.totalMembers}\` users`,
+        `> ${verifiedIcon} **Online Active**: \`${stats.onlineMembers}\` users`,
+        `> ${shieldIcon} **Member Protection**: \`Active\``
+      ].join('\n'));
       break;
+
     case 'messages':
-      embed.setTitle('💬 **Message Telemetry**')
-        .setDescription('> Real-time tracking of server communication and engagement hotspots.')
-        .addFields(
-          { name: '🔥 Top Active Channels', value: '> 1. **#general-chat**\n> 2. **#commands**' }
-        );
+      embed.setDescription([
+        `> • **MESSAGE TELEMETRY**`,
+        `> • **RAGE OPTIMISER CONTROL PANEL**`,
+        `> `,
+        `> ${verifiedIcon} **Top Active Channels**:`,
+        `> ${verifiedIcon} __**#general-chat**__`,
+        `> ${verifiedIcon} __**#commands**__`
+      ].join('\n'));
       break;
+
     case 'voice':
       const voiceCount = guild.members.cache.filter((m: any) => m.voice?.channelId).size;
-      embed.setTitle('🎙️ **Voice Comms**')
-        .setDescription('> Live monitoring of audio channels and active speakers.')
-        .addFields(
-          { name: '🔊 Current Connections', value: `\`\`\`yaml\nStatus: ${voiceCount} active users\n\`\`\`` }
-        );
+      embed.setDescription([
+        `> • **VOICE COMMS**`,
+        `> • **RAGE OPTIMISER CONTROL PANEL**`,
+        `> `,
+        `> ${verifiedIcon} **Active Voice Connections**: \`${voiceCount}\` users`,
+        `> ${shieldIcon} **Voice Guard Status**: \`Protected\``
+      ].join('\n'));
       break;
+
     case 'tickets':
       const modules = context?.getModulesState ? context.getModulesState() : [];
       const ticketsModule = modules.find((m: any) => m.id === 'tickets');
       const catId = ticketsModule?.config?.categoryId;
       const activeTickets = catId ? guild.channels.cache.filter((c: any) => c.parentId === catId && c.name.startsWith('ticket-')).size : 0;
       
-      embed.setTitle('🎫 **Support Desk**')
-        .setDescription('> Overview of active inquiries and staff response metrics.')
-        .addFields(
-          { name: '📬 Open Tickets', value: `**${activeTickets}** Active`, inline: true },
-          { name: '✅ Resolved Today', value: `**0** Closed`, inline: true }
-        );
+      embed.setDescription([
+        `> • **SUPPORT DESK**`,
+        `> • **RAGE OPTIMISER CONTROL PANEL**`,
+        `> `,
+        `> ${verifiedIcon} **Open Inquiries**: \`${activeTickets}\` Active`,
+        `> ${verifiedIcon} **Resolved Today**: \`0\` Closed`
+      ].join('\n'));
       break;
+
     case 'events':
-      embed.setTitle('🎉 **Community Events**')
-        .setDescription('> Upcoming giveaways, tournaments, and server gatherings.')
-        .addFields(
-          { name: '📅 Upcoming Schedule', value: '```yaml\nNo active events at this time.\n```' }
-        );
+      embed.setDescription([
+        `> • **COMMUNITY EVENTS**`,
+        `> • **RAGE OPTIMISER CONTROL PANEL**`,
+        `> `,
+        `> ${verifiedIcon} **Upcoming Schedule**: \`No active events at this time\``
+      ].join('\n'));
       break;
+
     case 'stats':
-      embed.setTitle('📊 **Deep Analytics**')
-        .setDescription('> Advanced insights into server engagement and retention rates.')
-        .addFields(
-          { name: '📈 Engagement Index', value: '> Gathering sufficient data to calculate...' }
-        );
+      embed.setDescription([
+        `> • **DEEP ANALYTICS**`,
+        `> • **RAGE OPTIMISER CONTROL PANEL**`,
+        `> `,
+        `> ${verifiedIcon} **Engagement Index**: \`Gathering real-time telemetry...\``
+      ].join('\n'));
       break;
+
     case 'more':
-      embed.setTitle('⚙️ **Advanced Modules**')
-        .setDescription('> Access other automated systems deployed in this server.')
-        .addFields(
-          { name: '🔗 Quick Links', value: '> • **Announcements System**\n> • **Suggestions Box**\n> • **Moderation Logs**' }
-        );
+      embed.setDescription([
+        `> • **ADVANCED MODULES**`,
+        `> • **RAGE OPTIMISER CONTROL PANEL**`,
+        `> `,
+        `> ${verifiedIcon} __**Announcements System**__`,
+        `> ${verifiedIcon} __**Suggestions Box**__`,
+        `> ${verifiedIcon} __**Moderation & Security Logs**__`
+      ].join('\n'));
       break;
   }
 
   return embed;
 }
 
-function generateDashboardComponents(config: any = {}, activePage: string = 'home') {
+function safeEmoji(client: any, target: string, fallback: string): string {
+  if (!target) return fallback;
+  if (target.startsWith('<') && target.endsWith('>')) return target;
+  if (!target.startsWith(':')) return target;
+
+  const rawName = target.replace(/^:|:$/g, '').replace(/~.*$/, '').trim();
+  if (client?.emojis?.cache) {
+    const matched = client.emojis.cache.find((e: any) => e.name.toLowerCase() === rawName.toLowerCase());
+    if (matched) {
+      return matched.animated ? `<a:${matched.name}:${matched.id}>` : `<:${matched.name}:${matched.id}>`;
+    }
+  }
+  return fallback;
+}
+
+function generateDashboardComponents(config: any = {}, activePage: string = 'home', client?: any) {
   const enabledPages = config.enabledPages || {
     home: true,
     members: true,
@@ -106,13 +148,13 @@ function generateDashboardComponents(config: any = {}, activePage: string = 'hom
   };
 
   const allButtons = [
-    { id: 'dbn_home', label: 'Home', emoji: '🏠', page: 'home' },
-    { id: 'dbn_members', label: 'Members', emoji: '👥', page: 'members' },
-    { id: 'dbn_messages', label: 'Messages', emoji: '💬', page: 'messages' },
-    { id: 'dbn_voice', label: 'Voice', emoji: '🎙️', page: 'voice' },
+    { id: 'dbn_home', label: 'Home', emoji: safeEmoji(client, ':50738home:', '🏠'), page: 'home' },
+    { id: 'dbn_members', label: 'Members', emoji: safeEmoji(client, ':membericons:', '👥'), page: 'members' },
+    { id: 'dbn_messages', label: 'Messages', emoji: safeEmoji(client, ':paperplane:', '💬'), page: 'messages' },
+    { id: 'dbn_voice', label: 'Voice', emoji: safeEmoji(client, ':voicechannellimitedgreen:', '🎙️'), page: 'voice' },
     { id: 'dbn_tickets', label: 'Tickets', emoji: '🎫', page: 'tickets' },
-    { id: 'dbn_events', label: 'Events', emoji: '🎉', page: 'events' },
-    { id: 'dbn_stats', label: 'Statistics', emoji: '📊', page: 'stats' },
+    { id: 'dbn_events', label: 'Events', emoji: safeEmoji(client, ':announcements~3:', '🎉'), page: 'events' },
+    { id: 'dbn_stats', label: 'Statistics', emoji: safeEmoji(client, ':stats:', '📊'), page: 'stats' },
     { id: 'dbn_more', label: 'More', emoji: '⚙️', page: 'more' }
   ];
 
@@ -127,7 +169,7 @@ function generateDashboardComponents(config: any = {}, activePage: string = 'hom
       rows.push(currentRow);
       currentRow = new ActionRowBuilder<ButtonBuilder>();
     }
-    const style = b.page === activePage ? ButtonStyle.Primary : ButtonStyle.Secondary;
+    const style = b.page === activePage ? ButtonStyle.Success : ButtonStyle.Secondary;
     currentRow.addComponents(
       new ButtonBuilder()
         .setCustomId(b.id)
@@ -144,7 +186,7 @@ function generateDashboardComponents(config: any = {}, activePage: string = 'hom
   // Utility row (always enabled)
   const utilityRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('dbn_refresh').setLabel('Refresh').setEmoji('🔄').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('dbn_config').setLabel('Configure').setEmoji('🛠️').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('dbn_config').setLabel('Configure').setEmoji(safeEmoji(client, ':config:', '🛠️')).setStyle(ButtonStyle.Secondary)
   );
   rows.push(utilityRow);
 
@@ -175,17 +217,22 @@ export const DiscordDashboardManifest: ModuleManifest = {
     {
       name: 'setup-discord-dashboard',
       description: 'Force spawn the Discord dashboard message in the current channel.'
+    },
+    {
+      name: 'dashboard',
+      description: 'Spawn the interactive Discord server control panel.'
     }
   ],
   events: [
     {
       name: 'tick',
       handler: async (client: any, context: any) => {
+        if (!client || !client.isReady || !client.isReady() || !client.token) return;
         const modules = context.getModulesState ? context.getModulesState() : [];
         const dashModule = modules.find((m: any) => m.id === 'discord-dashboard');
-        if (!dashModule || dashModule.status !== 'enabled') return;
+        if (dashModule && dashModule.status === 'disabled') return;
 
-        const config = dashModule.config || {};
+        const config = dashModule?.config || {};
         if (!config.channelId || !config.messageId) return;
 
         // Rate limit check based on configured interval
@@ -209,10 +256,12 @@ export const DiscordDashboardManifest: ModuleManifest = {
           if (!message) return;
 
           const embed = generateDashboardEmbed(guild, 'home', client, context);
-          const components = generateDashboardComponents(config, 'home');
+          const components = generateDashboardComponents(config, 'home', client);
           await message.edit({ embeds: [embed], components });
-        } catch (err) {
-          console.error('[Discord Dashboard] Background refresh failed:', err);
+        } catch (err: any) {
+          if (!err?.message?.includes('Expected token to be set')) {
+            console.error('[Discord Dashboard] Background refresh failed:', err);
+          }
         }
       }
     },
@@ -222,20 +271,20 @@ export const DiscordDashboardManifest: ModuleManifest = {
         const modules = context.getModulesState ? context.getModulesState() : [];
         const dashModule = modules.find((m: any) => m.id === 'discord-dashboard');
         
-        if (!dashModule || dashModule.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Discord Dashboard module is not enabled.', flags: 64 });
+        if (dashModule && dashModule.status === 'disabled') {
+          return interaction.reply({ content: '❌ Discord Dashboard module is currently disabled.', flags: 64 });
         }
 
         try {
           const embed = generateDashboardEmbed(interaction.guild, 'home', client, context);
-          const components = generateDashboardComponents(dashModule.config || {}, 'home');
+          const components = generateDashboardComponents(dashModule?.config || {}, 'home', client);
 
           const message = await interaction.reply({ embeds: [embed], components, fetchReply: true });
           
           // Save message ID to backend config
           if (context.updateModuleConfig) {
             context.updateModuleConfig('discord-dashboard', {
-              ...dashModule.config,
+              ...(dashModule?.config || {}),
               channelId: interaction.channelId,
               messageId: message.id
             });
@@ -248,6 +297,27 @@ export const DiscordDashboardManifest: ModuleManifest = {
         }
       }
     },
+    {
+      name: 'command_dashboard',
+      handler: async (client: any, interaction: any, context: any) => {
+        const modules = context.getModulesState ? context.getModulesState() : [];
+        const dashModule = modules.find((m: any) => m.id === 'discord-dashboard');
+        
+        if (dashModule && dashModule.status === 'disabled') {
+          return interaction.reply({ content: '❌ Discord Dashboard module is currently disabled.', flags: 64 });
+        }
+
+        try {
+          const embed = generateDashboardEmbed(interaction.guild, 'home', client, context);
+          const components = generateDashboardComponents(dashModule?.config || {}, 'home', client);
+
+          await interaction.reply({ embeds: [embed], components });
+        } catch (err) {
+          console.error(err);
+          await interaction.reply({ content: '❌ Failed to display dashboard.', flags: 64 });
+        }
+      }
+    },
     ...['home', 'members', 'messages', 'voice', 'tickets', 'events', 'stats', 'more'].map(page => ({
       name: `button_dbn_${page}`,
       handler: async (client: any, interaction: any, context: any) => {
@@ -257,7 +327,7 @@ export const DiscordDashboardManifest: ModuleManifest = {
           const config = dashModule?.config || {};
 
           const embed = generateDashboardEmbed(interaction.guild, page, client, context);
-          const components = generateDashboardComponents(config, page);
+          const components = generateDashboardComponents(config, page, client);
           await interaction.update({ embeds: [embed], components });
         } catch (err) {
           console.error(err);
@@ -273,7 +343,7 @@ export const DiscordDashboardManifest: ModuleManifest = {
           const config = dashModule?.config || {};
 
           const embed = generateDashboardEmbed(interaction.guild, 'home', client, context);
-          const components = generateDashboardComponents(config, 'home');
+          const components = generateDashboardComponents(config, 'home', client);
           await interaction.update({ embeds: [embed], components });
         } catch (err) {
           console.error(err);
@@ -284,12 +354,11 @@ export const DiscordDashboardManifest: ModuleManifest = {
       name: 'button_dbn_config',
       handler: async (client: any, interaction: any, context: any) => {
         if (!interaction.memberPermissions?.has('Administrator')) {
-          return interaction.reply({ content: '❌ Only Administrators can access this config.', flags: 64 });
+          return interaction.reply({ content: '🔒 Only Administrators can access dashboard config.' });
         }
         const dashboardUrl = process.env.DASHBOARD_URL || 'http://localhost:4680';
         await interaction.reply({ 
-          content: `🛠️ **Dashboard Configuration**\nManage appearance, intervals, and pages directly from the Web Dashboard at: \`${dashboardUrl}/dashboard\``, 
-          flags: 64 
+          content: `🛠️ **Dashboard Configuration**\nManage appearance, intervals, and pages directly from the Web Dashboard at: \`${dashboardUrl}/dashboard\``
         });
       }
     }
