@@ -142,27 +142,31 @@ export class PrefixHelpCenter {
     const totalCommands = allCommands.length > 0 ? allCommands.length : 981;
 
     const descLines = [
-      `### Hey !!! , I am ${botUser} ,\n`,
-      `> » **Welcome to Security 2.0** A bot which is made for unbypassable security features and community management! View down and see our srv management modules listed below: **Total Commands: ${totalCommands}**\n`,
-      `> » **To set Custom Prefix use** ${botUser} **prefix " your custom prefix "**\n`,
+      `### 👋 Welcome to ${botUser || 'Rage Optimiser Enterprise'},\n`,
+      `> » **Enterprise Security 2.0 & Guild Suite**: Complete server management, anti-nuke protection, music, and automation system.\n`,
+      `> » **Active Prefix**: \`${prefix}\` | **Slash Commands**: \`/\` | **Total Commands**: **${totalCommands}**\n`,
+      `> » **Change Prefix**: Use \`${prefix}prefix set <new_prefix>\` or mention the bot.\n`,
       `--------------------------------------------------\n`,
       ...categories.map(cat => {
         const meta = this.getCategoryMeta(cat);
-        return `• **${cat}**`;
+        const count = PrefixRegistry.getCommandsByCategory(cat).length;
+        return `• ${meta.icon} **${cat}** — \`${count} commands\` · *${meta.description}*`;
       }),
-      `\n--------------------------------------------------`
+      `\n--------------------------------------------------`,
+      `*Select a module from the dropdown below or type \`${prefix}help <command_name>\` to view detailed manual and subcommands.*`
     ];
 
     const embed = new EmbedBuilder()
-      .setColor(0x84cc16)
+      .setColor(0x7C5CFC)
+      .setAuthor({ name: 'Rage Optimiser Enterprise • Master Help Matrix' })
       .setDescription(descLines.join('\n'))
       .setThumbnail(botUser?.displayAvatarURL({ size: 256 }) ?? null)
-      .setFooter({ text: 'Rage Optimiser • Security Engine' })
+      .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Suite' })
       .setTimestamp();
 
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('help_category_select')
-      .setPlaceholder('Click to view modules')
+      .setPlaceholder('Click to view module command list...')
       .addOptions(
         {
           label: 'Back to Home Center',
@@ -173,10 +177,11 @@ export class PrefixHelpCenter {
         },
         ...categories.slice(0, 24).map(cat => {
           const meta = this.getCategoryMeta(cat);
+          const count = PrefixRegistry.getCommandsByCategory(cat).length;
           return {
             label: cat,
             value: `help_cat_${cat.toLowerCase().replace(/\s+/g, '_')}`,
-            description: `View all ${cat} commands and syntax`,
+            description: `${count} cmds — ${meta.description.slice(0, 45)}`,
             emoji: meta.icon
           };
         })
@@ -200,33 +205,39 @@ export class PrefixHelpCenter {
     const allCategoryCmds = PrefixRegistry.getCommandsByCategory(category);
 
     const visibleCmds = allCategoryCmds.filter(c => !c.hidden);
-    const pageSize = 20;
+    const pageSize = 12;
     const totalPages = Math.max(1, Math.ceil(visibleCmds.length / pageSize));
     const currentPage = Math.min(Math.max(1, page), totalPages);
 
     const pageCmds = visibleCmds.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     const cmdEntries = pageCmds.map(c => {
-      return `> ${APPROVED_ICON} __**${c.name}**__`;
+      const aliasStr = c.aliases.length > 0 ? ` *(${c.aliases.map(a => prefix + a).join(', ')})*` : '';
+      const usageStr = c.usage ? `\n> └ **Syntax**: \`${c.usage.startsWith(prefix) || c.usage.startsWith('r!') ? c.usage : prefix + c.name + ' ' + c.usage}\`` : '';
+      const subStr = c.subcommands && c.subcommands.length > 0 ? `\n> └ **Subcommands**: ${c.subcommands.map(s => `\`${s.name}\``).join(', ')}` : '';
+      return `> ${APPROVED_ICON} **\`${prefix}${c.name}\`**${aliasStr} — ${c.description}${usageStr}${subStr}`;
     });
 
+    const meta = this.getCategoryMeta(category);
     const embedDesc = [
-      `> • **${category.toUpperCase()} STATUS**`,
-      `> • **RAGE OPTIMISER • ᴵˢ ɢʟᴏʙᴀʟ**\n`,
-      ...(cmdEntries.length > 0 ? cmdEntries : [`> ${APPROVED_ICON} __**No Commands Registered**__`])
+      `### ${meta.icon} ${category} Command Module (Page ${currentPage}/${totalPages})`,
+      `*${meta.description}*\n`,
+      ...(cmdEntries.length > 0 ? cmdEntries : [`> ${APPROVED_ICON} __**No Commands Registered**__`]),
+      `\n*Type \`${prefix}help <command_name>\` for detailed subcommand breakdown and examples.*`
     ].join('\n');
 
     const embed = new EmbedBuilder()
-      .setColor(0x84cc16)
+      .setColor(0x7C5CFC)
+      .setAuthor({ name: `Rage Optimiser Enterprise • ${category} Suite` })
       .setDescription(embedDesc)
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
-      .setFooter({ text: 'Rage Optimiser • Security Engine' })
+      .setFooter({ text: `Rage Optimiser v4.2 • Enterprise Suite  •  Total Module Commands: ${visibleCmds.length}` })
       .setTimestamp();
 
     const categories = PrefixRegistry.getCategories();
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('help_category_select')
-      .setPlaceholder('Click to view modules')
+      .setPlaceholder('Click to view other modules...')
       .addOptions(
         {
           label: 'Back to Home Center',
@@ -235,12 +246,12 @@ export class PrefixHelpCenter {
           emoji: '🏠'
         },
         ...categories.slice(0, 24).map(cat => {
-          const meta = this.getCategoryMeta(cat);
+          const catMeta = this.getCategoryMeta(cat);
           return {
             label: cat,
             value: `help_cat_${cat.toLowerCase().replace(/\s+/g, '_')}`,
             description: `View all ${cat} commands and syntax`,
-            emoji: meta.icon,
+            emoji: catMeta.icon,
             default: cat.toLowerCase() === category.toLowerCase()
           };
         })
@@ -250,7 +261,7 @@ export class PrefixHelpCenter {
 
     const btnHome = new ButtonBuilder()
       .setCustomId('help_btn_home')
-      .setLabel('Open Modules Manager')
+      .setLabel('Home Center')
       .setStyle(ButtonStyle.Success);
 
     const btnClose = new ButtonBuilder()
@@ -288,7 +299,8 @@ export class PrefixHelpCenter {
     const hasPermission = message.member ? PrefixPermissionManager.checkPermissions(message, cmd).allowed : true;
 
     const embed = new EmbedBuilder()
-      .setColor(hasPermission ? 0x84cc16 : 0xef4444)
+      .setColor(hasPermission ? 0x7C5CFC : 0xEF4444)
+      .setAuthor({ name: 'Rage Optimiser Enterprise • Command Manual' })
       .setTitle(`${hasPermission ? '🛡️' : '⚠️'} Command Manual: ${prefix}${cmd.name}`)
       .setDescription([
         `> **Description**: ${cmd.description}`,
@@ -298,18 +310,24 @@ export class PrefixHelpCenter {
         { name: '🏷️ Command Name', value: `\`${cmd.name}\``, inline: true },
         { name: '📁 Category', value: `\`${cmd.category}\``, inline: true },
         { name: '⏱️ Cooldown', value: `\`${cmd.cooldownSeconds || 3}s\``, inline: true },
-        { name: '📝 Syntax & Usage', value: `\`\`\`bash\n${cmd.usage}\n\`\`\``, inline: false },
+        { name: '📝 Syntax & Usage', value: `\`\`\`bash\n${cmd.usage.startsWith('r!') ? prefix + cmd.usage.slice(2) : cmd.usage}\n\`\`\``, inline: false },
         { name: '🔀 Aliases', value: cmd.aliases.length > 0 ? cmd.aliases.map(a => `\`${prefix}${a}\``).join(', ') : '`None`', inline: true },
         { name: '🔒 User Permission', value: cmd.userPermissions && cmd.userPermissions.length > 0 ? cmd.userPermissions.map(p => `\`${p}\``).join(', ') : '`Everyone`', inline: true },
         { name: '🤖 Bot Permission', value: cmd.botPermissions && cmd.botPermissions.length > 0 ? cmd.botPermissions.map(p => `\`${p}\``).join(', ') : '`SendMessages`', inline: true }
       )
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
-      .setFooter({ text: 'Rage Optimiser Enterprise • Command Documentation' })
+      .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Suite' })
       .setTimestamp();
 
-    if (cmd.examples && cmd.examples.length > 0) {
-      embed.addFields({ name: '💡 Practical Usage Examples', value: cmd.examples.map(e => `\`${e}\``).join('\n'), inline: false });
+    if (cmd.subcommands && cmd.subcommands.length > 0) {
+      const subLines = cmd.subcommands.map(s => `• \`${prefix}${cmd.name} ${s.name}\` — ${s.description}`).join('\n');
+      embed.addFields({ name: '🧩 Subcommands & Modes', value: subLines.length > 1024 ? subLines.substring(0, 1020) + '...' : subLines, inline: false });
     }
+
+    if (cmd.examples && cmd.examples.length > 0) {
+      embed.addFields({ name: '💡 Practical Usage Examples', value: cmd.examples.map(e => `\`${e.startsWith('r!') ? prefix + e.slice(2) : e}\``).join('\n'), inline: false });
+    }
+
 
     const components = this.buildComponents(cmd.category, 1, 1);
 
