@@ -1,4 +1,5 @@
 import React from 'react';
+import { logger } from '../services/logger';
 
 interface State {
   hasError: boolean;
@@ -18,8 +19,9 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     this.setState({ info });
-    console.error('[ErrorBoundary] Caught:', error, info);
+    logger.error(`[ErrorBoundary] ${error.message}`, { componentStack: info.componentStack }, 'react');
   }
+
 
   handleReload = () => {
     this.setState({ hasError: false, error: null, info: null });

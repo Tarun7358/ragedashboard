@@ -164,7 +164,9 @@ export function useDiscordSync() {
     // H-8 / L-6 FIX: Track cleanup state and reconnect timer to prevent
     // stale-closure duplicate WebSocket connections.
     let cleanedUp = false;
-    const reconnectTimer = { current: null as ReturnType<typeof setTimeout> | null };
+    const reconnectTimer = { current: null as any };
+
+
 
     // Setup live WebSocket channel
     const connectWS = () => {

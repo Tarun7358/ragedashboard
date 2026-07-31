@@ -54,7 +54,19 @@ const AntiNuke = React.lazy(() => import('./pages/AntiNuke').then(m => ({ defaul
 const UpmEngine = React.lazy(() => import('./pages/UpmEngine').then(m => ({ default: m.UpmEngine })));
 const VulnerabilityScan = React.lazy(() => import('./pages/VulnerabilityScan').then(m => ({ default: m.VulnerabilityScan })));
 const SecurityLogs = React.lazy(() => import('./pages/SecurityLogs').then(m => ({ default: m.SecurityLogs })));
+const EnterpriseHealth = React.lazy(() => import('./pages/EnterpriseHealth').then(m => ({ default: m.EnterpriseHealth })));
+
+
+// Status & Error Pages
+const NotFound = React.lazy(() => import('./pages/status/NotFound').then(m => ({ default: m.NotFound })));
+const ServerError = React.lazy(() => import('./pages/status/ServerError').then(m => ({ default: m.ServerError })));
+const Maintenance = React.lazy(() => import('./pages/status/Maintenance').then(m => ({ default: m.Maintenance })));
+const Offline = React.lazy(() => import('./pages/status/Offline').then(m => ({ default: m.Offline })));
+const ApiUnavailable = React.lazy(() => import('./pages/status/ApiUnavailable').then(m => ({ default: m.ApiUnavailable })));
+const Unauthorized = React.lazy(() => import('./pages/status/Unauthorized').then(m => ({ default: m.Unauthorized })));
+
 import { useAuth } from './hooks/useAuth';
+
 
 interface ToastItem {
   id: string;
@@ -153,6 +165,16 @@ function App() {
             registry={registry}
           />
         );
+      case 'enterprise-health':
+        return (
+          <EnterpriseHealth
+            latency={latency}
+            uptime={uptime}
+            isLive={isLive}
+            modules={modules}
+            registry={registry}
+          />
+        );
       case 'health':
         return (
           <ConfigHealth
@@ -164,6 +186,7 @@ function App() {
             onSimulateAction={simulateDiscordAction}
           />
         );
+
       case 'discord-dashboard':
         return (
           <DiscordDashboard
@@ -458,20 +481,26 @@ function App() {
             onUpdateConfig={updateModuleConfig}
           />
         );
+      case '404':
+      case 'not_found':
+        return <NotFound onNavigate={handleNavigate} />;
+      case '500':
+      case 'server_error':
+        return <ServerError onNavigate={handleNavigate} />;
+      case 'maintenance':
+        return <Maintenance />;
+      case 'offline':
+        return <Offline />;
+      case 'api_unavailable':
+        return <ApiUnavailable />;
+      case 'unauthorized':
+      case '401':
+        return <Unauthorized />;
       default:
-        return (
-          <DashboardHome
-            events={events}
-            latency={latency}
-            uptime={uptime}
-            onNavigate={handleNavigate}
-            onManualTrigger={pushManualEvent}
-            modules={modules}
-            registry={registry}
-          />
-        );
+        return <NotFound onNavigate={handleNavigate} />;
     }
   };
+
 
   // === ROUTE GUARDS ===
 

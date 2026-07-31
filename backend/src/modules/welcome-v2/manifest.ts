@@ -1,7 +1,6 @@
-import { EmbedBuilder, AttachmentBuilder, Role } from 'discord.js';
+import { EmbedBuilder, Role } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
-import { ImageGenerator } from './ImageGenerator.js';
 
 // Safe user tag helper
 function userTag(user: any): string {
@@ -273,28 +272,12 @@ export const WelcomeV2Manifest: ModuleManifest = {
                 payload.embeds = [welcomeEmbed];
               }
 
-              // Dynamic welcome image attachment
+              // Dynamic welcome image attachment disabled (Puppeteer removed)
               if (config.welcomeImageEnabled) {
-                try {
-                  const imageSettings = config.welcomeImageSettings || {};
-                  const buffer = await ImageGenerator.generateWelcomeImage(imageSettings, {
-                    avatarUrl: member.user.displayAvatarURL({ forceStatic: false, extension: 'png' }),
-                    username: member.user.username,
-                    serverName: member.guild.name,
-                    memberCount: member.guild.memberCount
-                  });
-
-                  const attachment = new AttachmentBuilder(buffer, { name: 'welcome-card.png' });
-                  
-                  if (payload.embeds && payload.embeds.length > 0) {
-                    payload.embeds[0].setImage('attachment://welcome-card.png');
-                    payload.files = [attachment];
-                  } else {
-                    payload.files = [attachment];
-                  }
-                } catch (imgErr) {
-                  console.error('[WelcomeV2] Failed to generate welcome card:', imgErr);
-                }
+                context.logSyncEvent(
+                  "Welcome image generation disabled (Puppeteer removed).",
+                  "info"
+                );
               }
 
               if (payload.content || (payload.embeds && payload.embeds.length > 0) || (payload.files && payload.files.length > 0)) {

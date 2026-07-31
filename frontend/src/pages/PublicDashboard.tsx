@@ -1,6 +1,7 @@
-import { API_BASE } from '../config';
+import { API_BASE, WS_BASE } from '../config';
 import React, { useState, useEffect, useRef } from 'react';
 import { Users, Mic, MessageSquare, Server, Music, Ticket, Calendar, Search, RefreshCw, ChevronLeft, ChevronRight, Hash } from 'lucide-react';
+
 
 
 const CATEGORIES = [
@@ -79,8 +80,9 @@ export function PublicDashboard() {
 
   useEffect(() => {
     const connectWS = () => {
-      const socket = new WebSocket('ws://localhost:5001');
+      const socket = new WebSocket(WS_BASE);
       wsRef.current = socket;
+
 
       socket.onmessage = (event) => {
         try {

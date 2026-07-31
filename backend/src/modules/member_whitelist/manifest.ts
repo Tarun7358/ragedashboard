@@ -636,7 +636,7 @@ export const MemberWhitelistManifest: ModuleManifest = {
 
           const embedDesc = [
             `__**WL OVERVIEW**__\n`,
-            `**RAGE OPTIMISER**\n`,
+            `**RAGE OPTIMISER • ᴵˢ ɢʟᴏʙᴀʟ**\n`,
             `**Users Whitelisted**\n`,
             `> ` + userMentions.split('\n').join('\n> ') + `\n`,
             `**Roles Whitelisted**\n`,
@@ -780,10 +780,17 @@ export const MemberWhitelistManifest: ModuleManifest = {
         return interaction.editReply({ embeds: [embed] }).catch(() => {});
       }
     },
-    {
-      name: 'button_wl_generic',
+    ...[
+      'wl_close',
+      'wl_add_user',
+      'wl_add_role',
+      'wl_remove_user',
+      'wl_remove_role',
+      'wl_manage_users',
+      'wl_manage_roles'
+    ].map(customId => ({
+      name: `button_${customId}`,
       handler: async (client: any, interaction: any, context: any) => {
-        const customId = interaction.customId;
         const verifiedIcon = '<a:approved:1532390590707142956>';
 
         if (customId === 'wl_close') {
@@ -817,7 +824,7 @@ export const MemberWhitelistManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
         }
       }
-    }
+    }))
   ],
   routes: [
     {

@@ -98,7 +98,7 @@ function transformContentToLimeCard(options: any, user: any) {
 
         // Clean footer
         if (json.footer && json.footer.text) {
-          json.footer.text = json.footer.text.replace(/Unbypassable Security \| Menu Expired Rescue it/gi, 'Rage Optimiser • Security Engine');
+          json.footer.text = json.footer.text.replace(/(?:Secure\s+)?Unbypassable\s+Security(?:\s*\|\s*Menu\s+Expired\s+Rescue\s+it)?/gi, 'Rage Optimiser • Security Engine');
         }
 
         // Replace default violet color #7c5cfc with Lime Green #84cc16
@@ -1222,6 +1222,11 @@ export class Gateway {
           await interaction.reply(replyPayload).catch(() => {});
         }
       } else if (interaction.isButton()) {
+        setTimeout(() => {
+          if (!interaction.replied && !interaction.deferred) {
+            interaction.deferUpdate().catch(() => {});
+          }
+        }, 2200);
         this.dispatchEvent(`button_${interaction.customId}`, interaction);
         if (interaction.customId.startsWith('tickets_v2_')) {
           this.dispatchEvent('button_tickets_v2_generic', interaction);
@@ -1235,10 +1240,21 @@ export class Gateway {
         if (interaction.customId.startsWith('wl_')) {
           this.dispatchEvent('button_wl_generic', interaction);
         }
+        if (interaction.customId.startsWith('sec_')) {
+          this.dispatchEvent('button_sec_generic', interaction);
+        }
+        if (interaction.customId.startsWith('mod_')) {
+          this.dispatchEvent('button_mod_generic', interaction);
+        }
         if (interaction.customId.startsWith('help_btn_')) {
           PrefixHelpCenter.handleButtonInteraction(interaction).catch(() => {});
         }
       } else if (interaction.isAnySelectMenu()) {
+        setTimeout(() => {
+          if (!interaction.replied && !interaction.deferred) {
+            interaction.deferUpdate().catch(() => {});
+          }
+        }, 2200);
         this.dispatchEvent(`select_${interaction.customId}`, interaction);
         if (interaction.customId.startsWith('tickets_v2_')) {
           this.dispatchEvent('select_tickets_v2_generic', interaction);
@@ -1250,6 +1266,11 @@ export class Gateway {
           PrefixHelpCenter.handleSelectMenuInteraction(interaction).catch(() => {});
         }
       } else if (interaction.isModalSubmit()) {
+        setTimeout(() => {
+          if (!interaction.replied && !interaction.deferred) {
+            interaction.deferUpdate().catch(() => {});
+          }
+        }, 2200);
         this.dispatchEvent(`modal_${interaction.customId}`, interaction);
         if (interaction.customId.startsWith('tickets_v2_')) {
           this.dispatchEvent('modal_tickets_v2_generic', interaction);

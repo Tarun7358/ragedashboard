@@ -130,18 +130,31 @@ export class WebServer {
     this.app.use('/api/', limiter);
 
     this.server = createServer(this.app);
-    this.wss = new WebSocketServer({ port: Number(process.env.WS_PORT || 5001) });
 
-    // Security warning: JWT_SECRET must be set in production
-    if (!process.env.JWT_SECRET) {
-      console.warn('⚠️  WARNING: JWT_SECRET environment variable is not set! Using insecure fallback secret. Set JWT_SECRET in your .env file before deploying to production.');
+    // TODO:
+    // Dashboard currently disabled.
+    // Planned for Enterprise Web Panel.
+    // UI should follow Lime.gg inspiration.
+    const isDashboardEnabled = process.env.DASHBOARD_ENABLED === 'true';
+
+    if (isDashboardEnabled) {
+      this.wss = new WebSocketServer({ port: Number(process.env.WS_PORT || 5001) });
+
+      // Security warning: JWT_SECRET must be set in production
+      if (!process.env.JWT_SECRET) {
+        console.warn('⚠️  WARNING: JWT_SECRET environment variable is not set! Using insecure fallback secret. Set JWT_SECRET in your .env file before deploying to production.');
+      }
+
+      this.setupRoutes();
+      this.setupWebSockets();
+    } else {
+      this.wss = null as any;
+      console.log('ℹ️ WebServer initialized in Dashboard Disabled Mode (DASHBOARD_ENABLED=false).');
     }
-
-    this.setupRoutes();
-    this.setupWebSockets();
   }
 
   public registerModuleManifests(manifests: ModuleManifest[]) {
+    if (process.env.DASHBOARD_ENABLED !== 'true') return;
     // Mount custom routes defined inside the module manifests
     manifests.forEach(manifest => {
       if (manifest.routes) {
@@ -186,6 +199,10 @@ export class WebServer {
   }
 
   public listen(port: number) {
+    if (process.env.DASHBOARD_ENABLED !== 'true') {
+      console.log('ℹ️ Web Dashboard HTTP/WS listener skipped (DASHBOARD_ENABLED=false). Native Discord interface active.');
+      return;
+    }
     this.server.listen(port, () => {
       console.log(`Core WebServer running on http://localhost:${port}`);
     });
@@ -193,6 +210,7 @@ export class WebServer {
   }
 
   public broadcast(msgObj: any) {
+    if (process.env.DASHBOARD_ENABLED !== 'true' || !this.wss || !this.clients) return;
     const serialized = JSON.stringify(msgObj);
     const targetGuildId = msgObj.guildId;
     this.clients.forEach(ws => {

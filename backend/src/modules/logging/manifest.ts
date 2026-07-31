@@ -164,7 +164,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!desc) desc = '*No categories configured.*';
           
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('🛡️ Advanced Logging Center — Telemetry Matrix')
             .setDescription(
               `> ### Server Audit Distribution Configuration\n` +
@@ -178,7 +178,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'search') {
           const query = interaction.options.getString('query');
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('🔍 Logging Center — Audit Search Results')
             .setDescription(`> ### Telemetry Search: \`${query}\`\n\n*No matching telemetry entries found in the active log cache.*`)
             .setFooter({ text: 'Rage Optimiser • Audit Telemetry', iconURL: client.user?.displayAvatarURL() })
@@ -187,7 +187,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'user') {
           const targetUser = interaction.options.getUser('user');
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('👤 Logging Center — User Audit History')
             .setDescription(`> ### Filter Target: ${targetUser} (\`${targetUser?.id}\`)\n\n*No recent audit log events recorded for this user.*`)
             .setFooter({ text: 'Rage Optimiser • User Audit Log', iconURL: client.user?.displayAvatarURL() })
@@ -195,7 +195,7 @@ export const LoggingManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (subcommand === 'timeline') {
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('📈 Logging Center — Live Timeline')
             .setDescription(
               `> ### Real-Time Event Stream\n` +
@@ -207,7 +207,7 @@ export const LoggingManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (subcommand === 'voice') {
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('🔊 Logging Center — Voice Health Telemetry')
             .setDescription(
               `> ### Voice Infrastructure Diagnostics\n` +
@@ -221,7 +221,7 @@ export const LoggingManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (subcommand === 'export') {
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('📥 Logging Center — Audit Export')
             .setDescription(
               `> ### Log Export Engine\n` +
@@ -233,7 +233,7 @@ export const LoggingManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (subcommand === 'categories') {
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('📁 Logging Center — Category Toggles')
             .setDescription(
               `> ### Valid Audit Categories\n` +
@@ -245,7 +245,7 @@ export const LoggingManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (subcommand === 'stats') {
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('📊 Logging Center — Performance Stats')
             .setDescription(
               `> ### Audit Engine Telemetry\n\n` +
@@ -262,7 +262,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'retention') {
           const days = interaction.options.getInteger('days');
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('⏱️ Logging Center — Retention Updated')
             .setDescription(`> ### Log Lifecycle Modified\n> Audit log retention lifecycle window set to **${days} days**.`)
             .setFooter({ text: 'Rage Optimiser • Lifecycle Engine', iconURL: client.user?.displayAvatarURL() })
@@ -271,7 +271,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'live') {
           context.logSyncEvent('📡 Logging Center: Live logs telemetry test initiated.', 'success');
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('📡 Logging Center — Live Simulation')
             .setDescription(`> ### Mock Event Telemetry\n> Mock live activity stream initiated. Check your Web Dashboard under **Logs Timeline**.`)
             .setFooter({ text: 'Rage Optimiser • Simulation Engine', iconURL: client.user?.displayAvatarURL() })
@@ -295,7 +295,7 @@ export const LoggingManifest: ModuleManifest = {
             
             context.logSyncEvent(`Logging Center: ${actualCategory} log channel updated to #${ch.name} via slash command.`, 'success');
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle(`✅ Logging Channel Updated — ${actualCategory.toUpperCase()}`)
               .setDescription(`> ### Target Channel Assigned\n> **Category**: \`${actualCategory.toUpperCase()}\` → Target: ${ch} (\`${ch.id}\`)`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
@@ -305,7 +305,7 @@ export const LoggingManifest: ModuleManifest = {
             const enabled = subcommand === 'enable';
             context.logSyncEvent(`Logging Center: ${actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle(`${enabled ? '🟢' : '🔴'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${actualCategory.toUpperCase()}`)
               .setDescription(`> ### Telemetry Pipeline Status\n> Category **${actualCategory.toUpperCase()}** logging is now **${enabled ? 'ENABLED' : 'DISABLED'}**.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
@@ -313,7 +313,7 @@ export const LoggingManifest: ModuleManifest = {
             await interaction.reply({ embeds: [embed], flags: 64 });
           } else if (subcommand === 'reset') {
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle(`♻️ Category Reset — ${actualCategory.toUpperCase()}`)
               .setDescription(`> ### Configuration Restored\n> Category **${actualCategory.toUpperCase()}** configuration has been reset to defaults.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
@@ -328,7 +328,7 @@ export const LoggingManifest: ModuleManifest = {
               const channel = await interaction.guild?.channels.fetch(catConfig.channelId).catch(() => null);
               if (channel && channel.isTextBased()) {
                 const embed = new EmbedBuilder()
-                  .setColor(0x57F287)
+                  .setColor(0x84cc16)
                   .setTitle(`🧪 Audit Verification — ${actualCategory.toUpperCase()}`)
                   .setDescription(
                     `> ### Test Log Telemetry Event\n` +
@@ -375,7 +375,7 @@ export const LoggingManifest: ModuleManifest = {
             const authorText = message.author ? `${message.author} (\`${message.author.id}\`)` : 'Unknown User (Uncached Message)';
             const contentText = (message.content || 'No text content cached').slice(0, 1000);
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('🗑️ Audit Event — Message Deleted')
               .setDescription(
                 `> ### Message Removed in ${message.channel}\n` +
@@ -420,7 +420,7 @@ export const LoggingManifest: ModuleManifest = {
           if (channel && channel.isTextBased()) {
             const authorText = newMessage.author ? `${newMessage.author} (\`${newMessage.author.id}\`)` : 'Unknown User';
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('✏️ Audit Event — Message Edited')
               .setDescription(
                 `> ### Message Updated in ${newMessage.channel}\n` +
@@ -497,7 +497,7 @@ export const LoggingManifest: ModuleManifest = {
               }
 
               const embed = new EmbedBuilder()
-                .setColor(0x57F287)
+                .setColor(0x84cc16)
                 .setTitle(`${emoji} Audit Event — ${actionText}`)
                 .setDescription(
                   `> ### Voice State Modified\n` +
@@ -517,7 +517,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!oldState.channelId && newState.channelId) {
             if (logJoinLeaveSwitch) {
               const embed = new EmbedBuilder()
-                .setColor(0x57F287)
+                .setColor(0x84cc16)
                 .setTitle('🟢 Voice Event — Member Connected')
                 .setDescription(
                   `> ### Joined Voice Channel\n` +
@@ -532,7 +532,7 @@ export const LoggingManifest: ModuleManifest = {
           } else if (oldState.channelId && !newState.channelId) {
             if (logJoinLeaveSwitch) {
               const embed = new EmbedBuilder()
-                .setColor(0x57F287)
+                .setColor(0x84cc16)
                 .setTitle('🔴 Voice Event — Member Disconnected')
                 .setDescription(
                   `> ### Left Voice Channel\n` +
@@ -573,7 +573,7 @@ export const LoggingManifest: ModuleManifest = {
                   : 'Self / System';
 
                 const embed = new EmbedBuilder()
-                  .setColor(0x57F287)
+                  .setColor(0x84cc16)
                   .setTitle('🔀 Voice Event — Member Dragged')
                   .setDescription(
                     `> ### Voice Channel Relocation\n` +
@@ -589,7 +589,7 @@ export const LoggingManifest: ModuleManifest = {
             } else {
               if (logJoinLeaveSwitch) {
                 const embed = new EmbedBuilder()
-                  .setColor(0x57F287)
+                  .setColor(0x84cc16)
                   .setTitle('🔵 Voice Event — Channel Switched')
                   .setDescription(
                     `> ### Self-Switched Voice Channel\n` +
@@ -640,7 +640,7 @@ export const LoggingManifest: ModuleManifest = {
           const soundName = effect.soundName || effect.soundboardSound?.name || effect.name || 'Custom Soundboard Sound';
 
           const embed = new EmbedBuilder()
-            .setColor(0x57F287)
+            .setColor(0x84cc16)
             .setTitle('🔊 Voice Event — Soundboard Sound')
             .setDescription(
               `> ### Sound Played in Voice Channel\n` +
@@ -668,7 +668,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await member.guild?.channels.fetch(config.channelId).catch(() => null);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('👋 System Event — Member Joined')
               .setDescription(
                 `> ### Welcome New Member\n` +
@@ -696,7 +696,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await member.guild?.channels.fetch(config.channelId).catch(() => null);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('🚪 System Event — Member Left')
               .setDescription(
                 `> ### Member Departure\n` +
@@ -724,7 +724,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await ban.guild?.channels.fetch(config.channelId).catch(() => null);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('🔨 Moderation Event — Member Banned')
               .setDescription(
                 `> ### Ban Enforced\n` +
@@ -752,7 +752,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await ban.guild?.channels.fetch(config.channelId).catch(() => null);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('🔓 Moderation Event — Member Unbanned')
               .setDescription(
                 `> ### Ban Revoked\n` +
@@ -779,7 +779,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await role.guild?.channels.fetch(config.channelId).catch(() => null);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('🛡️ Security Audit — Role Created')
               .setDescription(
                 `> ### New Server Role Created\n` +
@@ -806,7 +806,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await role.guild?.channels.fetch(config.channelId).catch(() => null);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('🛡️ Security Audit — Role Deleted')
               .setDescription(
                 `> ### Server Role Removed\n` +
@@ -833,7 +833,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await ch.guild?.channels.fetch(config.channelId).catch(() => null);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('📁 Security Audit — Channel Created')
               .setDescription(
                 `> ### New Channel Created\n` +
@@ -860,7 +860,7 @@ export const LoggingManifest: ModuleManifest = {
           if (!channel) channel = await ch.guild?.channels.fetch(config.channelId).catch(() => null);
           if (channel && channel.isTextBased()) {
             const embed = new EmbedBuilder()
-              .setColor(0x57F287)
+              .setColor(0x84cc16)
               .setTitle('📁 Security Audit — Channel Deleted')
               .setDescription(
                 `> ### Channel Removed\n` +

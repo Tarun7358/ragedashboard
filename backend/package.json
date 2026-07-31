@@ -2,10 +2,10 @@
   "name": "rage-optimiser-backend",
   "version": "1.0.0",
   "description": "Backend API and Discord Bot server for Rage Optimiser dashboard.",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
@@ -33,7 +33,7 @@
     "qrcode": "^1.5.4",
     "spotify-uri": "^4.1.0",
     "spotify-url-info": "^3.3.1",
-    "sqlite3": "^6.0.1",
+    "sqlite3": "^5.1.7",
     "ws": "^8.16.0",
     "youtubei.js": "^17.2.0"
   },
@@ -48,7 +48,6 @@
     "@types/sqlite3": "^3.1.11",
     "@types/ws": "^8.5.10",
     "jest": "^30.4.2",
-    "puppeteer": "^25.2.1",
     "ts-jest": "^29.4.11",
     "tsx": "^4.7.1",
     "typescript": "^5.3.3"

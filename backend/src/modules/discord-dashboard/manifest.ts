@@ -183,10 +183,9 @@ function generateDashboardComponents(config: any = {}, activePage: string = 'hom
     rows.push(currentRow);
   }
 
-  // Utility row (always enabled)
+  // Utility row (always enabled, single Auto-Refresh status button)
   const utilityRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('dbn_refresh').setLabel('Refresh').setEmoji('🔄').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('dbn_config').setLabel('Configure').setEmoji(safeEmoji(client, ':config:', '🛠️')).setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('dbn_refresh').setLabel('Auto-Refreshing (5s)').setEmoji('🔄').setStyle(ButtonStyle.Success)
   );
   rows.push(utilityRow);
 
@@ -235,8 +234,8 @@ export const DiscordDashboardManifest: ModuleManifest = {
         const config = dashModule?.config || {};
         if (!config.channelId || !config.messageId) return;
 
-        // Rate limit check based on configured interval
-        const interval = config.refreshInterval || 30000;
+        // Auto-refresh interval (5 seconds)
+        const interval = config.refreshInterval || 5000;
         const now = Date.now();
         if (!dashModule._lastRefresh) dashModule._lastRefresh = 0;
         if (now - dashModule._lastRefresh < interval) return;

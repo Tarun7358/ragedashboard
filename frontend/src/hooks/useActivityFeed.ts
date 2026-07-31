@@ -1,5 +1,7 @@
-import { API_BASE } from '../config';
+import { API_BASE, wsUrl } from '../config';
+import { logger } from '../services/logger';
 import { useState, useEffect, useRef } from 'react';
+
 
 export interface ActivityEvent {
   id: string;
@@ -92,62 +94,84 @@ export function useActivityFeed() {
 
     fetchInitialLogs();
 
-    // Setup live WebSocket channel
-    const socket = new WebSocket(`ws://localhost:5001?token=${token}`);
-    
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'INIT') {
-          if (data.syncLogs) {
-            const mappedEvents: ActivityEvent[] = data.syncLogs.map((log: any, index: number) => ({
-              id: `init-ws-${index}-${log.time}`,
+    let cleanedUp = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let socket: WebSocket | null = null;
+
+    const connectWS = () => {
+      if (cleanedUp || !token) return;
+      const url = wsUrl({ token });
+      socket = new WebSocket(url);
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'INIT') {
+            if (data.syncLogs) {
+              const mappedEvents: ActivityEvent[] = data.syncLogs.map((log: any, index: number) => ({
+                id: `init-ws-${index}-${log.time}`,
+                timestamp: log.time,
+                type: getType(log.type, log.msg),
+                category: getCategory(log.msg),
+                message: log.msg
+              }));
+              setEvents(mappedEvents);
+            }
+            if (data.latency !== undefined) setLatency(data.latency);
+            if (data.uptime !== undefined) setUptime(data.uptime);
+          } else if (data.type === 'METRICS_UPDATE') {
+            setLatency(data.latency);
+            setUptime(data.uptime);
+          } else if (data.type === 'SYNC_LOG') {
+            const log = data.log;
+            const newEvent: ActivityEvent = {
+              id: `ev-ws-${Date.now()}-${Math.random()}`,
               timestamp: log.time,
               type: getType(log.type, log.msg),
               category: getCategory(log.msg),
               message: log.msg
-            }));
-            setEvents(mappedEvents);
-          }
-          if (data.latency !== undefined) setLatency(data.latency);
-          if (data.uptime !== undefined) setUptime(data.uptime);
-        } else if (data.type === 'METRICS_UPDATE') {
-          setLatency(data.latency);
-          setUptime(data.uptime);
-        } else if (data.type === 'SYNC_LOG') {
-          const log = data.log;
-          const newEvent: ActivityEvent = {
-            id: `ev-ws-${Date.now()}-${Math.random()}`,
-            timestamp: log.time,
-            type: getType(log.type, log.msg),
-            category: getCategory(log.msg),
-            message: log.msg
-          };
-          setEvents(prev => [newEvent, ...prev].slice(0, 50));
-
-          // Trigger live notification for warning/danger events
-          const type = getType(log.type, log.msg);
-          if (type === 'danger' || type === 'warning') {
-            const newNotif: NotificationItem = {
-              id: `notif-${Date.now()}`,
-              title: log.msg,
-              time: 'Just now',
-              type: type === 'danger' ? 'danger' : 'warning',
-              read: false,
-              link: getCategory(log.msg).toLowerCase() === 'security' ? 'security' : 'logs',
             };
-            setNotifications(prev => [newNotif, ...prev].slice(0, 15));
+            setEvents(prev => [newEvent, ...prev].slice(0, 50));
+
+            // Trigger live notification for warning/danger events
+            const type = getType(log.type, log.msg);
+            if (type === 'danger' || type === 'warning') {
+              const newNotif: NotificationItem = {
+                id: `notif-${Date.now()}`,
+                title: log.msg,
+                time: 'Just now',
+                type: type === 'danger' ? 'danger' : 'warning',
+                read: false,
+                link: getCategory(log.msg).toLowerCase() === 'security' ? 'security' : 'logs',
+              };
+              setNotifications(prev => [newNotif, ...prev].slice(0, 15));
+            }
           }
+        } catch (err) {
+          logger.error('Activity feed websocket parse error', { err }, 'websocket');
         }
-      } catch (err) {
-        console.error('Activity feed websocket parse error:', err);
-      }
+      };
+
+      socket.onclose = () => {
+        if (!cleanedUp && localStorage.getItem('cn_token')) {
+          reconnectTimer = setTimeout(connectWS, 3000);
+        }
+      };
+
+      socket.onerror = (err) => {
+        logger.error('Activity feed websocket error', { err }, 'websocket');
+      };
     };
+
+    connectWS();
 
     return () => {
-      socket.close();
+      cleanedUp = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (socket) socket.close();
     };
   }, [token]);
+
 
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));

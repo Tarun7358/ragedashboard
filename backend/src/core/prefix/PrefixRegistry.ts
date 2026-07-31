@@ -185,6 +185,7 @@ export class PrefixRegistry {
       'social-updates': 'Social Updates',
       'analytics': 'Analytics',
       'audit': 'Audit',
+      'rage-enterprise': 'Enterprise',
       'payment': 'Payment QR'
     };
 

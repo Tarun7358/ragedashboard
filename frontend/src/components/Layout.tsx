@@ -54,8 +54,10 @@ export function Layout({
   const overviewItems = [
     { id: 'dashboard', label: 'Web Dashboard', icon: <LayoutDashboard size={18} /> },
     { id: 'discord-dashboard', label: 'Discord Dashboard', icon: <LayoutTemplate size={18} /> },
+    { id: 'enterprise-health', label: 'Enterprise System Health', icon: <Activity size={18} color="#10b981" /> },
     { id: 'health', label: 'Config Health', icon: <AlertTriangle size={18} color="var(--color-warning)" /> },
   ];
+
 
   const securitySectorItems = [
     { id: 'security', label: 'Security Threat Analysis & SOC', icon: <Shield size={18} color="#ef4444" /> },

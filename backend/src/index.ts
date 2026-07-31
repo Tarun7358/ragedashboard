@@ -12,25 +12,20 @@ const _dotenv = _require('dotenv');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Real-time debug logging hijack to bypass Windows terminal buffering
-const debugLogStream = fs.createWriteStream(path.resolve(process.cwd(), 'bot_debug.log'), { flags: 'w' });
-const origLog = console.log;
-const origWarn = console.warn;
-const origError = console.error;
+import { Logger } from './utils/logger.js';
 
 console.log = (...args) => {
-  debugLogStream.write(`[LOG] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`);
-  origLog(...args);
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  Logger.info(msg, 'console');
 };
 console.warn = (...args) => {
-  debugLogStream.write(`[WARN] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`);
-  origWarn(...args);
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  Logger.warn(msg, 'console');
 };
 console.error = (...args) => {
-  debugLogStream.write(`[ERROR] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`);
-  origError(...args);
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  Logger.error(msg, 'console');
 };
-
 
 // Find first existing .env file
 const possibleEnvPaths = [
@@ -56,23 +51,31 @@ if (loadedPath) {
   console.warn('⚠️ No .env file could be resolved.');
 }
 
-// BUG-003 FIX: Refuse to start if JWT_SECRET is missing or too short.
-// A missing secret causes all JWT operations to fall back to the publicly known
-// string 'fallback_secret', allowing anyone to forge valid admin tokens.
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  console.error('');
-  console.error('╔══════════════════════════════════════════════════════════════╗');
-  console.error('║  FATAL STARTUP ERROR — JWT_SECRET not configured correctly   ║');
-  console.error('╠══════════════════════════════════════════════════════════════╣');
-  console.error('║  JWT_SECRET must be set to a string of at least 32 chars     ║');
-  console.error('║  in your .env file before starting in production mode.        ║');
-  console.error('║                                                                ║');
-  console.error('║  Example:  JWT_SECRET=your-32-char-secure-random-secret-here  ║');
-  console.error('║                                                                ║');
-  console.error('║  Refusing to start to prevent insecure JWT token forgery.     ║');
-  console.error('╚══════════════════════════════════════════════════════════════╝');
-  console.error('');
-  process.exit(1);
+// TODO:
+// Dashboard currently disabled.
+// Planned for Enterprise Web Panel.
+// UI should follow Lime.gg inspiration.
+const isDashboardEnabled = process.env.DASHBOARD_ENABLED === 'true';
+
+if (isDashboardEnabled) {
+  // BUG-003 FIX: Refuse to start if JWT_SECRET is missing or too short when Dashboard is enabled.
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    console.error('');
+    console.error('╔══════════════════════════════════════════════════════════════╗');
+    console.error('║  FATAL STARTUP ERROR — JWT_SECRET not configured correctly   ║');
+    console.error('╠══════════════════════════════════════════════════════════════╣');
+    console.error('║  JWT_SECRET must be set to a string of at least 32 chars     ║');
+    console.error('║  in your .env file before starting in production mode.        ║');
+    console.error('║                                                                ║');
+    console.error('║  Example:  JWT_SECRET=your-32-char-secure-random-secret-here  ║');
+    console.error('║                                                                ║');
+    console.error('║  Refusing to start to prevent insecure JWT token forgery.     ║');
+    console.error('╚══════════════════════════════════════════════════════════════╝');
+    console.error('');
+    process.exit(1);
+  }
+} else {
+  console.log('ℹ️ Web Dashboard Disabled (DASHBOARD_ENABLED=false). Native Discord Management active.');
 }
 
 if (process.stdout && (process.stdout as any)._handle && typeof (process.stdout as any)._handle.setBlocking === 'function') {
@@ -124,6 +127,7 @@ import { TicketsV2Manifest } from './modules/tickets-v2/manifest.js';
 import { AnalyticsManifest } from './modules/analytics/manifest.js';
 import { AuditManifest } from './modules/audit/manifest.js';
 import { PaymentManifest } from './modules/payment/manifest.js';
+import { RageEnterpriseManifest } from './modules/rage-enterprise/manifest.js';
 
 
 
@@ -158,6 +162,7 @@ export const ALL_MANIFESTS = [
   AnalyticsManifest,
   AuditManifest,
   PaymentManifest,
+  RageEnterpriseManifest,
 ];
 
 // Web-server excluded manifests (no routes needed for some)
@@ -249,12 +254,45 @@ async function bootstrap() {
 
 
 process.on('uncaughtException', (err) => {
-  console.error('🔥 CRITICAL: Uncaught Exception caught by global handler:', err);
+  Logger.error(`🔥 CRITICAL: Uncaught Exception: ${err?.message || err}\nStack: ${err?.stack || 'N/A'}`, 'uncaught');
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('🔥 CRITICAL: Unhandled Rejection caught by global handler:', reason);
+process.on('unhandledRejection', (reason) => {
+  Logger.error(`🔥 CRITICAL: Unhandled Rejection: ${reason instanceof Error ? reason.message : reason}\nStack: ${reason instanceof Error ? reason.stack : 'N/A'}`, 'unhandled');
 });
+
+const handleGracefulShutdown = async (signal: string) => {
+  console.log(`\n[Process] Received ${signal}. Initiating clean shutdown...`);
+  try {
+    // Disconnect Gateway if it exists
+    if (gateway) {
+      console.log('[Shutdown] Disconnecting Discord client...');
+      gateway.client?.destroy();
+    }
+  } catch (e: any) {
+    console.error('Error disconnecting Discord client:', e.message);
+  }
+  
+  try {
+    // Close Database
+    console.log('[Shutdown] Closing SQLite database...');
+    await Database.close();
+  } catch (e: any) {
+    console.error('Error closing SQLite database:', e.message);
+  }
+
+  try {
+    // Close Logger
+    console.log('[Shutdown] Flushing log streams...');
+    Logger.close();
+  } catch (e) {}
+
+  console.log('[Shutdown] Shutdown sequence completed.');
+  process.exit(0);
+};
+
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
 
 const isMainFile = () => {
   try {

@@ -1,5 +1,6 @@
-import { API_BASE } from '../config';
+import { API_BASE, DISCORD_CLIENT_ID } from '../config';
 import React, { useState, useEffect } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Zap, Users, Music, FileText, BarChart2, Bot, Lock,
@@ -366,7 +367,8 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void }) {
     return () => clearInterval(interval);
   }, []);
 
-  const BOT_INVITE = `https://discord.com/api/oauth2/authorize?client_id=1519626369594818560&permissions=8&scope=bot%20applications.commands`;
+  const BOT_INVITE = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&permissions=8&scope=bot%20applications.commands`;
+
 
   const activeFeature = FEATURES_TABS.find(f => f.id === activeTab) || FEATURES_TABS[0];
 

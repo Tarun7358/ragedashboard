@@ -889,7 +889,10 @@ export class GuildQueue {
     const CORE_API = `http://localhost:${process.env.PORT || 5000}`;
     fetch(`${CORE_API}/api/internal/music/state`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': process.env.INTERNAL_SECRET || ''
+      },
       body: JSON.stringify(statePayload)
     }).catch(() => {});
   }

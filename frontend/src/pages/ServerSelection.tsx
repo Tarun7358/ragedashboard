@@ -1,5 +1,6 @@
-import { API_BASE } from '../config';
+import { API_BASE, DISCORD_CLIENT_ID } from '../config';
 import React, { useState } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server, Users, Clock, Shield, ShieldCheck, ShieldAlert, ShieldX,
@@ -93,7 +94,8 @@ function GuildCard({
   const status = approval?.status || 'Not Registered';
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG['Not Registered'];
   const iconUrl = getGuildIconUrl(guild.id, guild.icon);
-  const BOT_INVITE_URL = `https://discord.com/api/oauth2/authorize?client_id=${import.meta.env.VITE_CLIENT_ID || '1519626369594818560'}&permissions=8&scope=bot%20applications.commands&guild_id=${guild.id}`;
+  const BOT_INVITE_URL = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&permissions=8&scope=bot%20applications.commands&guild_id=${guild.id}`;
+
   const MUSIC_INVITE_URL = `https://discord.com/api/oauth2/authorize?client_id=${MUSIC_CLIENT_ID}&permissions=${MUSIC_BOT_PERMISSIONS}&scope=bot%20applications.commands&guild_id=${guild.id}`;
 
   return (
