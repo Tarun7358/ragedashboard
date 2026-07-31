@@ -32,9 +32,9 @@ export const WRONG_ICON = '<:wrong:1532390628330307634>';
 // DESIGN TOKENS
 // ─────────────────────────────────────────────
 export const Colors = {
-  BRAND:   0x84CC16,  // Lime Green primary
-  LIME:    0x84CC16,  // Lime Green accent
-  SUCCESS: 0x84CC16,  // Green
+  BRAND:   0x7C5CFC,  // Rage Violet primary
+  LIME:    0x7C5CFC,  // Accent primary
+  SUCCESS: 0x10B981,  // Emerald Green
   WARN:    0xF59E0B,  // Amber
   DANGER:  0xEF4444,  // Red
   GOLD:    0xD4AF37,  // Premium gold
@@ -45,6 +45,7 @@ export const Colors = {
   INFO:    0x06B6D4,  // Cyan info
   BOOST:   0xF47FFF,  // Server boost pink
 } as const;
+
 
 // ─────────────────────────────────────────────
 // MODULE IDENTITIES
@@ -100,58 +101,38 @@ function stripLeadingEmoji(text: string): string {
 export const Embeds = {
   info(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
     const cleanTitle = stripLeadingEmoji(title);
-    return new EmbedBuilder()
-      .setColor(Colors.LIME)
-      .setDescription(`${VERIFIED_ICON} **${cleanTitle}**\n${description}`);
+    return buildBaseEmbed(Colors.BRAND, title, description, opts);
   },
 
   success(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    const cleanTitle = stripLeadingEmoji(title);
-    return new EmbedBuilder()
-      .setColor(Colors.SUCCESS)
-      .setDescription(`${VERIFIED_ICON} **${cleanTitle}** ${description}`);
+    return buildBaseEmbed(Colors.SUCCESS, title, description, opts);
   },
 
   warn(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    const cleanTitle = stripLeadingEmoji(title);
-    return new EmbedBuilder()
-      .setColor(Colors.WARN)
-      .setDescription(`${WRONG_ICON} **${cleanTitle}** ${description}`);
+    return buildBaseEmbed(Colors.WARN, title, description, opts);
   },
 
   error(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    const cleanTitle = stripLeadingEmoji(title);
-    return new EmbedBuilder()
-      .setColor(Colors.DANGER)
-      .setDescription(`${WRONG_ICON} **${cleanTitle}** ${description}`);
+    return buildBaseEmbed(Colors.DANGER, title, description, opts);
   },
 
   premium(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    const cleanTitle = stripLeadingEmoji(title);
-    return new EmbedBuilder()
-      .setColor(Colors.GOLD)
-      .setDescription(`${VERIFIED_ICON} **${cleanTitle}** ${description}`);
+    return buildBaseEmbed(Colors.GOLD, title, description, opts);
   },
 
   module(mod: ModuleKey | string, title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    const cleanTitle = stripLeadingEmoji(title);
-    return new EmbedBuilder()
-      .setColor(Colors.LIME)
-      .setDescription(`${VERIFIED_ICON} **${cleanTitle}**\n${description}`);
+    return buildBaseEmbed(Colors.BRAND, title, description, { ...opts, module: mod });
   },
 
   denied(reason: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return new EmbedBuilder()
-      .setColor(Colors.DANGER)
-      .setDescription(`${WRONG_ICON} **Access Denied**: ${reason}`);
+    return buildBaseEmbed(Colors.DANGER, '🔒 Access Denied', reason, opts);
   },
 
   permError(permission: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return new EmbedBuilder()
-      .setColor(Colors.DANGER)
-      .setDescription(`${WRONG_ICON} You require the **${permission}** permission to execute this operation.`);
+    return buildBaseEmbed(Colors.DANGER, '🔒 Permission Required', `You require the **${permission}** permission to execute this operation.`, opts);
   },
 };
+
 
 function buildBaseEmbed(
   color: number,

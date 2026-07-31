@@ -647,10 +647,13 @@ async function executeTicketCreation(client: any, interaction: any, context: any
 
     // Send Welcome Embed inside the Ticket channel
     const welcomeEmbed = new EmbedBuilder()
-      .setTitle(`✉️ Welcome to your Ticket, ${creator.username}!`)
-      .setDescription(`Support category: **${option.label}**\nOur staff has been notified and will be with you shortly. Use the controls below to manage this ticket.`)
-      .setColor('#d4af37')
+      .setAuthor({ name: 'Rage Optimiser Enterprise • Support Desk' })
+      .setTitle(`✉️ Support Ticket Channel Spawned`)
+      .setDescription(`Welcome ${creator}! Support category: **${option.label}**\nOur support team has been notified and will assist you shortly. Use the control buttons below to claim or close this ticket.`)
+      .setColor('#7C5CFC')
+      .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Support' })
       .setTimestamp();
+
 
     // If modal questionnaire was answered, list them in the welcome message
     const responseKeys = Object.keys(modalResponses);

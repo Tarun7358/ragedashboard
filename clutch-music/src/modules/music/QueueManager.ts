@@ -919,8 +919,9 @@ export class GuildQueue {
       if (!this.currentTrack) {
         // ─── IDLE PANEL ───────────────────────────────────────────────
         embed
-          .setColor(0x57F287)
-          .setTitle('🎵 Rage Music — Audio Engine')
+          .setColor(0x7C5CFC)
+          .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
+          .setTitle('🎵 Audio Engine Control Panel')
           .setDescription(
             '> **No music is currently playing.**\n' +
             '> Start a session by joining a voice channel and using `/play` or `r!play <query>`.\n\n' +
@@ -934,7 +935,7 @@ export class GuildQueue {
             { name: '🎚️ DSP Filters', value: '```None Active```', inline: true },
             { name: '🔁 Loop Mode', value: '```Off```', inline: true }
           )
-          .setFooter({ text: 'Rage Optimiser • Audio System', iconURL: client.user?.displayAvatarURL() })
+          .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Suite', iconURL: client.user?.displayAvatarURL() })
           .setTimestamp();
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -974,7 +975,8 @@ export class GuildQueue {
           const statusLabel = isPaused ? '⏸️ Paused' : '▶️ Playing';
 
           embed
-            .setColor(0x57F287)
+            .setColor(0x7C5CFC)
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
             .setTitle(`${statusLabel} — Now Playing`)
             .setDescription(
               `> ### ${titleLink}\n` +
@@ -987,8 +989,9 @@ export class GuildQueue {
               { name: '⚙️ Controls', value: `Volume: **${this.volume}%**\nSpeed: **${this.speed}x** | Pitch: **${this.pitch}x**`, inline: true },
               { name: '💿 Session', value: `Platform: **${platform}**\nQueue: **${this.queue.length}** tracks\nLoop: **${loopLabel}**`, inline: true }
             )
-            .setFooter({ text: 'Rage Optimiser • Audio System', iconURL: client.user?.displayAvatarURL() })
+            .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Suite', iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
+
 
           if (hasValidUrl) embed.setURL(this.currentTrack.url);
           if (this.currentTrack.thumbnail) embed.setThumbnail(this.currentTrack.thumbnail);
