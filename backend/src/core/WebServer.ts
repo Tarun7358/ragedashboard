@@ -99,14 +99,23 @@ export class WebServer {
     this.app = express();
     this.app.use(helmet({ contentSecurityPolicy: false }));
     this.app.use(cors({
-      origin: [
-        process.env.FRONTEND_URL || 'http://localhost:5173',
-        'http://localhost:5173',
-        'http://localhost:4680',
-        'http://localhost:3000'
-      ],
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const allowedOrigins = [
+          process.env.FRONTEND_URL,
+          'https://ragesecureddashboard.netlify.app',
+          'http://localhost:5173',
+          'http://localhost:4680',
+          'http://localhost:3000'
+        ].filter(Boolean);
+        if (allowedOrigins.includes(origin) || origin.endsWith('.netlify.app')) {
+          return callback(null, true);
+        }
+        return callback(null, true); // Permissive for production web dashboard integration
+      },
       credentials: true
     }));
+
     this.app.use(express.json());
 
 

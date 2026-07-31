@@ -166,8 +166,28 @@ export function Login() {
                 style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
               >
                 {errorMsg && (
-                  <div className="login-error">
-                    <ShieldAlert size={14} /> {errorMsg}
+                  <div className="login-error-container">
+                    <div className="login-error">
+                      <ShieldAlert size={16} />
+                      <div>
+                        <strong>Backend Server Unreachable</strong>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.9 }}>
+                          {errorMsg}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="backend-guide">
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#93C5FD', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Server size={14} /> Production Deployment Setup:
+                      </h4>
+                      <ol style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <li>Deploy backend server (`backend/src/index.ts`) on Render, Railway, Fly.io, or VPS with `DASHBOARD_ENABLED=true`.</li>
+                        <li>In Netlify Site Settings &rarr; <strong>Environment Variables</strong>, add:
+                          <br /><code style={{ background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '4px', color: '#60A5FA' }}>VITE_API_URL = https://your-backend-api.com</code>
+                        </li>
+                        <li>Re-deploy site on Netlify to apply the API endpoint.</li>
+                      </ol>
+                    </div>
                   </div>
                 )}
 
@@ -187,6 +207,7 @@ export function Login() {
                 </button>
               </motion.div>
             </AnimatePresence>
+
 
             <div className="login-footer">
               <span>v1.0.0</span>
