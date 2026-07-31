@@ -527,14 +527,19 @@ export const BackupsManifest: ModuleManifest = {
             await saveBackup(snapshot);
 
             const embed = new EmbedBuilder()
-              .setTitle('💾 Backup Snapshot Created')
-              .setDescription(`Successfully captured server config template!\n\n` + 
-                              `🔑 **Backup ID**: \`${snapshot.id}\`\n` +
-                              `🔢 **Channels**: ${snapshot.channelsCount}\n` +
-                              `🛡️ **Roles**: ${snapshot.rolesCount}\n` +
-                              `😀 **Emojis**: ${snapshot.emojisCount}\n\n` +
-                              `💡 *You can load this backup on another server by running \`/backup load ${snapshot.id}\` to clone it!*`)
-              .setColor('#2ecc71')
+              .setAuthor({ name: 'Rage Optimiser Enterprise • Backup System' })
+              .setTitle('💾 Server Backup Snapshot Created')
+              .setDescription(`Successfully captured complete server configuration template!`)
+              .setColor('#7C5CFC')
+              .addFields(
+                { name: '🔑 Backup ID', value: `\`${snapshot.id}\``, inline: true },
+                { name: '🔤 Channels', value: `\`${snapshot.channelsCount}\``, inline: true },
+                { name: '🛡️ Roles', value: `\`${snapshot.rolesCount}\``, inline: true },
+                { name: '😀 Emojis', value: `\`${snapshot.emojisCount}\``, inline: true },
+                { name: '👤 Captured By', value: `\`${snapshot.createdByName}\``, inline: true },
+                { name: '💡 Server Clone Command', value: `\`\`\`\n/backup load ${snapshot.id}\n\`\`\``, inline: false }
+              )
+              .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Protection' })
               .setTimestamp();
 
             await interaction.editReply({ embeds: [embed] });
@@ -550,15 +555,17 @@ export const BackupsManifest: ModuleManifest = {
           const guildBackups = await getGuildBackups(guild.id);
 
           const embed = new EmbedBuilder()
-            .setTitle('📁 Server Backups')
-            .setDescription(guildBackups.length === 0 ? 'No backups saved for this server yet.' : `Found ${guildBackups.length} backups for this server:`)
-            .setColor('#3498db')
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Backup Vault' })
+            .setTitle('📁 Server Configuration Snapshots')
+            .setDescription(guildBackups.length === 0 ? 'No backups saved for this server yet.' : `Found ${guildBackups.length} snapshot backups:`)
+            .setColor('#7C5CFC')
+            .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Protection' })
             .setTimestamp();
 
           guildBackups.slice(0, 10).forEach(b => {
             embed.addFields({
-              name: `ID: ${b.id}`,
-              value: `📅 Date: ${new Date(b.timestamp).toLocaleString()}\n🛡️ Roles: ${b.rolesCount} | 🔢 Channels: ${b.channelsCount} | Created By: ${b.createdByName}`
+              name: `Snapshot \`${b.id}\``,
+              value: `📅 Date: \`${new Date(b.timestamp).toLocaleString()}\` | 🛡️ Roles: \`${b.rolesCount}\` | 🔢 Channels: \`${b.channelsCount}\` | Created By: \`${b.createdByName}\``
             });
           });
 
@@ -575,18 +582,20 @@ export const BackupsManifest: ModuleManifest = {
           }
 
           const embed = new EmbedBuilder()
-            .setTitle(`ℹ️ Backup details: ${snapshot.id}`)
-            .setDescription(`Information on server snapshot template:`)
-            .setColor('#9b59b6')
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Backup Inspector' })
+            .setTitle(`ℹ️ Snapshot Details: ${snapshot.id}`)
+            .setDescription(`Detailed telemetry for server configuration snapshot template:`)
+            .setColor('#7C5CFC')
             .addFields(
-              { name: 'Source Guild', value: snapshot.guildName, inline: true },
+              { name: 'Source Server', value: snapshot.guildName, inline: true },
               { name: 'Source Guild ID', value: snapshot.guildId, inline: true },
               { name: 'Created By', value: snapshot.createdByName || 'Unknown', inline: true },
               { name: 'Created At', value: new Date(snapshot.timestamp).toLocaleString(), inline: false },
-              { name: 'Channels & Layouts', value: `${snapshot.channelsCount} channels`, inline: true },
-              { name: 'Roles Hierarchy', value: `${snapshot.rolesCount} roles`, inline: true },
-              { name: 'Custom Emojis', value: `${snapshot.emojisCount || 0} emojis`, inline: true }
+              { name: 'Channels & Layouts', value: `\`${snapshot.channelsCount}\` channels`, inline: true },
+              { name: 'Roles Hierarchy', value: `\`${snapshot.rolesCount}\` roles`, inline: true },
+              { name: 'Custom Emojis', value: `\`${snapshot.emojisCount || 0}\` emojis`, inline: true }
             )
+            .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Protection' })
             .setTimestamp();
 
           await interaction.reply({ embeds: [embed], flags: 64 });
@@ -627,14 +636,17 @@ export const BackupsManifest: ModuleManifest = {
           pendingBackupLoads.set(`${guild.id}:${interaction.user.id}`, backupId);
 
           const embed = new EmbedBuilder()
-            .setTitle('⚠️ Confirm Server Rewrite/Cloning')
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Restoration Warning' })
+            .setTitle('⚠️ Confirm Server Rewrite & Clone')
             .setDescription(`You are about to load backup ID **\`${backupId}\`**.\n\n` + 
                             `🌐 **Source Server**: ${snapshot.guildName}\n` +
                             `🔢 **Channels**: ${snapshot.channelsCount}\n` +
                             `🛡️ **Roles**: ${snapshot.rolesCount}\n\n` +
-                            `🚨 **WARNING**: This operation is **destructive**! It will delete all existing channels, categories, and roles (except the bot's roles, booster roles, and @everyone) and rewrite them using the template.`)
-            .setColor('#e74c3c')
+                            `🚨 **WARNING**: This operation is **destructive**! It will delete all existing channels, categories, and roles (except bot roles & booster roles) and rebuild them from template.`)
+            .setColor('#FF3B30')
+            .setFooter({ text: 'Rage Optimiser v4.2 • Destruction Safeguard' })
             .setTimestamp();
+
 
           const row = new ActionRowBuilder()
             .addComponents(

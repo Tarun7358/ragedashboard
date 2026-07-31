@@ -114,12 +114,21 @@ export const BackupsManifest: ModuleManifest = {
           saveBackups(backups);
 
           const embed = new EmbedBuilder()
-            .setTitle('💾 Backup Snapshot Created')
-            .setDescription(`Successfully captured server config template!\n\n🔑 **Backup ID**: \`${snapshotId}\`\n🔢 **Channels**: ${snapshot.channelsCount}\n🛡️ **Roles**: ${snapshot.rolesCount}`)
-            .setColor('#2ecc71')
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Backup System' })
+            .setTitle('💾 Server Backup Snapshot Created')
+            .setDescription(`Successfully captured complete server configuration template!`)
+            .setColor('#7C5CFC')
+            .addFields(
+              { name: '🔑 Backup ID', value: `\`${snapshotId}\``, inline: true },
+              { name: '🔤 Channels', value: `\`${snapshot.channelsCount}\``, inline: true },
+              { name: '🛡️ Roles', value: `\`${snapshot.rolesCount}\``, inline: true },
+              { name: '💡 Server Clone Command', value: `\`\`\`\n/restore-backup backup-id:${snapshotId}\n\`\`\``, inline: false }
+            )
+            .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Protection' })
             .setTimestamp();
 
           await interaction.editReply({ embeds: [embed] });
+
           context.logSyncEvent(`Backup Recovery: Created configuration backup snapshot "${snapshotId}".`, 'success');
         } catch (err) {
           console.error(err);

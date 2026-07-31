@@ -86,13 +86,14 @@ export function EmbedBuilder({ value, onChange, titleLabel = 'Embed Configuratio
 
     // First resolve common variable tags
     let processed = text
-      .replace(/{user}/g, '@rbzclasher')
-      .replace(/{user\.mention}/g, '@rbzclasher')
-      .replace(/{username}/g, 'rbzclasher')
-      .replace(/{userTag}/g, 'rbzclasher#1337')
+      .replace(/{user}/g, '@User')
+      .replace(/{user\.mention}/g, '@User')
+      .replace(/{username}/g, 'User')
+      .replace(/{userTag}/g, 'User#0001')
       .replace(/{userId}/g, '7358129381293812')
-      .replace(/{server}/g, 'Rage Optimizer')
-      .replace(/{server\.name}/g, 'Rage Optimizer')
+      .replace(/{server}/g, 'Rage Optimiser')
+      .replace(/{server\.name}/g, 'Rage Optimiser')
+
       .replace(/{membercount}/g, '142')
       .replace(/{memberCount}/g, '142')
       .replace(/{date}/g, 'Friday, July 17, 2026')
