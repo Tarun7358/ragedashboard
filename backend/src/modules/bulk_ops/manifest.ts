@@ -140,19 +140,19 @@ export const BulkOpsManifest: ModuleManifest = {
       name: 'command_bulk',
       handler: async (client: any, interaction: any, context: any) => {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-          return interaction.reply({ content: '🔒 Administrator permission required for bulk operations.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Administrator permission required for bulk operations.', flags: 64 });
         }
 
         const sub = interaction.options.getSubcommand(false);
         const guild = interaction.guild;
         if (!sub) {
           const embed = new EmbedBuilder()
-            .setTitle('🛠️ Bulk Operations Manager')
+            .setTitle('<:config:1532425712844144701> Bulk Operations Manager')
             .setDescription('Run bulk server operations across roles, channels, messages, and members.')
             .addFields(
-              { name: '🏷️ Role Operations', value: '`r!bulk role-add` • `r!bulk role-remove` • `r!bulk role-purge`', inline: false },
-              { name: '💬 Channel & Messages', value: '`r!bulk channel-purge` • `r!bulk message-purge`', inline: false },
-              { name: '👤 Member Management', value: '`r!bulk nickname-reset` • `r!bulk member-kick` • `r!bulk member-ban`', inline: false }
+              { name: '<:vip:1532620837117759508> Role Operations', value: '`r!bulk role-add` • `r!bulk role-remove` • `r!bulk role-purge`', inline: false },
+              { name: '<:link:1532620952087826602> Channel & Messages', value: '`r!bulk channel-purge` • `r!bulk message-purge`', inline: false },
+              { name: '<:member:1532621317487071426> Member Management', value: '`r!bulk nickname-reset` • `r!bulk member-kick` • `r!bulk member-ban`', inline: false }
             )
             .setColor('#7c5cfc')
             .setFooter({ text: 'Rage Optimiser • Bulk Operations Engine' });
@@ -291,7 +291,7 @@ export const BulkOpsManifest: ModuleManifest = {
           const cat = interaction.options.getChannel('category');
           const prefix = interaction.options.getString('prefix') || '';
           const suffix = interaction.options.getString('suffix') || '';
-          if (!prefix && !suffix) return interaction.editReply({ content: '❌ Provide at least a prefix or suffix.' });
+          if (!prefix && !suffix) return interaction.editReply({ content: '<:wrong:1532390628330307634> Provide at least a prefix or suffix.' });
           const channels = guild.channels.cache.filter((c: any) => c.parentId === cat.id);
           let count = 0;
           for (const [, ch] of channels) {
@@ -374,9 +374,9 @@ export const BulkOpsManifest: ModuleManifest = {
         // BAN LIST
         if (sub === 'ban-list') {
           const bans = await guild.bans.fetch();
-          if (bans.size === 0) return interaction.editReply({ content: '📋 No banned users.' });
+          if (bans.size === 0) return interaction.editReply({ content: '<:information:1532621274092929124> No banned users.' });
           const lines = [...bans.values()].slice(0, 20).map((b: any, i: number) => `**${i + 1}.** ${b.user.username} (${b.user.id}) — ${b.reason || 'No reason'}`);
-          return interaction.editReply({ content: `🚫 **Banned Users (${bans.size}):**\n${lines.join('\n')}` });
+          return interaction.editReply({ content: `<:shield:1532403012751065179> **Banned Users (${bans.size}):**\n${lines.join('\n')}` });
         }
 
         // MASS BAN
@@ -384,7 +384,7 @@ export const BulkOpsManifest: ModuleManifest = {
           const idsStr = interaction.options.getString('user_ids');
           const reason = interaction.options.getString('reason') || 'Mass ban by moderator';
           const ids = idsStr.split(/[\s,]+/).filter((id: string) => /^\d+$/.test(id));
-          if (ids.length === 0) return interaction.editReply({ content: '❌ No valid user IDs provided.' });
+          if (ids.length === 0) return interaction.editReply({ content: '<:wrong:1532390628330307634> No valid user IDs provided.' });
           let count = 0;
           for (const id of ids) {
             await guild.members.ban(id, { reason }).catch(() => {});
@@ -399,7 +399,7 @@ export const BulkOpsManifest: ModuleManifest = {
         if (sub === 'mass-unban') {
           const idsStr = interaction.options.getString('user_ids');
           const ids = idsStr.split(/[\s,]+/).filter((id: string) => /^\d+$/.test(id));
-          if (ids.length === 0) return interaction.editReply({ content: '❌ No valid user IDs provided.' });
+          if (ids.length === 0) return interaction.editReply({ content: '<:wrong:1532390628330307634> No valid user IDs provided.' });
           let count = 0;
           for (const id of ids) {
             await guild.members.unban(id, 'Mass unban').catch(() => {});
@@ -462,7 +462,7 @@ export const BulkOpsManifest: ModuleManifest = {
           return interaction.editReply({ embeds: [buildMinimalCard('Created Channels', `**${count} channels**`)] });
         }
 
-        return interaction.editReply({ content: '❌ Unknown bulk operation.' });
+        return interaction.editReply({ content: '<:wrong:1532390628330307634> Unknown bulk operation.' });
       }
     }
   ]

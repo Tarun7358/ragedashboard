@@ -26,43 +26,103 @@ import {
 } from 'discord.js';
 
 export const VERIFIED_ICON = '<a:approved:1532390590707142956>';
+export const SQUARE_TICK_ICON = '<:ticks:1532620580266836148>';
 export const WRONG_ICON = '<:wrong:1532390628330307634>';
+export const SHIELD_ICON = '<:shield:1532403012751065179>';
+export const GAVEL_ICON = '<:gavel:1532621057318584380>';
+export const BOT_ICON = '<:bot:1532621107746570391>';
+export const MEMBER_ICON = '<:member:1532621317487071426>';
+export const INFO_ICON = '<:information:1532621274092929124>';
+export const BOOSTER_ICON = '<:booster:1532621228492460172>';
+export const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
+export const CONFIG_ICON = '<:config:1532425712844144701>';
+export const TICKET_ICON = '<:ticket:1532620631466836021>';
+export const TIMER_ICON = '<:timer:1532620491662037123>';
+export const VIP_ICON = '<:vip:1532620837117759508>';
+export const LINK_ICON = '<:link:1532620952087826602>';
 
 // ─────────────────────────────────────────────
-// DESIGN TOKENS
+// DESIGN TOKENS (Matching Lime.gg visual design with Rage Optimiser branding)
 // ─────────────────────────────────────────────
 export const Colors = {
-  BRAND:   0x7C5CFC,  // Rage Violet primary
-  LIME:    0x7C5CFC,  // Accent primary
+  BRAND: 0x99CC00,  // Lime Green primary (#99CC00 / #BEF264)
+  LIME: 0x99CC00,  // Accent primary lime
   SUCCESS: 0x10B981,  // Emerald Green
-  WARN:    0xF59E0B,  // Amber
-  DANGER:  0xEF4444,  // Red
-  GOLD:    0xD4AF37,  // Premium gold
-  MUTED:   0x5C6370,  // Disabled/neutral
-  TICKET:  0x4F8CFF,  // Ticket system
-  VOICE:   0x3B82F6,  // Voice accent
-  MUSIC:   0xA855F7,  // Music accent
-  INFO:    0x06B6D4,  // Cyan info
-  BOOST:   0xF47FFF,  // Server boost pink
+  WARN: 0xF59E0B,  // Amber
+  DANGER: 0xEF4444,  // Red
+  GOLD: 0xD4AF37,  // Premium gold
+  MUTED: 0x5C6370,  // Disabled/neutral
+  TICKET: 0x4F8CFF,  // Ticket system
+  VOICE: 0x3B82F6,  // Voice accent
+  MUSIC: 0xA855F7,  // Music accent
+  INFO: 0x06B6D4,  // Cyan info
+  BOOST: 0xF47FFF,  // Server boost pink
 } as const;
 
+export function createLimeEmbed(options: {
+  author?: string;
+  title: string;
+  description?: string;
+  fields?: { name: string; value: string; inline?: boolean }[];
+  color?: string | number;
+  commandBox?: string;
+  thumbnail?: string;
+  footerText?: string;
+  client?: any;
+}): EmbedBuilder {
+  const colorVal = typeof options.color === 'number'
+    ? options.color
+    : (options.color || 0x99CC00);
+
+  const embed = new EmbedBuilder()
+    .setAuthor({ name: options.author || 'Rage Optimiser' })
+    .setTitle(options.title)
+    .setColor(colorVal as any)
+    .setFooter({
+      text: options.footerText || `Rage Optimiser • Unbypassable Security`,
+      iconURL: options.client?.user?.displayAvatarURL?.()
+    })
+    .setTimestamp();
+
+  if (options.description) {
+    embed.setDescription(options.description);
+  }
+
+  if (options.fields && options.fields.length > 0) {
+    embed.addFields(options.fields);
+  }
+
+  if (options.commandBox) {
+    embed.addFields({
+      name: `${INFO_ICON} System Command`,
+      value: `\`\`\`${options.commandBox}\`\`\``,
+      inline: false
+    });
+  }
+
+  if (options.thumbnail && options.thumbnail.startsWith('http')) {
+    embed.setThumbnail(options.thumbnail);
+  }
+
+  return embed;
+}
 
 // ─────────────────────────────────────────────
 // MODULE IDENTITIES
 // ─────────────────────────────────────────────
 export const ModuleMeta = {
-  leveling:      { icon: '⭐', name: 'Leveling & Economy',   color: Colors.GOLD },
-  giveaway:      { icon: '🎉', name: 'Giveaway Manager',     color: Colors.GOLD },
-  tickets:       { icon: '🎫', name: 'Ticket System',        color: Colors.TICKET },
-  announcements: { icon: '📢', name: 'Announcements',        color: Colors.INFO },
-  welcome:       { icon: '👋', name: 'Welcome System',       color: Colors.BRAND },
-  voice:         { icon: '🎙️', name: 'Voice Manager',        color: Colors.VOICE },
-  automod:       { icon: '⚙️', name: 'AutoMod',              color: Colors.WARN },
-  security:      { icon: '🛡️', name: 'Security',            color: Colors.DANGER },
-  analytics:     { icon: '📊', name: 'Analytics',            color: Colors.BRAND },
-  music:         { icon: '🎵', name: 'Music',                color: Colors.MUSIC },
-  help:          { icon: '⚡', name: 'Command Hub',          color: Colors.BRAND },
-  system:        { icon: '🔧', name: 'System',               color: Colors.MUTED },
+  leveling: { icon: VIP_ICON, name: 'Leveling & Economy', color: Colors.GOLD },
+  giveaway: { icon: '<:cart:1532621146208473115>', name: 'Giveaway Manager', color: Colors.GOLD },
+  tickets: { icon: TICKET_ICON, name: 'Ticket System', color: Colors.TICKET },
+  announcements: { icon: INFO_ICON, name: 'Announcements', color: Colors.INFO },
+  welcome: { icon: MEMBER_ICON, name: 'Welcome System', color: Colors.BRAND },
+  voice: { icon: '<:voicechannelgreen:1532425750278438962>', name: 'Voice Manager', color: Colors.VOICE },
+  automod: { icon: GAVEL_ICON, name: 'AutoMod', color: Colors.WARN },
+  security: { icon: SHIELD_ICON, name: 'Security', color: Colors.DANGER },
+  analytics: { icon: '<:stats:1532429110775779459>', name: 'Analytics', color: Colors.BRAND },
+  music: { icon: '<:voicechannelgreen:1532425750278438962>', name: 'Music', color: Colors.MUSIC },
+  help: { icon: CONFIG_ICON, name: 'Command Hub', color: Colors.BRAND },
+  system: { icon: BOT_ICON, name: 'System', color: Colors.MUTED },
 } as const;
 
 export type ModuleKey = keyof typeof ModuleMeta;
@@ -70,7 +130,7 @@ export type ModuleKey = keyof typeof ModuleMeta;
 // ─────────────────────────────────────────────
 // FOOTER & AUTHOR HELPERS
 // ─────────────────────────────────────────────
-const BRAND_FOOTER = 'Rage Optimiser Enterprise';
+const BRAND_FOOTER = 'Rage Optimiser • Unbypassable Security';
 
 function moduleFooterText(module?: ModuleKey | string): string {
   if (!module) return BRAND_FOOTER;
@@ -125,14 +185,13 @@ export const Embeds = {
   },
 
   denied(reason: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.DANGER, '🔒 Access Denied', reason, opts);
+    return buildBaseEmbed(Colors.DANGER, '<:shield:1532403012751065179> Access Denied', reason, opts);
   },
 
   permError(permission: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.DANGER, '🔒 Permission Required', `You require the **${permission}** permission to execute this operation.`, opts);
+    return buildBaseEmbed(Colors.DANGER, '<:shield:1532403012751065179> Permission Required', `You require the **${permission}** permission to execute this operation.`, opts);
   },
 };
-
 
 function buildBaseEmbed(
   color: number,
@@ -158,6 +217,8 @@ function buildBaseEmbed(
   if (opts.authorIcon && title) {
     embed.setAuthor({ name: title, iconURL: opts.authorIcon });
     embed.setTitle(''); // avoid duplicating title in author
+  } else {
+    embed.setAuthor({ name: 'Rage Optimiser Enterprise • Core Security Engine' });
   }
 
   return embed;
@@ -175,7 +236,7 @@ export function buildMinimalAction(opts: {
   const linkWord = opts.toOrFrom ? ` **${opts.toOrFrom}** ` : (opts.target ? ' ' : '');
   const targetStr = opts.target ? `${linkWord}${opts.target}` : '';
   const extraStr = opts.extra ? ` ${opts.extra}` : '';
-  
+
   return new EmbedBuilder()
     .setColor(color)
     .setDescription(`${VERIFIED_ICON} ${opts.user} **${opts.action}**${targetStr}${extraStr}`);
@@ -194,9 +255,10 @@ export function buildLimeOverviewCard(opts: {
 }): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setColor(opts.color ?? Colors.LIME)
+    .setAuthor({ name: 'Rage Optimiser' })
     .setTimestamp();
 
-  embed.setFooter({ text: opts.footerText ?? 'Rage Optimiser • Security Engine' });
+  embed.setFooter({ text: opts.footerText ?? 'Rage Optimiser • Unbypassable Security' });
 
   let desc = `> • **${opts.title.toUpperCase()}**\n`;
   desc += `> • **${opts.subtitle ? opts.subtitle.toUpperCase() : 'RAGE OPTIMISER'}**\n\n`;
@@ -205,12 +267,21 @@ export function buildLimeOverviewCard(opts: {
     if (sec.title) {
       desc += `> **${sec.title}**\n`;
     }
-    desc += sec.items.map(item => {
-      if (item.startsWith('<a:') || item.startsWith('<:')) {
-        return `> ${item}`;
+    for (const rawItem of sec.items) {
+      const lines = String(rawItem).split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        if (trimmed.startsWith('<a:') || trimmed.startsWith('<:') || trimmed.startsWith('<@') || trimmed.startsWith('@') || trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('`') || trimmed.startsWith('>')) {
+          desc += `> ${trimmed.startsWith('>') ? trimmed.slice(1).trim() : trimmed}\n`;
+        } else if (trimmed === 'None' || trimmed.startsWith('No members') || trimmed.startsWith('No roles')) {
+          desc += `> *${trimmed}*\n`;
+        } else {
+          desc += `> ${VERIFIED_ICON} ${trimmed}\n`;
+        }
       }
-      return `> ${VERIFIED_ICON} __**${item}**__`;
-    }).join('\n') + `\n\n`;
+    }
+    desc += `\n`;
   }
 
   embed.setDescription(desc.trim());
@@ -231,8 +302,8 @@ export interface CV2Options {
 }
 
 /**
- * Build a Components V2 container for a simple status card.
- * Returns { components, flags } ready to spread into interaction.reply()
+ * Build a standard enterprise status card embed.
+ * Returns { embeds, components, flags } ready to spread into interaction.reply()
  */
 export function buildStatusCard(opts: {
   emoji: string;
@@ -241,56 +312,35 @@ export function buildStatusCard(opts: {
   accentColor?: number;
   thumbnailUrl?: string;
   fields?: Array<{ label: string; value: string }>;
-}): { components: ContainerBuilder[]; flags: number } {
+}): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   const color = opts.accentColor ?? Colors.BRAND;
 
-  const container = new ContainerBuilder().setAccentColor(color);
-
-  // Header section (with optional thumbnail)
-  const headerSection = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`## ${opts.emoji} ${opts.title}`)
-  );
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(`${opts.emoji} ${opts.title}`.trim())
+    .setDescription(opts.body)
+    .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+    .setTimestamp();
 
   if (opts.thumbnailUrl) {
-    headerSection.setThumbnailAccessory(
-      new ThumbnailBuilder().setURL(opts.thumbnailUrl)
-    );
+    try { embed.setThumbnail(opts.thumbnailUrl); } catch {}
   }
 
-  container.addSectionComponents(headerSection);
-
-  // Body separator
-  container.addSeparatorComponents(
-    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false)
-  );
-
-  // Body text
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(opts.body)
-  );
-
-  // Optional fields
   if (opts.fields && opts.fields.length > 0) {
-    container.addSeparatorComponents(
-      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
-    );
-    for (const f of opts.fields) {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`**${f.label}**\n${f.value}`)
-      );
-    }
+    embed.addFields(opts.fields.map(f => ({ name: f.label, value: f.value, inline: false })));
   }
 
   return {
-    components: [container],
-    flags: MessageFlags.IsComponentsV2,
+    embeds: [embed],
+    components: [],
+    flags: 0,
   };
 }
 
 /**
- * Quick reply helper for standard error responses in Components V2 layout
+ * Quick reply helper for standard error responses
  */
-export function buildErrorCard(text: string, title = 'Error'): { components: ContainerBuilder[]; flags: number } {
+export function buildErrorCard(text: string, title = 'Error'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   return buildStatusCard({
     emoji: WRONG_ICON,
     title,
@@ -300,23 +350,23 @@ export function buildErrorCard(text: string, title = 'Error'): { components: Con
 }
 
 /**
- * Quick reply helper for standard success responses in Components V2 layout
+ * Quick reply helper for standard success responses
  */
-export function buildSuccessCard(text: string, title = 'Success'): { components: ContainerBuilder[]; flags: number } {
+export function buildSuccessCard(text: string, title = 'Success'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   return buildStatusCard({
     emoji: VERIFIED_ICON,
     title,
     body: text,
-    accentColor: Colors.SUCCESS,
+    accentColor: Colors.BRAND,
   });
 }
 
 /**
- * Quick reply helper for warning responses in Components V2 layout
+ * Quick reply helper for warning responses
  */
-export function buildWarnCard(text: string, title = 'Warning'): { components: ContainerBuilder[]; flags: number } {
+export function buildWarnCard(text: string, title = 'Warning'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   return buildStatusCard({
-    emoji: '⚠️',
+    emoji: TIMER_ICON,
     title,
     body: text,
     accentColor: Colors.WARN,
@@ -324,11 +374,11 @@ export function buildWarnCard(text: string, title = 'Warning'): { components: Co
 }
 
 /**
- * Quick reply helper for permission error responses in Components V2 layout
+ * Quick reply helper for permission error responses
  */
-export function buildPermCard(permission: string): { components: ContainerBuilder[]; flags: number } {
+export function buildPermCard(permission: string): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   return buildStatusCard({
-    emoji: '🔒',
+    emoji: SHIELD_ICON,
     title: 'Access Denied',
     body: `You need the **${permission}** permission to execute this operation.`,
     accentColor: Colors.DANGER,
@@ -336,7 +386,7 @@ export function buildPermCard(permission: string): { components: ContainerBuilde
 }
 
 /**
- * Build a Components V2 leaderboard / multi-entry list card.
+ * Build an enterprise leaderboard / multi-entry list card embed.
  */
 export function buildListCard(opts: {
   emoji: string;
@@ -345,40 +395,30 @@ export function buildListCard(opts: {
   entries: string[];
   accentColor?: number;
   thumbnailUrl?: string;
-}): { components: ContainerBuilder[]; flags: number } {
+}): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   const color = opts.accentColor ?? Colors.BRAND;
-  const container = new ContainerBuilder().setAccentColor(color);
+  const listText = opts.entries.join('\n') || '*No entries found.*';
 
-  const headerSection = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(
-      `## ${opts.emoji} ${opts.title}` + (opts.subtitle ? `\n-# ${opts.subtitle}` : '')
-    )
-  );
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(`${opts.emoji} ${opts.title}`.trim())
+    .setDescription((opts.subtitle ? `*${opts.subtitle}*\n\n` : '') + listText)
+    .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+    .setTimestamp();
 
   if (opts.thumbnailUrl) {
-    headerSection.setThumbnailAccessory(
-      new ThumbnailBuilder().setURL(opts.thumbnailUrl)
-    );
+    try { embed.setThumbnail(opts.thumbnailUrl); } catch {}
   }
 
-  container.addSectionComponents(headerSection);
-  container.addSeparatorComponents(
-    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
-  );
-
-  const listText = opts.entries.join('\n') || '*No entries found.*';
-  container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(listText)
-  );
-
   return {
-    components: [container],
-    flags: MessageFlags.IsComponentsV2,
+    embeds: [embed],
+    components: [],
+    flags: 0,
   };
 }
 
 /**
- * Build a full-featured Components V2 card with header, fields grid, and footer note.
+ * Build a full-featured enterprise card embed with header, fields, and footer.
  */
 export function buildRichCard(opts: {
   emoji: string;
@@ -389,62 +429,36 @@ export function buildRichCard(opts: {
   fields?: Array<{ label: string; value: string; inline?: boolean }>;
   footerNote?: string;
   actionRow?: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>;
-}): { components: (ContainerBuilder | ActionRowBuilder<any>)[]; flags: number } {
+}): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   const color = opts.accentColor ?? Colors.BRAND;
-  const container = new ContainerBuilder().setAccentColor(color);
 
-  // Header section
-  const headerSection = new SectionBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`## ${opts.emoji} ${opts.title}`)
-  );
-
-  if (opts.thumbnailUrl) {
-    headerSection.setThumbnailAccessory(
-      new ThumbnailBuilder().setURL(opts.thumbnailUrl)
-    );
-  }
-
-  container.addSectionComponents(headerSection);
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(`${opts.emoji} ${opts.title}`.trim())
+    .setFooter({ text: opts.footerNote || 'Rage Optimiser • Unbypassable Security' })
+    .setTimestamp();
 
   if (opts.description) {
-    container.addSeparatorComponents(
-      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false)
-    );
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(opts.description)
-    );
+    embed.setDescription(opts.description);
   }
 
-  // Fields
+  if (opts.thumbnailUrl) {
+    try { embed.setThumbnail(opts.thumbnailUrl); } catch {}
+  }
+
   if (opts.fields && opts.fields.length > 0) {
-    container.addSeparatorComponents(
-      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
-    );
-    for (const f of opts.fields) {
-      container.addTextDisplayComponents(
-        new TextDisplayBuilder().setContent(`**${f.label}**\n${f.value}`)
-      );
-    }
+    embed.addFields(opts.fields.map(f => ({ name: f.label, value: f.value, inline: !!f.inline })));
   }
 
-  // Footer note
-  if (opts.footerNote) {
-    container.addSeparatorComponents(
-      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(false)
-    );
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`-# ${opts.footerNote}`)
-    );
-  }
-
-  const components: (ContainerBuilder | ActionRowBuilder<any>)[] = [container];
+  const components: any[] = [];
   if (opts.actionRow) {
     components.push(opts.actionRow);
   }
 
   return {
+    embeds: [embed],
     components,
-    flags: MessageFlags.IsComponentsV2,
+    flags: 0,
   };
 }
 
@@ -461,12 +475,12 @@ export const Components = {
         .setCustomId(confirmId)
         .setLabel(labels?.confirm ?? 'Confirm')
         .setStyle(ButtonStyle.Danger)
-        .setEmoji('✅'),
+        .setEmoji(VERIFIED_ICON),
       new ButtonBuilder()
         .setCustomId(cancelId)
         .setLabel(labels?.cancel ?? 'Cancel')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('✖️')
+        .setEmoji(WRONG_ICON)
     );
   },
 

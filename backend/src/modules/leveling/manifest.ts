@@ -266,18 +266,18 @@ export const LevelingManifest: ModuleManifest = {
         if (!guildId) return;
 
         const eco = await getUserEco(guildId, target.id);
-        const { components, flags } = buildRichCard({
-          emoji: '💰',
+        const { embeds, components, flags } = buildRichCard({
+          emoji: '<:ticket:1532620631466836021>',
           title: `Wallet — ${target.username}`,
           accentColor: Colors.GOLD,
           thumbnailUrl: target.displayAvatarURL({ size: 256 }),
           fields: [
-            { label: '💵 Balance', value: `**${fmt(eco.balance)}** coins` },
+            { label: '<:stats:1532429110775779459> Balance', value: `**${fmt(eco.balance)}** coins` },
           ],
-          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+          footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
         });
 
-        await interaction.reply({ components, flags });
+        await interaction.reply({ embeds, components, flags });
       }
     },
     {
@@ -294,33 +294,33 @@ export const LevelingManifest: ModuleManifest = {
         
         if (diff < cooldown) {
           const remaining = Math.ceil((cooldown - diff) / 3600000);
-          const { components, flags } = buildStatusCard({
-            emoji: '⏳',
+          const { embeds, components } = buildStatusCard({
+            emoji: '<:timer:1532620491662037123>',
             title: 'Daily Cooldown Active',
             body: `You've already claimed your daily reward today.\n\n**Next reward available:** ${ts(Math.floor((last + cooldown) / 1000))}`,
             accentColor: Colors.WARN,
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds, components });
         }
         
         eco.balance += 500;
         eco.lastDaily = now;
         await saveUserEco(guildId, interaction.user.id, eco);
         
-        const { components, flags } = buildRichCard({
-          emoji: '🎁',
+        const { embeds, components } = buildRichCard({
+          emoji: '<:booster:1532621228492460172>',
           title: 'Daily Reward Claimed!',
-          accentColor: Colors.SUCCESS,
+          accentColor: Colors.BRAND,
           thumbnailUrl: interaction.user.displayAvatarURL({ size: 256 }),
           fields: [
-            { label: '🎁 Reward',     value: '**500 coins**' },
-            { label: '💰 New Balance', value: `**${fmt(eco.balance)}** coins` },
-            { label: '⏰ Next Daily',  value: ts(Math.floor((now + cooldown) / 1000)) },
+            { label: '<:booster:1532621228492460172> Reward',     value: '**500 coins**' },
+            { label: '<:stats:1532429110775779459> New Balance', value: `**${fmt(eco.balance)}** coins` },
+            { label: '<:timer:1532620491662037123> Next Daily',  value: ts(Math.floor((now + cooldown) / 1000)) },
           ],
-          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+          footerNote: `Rage Optimiser • Unbypassable Security`,
         });
 
-        await interaction.reply({ components, flags });
+        await interaction.reply({ embeds, components });
       }
     },
     {
@@ -336,13 +336,13 @@ export const LevelingManifest: ModuleManifest = {
         
         if (now - last < cooldown) {
           const remaining = Math.ceil((cooldown - (now - last)) / 60000);
-          const { components, flags } = buildStatusCard({
-            emoji: '⏳',
+          const { embeds, components } = buildStatusCard({
+            emoji: '<:timer:1532620491662037123>',
             title: 'Work Shift Cooldown',
             body: `You're currently resting after your work shift.\n\n**Back to work in:** \`${remaining} minutes\``,
             accentColor: Colors.WARN,
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds, components });
         }
         
         const earnings = Math.floor(Math.random() * 200) + 100; // 100 to 300
@@ -350,19 +350,19 @@ export const LevelingManifest: ModuleManifest = {
         eco.lastWork = now;
         await saveUserEco(guildId, interaction.user.id, eco);
         
-        const { components, flags } = buildRichCard({
-          emoji: '💼',
+        const { embeds, components, flags } = buildRichCard({
+          emoji: '<:config:1532425712844144701>',
           title: 'Work Shift Completed!',
           accentColor: Colors.SUCCESS,
           fields: [
-            { label: '💵 Earned',      value: `**${fmt(earnings)} coins**` },
-            { label: '💰 New Balance', value: `**${fmt(eco.balance)} coins**` },
-            { label: '⏰ Next Shift',  value: ts(Math.floor((now + cooldown) / 1000)) },
+            { label: '<:stats:1532429110775779459> Earned',      value: `**${fmt(earnings)} coins**` },
+            { label: '<:stats:1532429110775779459> New Balance', value: `**${fmt(eco.balance)} coins**` },
+            { label: '<:timer:1532620491662037123> Next Shift',  value: ts(Math.floor((now + cooldown) / 1000)) },
           ],
-          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+          footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
         });
 
-        await interaction.reply({ components, flags });
+        await interaction.reply({ embeds, components, flags });
       }
     },
     {
@@ -389,36 +389,36 @@ export const LevelingManifest: ModuleManifest = {
         await saveUserEco(guildId, interaction.user.id, senderEco);
         await saveUserEco(guildId, target.id, targetEco);
         
-        const { components, flags } = buildRichCard({
-          emoji: '💸',
+        const { embeds, components, flags } = buildRichCard({
+          emoji: '<:lightpurplearrow:1532621364115013693>',
           title: 'Transfer Successful',
           accentColor: Colors.SUCCESS,
           fields: [
-            { label: '📤 Sent To',     value: `${target} (\`${target.username}\`)` },
-            { label: '💵 Amount',      value: `**${fmt(amount)} coins**` },
-            { label: '💰 Your Balance', value: `**${fmt(senderEco.balance)} coins**` },
+            { label: '<:member:1532621317487071426> Sent To',     value: `${target} (\`${target.username}\`)` },
+            { label: '<:stats:1532429110775779459> Amount',      value: `**${fmt(amount)} coins**` },
+            { label: '<:stats:1532429110775779459> Your Balance', value: `**${fmt(senderEco.balance)} coins**` },
           ],
-          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+          footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
         });
 
-        await interaction.reply({ components, flags });
+        await interaction.reply({ embeds, components, flags });
       }
     },
     {
       name: 'command_shop',
       handler: async (client: any, interaction: any, context: any) => {
-        const { components, flags } = buildListCard({
-          emoji: '🛒',
+        const { embeds, components, flags } = buildListCard({
+          emoji: '<:vip:1532620837117759508>',
           title: 'Server Shop',
           subtitle: 'Use /buy <item> to purchase (Coming soon)',
           entries: [
-            '**1.** 👑 VIP Role — `10,000 coins`',
-            '**2.** 🎨 Custom Name Color — `5,000 coins`',
-            '**3.** 🎁 Mystery Box — `1,000 coins`',
+            '**1.** <:vip:1532620837117759508> VIP Role — `10,000 coins`',
+            '**2.** <:config:1532425712844144701> Custom Name Color — `5,000 coins`',
+            '**3.** <:booster:1532621228492460172> Mystery Box — `1,000 coins`',
           ],
           accentColor: Colors.MUSIC,
         });
-        await interaction.reply({ components, flags });
+        await interaction.reply({ embeds, components, flags });
       }
     },
     {
@@ -434,8 +434,8 @@ export const LevelingManifest: ModuleManifest = {
           ? inv.map((item, i) => `**${i + 1}.** ${item}`)
           : ['*Your inventory is empty. Visit the shop to get started!*'];
 
-        const { components, flags } = buildListCard({
-          emoji: '🎒',
+        const { embeds, components, flags } = buildListCard({
+          emoji: '<:ticket:1532620631466836021>',
           title: `Inventory — ${interaction.user.username}`,
           subtitle: `${inv.length} item(s) owned`,
           entries,
@@ -443,7 +443,7 @@ export const LevelingManifest: ModuleManifest = {
           thumbnailUrl: interaction.user.displayAvatarURL({ size: 256 }),
         });
 
-        await interaction.reply({ components, flags });
+        await interaction.reply({ embeds, components, flags });
       }
     },
     {
@@ -470,35 +470,35 @@ export const LevelingManifest: ModuleManifest = {
           await saveUserEco(guildId, interaction.user.id, myEco);
           await saveUserEco(guildId, target.id, targetEco);
 
-          const { components, flags } = buildRichCard({
-            emoji: '🥷',
+          const { embeds, components, flags } = buildRichCard({
+            emoji: '<:shield:1532403012751065179>',
             title: 'Heist Successful!',
             accentColor: Colors.SUCCESS,
             fields: [
-              { label: '🎯 Target',      value: `${target} (\`${target.username}\`)` },
-              { label: '💰 Stolen',      value: `**${fmt(stolen)} coins**` },
-              { label: '💵 Your Balance', value: `**${fmt(myEco.balance)} coins**` },
+              { label: '<:member:1532621317487071426> Target',      value: `${target} (\`${target.username}\`)` },
+              { label: '<:stats:1532429110775779459> Stolen',      value: `**${fmt(stolen)} coins**` },
+              { label: '<:stats:1532429110775779459> Your Balance', value: `**${fmt(myEco.balance)} coins**` },
             ],
-            footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+            footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
           });
-          await interaction.reply({ components, flags });
+          await interaction.reply({ embeds, components, flags });
         } else {
           const fine = 500;
           myEco.balance -= fine;
           await saveUserEco(guildId, interaction.user.id, myEco);
 
-          const { components, flags } = buildRichCard({
-            emoji: '🚓',
+          const { embeds, components, flags } = buildRichCard({
+            emoji: '<:gavel:1532621057318584380>',
             title: 'Caught Red-Handed!',
             description: `You were caught attempting to rob **${target.username}** and fined by the authorities.`,
             accentColor: Colors.DANGER,
             fields: [
-              { label: '⚖️ Fine Paid',   value: `**${fmt(fine)} coins**` },
-              { label: '💰 New Balance', value: `**${fmt(myEco.balance)} coins**` },
+              { label: '<:gavel:1532621057318584380> Fine Paid',   value: `**${fmt(fine)} coins**` },
+              { label: '<:stats:1532429110775779459> New Balance', value: `**${fmt(myEco.balance)} coins**` },
             ],
-            footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+            footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
           });
-          await interaction.reply({ components, flags });
+          await interaction.reply({ embeds, components, flags });
         }
       }
     },
@@ -541,20 +541,20 @@ export const LevelingManifest: ModuleManifest = {
         eco.balance += win;
         await saveUserEco(guildId, interaction.user.id, eco);
         
-        const { components, flags } = buildRichCard({
-          emoji: '🎰',
+        const { embeds, components, flags } = buildRichCard({
+          emoji: '<:stats:1532429110775779459>',
           title: 'Slot Machine',
           description: `## ${s1}  ${s2}  ${s3}\n\n${resultText}`,
           accentColor,
           fields: [
-            { label: '🎲 Bet',        value: `**${fmt(bet)} coins**` },
-            { label: '💵 Net',        value: win > 0 ? `**+${fmt(win - bet)} coins**` : `**-${fmt(bet)} coins**` },
-            { label: '💰 Balance',    value: `**${fmt(eco.balance)} coins**` },
+            { label: '<:stats:1532429110775779459> Bet',        value: `**${fmt(bet)} coins**` },
+            { label: '<:stats:1532429110775779459> Net',        value: win > 0 ? `**+${fmt(win - bet)} coins**` : `**-${fmt(bet)} coins**` },
+            { label: '<:stats:1532429110775779459> Balance',    value: `**${fmt(eco.balance)} coins**` },
           ],
-          footerNote: `Rage Optimiser Enterprise  •  ⭐ Leveling & Economy`,
+          footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
         });
           
-        await interaction.reply({ components, flags });
+        await interaction.reply({ embeds, components, flags });
       }
     }
   ],

@@ -92,22 +92,22 @@ export const VerificationManifest: ModuleManifest = {
         const modules = context.getModulesState ? context.getModulesState() : [];
         const verModule = modules.find((m: any) => m.id === 'verification');
         if (!verModule || verModule.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Verification module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Verification module is not enabled.', flags: 64 });
         }
 
         try {
           const embed = new EmbedBuilder()
-            .setTitle('🛡️ Member Verification Required')
+            .setTitle('<:shield:1532403012751065179> Member Verification Required')
             .setDescription('To gain access to the channels and features of this server, please click the verification button below.')
-            .setColor('#2b2d31')
-            .setFooter({ text: `${interaction.guild?.name || 'Rage Optimiser'} Gatekeeper` })
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
 
           const btn = new ButtonBuilder()
             .setCustomId('verify_btn_click')
             .setLabel('Verify Me')
             .setStyle(ButtonStyle.Success)
-            .setEmoji('✅');
+            .setEmoji('<a:approved:1532390590707142956>');
 
           const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btn);
 
@@ -115,7 +115,7 @@ export const VerificationManifest: ModuleManifest = {
           context.logSyncEvent('Verification Service: Posted verification card to entry channel.', 'info');
         } catch (err) {
           console.error(err);
-          await interaction.reply({ content: '❌ Failed to post verification card.', flags: 64 });
+          await interaction.reply({ content: '<:wrong:1532390628330307634> Failed to post verification card.', flags: 64 });
         }
       }
     },
@@ -125,7 +125,7 @@ export const VerificationManifest: ModuleManifest = {
         const modules = context.getModulesState ? context.getModulesState() : [];
         const verModule = modules.find((m: any) => m.id === 'verification');
         if (!verModule || verModule.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Verification module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Verification module is not enabled.', flags: 64 });
         }
 
         const config = verModule.config;
@@ -139,7 +139,7 @@ export const VerificationManifest: ModuleManifest = {
         const showAlreadyVerifiedMessage = config.showAlreadyVerifiedMessage ?? true;
 
         if (!unverifiedRoleId || !verifiedRoleId) {
-          return interaction.reply({ content: '❌ Verification role settings are not configured properly.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Verification role settings are not configured properly.', flags: 64 });
         }
 
         try {
@@ -160,7 +160,7 @@ export const VerificationManifest: ModuleManifest = {
               
               if (showAlreadyVerifiedMessage) {
                 return interaction.reply({ 
-                  content: '✅ **Verification Confirmed**\n\nYou have already completed verification.\nYour verification role was missing and has now been restored.', 
+                  content: '<a:approved:1532390590707142956> **Verification Confirmed**\n\nYou have already completed verification.\nYour verification role was missing and has now been restored.', 
                   flags: 64 
                 });
               } else {
@@ -175,7 +175,7 @@ export const VerificationManifest: ModuleManifest = {
 
             if (showAlreadyVerifiedMessage) {
               return interaction.reply({ 
-                content: '✅ **You\'re Already Verified**\n\nYou have already completed the verification process and successfully claimed your verification role.\nNo further action is required.', 
+                content: '<a:approved:1532390590707142956> **You\'re Already Verified**\n\nYou have already completed the verification process and successfully claimed your verification role.\nNo further action is required.', 
                 flags: 64 
               });
             } else {
@@ -191,11 +191,11 @@ export const VerificationManifest: ModuleManifest = {
 
           await markUserVerified(guildId, member.user.id);
 
-          await interaction.reply({ content: '✅ **Verification Succeeded!** Welcome to the server.', flags: 64 });
+          await interaction.reply({ content: '<a:approved:1532390590707142956> **Verification Succeeded!** Welcome to the server.', flags: 64 });
           context.logSyncEvent(`Verification Service: Verified member "${userTag(member.user)}" successfully.`, 'success');
         } catch (err) {
           console.error(err);
-          await interaction.reply({ content: '❌ Failed to update your roles. Verify bot roles hierarchy.', flags: 64 });
+          await interaction.reply({ content: '<:wrong:1532390628330307634> Failed to update your roles. Verify bot roles hierarchy.', flags: 64 });
         }
       }
     }

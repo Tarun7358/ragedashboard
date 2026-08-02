@@ -577,6 +577,25 @@ export class Database {
         loopMode TEXT DEFAULT 'off',
         updatedAt INTEGER NOT NULL
       );`,
+      `CREATE TABLE IF NOT EXISTS temp_roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        roleId TEXT NOT NULL,
+        assignedBy TEXT NOT NULL,
+        reason TEXT,
+        expiresAt INTEGER NOT NULL,
+        createdAt INTEGER NOT NULL
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_temp_roles_expires ON temp_roles (expiresAt);`,
+      `CREATE TABLE IF NOT EXISTS extra_owners (
+        guildId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        addedBy TEXT NOT NULL,
+        permissionsJson TEXT NOT NULL DEFAULT '{"antinukeBypass":true,"manageWhitelists":true,"manageLockdowns":true}',
+        addedAt INTEGER NOT NULL,
+        PRIMARY KEY (guildId, userId)
+      );`,
     ];
 
     for (const schema of schemas) {

@@ -77,6 +77,21 @@ export class CommandPipeline {
 
       // 3. Permission Validation
       const isOwner = PrefixPermissionManager.isDeveloper(ctx.executor.id, ctx.message);
+
+      // Anti-Nuke & AutoMod Owner / Extra Owner Gate
+      const isAntiNukeOrAutoMod = ['security', 'automod', 'AutoMod', 'Security'].includes(cmdMeta.category) ||
+        ['security', 'antinuke', 'automod', 'antilink', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm'].includes(cmdMeta.name) ||
+        (cmdMeta.name === 'config' && ['security', 'antinuke', 'automod', 'antilink', 'whitelist', 'extraowner'].includes(ctx.args[0]?.toLowerCase()));
+
+      if (isAntiNukeOrAutoMod) {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const allowed = await isOwnerOrExtraOwner(ctx.executor.id, ctx.guild);
+        if (!allowed) {
+          PrefixAnalytics.trackFailure('permission');
+          return this.sendError(ctx, 'Access Denied: Only the Guild Owner and Extra Owners can access Anti-Nuke and AutoMod features.');
+        }
+      }
+
       const permResult = PrefixPermissionManager.checkPermissions(ctx.message, cmdMeta, modState);
       if (!permResult.allowed && !isOwner) {
         PrefixAnalytics.trackFailure('permission');
@@ -98,10 +113,12 @@ export class CommandPipeline {
       if (cdResult.onCooldown) {
         PrefixAnalytics.trackFailure('cooldown');
         const embed = new EmbedBuilder()
-          .setTitle('⏱️ Command Cooldown')
-          .setDescription(`Please wait **${cdResult.retryAfter}s** before using \`${cmdMeta.name}\` again.`)
-          .setColor('#f59e0b')
-          .setFooter({ text: `Correlation ID: ${correlationId}` });
+          .setAuthor({ name: 'Rage Optimiser Security Gate • Cooldown' })
+          .setTitle('<:timer:1532620491662037123> Command Cooldown Active')
+          .setDescription(`Please wait **\`${cdResult.retryAfter}s\`** before executing \`r!${cmdMeta.name}\` again.`)
+          .setColor(0xF59E0B)
+          .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${correlationId}` })
+          .setTimestamp();
         return ctx.message.reply({ embeds: [embed] }).catch(() => {});
       }
 
@@ -151,10 +168,11 @@ export class CommandPipeline {
       PrefixAnalytics.trackExecution(cmdMeta.name, cmdMeta.category, Date.now() - ctx.startTime, false);
 
       const errEmbed = new EmbedBuilder()
-        .setTitle('❌ Command Execution Failed')
+        .setAuthor({ name: 'Rage Optimiser Engine • Execution Error' })
+        .setTitle('<:wrong:1532390628330307634> Command Execution Failed')
         .setDescription(err.message || 'An internal server error occurred during validation or execution of this command.')
-        .setColor('#ff4444')
-        .setFooter({ text: `Correlation ID: ${correlationId}` })
+        .setColor(0xEF4444)
+        .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
         .setTimestamp();
       await ctx.message.reply({ embeds: [errEmbed] }).catch(() => {});
     }
@@ -167,10 +185,11 @@ export class CommandPipeline {
     );
 
     const embed = new EmbedBuilder()
-      .setTitle('🚨 Confirmation Required')
-      .setDescription(`Are you sure you want to execute **\`r!${ctx.cmdMeta.name} ${ctx.args.join(' ')}\`**?\nThis is classified as a high-risk operational command.`)
-      .setColor('#f59e0b')
-      .setFooter({ text: `Correlation ID: ${ctx.correlationId}` })
+      .setAuthor({ name: 'Rage Optimiser Security Gate • High Risk Action' })
+      .setTitle('<:shield:1532403012751065179> High Risk Action Confirmation')
+      .setDescription(`Are you sure you want to execute **\`r!${ctx.cmdMeta.name} ${ctx.args.join(' ')}\`**?\nThis is classified as a high-risk administrative command.`)
+      .setColor(0xF59E0B)
+      .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${ctx.correlationId}` })
       .setTimestamp();
 
     const response = await ctx.message.reply({ embeds: [embed], components: [row] });
@@ -182,24 +201,25 @@ export class CommandPipeline {
       });
 
       if (confirmation.customId === 'confirm_yes') {
-        await confirmation.update({ content: '✅ Command confirmed. Starting execution...', embeds: [], components: [] });
+        await confirmation.update({ content: '<a:approved:1532390590707142956> Command confirmed. Starting execution...', embeds: [], components: [] });
         return true;
       } else {
-        await confirmation.update({ content: '❌ Command cancelled.', embeds: [], components: [] });
+        await confirmation.update({ content: '<:wrong:1532390628330307634> Command cancelled.', embeds: [], components: [] });
         return false;
       }
     } catch {
-      await response.edit({ content: '⏰ Command timed out due to inactivity.', embeds: [], components: [] }).catch(() => {});
+      await response.edit({ content: '<:timer:1532620491662037123> Command timed out due to inactivity.', embeds: [], components: [] }).catch(() => {});
       return false;
     }
   }
 
   private static sendError(ctx: CommandContext, message: string) {
     const embed = new EmbedBuilder()
-      .setTitle('❌ Command Pipeline Error')
+      .setAuthor({ name: 'Rage Optimiser Security Gate • System Error' })
+      .setTitle('<:wrong:1532390628330307634> Command Pipeline Exception')
       .setDescription(message)
-      .setColor('#ff4444')
-      .setFooter({ text: `Correlation ID: ${ctx.correlationId}` })
+      .setColor(0xEF4444)
+      .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${ctx.correlationId}` })
       .setTimestamp();
     return ctx.message.reply({ embeds: [embed] }).catch(() => {});
   }

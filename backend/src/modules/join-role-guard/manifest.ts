@@ -241,18 +241,18 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
       name: 'command_joinguard',
       handler: async (client: any, interaction: any, context: any) => {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-          return interaction.reply({ content: '🔒 Administrator permissions required.', flags: 64 });
+          return interaction.reply({ content: '<:shield:1532403012751065179> Administrator permissions required.', flags: 64 });
         }
 
         const modules = context.getModulesState ? context.getModulesState() : [];
         const mod = modules.find((m: any) => m.id === 'join_role_guard');
         if (!mod) {
-          return interaction.reply({ content: '❌ Join Guard module not found.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Join Guard module not found.', flags: 64 });
         }
 
         const sub = interaction.options.getSubcommand(false);
         if (!sub) {
-          return interaction.reply({ content: '❌ Please specify a subcommand (status, config, or view).', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Please specify a subcommand (status, config, or view).', flags: 64 });
         }
         const config = mod.config || {};
 
@@ -261,7 +261,7 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
           config.enableJoinGuard = enabled;
           context.updateModuleConfig('join_role_guard', config);
           return interaction.reply({
-            content: `✅ Join Guard has been **${enabled ? 'enabled' : 'disabled'}**.`,
+            content: `<a:approved:1532390590707142956> Join Guard has been **${enabled ? 'enabled' : 'disabled'}**.`,
             flags: 64
           });
         }
@@ -281,23 +281,24 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
 
           context.updateModuleConfig('join_role_guard', config);
           return interaction.reply({
-            content: '✅ Join Guard configuration updated successfully.',
+            content: '<a:approved:1532390590707142956> Join Guard configuration updated successfully.',
             flags: 64
           });
         }
 
         if (sub === 'view') {
           const embed = new EmbedBuilder()
-            .setTitle('🛡️ Join Role Guard Configuration')
-            .setColor('#3498db')
+            .setTitle('<:shield:1532403012751065179> Join Role Guard Configuration')
+            .setColor(0x99CC00)
             .addFields(
-              { name: 'Status', value: config.enableJoinGuard !== false ? '🟢 Enabled' : '🔴 Disabled', inline: true },
-              { name: 'Grace Period', value: `${config.joinGracePeriod ?? 20} seconds`, inline: true },
-              { name: 'Ignore Onboarding', value: config.ignoreOnboarding !== false ? '✅ Yes' : '❌ No', inline: true },
-              { name: 'Ignore Screening', value: config.ignoreScreening !== false ? '✅ Yes' : '❌ No', inline: true },
-              { name: 'Ignore Trusted Bots', value: config.ignoreTrustedBots !== false ? '✅ Yes' : '❌ No', inline: true },
-              { name: 'Debug Mode', value: config.debugMode ? '✅ Enabled' : '❌ Disabled', inline: true }
+              { name: 'Status', value: config.enableJoinGuard !== false ? '<a:approved:1532390590707142956> Enabled' : '<:wrong:1532390628330307634> Disabled', inline: true },
+              { name: 'Grace Period', value: `\`${config.joinGracePeriod ?? 20} seconds\``, inline: true },
+              { name: 'Ignore Onboarding', value: config.ignoreOnboarding !== false ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No', inline: true },
+              { name: 'Ignore Screening', value: config.ignoreScreening !== false ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No', inline: true },
+              { name: 'Ignore Trusted Bots', value: config.ignoreTrustedBots !== false ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No', inline: true },
+              { name: 'Debug Mode', value: config.debugMode ? '<a:approved:1532390590707142956> Enabled' : '<:wrong:1532390628330307634> Disabled', inline: true }
             )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         }

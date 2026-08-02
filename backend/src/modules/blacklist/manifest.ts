@@ -162,13 +162,13 @@ export const BlacklistManifest: ModuleManifest = {
       name: 'command_blacklist',
       handler: async (client: any, interaction: any, context: any) => {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-          return interaction.reply({ content: '🔒 Administrator permissions required.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Administrator permissions required.', flags: 64 });
         }
 
         const modules = context.getModulesState ? context.getModulesState() : [];
         const blMod = modules.find((m: any) => m.id === 'blacklist');
         if (!blMod || blMod.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Blacklist module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Blacklist module is not enabled.', flags: 64 });
         }
 
         let entries: IBlacklistEntry[] = blMod.config?.entries || [];
@@ -192,7 +192,7 @@ export const BlacklistManifest: ModuleManifest = {
           else if (subGroup === 'sticker') { value = interaction.options.getString('sticker'); label = value; type = 'sticker'; }
 
           if (isBlacklisted(entries, type, value)) {
-            return interaction.reply({ content: `❌ \`${label}\` is already blacklisted as type **${type}**.`, flags: 64 });
+            return interaction.reply({ content: `<:wrong:1532390628330307634> \`${label}\` is already blacklisted as type **${type}**.`, flags: 64 });
           }
 
           const entry: IBlacklistEntry = {
@@ -235,7 +235,7 @@ export const BlacklistManifest: ModuleManifest = {
             }).catch(() => {});
           }
 
-          return interaction.reply({ content: `✅ **${type.toUpperCase()}** \`${label}\` has been blacklisted and immediate actions applied.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> **${type.toUpperCase()}** \`${label}\` has been blacklisted and immediate actions applied.`, flags: 64 });
         }
 
         // --- REMOVE ---
@@ -254,24 +254,24 @@ export const BlacklistManifest: ModuleManifest = {
 
           const before = entries.length;
           entries = entries.filter(e => !(e.type === subGroup && e.value === value));
-          if (entries.length === before) return interaction.reply({ content: `❌ Entry not found in blacklist.`, flags: 64 });
+          if (entries.length === before) return interaction.reply({ content: `<:wrong:1532390628330307634> Entry not found in blacklist.`, flags: 64 });
           saveEntries(entries);
           context.logSyncEvent(`[Blacklist] Removed ${subGroup} blacklist entry: ${value} by ${interaction.user.username}`, 'info');
-          return interaction.reply({ content: `🗑️ Removed \`${value}\` from **${subGroup}** blacklist.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Removed \`${value}\` from **${subGroup}** blacklist.`, flags: 64 });
         }
 
         // --- LIST ---
         if (sub === 'list') {
           const filtered = entries.filter(e => e.type === (subGroup as BlacklistType));
-          if (filtered.length === 0) return interaction.reply({ content: `📋 No ${subGroup} entries in the blacklist.`, flags: 64 });
+          if (filtered.length === 0) return interaction.reply({ content: `<:information:1532621274092929124> No ${subGroup} entries in the blacklist.`, flags: 64 });
           const lines = filtered.slice(0, 20).map((e, i) => `**${i + 1}.** \`${e.label || e.value}\` — ${e.reason || 'No reason'}`);
-          return interaction.reply({ content: `🚫 **${subGroup?.toUpperCase()} Blacklist** (${filtered.length} entries):\n${lines.join('\n')}`, flags: 64 });
+          return interaction.reply({ content: `<:shield:1532403012751065179> **${subGroup?.toUpperCase()} Blacklist** (${filtered.length} entries):\n${lines.join('\n')}`, flags: 64 });
         }
 
         // --- VIEW ---
         if (sub === 'view') {
           const types: BlacklistType[] = ['user', 'role', 'channel', 'bot', 'domain', 'invite', 'word', 'regex', 'emoji', 'sticker'];
-          const embed = new EmbedBuilder().setTitle('🚫 Server Blacklist Overview').setColor('#ff4444').setTimestamp();
+          const embed = new EmbedBuilder().setTitle('<:shield:1532403012751065179> Server Blacklist Overview').setColor('#ff4444').setTimestamp();
           for (const t of types) {
             const count = entries.filter(e => e.type === t).length;
             if (count > 0) embed.addFields({ name: t.charAt(0).toUpperCase() + t.slice(1), value: `${count} entries`, inline: true });
@@ -286,7 +286,7 @@ export const BlacklistManifest: ModuleManifest = {
           if (type === 'all') { entries = []; }
           else { entries = entries.filter(e => e.type !== type); }
           saveEntries(entries);
-          return interaction.reply({ content: `🗑️ Cleared all **${type}** blacklist entries.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Cleared all **${type}** blacklist entries.`, flags: 64 });
         }
 
         // --- EXPORT ---
@@ -294,10 +294,10 @@ export const BlacklistManifest: ModuleManifest = {
           const json = JSON.stringify(entries, null, 2);
           const { AttachmentBuilder } = await import('discord.js');
           const attachment = new AttachmentBuilder(Buffer.from(json), { name: `blacklist-${interaction.guildId}.json` });
-          return interaction.reply({ content: '📤 Blacklist export:', files: [attachment], flags: 64 });
+          return interaction.reply({ content: '<a:approved:1532390590707142956> Blacklist export:', files: [attachment], flags: 64 });
         }
 
-        await interaction.reply({ content: '❌ Unknown subcommand.', flags: 64 });
+        await interaction.reply({ content: '<:wrong:1532390628330307634> Unknown subcommand.', flags: 64 });
       }
     },
     // --- Message enforcement ---

@@ -241,7 +241,7 @@ export class PaymentService {
           .setDescription(content)
           .setColor(color as any)
           .setTimestamp()
-          .setFooter({ text: 'Rage Optimiser • Audit Logger' });
+          .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
         await channel.send({ embeds: [embed] }).catch(() => {});
       }

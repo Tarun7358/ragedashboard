@@ -287,7 +287,7 @@ export const PaymentManifest: ModuleManifest = {
               { name: '⬜ Background', value: `\`${brandingObj.backgroundColor || '#FFFFFF'}\``, inline: true }
             )
             .setColor((brandingObj.accentColor || '#7c5cfc') as any)
-            .setFooter({ text: config.footer || 'Rage Optimiser • Branding' });
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
           return interaction.reply({ embeds: [embed], flags: 64 });
         }

@@ -217,7 +217,7 @@ export const JoinToCreateManifest: ModuleManifest = {
         const jtcMod = modules.find((m: any) => m.id === 'join_to_create');
 
         if (!jtcMod || jtcMod.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Join To Create module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Join To Create module is not enabled.', flags: 64 });
         }
 
         const config: IJoinToCreate = jtcMod.config || {};
@@ -226,7 +226,7 @@ export const JoinToCreateManifest: ModuleManifest = {
 
         if (sub === 'setup') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '🔒 Administrator permission required.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> Administrator permission required.', flags: 64 });
           }
           const channel = interaction.options.getChannel('channel');
           const category = interaction.options.getChannel('category');
@@ -254,51 +254,51 @@ export const JoinToCreateManifest: ModuleManifest = {
           });
 
           context.logSyncEvent(`[JTC] Trigger ${existingIdx >= 0 ? 'updated' : 'added'}: #${(channel as any).name} (${existingTriggers.length} total).`, 'success');
-          return interaction.reply({ content: `✅ **JTC Trigger ${existingIdx >= 0 ? 'Updated' : 'Added'}!**\n- **Channel:** ${channel}\n- **Label:** \`${label}\`\n- **Default Name:** \`${defaultName}\`\n- **Privacy:** \`${privacy}\`\n- **Total Triggers:** ${existingTriggers.length}`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> **JTC Trigger ${existingIdx >= 0 ? 'Updated' : 'Added'}!**\n- **Channel:** ${channel}\n- **Label:** \`${label}\`\n- **Default Name:** \`${defaultName}\`\n- **Privacy:** \`${privacy}\`\n- **Total Triggers:** ${existingTriggers.length}`, flags: 64 });
         }
 
         if (sub === 'remove') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '🔒 Administrator permission required.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> Administrator permission required.', flags: 64 });
           }
           const channel = interaction.options.getChannel('channel');
           const existingTriggers: any[] = [...(config.triggers || [])];
           const filtered = existingTriggers.filter((t: any) => t.triggerChannelId !== channel.id);
           if (filtered.length === existingTriggers.length) {
-            return interaction.reply({ content: `❌ ${channel} is not a registered JTC trigger channel.`, flags: 64 });
+            return interaction.reply({ content: `<:wrong:1532390628330307634> ${channel} is not a registered JTC trigger channel.`, flags: 64 });
           }
           saveConfig({ triggers: filtered });
           context.logSyncEvent(`[JTC] Trigger removed: #${(channel as any).name} (${filtered.length} remaining).`, 'info');
-          return interaction.reply({ content: `✅ Removed **${(channel as any).name}** as a JTC trigger. **${filtered.length}** trigger(s) remaining.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Removed **${(channel as any).name}** as a JTC trigger. **${filtered.length}** trigger(s) remaining.`, flags: 64 });
         }
 
         // Find user's active channel
         const myChannel = activeChannels.find((c: any) => c.ownerId === interaction.user.id);
 
         if (sub === 'name') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const name = interaction.options.getString('name');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           await channel.setName(name).catch(() => {});
           myChannel.name = name;
           saveConfig({ activeChannels });
-          return interaction.reply({ content: `✅ Renamed your channel to **${name}**.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Renamed your channel to **${name}**.`, flags: 64 });
         }
 
         if (sub === 'limit') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const limit = interaction.options.getInteger('limit');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           await channel.setUserLimit(limit).catch(() => {});
-          return interaction.reply({ content: `✅ Set user limit to **${limit === 0 ? 'unlimited' : limit}**.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Set user limit to **${limit === 0 ? 'unlimited' : limit}**.`, flags: 64 });
         }
 
         if (sub === 'lock') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           // Lock = deny Connect (and ViewChannel for invisible mode) for @everyone
           await channel.permissionOverwrites.edit(interaction.guildId, {
             Connect: false,
@@ -306,13 +306,13 @@ export const JoinToCreateManifest: ModuleManifest = {
           }).catch(() => {});
           myChannel.locked = true;
           saveConfig({ activeChannels });
-          return interaction.reply({ content: '🔒 Your channel is now **locked**. Use `/jtc unlock` to reopen.', flags: 64 });
+          return interaction.reply({ content: '<:shield:1532403012751065179> Your channel is now **locked**. Use `/jtc unlock` to reopen.', flags: 64 });
         }
 
         if (sub === 'unlock') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           // Restore privacy mode from the originating trigger
           const originTrigger = (config.triggers || []).find((t: any) => t.id === myChannel.triggerId);
           const originPrivacy = originTrigger?.privacy || 'public';
@@ -327,92 +327,92 @@ export const JoinToCreateManifest: ModuleManifest = {
           }
           myChannel.locked = false;
           saveConfig({ activeChannels });
-          return interaction.reply({ content: '🔓 Your channel is now **unlocked**.', flags: 64 });
+          return interaction.reply({ content: '<a:approved:1532390590707142956> Your channel is now **unlocked**.', flags: 64 });
         }
 
         if (sub === 'transfer') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const user = interaction.options.getUser('user');
           myChannel.ownerId = user.id;
           myChannel.ownerTag = user.username;
           saveConfig({ activeChannels });
           context.logSyncEvent(`[JTC] ${interaction.user.username} transferred channel to ${user.username}.`, 'info');
-          return interaction.reply({ content: `✅ Transferred channel ownership to ${user}.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Transferred channel ownership to ${user}.`, flags: 64 });
         }
 
         if (sub === 'kick') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const user = interaction.options.getUser('user');
           const member = interaction.guild?.members.cache.get(user.id);
-          if (!member) return interaction.reply({ content: '❌ Member not found.', flags: 64 });
+          if (!member) return interaction.reply({ content: '<:wrong:1532390628330307634> Member not found.', flags: 64 });
           if (member.voice?.channelId === myChannel.channelId) {
             await member.voice.disconnect('Kicked from JTC channel').catch(() => {});
           }
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (channel) await channel.permissionOverwrites.edit(user.id, { Connect: false }).catch(() => {});
-          return interaction.reply({ content: `✅ Kicked ${user} from your channel.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Kicked ${user} from your channel.`, flags: 64 });
         }
 
         if (sub === 'invite') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const user = interaction.options.getUser('user');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           await channel.permissionOverwrites.edit(user.id, { Connect: true, ViewChannel: true }).catch(() => {});
-          return interaction.reply({ content: `✅ Invited ${user} to your channel.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Invited ${user} to your channel.`, flags: 64 });
         }
 
         if (sub === 'info') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const originTrigger = (config.triggers || []).find((t: any) => t.id === myChannel.triggerId);
-          const privacyLabel: Record<string, string> = { public: '🌐 Public', private: '🔐 Private', locked: '🔒 Locked', invisible: '👁️ Invisible', stage: '🎙️ Stage', sync: '🔄 Synced' };
+          const privacyLabel: Record<string, string> = { public: 'Public', private: 'Private', locked: 'Locked', invisible: 'Invisible', stage: 'Stage', sync: 'Synced' };
           const embed = new EmbedBuilder()
-            .setTitle(`🎙️ Your JTC Channel`)
+            .setTitle(`<:voicechannelgreen:1532425750278438962> Your JTC Channel`)
             .setColor('#4f8cff')
             .addFields(
-              { name: 'Channel', value: `<#${myChannel.channelId}>`, inline: true },
-              { name: 'Name', value: myChannel.name, inline: true },
-              { name: 'Status', value: myChannel.locked ? '🔒 Locked' : '🔓 Open', inline: true },
-              { name: 'Privacy Mode', value: privacyLabel[originTrigger?.privacy || 'public'] || '🌐 Public', inline: true },
-              { name: 'User Limit', value: (myChannel.limit || 0) === 0 ? '∞ Unlimited' : `${myChannel.limit} max`, inline: true },
-              { name: 'Trigger', value: originTrigger ? `📌 ${originTrigger.label}` : 'Legacy', inline: true },
-              { name: 'Created', value: `<t:${Math.floor(new Date(myChannel.createdAt).getTime() / 1000)}:R>`, inline: true }
+              { name: '<:voicechannelgreen:1532425750278438962> Channel', value: `<#${myChannel.channelId}>`, inline: true },
+              { name: '<:information:1532621274092929124> Name', value: myChannel.name, inline: true },
+              { name: '<:shield:1532403012751065179> Status', value: myChannel.locked ? 'Locked' : 'Open', inline: true },
+              { name: '<:config:1532425712844144701> Privacy Mode', value: privacyLabel[originTrigger?.privacy || 'public'] || 'Public', inline: true },
+              { name: '<:member:1532621317487071426> User Limit', value: (myChannel.limit || 0) === 0 ? '∞ Unlimited' : `${myChannel.limit} max`, inline: true },
+              { name: '<:link:1532620952087826602> Trigger', value: originTrigger ? originTrigger.label : 'Legacy', inline: true },
+              { name: '<:timer:1532620491662037123> Created', value: `<t:${Math.floor(new Date(myChannel.createdAt).getTime() / 1000)}:R>`, inline: true }
             );
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
         if (sub === 'list') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-            return interaction.reply({ content: '🔒 Manage Server permission required.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> Manage Server permission required.', flags: 64 });
           }
-          if (activeChannels.length === 0) return interaction.reply({ content: '📋 No active JTC channels.', flags: 64 });
-          const lines = activeChannels.map((c: any, i: number) => `**${i + 1}.** <#${c.channelId}> — Owner: <@${c.ownerId}> ${c.locked ? '🔒' : '🔓'}`);
-          return interaction.reply({ content: `🎙️ **Active JTC Channels (${activeChannels.length}):**\n${lines.join('\n')}`, flags: 64 });
+          if (activeChannels.length === 0) return interaction.reply({ content: '<:information:1532621274092929124> No active JTC channels.', flags: 64 });
+          const lines = activeChannels.map((c: any, i: number) => `**${i + 1}.** <#${c.channelId}> — Owner: <@${c.ownerId}> ${c.locked ? '[Locked]' : '[Open]'}`);
+          return interaction.reply({ content: `<:voicechannelgreen:1532425750278438962> **Active JTC Channels (${activeChannels.length}):**\n${lines.join('\n')}`, flags: 64 });
         }
 
         if (sub === 'bitrate') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const bitrate = interaction.options.getInteger('bitrate');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           await channel.setBitrate(bitrate * 1000).catch(() => {});
-          return interaction.reply({ content: `✅ Set bitrate to **${bitrate}kbps**.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Set bitrate to **${bitrate}kbps**.`, flags: 64 });
         }
 
         if (sub === 'region') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const region = interaction.options.getString('region');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           const rtcRegion = region?.toLowerCase() === 'auto' ? null : (region || null);
           await (channel as any).setRTCRegion(rtcRegion).catch(() => {});
-          return interaction.reply({ content: `✅ Set voice region to **${rtcRegion ?? 'Automatic'}**.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Set voice region to **${rtcRegion ?? 'Automatic'}**.`, flags: 64 });
         }
 
         if (sub === 'reset') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           // BUG FIX: resolve defaults from originating trigger, not stale root config fields
           const originTrigger = (config.triggers || []).find((t: any) => t.id === myChannel.triggerId);
           const defaultName = ((originTrigger?.defaultName || config.defaultName || "{username}'s Channel"))
@@ -436,61 +436,61 @@ export const JoinToCreateManifest: ModuleManifest = {
           myChannel.name = defaultName;
           myChannel.locked = false;
           saveConfig({ activeChannels });
-          return interaction.reply({ content: `✅ Reset your channel to **${defaultPrivacy}** defaults.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Reset your channel to **${defaultPrivacy}** defaults.`, flags: 64 });
         }
 
         if (sub === 'hide') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           await channel.permissionOverwrites.edit(interaction.guild?.roles.everyone.id!, { ViewChannel: false });
-          return interaction.reply({ content: '✅ Channel successfully hidden.', flags: 64 });
+          return interaction.reply({ content: '<a:approved:1532390590707142956> Channel successfully hidden.', flags: 64 });
         }
 
         if (sub === 'unhide') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           await channel.permissionOverwrites.edit(interaction.guild?.roles.everyone.id!, { ViewChannel: true });
-          return interaction.reply({ content: '✅ Channel successfully unhidden.', flags: 64 });
+          return interaction.reply({ content: '<a:approved:1532390590707142956> Channel successfully unhidden.', flags: 64 });
         }
 
         if (sub === 'permit') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           const target = interaction.options.getUser('user');
           await channel.permissionOverwrites.edit(target.id, { Connect: true, ViewChannel: true });
-          return interaction.reply({ content: `✅ Allowed ${target} to join your channel.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Allowed ${target} to join your channel.`, flags: 64 });
         }
 
         if (sub === 'reject') {
-          if (!myChannel) return interaction.reply({ content: '❌ You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '❌ Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel not found.', flags: 64 });
           const target = interaction.options.getUser('user');
           await channel.permissionOverwrites.edit(target.id, { Connect: false });
           const member = interaction.guild?.members.cache.get(target.id);
           if (member && member.voice?.channelId === channel.id) {
             await member.voice.disconnect().catch(() => {});
           }
-          return interaction.reply({ content: `❌ Blocked ${target} from joining your channel.`, flags: 64 });
+          return interaction.reply({ content: `<:wrong:1532390628330307634> Blocked ${target} from joining your channel.`, flags: 64 });
         }
 
         if (sub === 'claim') {
           const currentVoiceChannel = (interaction.member as any)?.voice?.channel;
-          if (!currentVoiceChannel) return interaction.reply({ content: '❌ You must be in a JTC voice channel to claim it.', flags: 64 });
+          if (!currentVoiceChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You must be in a JTC voice channel to claim it.', flags: 64 });
           const activeCh = activeChannels.find((c: any) => c.channelId === currentVoiceChannel.id);
-          if (!activeCh) return interaction.reply({ content: '❌ This channel is not a managed JTC channel.', flags: 64 });
+          if (!activeCh) return interaction.reply({ content: '<:wrong:1532390628330307634> This channel is not a managed JTC channel.', flags: 64 });
           const originalOwnerInVc = currentVoiceChannel.members.has(activeCh.ownerId);
           if (originalOwnerInVc && activeCh.ownerId !== interaction.user.id) {
-            return interaction.reply({ content: '❌ You cannot claim this channel because the owner is still in the voice channel.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> You cannot claim this channel because the owner is still in the voice channel.', flags: 64 });
           }
           activeCh.ownerId = interaction.user.id;
           activeCh.ownerTag = interaction.user.tag;
           saveConfig({ activeChannels });
           await currentVoiceChannel.permissionOverwrites.edit(interaction.user.id, { ManageChannels: true, Connect: true, ViewChannel: true });
-          return interaction.reply({ content: '👑 **You have successfully claimed ownership of this channel!**' });
+          return interaction.reply({ content: '<:vip:1532620837117759508> **You have successfully claimed ownership of this channel!**' });
         }
       }
     },

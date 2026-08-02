@@ -1,6 +1,6 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { PermissionFlagsBits, MessageFlags } from 'discord.js';
-import { Embeds, Colors, buildStatusCard } from '../../core/UIFactory.js';
+import { Embeds, Colors, buildStatusCard, createLimeEmbed } from '../../core/UIFactory.js';
 import { checkWhitelistPermission } from '../../utils/whitelistCheck.js';
 import { isUrlCommandBypass } from '../../utils/antiLinkBypass.js';
 
@@ -45,7 +45,7 @@ async function repostSanitizedContent(message: any, cleanText: string) {
     }
 
     await channel.send({
-      content: `💬 **Message from ${message.author.username}** *(link removed)*:\n${cleanText}`,
+      content: `<:link:1532620952087826602> **Message from ${message.author.username}** *(link removed)*:\n${cleanText}`,
       allowedMentions: { parse: [] }
     });
   } catch (e) {
@@ -81,27 +81,83 @@ export const AutomodManifest: ModuleManifest = {
   commands: [
     {
       name: 'automod',
-      description: 'Enterprise AntiLink & AutoMod configuration',
+      description: 'Enterprise AntiLink & AutoMod configuration engine',
       options: [
         {
           name: 'status',
-          description: 'View AutoMod status, AntiLink settings, ignored channels and roles',
+          description: 'View complete AutoMod status matrix, AntiLink rules & bypasses',
           type: 1
         },
         {
           name: 'antilink',
-          description: 'Configure AntiLink protection settings',
+          description: 'Configure Anti-Link filter, punishments, invite rules & bypass domains',
           type: 1,
           options: [
             {
+              name: 'enable',
+              type: 5,
+              description: 'Enable or disable Anti-Link filter',
+              required: false
+            },
+            {
               name: 'action',
               type: 3,
-              description: 'Action (enable / disable / status)',
-              required: true,
+              description: 'Punishment action on link detection',
+              required: false,
               choices: [
-                { name: 'Enable AntiLink', value: 'enable' },
-                { name: 'Disable AntiLink', value: 'disable' },
-                { name: 'View Status', value: 'status' }
+                { name: 'Delete Message Only', value: 'delete' },
+                { name: 'Warn & Delete Message', value: 'warn' },
+                { name: 'Mute Member & Delete', value: 'mute' }
+              ]
+            },
+            {
+              name: 'allow_invites',
+              type: 5,
+              description: 'Allow Discord invite links (discord.gg / discord.com/invite)',
+              required: false
+            },
+            {
+              name: 'ignored_domains',
+              type: 3,
+              description: 'Comma-separated bypass domains (e.g. spotify.com, youtube.com)',
+              required: false
+            }
+          ]
+        },
+        {
+          name: 'antispam',
+          description: 'Configure Anti-Spam rate limit, window duration & punishment',
+          type: 1,
+          options: [
+            {
+              name: 'enable',
+              type: 5,
+              description: 'Enable or disable Anti-Spam rate limiter',
+              required: false
+            },
+            {
+              name: 'max_messages',
+              type: 4,
+              description: 'Maximum messages allowed within time window (e.g. 5)',
+              required: false
+            },
+            {
+              name: 'window_seconds',
+              type: 4,
+              description: 'Time window duration in seconds (e.g. 5)',
+              required: false
+            },
+            {
+              name: 'action',
+              type: 3,
+              description: 'Punishment action on spam trigger',
+              required: false,
+              choices: [
+                { name: 'Delete Message Only', value: 'delete' },
+                { name: 'Warn & Delete Message', value: 'warn' },
+                { name: 'Mute Member (Timeout)', value: 'mute' },
+                { name: 'Kick Member', value: 'kick' },
+                { name: 'Ban Member', value: 'ban' }
               ]
             }
           ]
@@ -162,7 +218,16 @@ export const AutomodManifest: ModuleManifest = {
       name: 'command_automod',
       handler: async (client: any, interaction: any, context: any) => {
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: '❌ AutoMod commands must be run inside a server.', flags: 64 });
+        if (!guild) return interaction.reply({ content: '<:wrong:1532390628330307634> AutoMod commands must be run inside a server.', flags: 64 });
+
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const isOwnerOrExtra = await isOwnerOrExtraOwner(interaction.user.id, guild);
+        if (!isOwnerOrExtra) {
+          return interaction.reply({
+            content: '<:wrong:1532390628330307634> Access Denied: Only the Guild Owner and Extra Owners can access Anti-Nuke and AutoMod features.',
+            flags: 64
+          });
+        }
 
         const modules = context.getModulesState ? context.getModulesState() : [];
         const amMod = modules.find((m: any) => m.id === 'automod');
@@ -180,30 +245,30 @@ export const AutomodManifest: ModuleManifest = {
 
           if (action === 'add') {
             if (!targetChannel) {
-              return interaction.reply({ content: '❌ Please mention or specify a target channel to ignore.', flags: 64 });
+              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target channel to ignore.', flags: 64 });
             }
             if (!ignoredChannels.includes(targetChannel.id)) {
               ignoredChannels.push(targetChannel.id);
               context.updateModuleConfig('automod', { ...config, ignoredChannels });
               context.logSyncEvent(`AutoMod: Added #${targetChannel.name} to AntiLink ignored channels.`, 'success');
             }
-            return interaction.reply({ content: `✅ Added ${targetChannel} to AntiLink **ignored channels**. Links posted in this channel will now be bypassed.`, flags: 64 });
+            return interaction.reply({ content: `<a:approved:1532390590707142956> Added ${targetChannel} to AntiLink **ignored channels**. Links posted in this channel will now be bypassed.`, flags: 64 });
           }
 
           if (action === 'remove') {
             if (!targetChannel) {
-              return interaction.reply({ content: '❌ Please mention or specify a target channel to remove.', flags: 64 });
+              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target channel to remove.', flags: 64 });
             }
             ignoredChannels = ignoredChannels.filter((id: string) => id !== targetChannel.id);
             context.updateModuleConfig('automod', { ...config, ignoredChannels });
             context.logSyncEvent(`AutoMod: Removed #${targetChannel.name} from AntiLink ignored channels.`, 'warn');
-            return interaction.reply({ content: `✅ Removed ${targetChannel} from AntiLink **ignored channels**. Links in this channel are now filtered.`, flags: 64 });
+            return interaction.reply({ content: `<a:approved:1532390590707142956> Removed ${targetChannel} from AntiLink **ignored channels**. Links in this channel are now filtered.`, flags: 64 });
           }
 
           // list
           const channelMentions = ignoredChannels.map((id: string) => `<#${id}>`).join(', ');
           return interaction.reply({
-            content: `📢 **AntiLink Ignored Channels**:\n${channelMentions || '*No ignored channels configured.*'}`,
+            content: `<:information:1532621274092929124> **AntiLink Ignored Channels**:\n${channelMentions || '*No ignored channels configured.*'}`,
             flags: 64
           });
         }
@@ -217,45 +282,109 @@ export const AutomodManifest: ModuleManifest = {
 
           if (action === 'add') {
             if (!targetRole) {
-              return interaction.reply({ content: '❌ Please mention or specify a target role to ignore.', flags: 64 });
+              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target role to ignore.', flags: 64 });
             }
             if (!ignoredRoles.includes(targetRole.id)) {
               ignoredRoles.push(targetRole.id);
               context.updateModuleConfig('automod', { ...config, ignoredRoles });
               context.logSyncEvent(`AutoMod: Added @${targetRole.name} to AntiLink ignored roles.`, 'success');
             }
-            return interaction.reply({ content: `✅ Added ${targetRole} to AntiLink **ignored roles**. Members with this role can now post links anywhere.`, flags: 64 });
+            return interaction.reply({ content: `<a:approved:1532390590707142956> Added ${targetRole} to AntiLink **ignored roles**. Members with this role can now post links anywhere.`, flags: 64 });
           }
 
           if (action === 'remove') {
             if (!targetRole) {
-              return interaction.reply({ content: '❌ Please mention or specify a target role to remove.', flags: 64 });
+              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target role to remove.', flags: 64 });
             }
             ignoredRoles = ignoredRoles.filter((id: string) => id !== targetRole.id);
             context.updateModuleConfig('automod', { ...config, ignoredRoles });
             context.logSyncEvent(`AutoMod: Removed @${targetRole.name} from AntiLink ignored roles.`, 'warn');
-            return interaction.reply({ content: `✅ Removed ${targetRole} from AntiLink **ignored roles**. Link restrictions re-enabled for this role.`, flags: 64 });
+            return interaction.reply({ content: `<a:approved:1532390590707142956> Removed ${targetRole} from AntiLink **ignored roles**. Link restrictions re-enabled for this role.`, flags: 64 });
           }
 
           // list
           const roleMentions = ignoredRoles.map((id: string) => `<@&${id}>`).join(', ');
           return interaction.reply({
-            content: `👑 **AntiLink Ignored Roles**:\n${roleMentions || '*No ignored roles configured.*'}`,
+            content: `<:vip:1532620837117759508> **AntiLink Ignored Roles**:\n${roleMentions || '*No ignored roles configured.*'}`,
             flags: 64
           });
         }
 
-        // ANTILINK ENABLE / DISABLE
+        // ANTILINK ENABLE / DISABLE / FULL CONFIG
         if (sub === 'antilink' || interaction.parsed?.args?.[0] === 'antilink') {
-          const action = actionArg || interaction.parsed?.args?.[1]?.toLowerCase();
-          if (action === 'enable') {
-            context.updateModuleConfig('automod', { ...config, blockLinks: true });
-            return interaction.reply({ content: '✅ AntiLink protection has been **ENABLED**.', flags: 64 });
+          const enableOpt = interaction.options?.getBoolean?.('enable');
+          const actionOpt = interaction.options?.getString?.('action') || actionArg || interaction.parsed?.args?.[1]?.toLowerCase();
+          const allowInvitesOpt = interaction.options?.getBoolean?.('allow_invites');
+          const ignoredDomainsOpt = interaction.options?.getString?.('ignored_domains');
+
+          const updatedConfig = { ...config };
+          if (enableOpt !== null && enableOpt !== undefined) {
+            updatedConfig.blockLinks = enableOpt;
+          } else if (actionOpt === 'enable') {
+            updatedConfig.blockLinks = true;
+          } else if (actionOpt === 'disable') {
+            updatedConfig.blockLinks = false;
           }
-          if (action === 'disable') {
-            context.updateModuleConfig('automod', { ...config, blockLinks: false });
-            return interaction.reply({ content: '⚠️ AntiLink protection has been **DISABLED**.', flags: 64 });
+
+          if (actionOpt && ['delete', 'warn', 'mute'].includes(actionOpt)) {
+            updatedConfig.punishment = actionOpt;
           }
+          if (allowInvitesOpt !== null && allowInvitesOpt !== undefined) {
+            updatedConfig.allowInvites = allowInvitesOpt;
+          }
+          if (ignoredDomainsOpt) {
+            updatedConfig.ignoredDomains = ignoredDomainsOpt.split(',').map((d: string) => d.trim().toLowerCase()).filter(Boolean);
+          }
+
+          context.updateModuleConfig('automod', updatedConfig);
+          context.logSyncEvent(`AutoMod: Updated AntiLink config (blockLinks=${updatedConfig.blockLinks}, punishment=${updatedConfig.punishment})`, 'info');
+
+          const embed = createLimeEmbed({
+            title: '<:link:1532620952087826602> Anti-Link Protection Settings Updated',
+            description: [
+              `• **Anti-Link Filter**: ${updatedConfig.blockLinks !== false ? '<a:approved:1532390590707142956> **Enabled**' : '<:wrong:1532390628330307634> **Disabled**'}`,
+              `• **Punishment Mode**: \`${updatedConfig.punishment || 'warn'}\``,
+              `• **Allow Discord Invites**: ${updatedConfig.allowInvites ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No'}`,
+              `• **Ignored Bypass Domains**: ${updatedConfig.ignoredDomains?.length ? updatedConfig.ignoredDomains.map((d: string) => `\`${d}\``).join(', ') : '*None*'}`
+            ].join('\n')
+          });
+          return interaction.reply({ embeds: [embed] });
+        }
+
+        // ANTISPAM FULL CONFIG
+        if (sub === 'antispam' || interaction.parsed?.args?.[0] === 'antispam') {
+          const enableOpt = interaction.options?.getBoolean?.('enable');
+          const maxMsgsOpt = interaction.options?.getInteger?.('max_messages');
+          const windowSecOpt = interaction.options?.getInteger?.('window_seconds');
+          const actionOpt = interaction.options?.getString?.('action');
+
+          const updatedConfig = { ...config };
+          if (enableOpt !== null && enableOpt !== undefined) {
+            updatedConfig.antiSpamEnabled = enableOpt;
+          }
+          if (maxMsgsOpt) {
+            updatedConfig.maxSpamMessages = maxMsgsOpt;
+          }
+          if (windowSecOpt) {
+            updatedConfig.spamWindowSeconds = windowSecOpt;
+          }
+          if (actionOpt) {
+            updatedConfig.spamAction = actionOpt;
+          }
+
+          context.updateModuleConfig('automod', updatedConfig);
+          context.logSyncEvent(`AutoMod: Updated AntiSpam config (enabled=${updatedConfig.antiSpamEnabled}, max=${updatedConfig.maxSpamMessages}, window=${updatedConfig.spamWindowSeconds})`, 'info');
+
+          const embed = createLimeEmbed({
+            title: '<:shield:1532403012751065179> Anti-Spam Protection Settings Updated',
+            description: [
+              `• **Anti-Spam Limiter**: ${updatedConfig.antiSpamEnabled !== false ? '<a:approved:1532390590707142956> **Enabled**' : '<:wrong:1532390628330307634> **Disabled**'}`,
+              `• **Max Message Limit**: \`${updatedConfig.maxSpamMessages || 5}\` messages`,
+              `• **Window Duration**: \`${updatedConfig.spamWindowSeconds || 5}\` seconds`,
+              `• **Punishment Action**: \`${updatedConfig.spamAction || 'mute'}\``
+            ].join('\n')
+          });
+          return interaction.reply({ embeds: [embed] });
         }
 
         // DEFAULT STATUS & OVERVIEW
@@ -263,17 +392,17 @@ export const AutomodManifest: ModuleManifest = {
         const ignoredRolesList = (config.ignoredRoles || []).map((id: string) => `<@&${id}>`).join(', ') || '*None*';
 
         const statusEmbed = Embeds.info(
-          '🤖 AutoMod & AntiLink Protection Center',
+          '<:gavel:1532621057318584380> AutoMod & AntiLink Protection Center',
           '*Automated chat filtering, anti-link rules, ignored channels, and role bypasses.*',
           {
             module: 'automod',
             fields: [
-              { name: '⚡ AutoMod Status',          value: `\`${amMod?.status || 'enabled'}\``,                     inline: true },
-              { name: '🔗 AntiLink Filter',         value: config.blockLinks !== false ? '🟢 **Enabled**' : '🔴 **Disabled**', inline: true },
-              { name: '⚠️ Punishment Mode',         value: `\`${config.punishment || 'warn'}\``,                  inline: true },
-              { name: '📢 Ignored Channels',        value: ignoredChannelsList,                                    inline: false },
-              { name: '👑 Ignored Roles',           value: ignoredRolesList,                                       inline: false },
-              { name: '📝 Configure Commands',      value: '• `r!automod ignore-channel <add|remove|list> #channel`\n• `r!automod ignore-role <add|remove|list> @role`\n• `r!automod antilink <enable|disable>`', inline: false },
+              { name: '<:bot:1532621107746570391> AutoMod Status',          value: `\`${amMod?.status || 'enabled'}\``,                     inline: true },
+              { name: '<:link:1532620952087826602> AntiLink Filter',         value: config.blockLinks !== false ? '<a:approved:1532390590707142956> **Enabled**' : '<:wrong:1532390628330307634> **Disabled**', inline: true },
+              { name: '<:shield:1532403012751065179> Punishment Mode',         value: `\`${config.punishment || 'warn'}\``,                  inline: true },
+              { name: '<:information:1532621274092929124> Ignored Channels',        value: ignoredChannelsList,                                    inline: false },
+              { name: '<:vip:1532620837117759508> Ignored Roles',           value: ignoredRolesList,                                       inline: false },
+              { name: '<:config:1532425712844144701> Configure Commands',      value: '• `r!automod ignore-channel <add|remove|list> #channel`\n• `r!automod ignore-role <add|remove|list> @role`\n• `r!automod antilink <enable|disable>`', inline: false },
             ],
           }
         );
@@ -387,14 +516,14 @@ export const AutomodManifest: ModuleManifest = {
             if (reason === 'Posting unauthorized links') {
               (message as any)._antiLinkHandled = true;
               const dmEmbed = Embeds.warn(
-                `🔗 Anti-Link Enforcement — ${message.guild.name}`,
+                `<:link:1532620952087826602> Anti-Link Enforcement — ${message.guild.name}`,
                 `Your message in **#${message.channel.name || 'channel'}** was removed because it contained an unauthorized link.\n\n**Server**: ${message.guild.name}\n**Action**: Message removed & link blocked.`,
                 { module: 'automod', footer: `${message.guild.name}  •  Anti-Link Protection` }
               );
               await message.member?.send({ embeds: [dmEmbed] }).catch(() => {});
             } else {
               const warningEmbed = Embeds.warn(
-                '🛡️ AutoMod Enforcement',
+                '<:shield:1532403012751065179> AutoMod Enforcement',
                 `**User**: ${message.author} (\`${message.author.id}\`)\n**Reason**: ${reason}\n**Action**: Message removed.`,
                 { module: 'automod' }
               );
@@ -409,7 +538,7 @@ export const AutomodManifest: ModuleManifest = {
               const logChannel = message.guild.channels.cache.get(config.logChannelId);
               if (logChannel && logChannel.isTextBased()) {
                 const embed = Embeds.warn(
-                  '🛡️ AutoMod Intervention',
+                  '<:shield:1532403012751065179> AutoMod Intervention',
                   `**User**: ${userTag(message.author)} (\`${message.author.id}\`)\n**Channel**: ${message.channel}\n**Reason**: \`${reason}\`\n\n**Content**:\n${message.content.length > 900 ? message.content.substring(0, 900) + '\u2026' : message.content}`,
                   { module: 'automod' }
                 );
@@ -420,7 +549,7 @@ export const AutomodManifest: ModuleManifest = {
             // Handle punishment
             if (config.punishment === 'warn') {
               const dmEmbed = Embeds.warn(
-                `⚠️ AutoMod Warning — ${message.guild.name}`,
+                `<:wrong:1532390628330307634> AutoMod Warning — ${message.guild.name}`,
                 `Your message in **#${message.channel.name || 'channel'}** was removed by AutoMod.\n\n**Server**: ${message.guild.name}\n**Reason**: ${reason}`,
                 { module: 'automod', footer: `${message.guild.name}  •  AutoMod Protection` }
               );

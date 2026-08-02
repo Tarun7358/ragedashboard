@@ -1,6 +1,6 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { PermissionFlagsBits, ChannelType, MessageFlags } from 'discord.js';
-import { Colors, buildRichCard, buildListCard, buildStatusCard, buildSuccessCard, buildErrorCard, buildPermCard } from '../../core/UIFactory.js';
+import { Colors, buildRichCard, buildListCard, buildStatusCard, buildSuccessCard, buildErrorCard, buildPermCard, MEMBER_ICON } from '../../core/UIFactory.js';
 
 export const VoiceManagerManifest: ModuleManifest = {
   id: 'voice_manager',
@@ -216,7 +216,7 @@ export const VoiceManagerManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 100));
           }
           logVoiceAction('Mass Disconnect', `${count} members from #${channel.name}`);
-          return interaction.editReply({ content: `✅ Disconnected **${count}** members from ${channel}.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Disconnected **${count}** members from ${channel}.` });
         }
 
         // MASS MUTE
@@ -229,7 +229,7 @@ export const VoiceManagerManifest: ModuleManifest = {
             count++;
           }
           logVoiceAction('Mass Mute', `${count} members in #${channel.name}`);
-          return interaction.editReply({ content: `🔇 Server-muted **${count}** members in ${channel}.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Server-muted **${count}** members in ${channel}.` });
         }
 
         // MASS UNMUTE
@@ -242,7 +242,7 @@ export const VoiceManagerManifest: ModuleManifest = {
             count++;
           }
           logVoiceAction('Mass Unmute', `${count} members in #${channel.name}`);
-          return interaction.editReply({ content: `🔊 Server-unmuted **${count}** members in ${channel}.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Server-unmuted **${count}** members in ${channel}.` });
         }
 
         // MASS DEAFEN
@@ -255,7 +255,7 @@ export const VoiceManagerManifest: ModuleManifest = {
             count++;
           }
           logVoiceAction('Mass Deafen', `${count} members in #${channel.name}`);
-          return interaction.editReply({ content: `🔕 Server-deafened **${count}** members in ${channel}.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Server-deafened **${count}** members in ${channel}.` });
         }
 
         // MASS UNDEAFEN
@@ -268,7 +268,7 @@ export const VoiceManagerManifest: ModuleManifest = {
             count++;
           }
           logVoiceAction('Mass Undeafen', `${count} members in #${channel.name}`);
-          return interaction.editReply({ content: `🔔 Server-undeafened **${count}** members in ${channel}.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Server-undeafened **${count}** members in ${channel}.` });
         }
 
         // MASS DRAG / MASS MOVE (same logic)
@@ -284,7 +284,7 @@ export const VoiceManagerManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 150));
           }
           logVoiceAction('Mass Move', `${count} members from #${from.name} → #${to.name}`);
-          return interaction.editReply({ content: `✅ Moved **${count}** members from ${from} → ${to}.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Moved **${count}** members from ${from} → ${to}.` });
         }
 
         // FREEZE
@@ -292,7 +292,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           const channel = interaction.options.getChannel('channel');
           await channel.permissionOverwrites.edit(guild.id, { Connect: false });
           logVoiceAction('Freeze', `#${channel.name}`);
-          return interaction.reply({ content: `🧊 Frozen ${channel}. No new users can join.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Frozen ${channel}. No new users can join.`, flags: 64 });
         }
 
         // UNFREEZE
@@ -300,7 +300,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           const channel = interaction.options.getChannel('channel');
           await channel.permissionOverwrites.edit(guild.id, { Connect: null });
           logVoiceAction('Unfreeze', `#${channel.name}`);
-          return interaction.reply({ content: `🌡️ Unfrozen ${channel}. Users can now join.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Unfrozen ${channel}. Users can now join.`, flags: 64 });
         }
 
         // LOCK
@@ -308,7 +308,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           const channel = interaction.options.getChannel('channel');
           await channel.permissionOverwrites.edit(guild.id, { Connect: false });
           logVoiceAction('Lock', `#${channel.name}`);
-          return interaction.reply({ content: `🔒 Locked ${channel}.`, flags: 64 });
+          return interaction.reply({ content: `<:shield:1532403012751065179> Locked ${channel}.`, flags: 64 });
         }
 
         // UNLOCK
@@ -316,7 +316,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           const channel = interaction.options.getChannel('channel');
           await channel.permissionOverwrites.edit(guild.id, { Connect: null });
           logVoiceAction('Unlock', `#${channel.name}`);
-          return interaction.reply({ content: `🔓 Unlocked ${channel}.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Unlocked ${channel}.`, flags: 64 });
         }
 
         // RENAME
@@ -325,22 +325,22 @@ export const VoiceManagerManifest: ModuleManifest = {
           const name = interaction.options.getString('name');
           await channel.setName(name);
           logVoiceAction('Rename', `#${channel.name} → ${name}`);
-          return interaction.reply({ content: `✅ Renamed channel to **${name}**.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Renamed channel to **${name}**.`, flags: 64 });
         }
 
         // LIMIT
         if (sub === 'limit') {
           const channel = interaction.options.getChannel('channel');
           const limit = interaction.options.getInteger('limit');
-          if (channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '❌ Not a voice channel.', flags: 64 });
+          if (channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<:wrong:1532390628330307634> Not a voice channel.', flags: 64 });
           await channel.setUserLimit(limit);
-          return interaction.reply({ content: `✅ Set user limit to **${limit === 0 ? 'unlimited' : limit}** for ${channel}.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Set user limit to **${limit === 0 ? 'unlimited' : limit}** for ${channel}.`, flags: 64 });
         }
 
         // CLEANUP
         if (sub === 'cleanup') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
-            return interaction.reply({ content: '🔒 Manage Channels permission required.', flags: 64 });
+            return interaction.reply({ content: '<:shield:1532403012751065179> Manage Channels permission required.', flags: 64 });
           }
           await interaction.deferReply({ flags: 64 });
           const voiceChannels = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildVoice && c.members.size === 0);
@@ -352,62 +352,62 @@ export const VoiceManagerManifest: ModuleManifest = {
             }
           }
           logVoiceAction('Cleanup', `Deleted ${count} empty voice channels`);
-          return interaction.editReply({ content: `🗑️ Cleaned up **${count}** empty voice channels.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Cleaned up **${count}** empty voice channels.` });
         }
 
         // PULL
         if (sub === 'pull') {
           const user = interaction.options.getUser('user');
           const member = guild.members.cache.get(user.id);
-          if (!member) return interaction.reply({ content: '❌ Member not found.', flags: 64 });
-          if (!interaction.member.voice?.channel) return interaction.reply({ content: '❌ You must be in a voice channel.', flags: 64 });
-          if (!member.voice?.channel) return interaction.reply({ content: `❌ ${user.username} is not in a voice channel.`, flags: 64 });
+          if (!member) return interaction.reply({ content: '<:wrong:1532390628330307634> Member not found.', flags: 64 });
+          if (!interaction.member.voice?.channel) return interaction.reply({ content: '<:wrong:1532390628330307634> You must be in a voice channel.', flags: 64 });
+          if (!member.voice?.channel) return interaction.reply({ content: `<:wrong:1532390628330307634> ${user.username} is not in a voice channel.`, flags: 64 });
           await member.voice.setChannel(interaction.member.voice.channel);
           logVoiceAction('Pull', `${user.username} → #${interaction.member.voice.channel.name}`);
-          return interaction.reply({ content: `✅ Pulled ${user} to your channel.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Pulled ${user} to your channel.`, flags: 64 });
         }
 
         // INFO
         if (sub === 'info') {
           const channel = interaction.options.getChannel('channel') || interaction.member.voice?.channel;
-          if (!channel) return interaction.reply({ content: '❌ No voice channel specified or you\'re not in one.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> No voice channel specified or you\'re not in one.', flags: 64 });
 
           const memberList = channel.members.size > 0
             ? [...channel.members.values()].map((m: any) => `• ${m.user.username}`).join('\n').substring(0, 900)
             : '*No members currently in channel.*';
 
-          const { components, flags } = buildRichCard({
-            emoji: '🎙️',
+          const { embeds, components, flags } = buildRichCard({
+            emoji: '<:voicechannelgreen:1532425750278438962>',
             title: `Voice Channel — ${channel.name}`,
             accentColor: Colors.VOICE,
             fields: [
-              { label: '👥 Members',  value: `**${channel.members.size}**${channel.userLimit ? ` / ${channel.userLimit}` : ''}` },
-              { label: '📡 Bitrate',  value: `**${channel.bitrate ? Math.round(channel.bitrate / 1000) : '?'} kbps**` },
+              { label: `${MEMBER_ICON} Members`,  value: `**${channel.members.size}**${channel.userLimit ? ` / ${channel.userLimit}` : ''}` },
+              { label: '<:stats:1532429110775779459> Bitrate',  value: `**${channel.bitrate ? Math.round(channel.bitrate / 1000) : '?'} kbps**` },
               { label: '🆔 ID',       value: `\`${channel.id}\`` },
-              { label: '👤 Users',    value: memberList },
+              { label: '<:member:1532621317487071426> Users',    value: memberList },
             ],
-            footerNote: 'Rage Optimiser Enterprise  •  🎙️ Voice Manager',
+            footerNote: 'Rage Optimiser • Unbypassable Security',
           });
-          return interaction.reply({ components, flags });
+          return interaction.reply({ embeds, components, flags });
         }
 
         // STATUS
         if (sub === 'status') {
           const voiceChannels = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildVoice && c.members.size > 0);
-          if (voiceChannels.size === 0) return interaction.reply({ content: '📋 No active voice channels right now.', flags: 64 });
+          if (voiceChannels.size === 0) return interaction.reply({ content: '<:information:1532621274092929124> No active voice channels right now.', flags: 64 });
 
           const lines = voiceChannels.map((c: any) =>
-            `🔊 **${c.name}** — ${c.members.size} member${c.members.size !== 1 ? 's' : ''}`
+            `<:voicechannelgreen:1532425750278438962> **${c.name}** — ${c.members.size} member${c.members.size !== 1 ? 's' : ''}`
           );
 
-          const { components, flags } = buildListCard({
-            emoji: '🎙️',
+          const { embeds, components } = buildListCard({
+            emoji: '<:voicechannelgreen:1532425750278438962>',
             title: 'Active Voice Channels',
             subtitle: `${voiceChannels.size} channel(s) with active members`,
             entries: [...lines],
             accentColor: Colors.VOICE,
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds, components });
         }
 
         // SPLIT GROUP
@@ -429,7 +429,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           }
 
           logVoiceAction('Split Group', `${members.length} members from #${source.name} into #${group1.name} and #${group2.name}`);
-          return interaction.editReply({ content: `✅ Split **${moved}** members: **${half}** → ${group1}, **${members.length - half}** → ${group2}.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Split **${moved}** members: **${half}** → ${group1}, **${members.length - half}** → ${group2}.` });
         }
 
         // DRAG
@@ -438,11 +438,11 @@ export const VoiceManagerManifest: ModuleManifest = {
           const channel = interaction.options.getChannel('channel');
           const member = guild.members.cache.get(user.id);
           if (!member || !member.voice?.channel) {
-            return interaction.reply({ content: '❌ User is not currently in a voice channel.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> User is not currently in a voice channel.', flags: 64 });
           }
           await member.voice.setChannel(channel);
           logVoiceAction('Drag', `Moved ${user.username} to #${channel.name}`);
-          return interaction.reply({ content: `✅ Successfully dragged ${user} to ${channel}.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Successfully dragged ${user} to ${channel}.`, flags: 64 });
         }
 
         // MASSDRAG
@@ -458,14 +458,14 @@ export const VoiceManagerManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 150));
           }
           logVoiceAction('Mass Drag', `${count} members from #${from.name} → #${to.name}`);
-          return interaction.editReply({ content: `✅ Successfully mass-dragged **${count}** members from ${from} to ${to}.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Successfully mass-dragged **${count}** members from ${from} to ${to}.` });
         }
 
         // PULLALL
         if (sub === 'pullall') {
           const from = interaction.options.getChannel('from');
           const to = interaction.member.voice?.channel;
-          if (!to) return interaction.reply({ content: '❌ You must be in a voice channel to pull members.', flags: 64 });
+          if (!to) return interaction.reply({ content: '<:wrong:1532390628330307634> You must be in a voice channel to pull members.', flags: 64 });
           await interaction.deferReply({ flags: 64 });
           let count = 0;
           for (const [, member] of from.members) {
@@ -474,7 +474,7 @@ export const VoiceManagerManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 150));
           }
           logVoiceAction('Pull All', `Pulled ${count} members to #${to.name}`);
-          return interaction.editReply({ content: `✅ Pulled **${count}** members from ${from} to your channel.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Pulled **${count}** members from ${from} to your channel.` });
         }
 
         // SWAP
@@ -496,7 +496,7 @@ export const VoiceManagerManifest: ModuleManifest = {
             await new Promise(r => setTimeout(r, 100));
           }
           logVoiceAction('VC Swap', `Swapped members of #${channel1.name} and #${channel2.name}`);
-          return interaction.editReply({ content: `✅ Swapped **${count}** members between ${channel1} and ${channel2}.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Swapped **${count}** members between ${channel1} and ${channel2}.` });
         }
 
         // DISCONNECT
@@ -505,17 +505,17 @@ export const VoiceManagerManifest: ModuleManifest = {
           const reason = interaction.options.getString('reason') || 'Voice disconnect';
           const member = guild.members.cache.get(user.id);
           if (!member || !member.voice?.channel) {
-            return interaction.reply({ content: '❌ User is not currently in a voice channel.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> User is not currently in a voice channel.', flags: 64 });
           }
           await member.voice.disconnect(reason).catch(() => {});
           logVoiceAction('Disconnect', `Disconnected ${user.username} from voice`);
-          return interaction.reply({ content: `✅ Disconnected ${user} from voice.`, flags: 64 });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Disconnected ${user} from voice.` });
         }
 
         // CLEAN
         if (sub === 'clean') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
-            return interaction.reply({ content: '🔒 Manage Channels permission required.', flags: 64 });
+            return interaction.reply({ content: '<:shield:1532403012751065179> Manage Channels permission required.', flags: 64 });
           }
           await interaction.deferReply({ flags: 64 });
           const voiceChannels = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildVoice && c.members.size === 0);
@@ -527,25 +527,25 @@ export const VoiceManagerManifest: ModuleManifest = {
             }
           }
           logVoiceAction('Cleanup', `Deleted ${count} empty VCs`);
-          return interaction.editReply({ content: `🗑️ Cleaned up **${count}** empty voice channels.` });
+          return interaction.editReply({ content: `<a:approved:1532390590707142956> Cleaned up **${count}** empty voice channels.` });
         }
 
         // SESSIONS
         if (sub === 'sessions') {
           const voiceStates = guild.voiceStates.cache;
           const activeSessions = voiceStates.filter((v: any) => v.channelId).size;
-          const { components, flags } = buildStatusCard({
-            emoji: '🔊',
+          const { embeds, components } = buildStatusCard({
+            emoji: '<:voicechannelgreen:1532425750278438962>',
             title: 'Live Voice Sessions',
             body: `There are currently **${activeSessions}** active voice session${activeSessions !== 1 ? 's' : ''} across all channels.`,
             accentColor: Colors.VOICE,
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds, components });
         }
 
         // HISTORY
         if (sub === 'history') {
-          return interaction.reply({ content: '📊 **Voice Connections History**:\nNo historical connection data has been recorded in the local log stream.', flags: 64 });
+          return interaction.reply({ content: '<:information:1532621274092929124> **Voice Connections History**:\nNo historical connection data has been recorded in the local log stream.', flags: 64 });
         }
       }
     }

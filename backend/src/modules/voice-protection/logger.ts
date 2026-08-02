@@ -28,16 +28,17 @@ export async function sendVoiceProtectionLog(
     const logChan = await client.channels.fetch(config.logChannel).catch(() => null);
     if (logChan && logChan.isTextBased()) {
       const embed = new EmbedBuilder()
-        .setTitle('🎙️ Voice Protection Incident')
+        .setTitle('<:shield:1532403012751065179> Voice Protection Incident')
         .setDescription(`An audio disturbance (excessive volume/ear-rape) was detected and punished.`)
-        .setColor(action === 'warn' ? 0xe67e22 : 0xe74c3c)
+        .setColor(0x99CC00)
         .addFields(
-          { name: '👤 User', value: `${user} (${user.username})`, inline: true },
-          { name: '🔊 Channel', value: `${channel.name} (<#${channel.id}>)`, inline: true },
-          { name: '⚡ Action Taken', value: `**${action.toUpperCase()}**`, inline: true },
-          { name: '📊 Avg Loudness', value: `\`${avgLoudness}%\``, inline: true },
-          { name: '📈 Peak Loudness', value: `\`${peakLoudness}%\``, inline: true }
+          { name: '<:member:1532621317487071426> User', value: `${user} (${user.username})`, inline: true },
+          { name: '<:voicechannelgreen:1532425750278438962> Channel', value: `${channel.name} (<#${channel.id}>)`, inline: true },
+          { name: '<:shield:1532403012751065179> Action Taken', value: `**${action.toUpperCase()}**`, inline: true },
+          { name: '<:information:1532621274092929124> Avg Loudness', value: `\`${avgLoudness}%\``, inline: true },
+          { name: '<:information:1532621274092929124> Peak Loudness', value: `\`${peakLoudness}%\``, inline: true }
         )
+        .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
         .setTimestamp();
 
       if (duration) {

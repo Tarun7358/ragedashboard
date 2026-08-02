@@ -83,6 +83,34 @@ export function isModuleBypassed(enabledModules: string[] | undefined, ruleId?: 
   return false;
 }
 
+import { Database } from '../core/Database.js';
+
+export async function isOwnerOrExtraOwner(userId: string, guild: any): Promise<boolean> {
+  if (!guild || !userId) return false;
+
+  // 1. Guild Owner or Bot Owner
+  if (userId === guild.ownerId || 
+      userId === process.env.OWNER_ID ||
+      userId === guild.client?.application?.owner?.id ||
+      ((guild.client?.application?.owner as any)?.members && (guild.client?.application?.owner as any).members.has(userId))) {
+    return true;
+  }
+
+  // 2. Extra Owner Delegated Authority check from SQLite
+  try {
+    const db = Database.getDb();
+    if (db && guild.id) {
+      const extraOwner = await db.get(
+        'SELECT userId FROM extra_owners WHERE guildId = ? AND userId = ?',
+        [guild.id, userId]
+      );
+      if (extraOwner) return true;
+    }
+  } catch {}
+
+  return false;
+}
+
 export async function checkWhitelistPermission(userId: string, guild: any, context: any, ruleId?: string): Promise<boolean> {
   if (!guild) return false;
 
@@ -90,6 +118,22 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
   if (userId === guild.ownerId || 
       userId === guild.client?.application?.owner?.id ||
       ((guild.client?.application?.owner as any)?.members && (guild.client?.application?.owner as any).members.has(userId))) return true;
+
+  // 1b. Extra Owner Delegated Authority check from SQLite
+  try {
+    const db = Database.getDb();
+    if (db && guild.id) {
+      const extraOwner = await db.get<{ permissionsJson: string }>(
+        'SELECT permissionsJson FROM extra_owners WHERE guildId = ? AND userId = ?',
+        [guild.id, userId]
+      );
+      if (extraOwner) {
+        let perms = { antinukeBypass: true, manageWhitelists: true, manageLockdowns: true };
+        try { perms = JSON.parse(extraOwner.permissionsJson); } catch {}
+        if (!ruleId || perms.antinukeBypass) return true;
+      }
+    }
+  } catch {}
 
   const modules = context.getModulesState ? context.getModulesState() : [];
 
@@ -661,5 +705,57 @@ export function resolveSelectedOptions(enabledModules: string[] | undefined): st
   }
 
   return selected;
+}
+
+export function getUnifiedWhitelistEntries(modules: any[]) {
+  const mwMod = modules.find((m: any) => m && m.id === 'member_whitelist');
+  const secMod = modules.find((m: any) => m && m.id === 'security');
+  const vpMod = modules.find((m: any) => m && m.id === 'voice-protection');
+
+  const userSet = new Map<string, string>();
+  const roleSet = new Map<string, string>();
+
+  // 1. Process member_whitelist config
+  const mwMembers = mwMod?.config?.members || [];
+  for (const entry of mwMembers) {
+    if (entry && entry.status === 'active') {
+      if (entry.type === 'role') {
+        const id = entry.roleId || entry.id;
+        if (id) roleSet.set(id, entry.name || `Role-${id}`);
+      } else {
+        const id = entry.userId || entry.id;
+        if (id) userSet.set(id, entry.username || `User-${id}`);
+      }
+    }
+  }
+
+  // 2. Process security whitelist & exception roles
+  const secConfig = secMod?.config || {};
+  const secWhitelist = secConfig.whitelist || [];
+  for (const w of secWhitelist) {
+    if (w) {
+      const uId = typeof w === 'string' ? w : w.targetId;
+      if (uId && !userSet.has(uId)) {
+        userSet.set(uId, typeof w === 'string' ? `User-${uId}` : (w.username || w.tag || `User-${uId}`));
+      }
+    }
+  }
+  const exceptionRoles = secConfig.exceptionRoleIds || secConfig.whitelistRoles || [];
+  for (const rId of exceptionRoles) {
+    if (rId && !roleSet.has(rId)) {
+      roleSet.set(rId, `Role-${rId}`);
+    }
+  }
+
+  // 3. Process voice protection whitelist
+  const vpConfig = vpMod?.config || {};
+  for (const uId of (vpConfig.whitelistedUsers || [])) {
+    if (uId && !userSet.has(uId)) userSet.set(uId, `User-${uId}`);
+  }
+  for (const rId of (vpConfig.whitelistedRoles || [])) {
+    if (rId && !roleSet.has(rId)) roleSet.set(rId, `Role-${rId}`);
+  }
+
+  return { userSet, roleSet };
 }
 

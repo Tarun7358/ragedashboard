@@ -306,7 +306,21 @@ export const CommunityManifest: ModuleManifest = {
         if (!guildId) return;
 
         await setUserAFK(guildId, interaction.user.id, reason);
-        await interaction.reply({ content: `✅ I set your AFK: ${reason}`, flags: 64 });
+
+        const embed = new EmbedBuilder()
+          .setColor(0x84cc16)
+          .setTitle('AFK Status Activated')
+          .setDescription(
+            `<a:approved:1532390590707142956> **Status Activated**\n` +
+            `**User**: ${interaction.user}\n` +
+            `**Reason**: \`${reason}\`\n\n` +
+            `*your afk status will be removed upon next message*`
+          )
+          .setThumbnail(interaction.user.displayAvatarURL({ forceStatic: false }))
+          .setFooter({ text: 'Rage Optimiser • AFK System' })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
       }
     },
     {

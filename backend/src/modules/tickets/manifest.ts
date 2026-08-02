@@ -44,21 +44,22 @@ export const TicketsManifest: ModuleManifest = {
         const modules = context.getModulesState ? context.getModulesState() : [];
         const tickModule = modules.find((m: any) => m.id === 'tickets');
         if (!tickModule || tickModule.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Ticket Support module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Ticket Support module is not enabled.', flags: 64 });
         }
 
         try {
           const embed = new EmbedBuilder()
-            .setTitle('✉️ Customer Support Ticket')
+            .setTitle('<:ticket:1532620631466836021> Customer Support Ticket')
             .setDescription('Need assistance from our staff? Click the button below to open a private support ticket.')
-            .setColor('#4f8cff')
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
 
           const btn = new ButtonBuilder()
             .setCustomId('ticket_btn_create')
             .setLabel('Create Ticket')
             .setStyle(ButtonStyle.Primary)
-            .setEmoji('✉️');
+            .setEmoji('<:ticket:1532620631466836021>');
 
           const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btn);
 
@@ -66,7 +67,7 @@ export const TicketsManifest: ModuleManifest = {
           context.logSyncEvent('Ticket Support: Posted interactive ticket board.', 'info');
         } catch (err) {
           console.error(err);
-          await interaction.reply({ content: '❌ Failed to post ticket board.', flags: 64 });
+          await interaction.reply({ content: '<:wrong:1532390628330307634> Failed to post ticket board.', flags: 64 });
         }
       }
     },
@@ -78,7 +79,7 @@ export const TicketsManifest: ModuleManifest = {
         const modules = context.getModulesState ? context.getModulesState() : [];
         const tickModule = modules.find((m: any) => m.id === 'tickets');
         if (!tickModule || tickModule.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Ticket Support module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Ticket Support module is not enabled.', flags: 64 });
         }
 
         const config = tickModule.config;
@@ -86,7 +87,7 @@ export const TicketsManifest: ModuleManifest = {
         const staffRoleIds = config.staffRoleIds || [];
 
         if (!categoryId) {
-          return interaction.reply({ content: '❌ Ticket category is not configured.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Ticket category is not configured.', flags: 64 });
         }
 
         const guild = interaction.guild;
@@ -102,7 +103,7 @@ export const TicketsManifest: ModuleManifest = {
           // Check if channel already exists for user
           const existingChannel = guild.channels.cache.find((c: any) => c.name === channelName);
           if (existingChannel) {
-            return interaction.editReply({ content: `❌ You already have an active ticket: ${existingChannel}` });
+            return interaction.editReply({ content: `<:wrong:1532390628330307634> You already have an active ticket: ${existingChannel}` });
           }
 
           // Build permission overwrites
@@ -135,25 +136,25 @@ export const TicketsManifest: ModuleManifest = {
 
           // Send welcome message in ticket channel
           const welcomeEmbed = new EmbedBuilder()
-            .setTitle(`🎫 Ticket Opened - #${ticketChannel.name}`)
+            .setTitle(`<:ticket:1532620631466836021> Ticket Opened - #${ticketChannel.name}`)
             .setDescription(`Welcome ${interaction.user}! Please describe your issue or question here. Our support team will respond shortly.`)
-            .setColor('#4f8cff')
-            .setFooter({ text: 'To close this ticket, click the button below.' });
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
           const closeBtn = new ButtonBuilder()
             .setCustomId('ticket_btn_close')
             .setLabel('Close Ticket')
             .setStyle(ButtonStyle.Danger)
-            .setEmoji('🔒');
+            .setEmoji('<:shield:1532403012751065179>');
 
           const row = new ActionRowBuilder<ButtonBuilder>().addComponents(closeBtn);
 
           await ticketChannel.send({ content: `${interaction.user} | Staff Notification`, embeds: [welcomeEmbed], components: [row] });
-          await interaction.editReply({ content: `✅ Ticket opened successfully: ${ticketChannel}` });
+          await interaction.editReply({ content: `<a:approved:1532390590707142956> Ticket opened successfully: ${ticketChannel}` });
           context.logSyncEvent(`Ticket Support: Opened ticket channel #${ticketChannel.name} for user "${interaction.user.username}".`, 'success');
         } catch (err) {
           console.error(err);
-          await interaction.editReply({ content: '❌ Failed to create support ticket channel. Verify bot permissions.' });
+          await interaction.editReply({ content: '<:wrong:1532390628330307634> Failed to create support ticket channel. Verify bot permissions.' });
         }
       }
     },
@@ -165,14 +166,14 @@ export const TicketsManifest: ModuleManifest = {
         const modules = context.getModulesState ? context.getModulesState() : [];
         const tickModule = modules.find((m: any) => m.id === 'tickets');
         if (!tickModule || tickModule.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Ticket Support module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Ticket Support module is not enabled.', flags: 64 });
         }
 
         const channel = interaction.channel;
         if (!channel) return;
 
         try {
-          await interaction.reply({ content: '🔒 **Closing ticket...** Channel will be removed in 5 seconds.', ephemeral: false });
+          await interaction.reply({ content: '<:shield:1532403012751065179> **Closing ticket...** Channel will be removed in 5 seconds.', ephemeral: false });
           
           context.logSyncEvent(`Ticket Support: User "${interaction.user.username}" closed ticket channel #${channel.name}.`, 'info');
           
@@ -185,7 +186,7 @@ export const TicketsManifest: ModuleManifest = {
           }, 5000);
         } catch (err) {
           console.error(err);
-          await interaction.reply({ content: '❌ Failed to close ticket.', flags: 64 });
+          await interaction.reply({ content: '<:wrong:1532390628330307634> Failed to close ticket.', flags: 64 });
         }
       }
     }

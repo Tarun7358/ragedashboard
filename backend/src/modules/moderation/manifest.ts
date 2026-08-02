@@ -1,6 +1,7 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { Database } from '../../core/Database.js';
+import { buildRichCard, Colors, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, GAVEL_ICON } from '../../core/UIFactory.js';
 
 // Safe display name helper — user.username is deprecated in new Discord username system
 function userTag(user: any): string {
@@ -82,8 +83,21 @@ export const ModerationManifest: ModuleManifest = {
     { name: 'warnings', description: 'Check a user\'s warnings', options: [{ name: 'user', type: 6, description: 'User to check', required: true }] },
     { name: 'clearwarnings', description: 'Clear a user\'s warnings', options: [{ name: 'user', type: 6, description: 'User to clear', required: true }] },
     { name: 'purge', description: 'Delete multiple messages', options: [{ name: 'amount', type: 4, description: 'Number of messages to delete', required: true }] },
-    { name: 'lock', description: 'Lock the current channel' },
-    { name: 'unlock', description: 'Unlock the current channel' },
+    {
+      name: 'lock',
+      description: 'Lock a text or voice channel to restrict member access',
+      options: [
+        { name: 'channel', type: 7, description: 'The text or voice channel to lock (defaults to current)', required: false },
+        { name: 'private', type: 5, description: 'Whether to hide the channel completely (ViewChannel: false)', required: false }
+      ]
+    },
+    {
+      name: 'unlock',
+      description: 'Unlock a text or voice channel to restore member access',
+      options: [
+        { name: 'channel', type: 7, description: 'The text or voice channel to unlock (defaults to current)', required: false }
+      ]
+    },
     { name: 'slowmode', description: 'Set channel slowmode', options: [{ name: 'seconds', type: 4, description: 'Slowmode duration in seconds', required: true }] },
     { name: 'timeout', description: 'Timeout a user', options: [{ name: 'user', type: 6, description: 'User to timeout', required: true }, { name: 'duration', type: 3, description: 'Duration (e.g. 10m, 1h)', required: true }] },
     { name: 'untimeout', description: 'Remove timeout from a user', options: [{ name: 'user', type: 6, description: 'User to remove timeout', required: true }] },
@@ -99,7 +113,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -110,7 +124,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await interaction.guild.members.ban(user, { reason });
           const successEmbed = new EmbedBuilder()
-            .setTitle('🛡️ Security Action: Member Permanently Banishment')
+            .setTitle('<:shield:1532403012751065179> Security Action: Member Permanent Banishment')
             .setDescription(`The selected member has been permanently removed from the server.\nAll moderation actions have been securely recorded in the audit log.`)
             .addFields(
               { name: 'Target Account', value: `${user} (${user.id})`, inline: true },
@@ -124,7 +138,7 @@ export const ModerationManifest: ModuleManifest = {
           logModAction(interaction.guild, user, interaction.user, 'Ban', reason, context);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Banishment Execution Failed')
+            .setTitle('<:wrong:1532390628330307634> Banishment Execution Failed')
             .setDescription('Failed to ban the user. This is usually due to permission hierarchy mismatch.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -137,7 +151,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -147,7 +161,7 @@ export const ModerationManifest: ModuleManifest = {
         const reason = interaction.options.getString('reason') || 'No reason provided';
         if (!member) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Member Location Failed')
+            .setTitle('<:wrong:1532390628330307634> Member Location Failed')
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -156,7 +170,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await member.kick(reason);
           const successEmbed = new EmbedBuilder()
-            .setTitle('🛡️ Security Action: Member Successfully Removed')
+            .setTitle('<:gavel:1532621057318584380> Security Action: Member Successfully Removed')
             .setDescription(`The selected member has been successfully kicked from the server.\nAll moderation actions have been securely recorded in the audit log.`)
             .addFields(
               { name: 'Target Account', value: `${member.user} (${member.user.id})`, inline: true },
@@ -170,7 +184,7 @@ export const ModerationManifest: ModuleManifest = {
           logModAction(interaction.guild, member.user, interaction.user, 'Kick', reason, context);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Expulsion Execution Failed')
+            .setTitle('<:wrong:1532390628330307634> Expulsion Execution Failed')
             .setDescription('Failed to kick the user. Check Bot permission hierarchy constraints.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -183,7 +197,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -193,7 +207,7 @@ export const ModerationManifest: ModuleManifest = {
         const durationStr = interaction.options.getString('duration');
         if (!member) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Member Location Failed')
+            .setTitle('<:wrong:1532390628330307634> Member Location Failed')
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -209,7 +223,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await member.timeout(ms, 'Moderator Timeout');
           const successEmbed = new EmbedBuilder()
-            .setTitle('⏱️ Security Action: Temporary Session Suspension')
+            .setTitle('<:timer:1532620491662037123> Security Action: Temporary Session Suspension')
             .setDescription(`The selected member's messaging privileges have been temporarily suspended.\nAll moderation actions have been securely recorded in the audit log.`)
             .addFields(
               { name: 'Target Account', value: `${member.user} (${member.user.id})`, inline: true },
@@ -223,7 +237,7 @@ export const ModerationManifest: ModuleManifest = {
           logModAction(interaction.guild, member.user, interaction.user, 'Timeout', durationStr, context);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Suspension Execution Failed')
+            .setTitle('<:wrong:1532390628330307634> Suspension Execution Failed')
             .setDescription('Failed to issue member timeout. Check roles hierarchy.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -236,7 +250,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -245,7 +259,7 @@ export const ModerationManifest: ModuleManifest = {
         const member = interaction.options.getMember('user');
         if (!member) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Member Location Failed')
+            .setTitle('<:wrong:1532390628330307634> Member Location Failed')
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -254,7 +268,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await member.timeout(null, 'Timeout removed by Moderator');
           const successEmbed = new EmbedBuilder()
-            .setTitle('🔓 Security Action: Session Restoration Protocol')
+            .setTitle('<a:approved:1532390590707142956> Security Action: Session Restoration Protocol')
             .setDescription(`The temporary session suspension has been revoked. Privileges are fully restored.`)
             .addFields(
               { name: 'Target Account', value: `${member.user} (${member.user.id})`, inline: true },
@@ -267,7 +281,7 @@ export const ModerationManifest: ModuleManifest = {
           logModAction(interaction.guild, member.user, interaction.user, 'Untimeout', 'N/A', context);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Restoration Execution Failed')
+            .setTitle('<:wrong:1532390628330307634> Restoration Execution Failed')
             .setDescription('Failed to revoke member timeout.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -280,7 +294,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -289,7 +303,7 @@ export const ModerationManifest: ModuleManifest = {
         const member = interaction.options.getMember('user');
         if (!member) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Member Location Failed')
+            .setTitle('<:wrong:1532390628330307634> Member Location Failed')
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -298,7 +312,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await member.timeout(60 * 60 * 1000, 'Moderator Mute');
           const successEmbed = new EmbedBuilder()
-            .setTitle('🔇 Security Action: Temporary Voice & Text Mute')
+            .setTitle('<:timer:1532620491662037123> Security Action: Temporary Voice & Text Mute')
             .setDescription(`The member has been placed under temporary silence restrictions for 1 hour.`)
             .addFields(
               { name: 'Target Account', value: `${member.user} (${member.user.id})`, inline: true },
@@ -311,7 +325,7 @@ export const ModerationManifest: ModuleManifest = {
           logModAction(interaction.guild, member.user, interaction.user, 'Mute', '1h', context);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Mute Execution Failed')
+            .setTitle('<:wrong:1532390628330307634> Mute Execution Failed')
             .setDescription('Failed to mute the member.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -324,7 +338,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -333,7 +347,7 @@ export const ModerationManifest: ModuleManifest = {
         const member = interaction.options.getMember('user');
         if (!member) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Member Location Failed')
+            .setTitle('<:wrong:1532390628330307634> Member Location Failed')
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -342,7 +356,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await member.timeout(null, 'Unmuted by Moderator');
           const successEmbed = new EmbedBuilder()
-            .setTitle('🔊 Security Action: Silence Restrictions Revoked')
+            .setTitle('<a:approved:1532390590707142956> Security Action: Silence Restrictions Revoked')
             .setDescription(`The silence restrictions have been successfully revoked. Voice and text privileges are active.`)
             .addFields(
               { name: 'Target Account', value: `${member.user} (${member.user.id})`, inline: true },
@@ -355,7 +369,7 @@ export const ModerationManifest: ModuleManifest = {
           logModAction(interaction.guild, member.user, interaction.user, 'Unmute', 'N/A', context);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Unmute Execution Failed')
+            .setTitle('<:wrong:1532390628330307634> Unmute Execution Failed')
             .setDescription('Failed to unmute the member.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -368,7 +382,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -383,7 +397,7 @@ export const ModerationManifest: ModuleManifest = {
         await saveUserWarnings(guildId, user.id, warnings);
 
         const successEmbed = new EmbedBuilder()
-          .setTitle('⚠️ Security Action: Formal Notification Issued')
+          .setTitle('<:shield:1532403012751065179> Security Action: Formal Notification Issued')
           .setDescription(`A formal warning has been issued to the selected member.\nThe infraction has been securely saved to the warnings log registry.`)
           .addFields(
             { name: 'Target Account', value: `${user} (${user.id})`, inline: true },
@@ -406,7 +420,7 @@ export const ModerationManifest: ModuleManifest = {
         const userWarns = await loadUserWarnings(guildId, user.id);
         
         const embed = new EmbedBuilder()
-          .setTitle(`📜 Infraction Warning Log: ${userTag(user)}`)
+          .setTitle(`<:information:1532621274092929124> Infraction Warning Log: ${userTag(user)}`)
           .setColor('#4f8cff')
           .setTimestamp()
           .setFooter({ text: 'Rage Optimiser • Infraction Logs' });
@@ -426,7 +440,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -437,7 +451,7 @@ export const ModerationManifest: ModuleManifest = {
         await clearUserWarnings(guildId, user.id);
 
         const successEmbed = new EmbedBuilder()
-          .setTitle('✅ Warning Logs Revoked')
+          .setTitle('<a:approved:1532390590707142956> Warning Logs Revoked')
           .setDescription(`All warning logs have been successfully cleared for the specified member.`)
           .addFields(
             { name: 'Target Account', value: `${user} (${user.id})`, inline: true },
@@ -455,7 +469,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -464,7 +478,7 @@ export const ModerationManifest: ModuleManifest = {
         const amount = interaction.options.getInteger('amount');
         if (amount < 1 || amount > 100) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Invalid Parameter')
+            .setTitle('<:wrong:1532390628330307634> Invalid Parameter')
             .setDescription('The quantity parameters for message deletion must be between 1 and 100.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Validation Check' });
@@ -473,7 +487,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await interaction.channel.bulkDelete(amount, true);
           const successEmbed = new EmbedBuilder()
-            .setTitle('🗑️ Bulk Message Deletion Protocol')
+            .setTitle('<a:approved:1532390590707142956> Bulk Message Deletion Protocol')
             .setDescription(`A bulk deletion request was successfully executed.`)
             .addFields(
               { name: 'Deleted Messages Count', value: `\`${amount}\``, inline: true },
@@ -486,7 +500,7 @@ export const ModerationManifest: ModuleManifest = {
           context.logSyncEvent(`Moderation: ${interaction.user.username} purged ${amount} messages in #${interaction.channel.name}.`, 'info');
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Bulk Deletion Failed')
+            .setTitle('<:wrong:1532390628330307634> Bulk Deletion Failed')
             .setDescription('An error occurred while attempting to delete messages. Messages older than 14 days cannot be bulk deleted.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -498,34 +512,80 @@ export const ModerationManifest: ModuleManifest = {
       name: 'command_lock',
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
-            .setDescription('You do not possess the required administrative clearances to execute this command.')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
+          const { embeds, components, flags } = buildRichCard({
+            emoji: WRONG_ICON,
+            title: 'Access Denied',
+            description: 'You do not possess the required administrative clearances to execute this command.',
+            accentColor: Colors.DANGER,
+            footerNote: 'Rage Optimiser • Access Control System',
+          });
+          return interaction.reply({ embeds, components, flags: 64 });
         }
+
+        let targetChannel: any = interaction.options?.getChannel?.('channel');
+        const arg0 = context?.parsed?.args?.[0]?.toLowerCase();
+        
+        if (!targetChannel) {
+          if (arg0 === 'vc' && interaction.member?.voice?.channel) {
+            targetChannel = interaction.member.voice.channel;
+          } else {
+            targetChannel = interaction.channel;
+          }
+        }
+
+        if (!targetChannel || !targetChannel.permissionOverwrites) {
+          const { embeds, components, flags } = buildRichCard({
+            emoji: WRONG_ICON,
+            title: 'Channel Resolution Error',
+            description: 'Could not resolve a valid target channel for lockdown.',
+            accentColor: Colors.DANGER,
+            footerNote: 'Rage Optimiser • Validation Check',
+          });
+          return interaction.reply({ embeds, components, flags: 64 });
+        }
+
+        const makePrivate = interaction.options?.getBoolean?.('private') === true || 
+          context?.parsed?.flags?.private === true || 
+          context?.parsed?.rawInput?.includes('--private');
+
+        const isVoice = targetChannel.isVoiceBased?.() || targetChannel.type === 2 || targetChannel.type === 13;
+
         try {
-          await interaction.channel.permissionOverwrites.edit(interaction.guild.id, { SendMessages: false });
-          const successEmbed = new EmbedBuilder()
-            .setTitle('🔒 Channel Lockdown Status: Active')
-            .setDescription(`Channel permissions have been restricted. Standard members can no longer send messages in this channel.`)
-            .addFields(
-              { name: 'Locked Channel', value: `${interaction.channel}`, inline: true },
-              { name: 'Authorized Moderator', value: `${interaction.user}`, inline: true }
-            )
-            .setColor('#f43f5e')
-            .setTimestamp()
-            .setFooter({ text: 'Rage Optimiser • Security System' });
-          await interaction.reply({ embeds: [successEmbed] });
-          context.logSyncEvent(`Moderation: ${interaction.user.username} locked #${interaction.channel.name}.`, 'warn');
-        } catch (e) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Lockdown Execution Failed')
-            .setDescription('Failed to edit permissions for this channel.')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Error Logs' });
-          await interaction.reply({ embeds: [errEmbed], flags: 64 });
+          if (isVoice) {
+            const overwrites: any = { Connect: false, SendMessages: false };
+            if (makePrivate) overwrites.ViewChannel = false;
+            await targetChannel.permissionOverwrites.edit(interaction.guild.id, overwrites);
+          } else {
+            const overwrites: any = { SendMessages: false, AddReactions: false, CreatePublicThreads: false, CreatePrivateThreads: false };
+            if (makePrivate) overwrites.ViewChannel = false;
+            await targetChannel.permissionOverwrites.edit(interaction.guild.id, overwrites);
+          }
+
+          const { embeds, components, flags } = buildRichCard({
+            emoji: SHIELD_ICON,
+            title: `${isVoice ? '<:voicechannelgreen:1532425750278438962> Voice Channel' : '<:shield:1532403012751065179> Text Channel'} Lockdown Active`,
+            description: `Permissions for ${targetChannel} have been restricted to enforce security isolation.`,
+            accentColor: Colors.DANGER,
+            fields: [
+              { label: '<:information:1532621274092929124> Target Channel', value: `${targetChannel} (\`${targetChannel.name}\`)`, inline: true },
+              { label: '<:shield:1532403012751065179> Authorized By', value: `${interaction.user}`, inline: true },
+              { label: '<:config:1532425712844144701> Lock Type', value: isVoice ? (makePrivate ? '`Voice & View Hidden`' : '`Voice Connect Blocked`') : (makePrivate ? '`Text & View Hidden`' : '`Send Messages Restricted`'), inline: true },
+              { label: '<:wrong:1532390628330307634> Channel Status', value: '<:wrong:1532390628330307634> **LOCKED / PRIVATE**', inline: true },
+            ],
+            footerNote: 'Rage Optimiser Enterprise • Channel Access Control',
+          });
+
+          await interaction.reply({ embeds, components, flags });
+          context.logSyncEvent?.(`Moderation: ${interaction.user.username} locked ${targetChannel.name}.`, 'warn');
+        } catch (e: any) {
+          const { embeds, components, flags } = buildRichCard({
+            emoji: WRONG_ICON,
+            title: 'Lockdown Execution Failed',
+            description: `Failed to modify channel permissions: \`${e?.message || 'Permission Error'}\``,
+            accentColor: Colors.DANGER,
+            footerNote: 'Rage Optimiser • Error Logs',
+          });
+          await interaction.reply({ embeds, components, flags: 64 });
         }
       }
     },
@@ -533,34 +593,82 @@ export const ModerationManifest: ModuleManifest = {
       name: 'command_unlock',
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
-            .setDescription('You do not possess the required administrative clearances to execute this command.')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
+          const { embeds, components, flags } = buildRichCard({
+            emoji: WRONG_ICON,
+            title: 'Access Denied',
+            description: 'You do not possess the required administrative clearances to execute this command.',
+            accentColor: Colors.DANGER,
+            footerNote: 'Rage Optimiser • Access Control System',
+          });
+          return interaction.reply({ embeds, components, flags: 64 });
         }
+
+        let targetChannel: any = interaction.options?.getChannel?.('channel');
+        const arg0 = context?.parsed?.args?.[0]?.toLowerCase();
+        
+        if (!targetChannel) {
+          if (arg0 === 'vc' && interaction.member?.voice?.channel) {
+            targetChannel = interaction.member.voice.channel;
+          } else {
+            targetChannel = interaction.channel;
+          }
+        }
+
+        if (!targetChannel || !targetChannel.permissionOverwrites) {
+          const { embeds, components, flags } = buildRichCard({
+            emoji: WRONG_ICON,
+            title: 'Channel Resolution Error',
+            description: 'Could not resolve a valid target channel for restoration.',
+            accentColor: Colors.DANGER,
+            footerNote: 'Rage Optimiser • Validation Check',
+          });
+          return interaction.reply({ embeds, components, flags: 64 });
+        }
+
+        const isVoice = targetChannel.isVoiceBased?.() || targetChannel.type === 2 || targetChannel.type === 13;
+
         try {
-          await interaction.channel.permissionOverwrites.edit(interaction.guild.id, { SendMessages: null });
-          const successEmbed = new EmbedBuilder()
-            .setTitle('🔓 Channel Lockdown Status: Inactive')
-            .setDescription(`Channel permissions have been restored. Standard members can now send messages.`)
-            .addFields(
-              { name: 'Unlocked Channel', value: `${interaction.channel}`, inline: true },
-              { name: 'Authorized Moderator', value: `${interaction.user}`, inline: true }
-            )
-            .setColor('#10b981')
-            .setTimestamp()
-            .setFooter({ text: 'Rage Optimiser • Security System' });
-          await interaction.reply({ embeds: [successEmbed] });
-          context.logSyncEvent(`Moderation: ${interaction.user.username} unlocked #${interaction.channel.name}.`, 'success');
-        } catch (e) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Unlock Execution Failed')
-            .setDescription('Failed to restore permissions for this channel.')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Error Logs' });
-          await interaction.reply({ embeds: [errEmbed], flags: 64 });
+          if (isVoice) {
+            await targetChannel.permissionOverwrites.edit(interaction.guild.id, {
+              Connect: null,
+              SendMessages: null,
+              ViewChannel: null
+            });
+          } else {
+            await targetChannel.permissionOverwrites.edit(interaction.guild.id, {
+              SendMessages: null,
+              AddReactions: null,
+              CreatePublicThreads: null,
+              CreatePrivateThreads: null,
+              ViewChannel: null
+            });
+          }
+
+          const { embeds, components, flags } = buildRichCard({
+            emoji: VERIFIED_ICON,
+            title: `${isVoice ? '<:voicechannelgreen:1532425750278438962> Voice Channel' : '<a:approved:1532390590707142956> Text Channel'} Unlocked`,
+            description: `Permissions for ${targetChannel} have been restored. Member access is active.`,
+            accentColor: Colors.SUCCESS,
+            fields: [
+              { label: '<:information:1532621274092929124> Target Channel', value: `${targetChannel} (\`${targetChannel.name}\`)`, inline: true },
+              { label: '<:shield:1532403012751065179> Authorized By', value: `${interaction.user}`, inline: true },
+              { label: '<a:approved:1532390590707142956> Restoration', value: isVoice ? '`Voice Connection Restored`' : '`Messaging Restored`', inline: true },
+              { label: '<a:approved:1532390590707142956> Channel Status', value: '<a:approved:1532390590707142956> **UNLOCKED / PUBLIC**', inline: true },
+            ],
+            footerNote: 'Rage Optimiser Enterprise • Channel Access Control',
+          });
+
+          await interaction.reply({ embeds, components, flags });
+          context.logSyncEvent?.(`Moderation: ${interaction.user.username} unlocked ${targetChannel.name}.`, 'success');
+        } catch (e: any) {
+          const { embeds, components, flags } = buildRichCard({
+            emoji: WRONG_ICON,
+            title: 'Unlock Execution Failed',
+            description: `Failed to restore channel permissions: \`${e?.message || 'Permission Error'}\``,
+            accentColor: Colors.DANGER,
+            footerNote: 'Rage Optimiser • Error Logs',
+          });
+          await interaction.reply({ embeds, components, flags: 64 });
         }
       }
     },
@@ -569,7 +677,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -579,7 +687,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await interaction.channel.setRateLimitPerUser(seconds);
           const successEmbed = new EmbedBuilder()
-            .setTitle('⏱️ Slowmode Status: Updated')
+            .setTitle('<:timer:1532620491662037123> Slowmode Status: Updated')
             .setDescription(`The message rate limit per user has been configured.`)
             .addFields(
               { name: 'Message Interval Delay', value: seconds === 0 ? 'Disabled' : `\`${seconds} seconds\``, inline: true },
@@ -591,7 +699,7 @@ export const ModerationManifest: ModuleManifest = {
           await interaction.reply({ embeds: [successEmbed] });
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Slowmode Configuration Failed')
+            .setTitle('<:wrong:1532390628330307634> Slowmode Configuration Failed')
             .setDescription('Failed to configure rate limit for this channel.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -604,7 +712,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -615,7 +723,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await interaction.guild.members.unban(userId, reason);
           const successEmbed = new EmbedBuilder()
-            .setTitle('🔓 Security Action: Member Re-authorized')
+            .setTitle('<a:approved:1532390590707142956> Security Action: Member Re-authorized')
             .setDescription(`The banishment registry has been updated to re-authorize the specified user ID.`)
             .addFields(
               { name: 'Re-authorized ID', value: `\`${userId}\``, inline: true },
@@ -629,7 +737,7 @@ export const ModerationManifest: ModuleManifest = {
           logModAction(interaction.guild, { id: userId, tag: userId }, interaction.user, 'Unban', reason, context);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Re-authorization Failed')
+            .setTitle('<:wrong:1532390628330307634> Re-authorization Failed')
             .setDescription('Failed to unban the user. Verify the User ID exists and is currently banned.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -642,7 +750,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -652,7 +760,7 @@ export const ModerationManifest: ModuleManifest = {
         const reason = interaction.options.getString('reason') || 'No reason provided';
         if (!member) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Member Location Failed')
+            .setTitle('<:wrong:1532390628330307634> Member Location Failed')
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -662,7 +770,7 @@ export const ModerationManifest: ModuleManifest = {
           await interaction.guild.members.ban(member.user.id, { deleteMessageSeconds: 7 * 24 * 60 * 60, reason });
           await interaction.guild.members.unban(member.user.id, 'Softban automatic unban');
           const successEmbed = new EmbedBuilder()
-            .setTitle('🔨 Security Action: Softban Protocol Executed')
+            .setTitle('<:gavel:1532621057318584380> Security Action: Softban Protocol Executed')
             .setDescription(`The selected member has been softbanned (removed, and message history cleared).`)
             .addFields(
               { name: 'Target Account', value: `${member.user} (${member.user.id})`, inline: true },
@@ -676,7 +784,7 @@ export const ModerationManifest: ModuleManifest = {
           logModAction(interaction.guild, member.user, interaction.user, 'Softban', reason, context);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Softban Protocol Failed')
+            .setTitle('<:wrong:1532390628330307634> Softban Protocol Failed')
             .setDescription('Failed to softban the member.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -689,7 +797,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -700,7 +808,7 @@ export const ModerationManifest: ModuleManifest = {
         const reason = interaction.options.getString('reason') || 'No reason provided';
         if (!member) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Member Location Failed')
+            .setTitle('<:wrong:1532390628330307634> Member Location Failed')
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -715,7 +823,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await interaction.guild.members.ban(member.user.id, { reason });
           const successEmbed = new EmbedBuilder()
-            .setTitle('⏱️ Security Action: Temporary Guild Suspension')
+            .setTitle('<:timer:1532620491662037123> Security Action: Temporary Guild Suspension')
             .setDescription(`The selected member has been temporarily suspended from the server.`)
             .addFields(
               { name: 'Target Account', value: `${member.user} (${member.user.id})`, inline: true },
@@ -734,7 +842,7 @@ export const ModerationManifest: ModuleManifest = {
           }, ms);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Temporary Suspension Failed')
+            .setTitle('<:wrong:1532390628330307634> Temporary Suspension Failed')
             .setDescription('Failed to ban the member.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -747,7 +855,7 @@ export const ModerationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         if (!hasModAccess(interaction, context)) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('You do not possess the required administrative clearances to execute this command.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
@@ -757,7 +865,7 @@ export const ModerationManifest: ModuleManifest = {
         const nickname = interaction.options.getString('nickname');
         if (!member) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Member Location Failed')
+            .setTitle('<:wrong:1532390628330307634> Member Location Failed')
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -766,7 +874,7 @@ export const ModerationManifest: ModuleManifest = {
         try {
           await member.setNickname(nickname);
           const successEmbed = new EmbedBuilder()
-            .setTitle('✏️ Nickname Status: Updated')
+            .setTitle('<:config:1532425712844144701> Nickname Status: Updated')
             .setDescription(`The user's display nickname has been successfully modified.`)
             .addFields(
               { name: 'Target Account', value: `${member.user}`, inline: true },
@@ -778,7 +886,7 @@ export const ModerationManifest: ModuleManifest = {
           await interaction.reply({ embeds: [successEmbed] });
         } catch (e) {
           const errEmbed = new EmbedBuilder()
-            .setTitle('❌ Nickname Modification Failed')
+            .setTitle('<:wrong:1532390628330307634> Nickname Modification Failed')
             .setDescription('Failed to change nickname. Verify bot permission hierarchy limits.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
@@ -793,7 +901,7 @@ export const ModerationManifest: ModuleManifest = {
         const guildId = interaction.guildId;
         const userWarns = await loadUserWarnings(guildId, user.id);
         const embed = new EmbedBuilder()
-          .setTitle(`📜 Infraction History: ${userTag(user)}`)
+          .setTitle(`<:information:1532621274092929124> Infraction History: ${userTag(user)}`)
           .setDescription(`Recorded historical warnings and administrative offenses for the specified account.`)
           .setColor('#ff4444')
           .setTimestamp()

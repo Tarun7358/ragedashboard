@@ -11,9 +11,128 @@ import {
   StreamType
 } from '@discordjs/voice';
 import play from 'play-dl';
-import { spawn, ChildProcess } from 'child_process';
+import ytdl from '@distube/ytdl-core';
+import { spawn, ChildProcess, execFile } from 'child_process';
+import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+export const EMOJIS = {
+  SOUNDWAVE: '<a:soundwave:1527641639924011028>',
+  VOICE: '<:voicechannelgreen:1532425750278438962>',
+  YOUTUBE: '<:YouTube:1527641424169009412>',
+  TIMER: '<:timer:1532620491662037123>',
+  MEMBER: '<:member:1532621317487071426>',
+  STATS: '<:stats:1532429110775779459>',
+  INFO: '<:information:1532621274092929124>',
+  CONFIG: '<:config:1532425712844144701>',
+  LINK: '<:link:1532620952087826602>',
+  APPROVED: '<a:approved:1532390590707142956>',
+  TICKS: '<:ticks:1532620580266836148>',
+  WRONG: '<:wrong:1532390628330307634>',
+  SHIELD: '<:shield:1532403012751065179>',
+  ARROW: '<:lightpurplearrow:1532621364115013693>',
+  RED_TICK: '<a:redtick:1527647199108796607>',
+  VIP: '<:vip:1532620837117759508>',
+};
+
+const execFileAsync = promisify(execFile);
+const currentModuleDir = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+
+function getYtDlpPath(): string {
+  const isWin = process.platform === 'win32';
+  const candidatePaths = [
+    path.join(process.cwd(), 'yt-dlp'),
+    path.join(process.cwd(), 'yt-dlp.exe'),
+    path.join(process.cwd(), 'bin', 'yt-dlp'),
+    path.join(process.cwd(), 'bin', 'yt-dlp.exe'),
+    path.join(process.cwd(), '..', 'yt-dlp'),
+    path.join(process.cwd(), '..', 'yt-dlp.exe'),
+    path.join(process.cwd(), '..', 'bin', 'yt-dlp'),
+    path.join(process.cwd(), '..', 'bin', 'yt-dlp.exe'),
+    path.join(currentModuleDir, '../../../yt-dlp'),
+    path.join(currentModuleDir, '../../../yt-dlp.exe'),
+    path.join(currentModuleDir, '../../../bin/yt-dlp'),
+    path.join(currentModuleDir, '../../../bin/yt-dlp.exe')
+  ];
+
+  for (const candidate of candidatePaths) {
+    try {
+      if (fs.existsSync(candidate)) {
+        if (!isWin) {
+          try { fs.chmodSync(candidate, 0o755); } catch (e) {}
+        }
+        return candidate;
+      }
+    } catch (e) {}
+  }
+  return 'yt-dlp';
+}
+
+async function extractDirectUrlWithYtDlp(audioUrl: string): Promise<string | null> {
+  const ytDlpPath = getYtDlpPath();
+  const tryExtract = async (args: string[]) => {
+    const { stdout } = await execFileAsync(ytDlpPath, args, { timeout: 15000 });
+    const lines = stdout.trim().split('\n').map(l => l.trim());
+    return lines.find(l => l.startsWith('http://') || l.startsWith('https://')) || null;
+  };
+
+  try {
+    const url = await tryExtract(['-g', '-f', 'bestaudio', '--no-playlist', audioUrl]);
+    if (url) return url;
+  } catch (err: any) {
+    console.warn(`[Music Warning] yt-dlp direct URL extraction primary attempt failed:`, err?.message || err);
+  }
+
+  try {
+    const url = await tryExtract(['-g', '-f', 'bestaudio', '--no-playlist', '--js-runtimes', 'node', audioUrl]);
+    if (url) return url;
+  } catch (err: any) {
+    console.warn(`[Music Warning] yt-dlp direct URL extraction fallback attempt failed:`, err?.message || err);
+  }
+
+  return null;
+}
+
+async function searchWithYtDlp(query: string): Promise<{ url: string; title: string; duration: string; thumbnail: string; artist: string } | null> {
+  const ytDlpPath = getYtDlpPath();
+  const runSearch = async (args: string[]) => {
+    const { stdout } = await execFileAsync(ytDlpPath, args, { timeout: 15000 });
+    const lines = stdout.trim().split('\n').map(l => l.trim()).filter(l => Boolean(l) && !l.startsWith('WARNING:') && !l.startsWith('['));
+    if (lines.length >= 2) {
+      const url = lines.find(l => l.startsWith('http://') || l.startsWith('https://')) || '';
+      if (!url) return null;
+      const nonUrlLines = lines.filter(l => !l.startsWith('http://') && !l.startsWith('https://'));
+      return {
+        url,
+        title: nonUrlLines[0] || query,
+        duration: lines.find(l => /^\d+(:\d+)+$/.test(l)) || '3:00',
+        thumbnail: lines.find(l => (l.startsWith('http://') || l.startsWith('https://')) && l !== url) || '',
+        artist: nonUrlLines[1] || 'YouTube Creator'
+      };
+    }
+    return null;
+  };
+
+  try {
+    const res = await runSearch([
+      '-f', 'bestaudio',
+      '--no-playlist',
+      '--print', 'webpage_url',
+      '--print', 'title',
+      '--print', 'duration_string',
+      '--print', 'thumbnail',
+      '--print', 'uploader',
+      `ytsearch1:${query}`
+    ]);
+    if (res) return res;
+  } catch (err: any) {
+    console.warn(`[Music Warning] yt-dlp search failed:`, err?.message || err);
+  }
+
+  return null;
+}
 // @ts-ignore
 import ffmpegPath from 'ffmpeg-static';
 import { 
@@ -126,6 +245,7 @@ export class GuildQueue {
   private queueLock = false;
   private retryCount = 0;
   private retryInProgress = false;
+  private retrySequence = 0; // FIX #2: sequence counter to invalidate stale retry timers
 
   private disconnectTimeout: NodeJS.Timeout | null = null;
   private currentProcess: ChildProcess | null = null;
@@ -216,6 +336,9 @@ export class GuildQueue {
             this.connection = newConn;
             this.bindConnectionEvents(newConn);
             newConn.subscribe(this.player);
+            // FIX #6: Stop the player first so the old stale AudioResource is fully
+            // cleared from the player state machine before creating a new stream.
+            this.player.stop();
             await this.startStream(this.currentTrack);
           } catch (rejoinErr) {
             console.error(`[Music Debug] Failed to rejoin user voice channel:`, rejoinErr);
@@ -478,17 +601,25 @@ export class GuildQueue {
   }
 
   private async handleTrackError(track: Track, error: any) {
-    console.error(`[Music Debug] Error playing track "${track.title}":`, error);
-    // Bug 6 Fix: Guard against duplicate playNext() calls when retries stack.
+    const errStr = error?.stack || error?.message || (typeof error === 'object' && Object.keys(error).length > 0 ? JSON.stringify(error) : String(error));
+    console.error(`[Music Debug] Error playing track "${track.title}": ${errStr}`);
+    // FIX #2: Guard against duplicate retries; use sequence counter so stale timer
+    // callbacks from prior errors cannot fire after a new retry has already started.
     if (this.retryInProgress) return;
     if (this.retryCount < 1) {
       this.retryCount++;
       this.retryInProgress = true;
-      console.log(`[Music Debug] Retrying failed track: "${track.title}" (Attempt 1/1)`);
+      const seq = ++this.retrySequence; // capture current sequence
+      console.log(`[Music Debug] Retrying failed track: "${track.title}" (Attempt 1/1, seq=${seq})`);
       if (track.url.includes('youtube.com') || track.url.includes('youtu.be')) {
         track.url = `search:${track.title} ${track.artist || ''}`;
       }
       setTimeout(async () => {
+        // FIX #2: Discard stale timer if a newer retry sequence was started
+        if (seq !== this.retrySequence) {
+          console.log(`[Music Debug] Discarding stale retry (seq=${seq}, current=${this.retrySequence})`);
+          return;
+        }
         this.retryInProgress = false;
         try {
           await this.startStream(track);
@@ -505,9 +636,10 @@ export class GuildQueue {
   }
 
   private async startStream(nextTrack: Track, seekSeconds: number = 0) {
+    // FIX #8: Guard against calling .destroy() on an already-destroyed stream
     if (this.playDlStream) {
       try {
-        this.playDlStream.destroy();
+        if (!this.playDlStream.destroyed) this.playDlStream.destroy();
       } catch (e) {}
       this.playDlStream = null;
     }
@@ -539,6 +671,8 @@ export class GuildQueue {
       let audioUrl = nextTrack.url;
       if (nextTrack.url.startsWith('search:')) {
         const query = nextTrack.url.replace('search:', '');
+        let foundTrack = false;
+
         const results = await play.search(query, { limit: 1 }).catch(() => []);
         if (results && results.length > 0) {
           audioUrl = results[0].url;
@@ -547,51 +681,134 @@ export class GuildQueue {
           if (results[0].durationRaw) nextTrack.duration = results[0].durationRaw;
           if (results[0].thumbnails?.[0]?.url) nextTrack.thumbnail = results[0].thumbnails[0].url;
           if (results[0].channel?.name) nextTrack.artist = results[0].channel.name;
-        } else {
-          throw new Error('Track not found via search stream import.');
+          foundTrack = true;
+        }
+
+        if (!foundTrack) {
+          console.log(`[Music] play-dl search empty for "${query}", falling back to yt-dlp search...`);
+          const ytResult = await searchWithYtDlp(query);
+          if (ytResult && ytResult.url) {
+            audioUrl = ytResult.url;
+            nextTrack.url = audioUrl;
+            if (ytResult.title) nextTrack.title = ytResult.title;
+            if (ytResult.duration) nextTrack.duration = ytResult.duration;
+            if (ytResult.thumbnail) nextTrack.thumbnail = ytResult.thumbnail;
+            if (ytResult.artist) nextTrack.artist = ytResult.artist;
+            foundTrack = true;
+          }
+        }
+
+        if (!foundTrack) {
+          throw new Error(`Track "${query}" not found via play-dl or yt-dlp search.`);
         }
       }
 
-      let useYtDlp = true;
-      if (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be') || audioUrl.includes('soundcloud.com')) {
+      let streamCreated = false;
+      let directStreamUrl: string | null = null;
+
+      // Tier 1: yt-dlp binary stdout process (Preferred for YouTube - avoids googlevideo CDN 403 blocks)
+      if (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be')) {
+        const ytDlpPath = getYtDlpPath();
+        try {
+          console.log(`[Music] Spawning yt-dlp binary (${ytDlpPath}) stdout stream for: ${audioUrl}`);
+          const proc = spawn(ytDlpPath, [
+            '-o', '-',
+            '-f', 'bestaudio',
+            '--no-playlist',
+            '--quiet',
+            audioUrl
+          ]);
+
+          await new Promise<void>((resolve, reject) => {
+            proc.once('error', reject);
+            setTimeout(() => {
+              proc.removeListener('error', reject);
+              resolve();
+            }, 300);
+          });
+
+          this.currentProcess = proc;
+          this.currentProcess.on('error', (err) => {
+            console.error('[Music Debug] yt-dlp process error:', err);
+          });
+          if (this.currentProcess.stdout) {
+            this.currentProcess.stdout.on('error', (err) => {
+              console.warn('[Music Debug] yt-dlp stdout error (ok during skip):', err.message);
+            });
+          }
+          if (this.currentProcess.stderr) {
+            this.currentProcess.stderr.on('data', (data) => {
+              const msg = data.toString().trim();
+              if (msg && !msg.startsWith('[download]') && !msg.startsWith('[youtube]') && !msg.includes('WARNING:')) {
+                console.warn(`[Music yt-dlp stderr] ${msg}`);
+              }
+            });
+          }
+          streamCreated = true;
+          console.log(`[Music] Successfully created yt-dlp binary stdout stream`);
+        } catch (ytDlpErr: any) {
+          console.warn(`[Music Warning] yt-dlp binary stdout failed, trying direct URL fallback:`, ytDlpErr.message || ytDlpErr);
+        }
+      }
+
+      // Tier 2: yt-dlp Direct URL Extraction fallback
+      if (!streamCreated && (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be'))) {
+        console.log(`[Music] Attempting direct URL extraction via yt-dlp for: ${audioUrl}`);
+        const directUrl = await extractDirectUrlWithYtDlp(audioUrl);
+        if (directUrl) {
+          directStreamUrl = directUrl;
+          streamCreated = true;
+          console.log(`[Music] Successfully extracted direct media URL via yt-dlp`);
+        } else {
+          console.warn(`[Music Warning] yt-dlp direct URL extraction returned null, trying play-dl fallback...`);
+        }
+      }
+
+      // Tier 3: play-dl stream (for SoundCloud, Spotify, or YouTube fallback)
+      if (!streamCreated) {
         try {
           console.log(`[Music] Attempting to stream via play-dl: ${audioUrl} (seek: ${seekSeconds}s)`);
-          const streamData = await play.stream(audioUrl, {
-            quality: 2,
-            seek: seekSeconds
-          });
+          const playOptions: any = {};
+          if (seekSeconds > 0) playOptions.seek = seekSeconds;
+          const streamData = await play.stream(audioUrl, playOptions);
           this.playDlStream = streamData.stream;
-          useYtDlp = false;
+          streamCreated = true;
           console.log(`[Music] Successfully created play-dl stream`);
         } catch (playDlErr: any) {
-          console.warn(`[Music Warning] play-dl streaming failed, falling back to yt-dlp:`, playDlErr.message || playDlErr);
+          console.warn(`[Music Warning] play-dl streaming failed:`, playDlErr.message || playDlErr);
         }
       }
 
-      if (useYtDlp) {
-        // Stream via yt-dlp binary
-        console.log(`[Music] Spawning yt-dlp process for: ${audioUrl}`);
-        const ytDlpPath = path.join(process.cwd(), 'bin', 'yt-dlp.exe');
-        const hasLocalYtDlp = fs.existsSync(ytDlpPath);
-        const command = hasLocalYtDlp ? ytDlpPath : 'yt-dlp';
+      // Tier 4: @distube/ytdl-core (last resort)
+      if (!streamCreated && (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be'))) {
+        try {
+          console.log(`[Music] Attempting @distube/ytdl-core for: ${audioUrl}`);
+          const ytdlStream = ytdl(audioUrl, {
+            filter: 'audioonly',
+            quality: 'highestaudio',
+            highWaterMark: 1 << 25,
+          });
+          await new Promise<void>((resolve, reject) => {
+            ytdlStream.once('error', reject);
+            ytdlStream.once('data', () => {
+              ytdlStream.removeListener('error', reject);
+              resolve();
+            });
+            setTimeout(() => {
+              ytdlStream.removeListener('error', reject);
+              resolve();
+            }, 2000);
+          });
+          this.playDlStream = ytdlStream as any;
+          streamCreated = true;
+          console.log(`[Music] Successfully created @distube/ytdl-core stream`);
+        } catch (ytdlErr: any) {
+          console.error(`[Music Error] @distube/ytdl-core failed:`, ytdlErr.message || ytdlErr);
+        }
+      }
 
-        this.currentProcess = spawn(command, [
-          '-o', '-',
-          '-f', 'bestaudio',
-          '--no-playlist',
-          audioUrl
-        ]);
-
-        this.currentProcess.on('error', (err) => {
-          console.error('[Music] yt-dlp process spawn error:', err);
-        });
-
-        if (!this.currentProcess.stdout) throw new Error('Failed to create yt-dlp stdout');
-
-        // Prevent EPIPE crash on yt-dlp stdout
-        this.currentProcess.stdout.on('error', (err) => {
-          console.warn('[Music Debug] yt-dlp stdout stream error (expected during skip):', err.message);
-        });
+      if (!streamCreated) {
+        throw new Error(`No audio stream could be created for: ${audioUrl}`);
       }
 
       // Build FFmpeg filters
@@ -634,11 +851,23 @@ export class GuildQueue {
         }
       });
 
-      const ffmpegArgs = [
-        '-i', 'pipe:0',
-      ];
+      const ffmpegArgs: string[] = ['-loglevel', 'error'];
 
-      if (seekSeconds > 0 && useYtDlp) {
+      if (directStreamUrl) {
+        ffmpegArgs.push(
+          '-headers', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\nReferer: https://www.youtube.com/\r\n',
+          '-reconnect', '1',
+          '-reconnect_streamed', '1',
+          '-reconnect_delay_max', '5',
+          '-i', directStreamUrl
+        );
+      } else {
+        ffmpegArgs.push('-i', 'pipe:0');
+      }
+
+      if (seekSeconds > 0 && !directStreamUrl && !this.playDlStream) {
+        ffmpegArgs.push('-ss', String(seekSeconds));
+      } else if (seekSeconds > 0 && directStreamUrl) {
         ffmpegArgs.push('-ss', String(seekSeconds));
       }
 
@@ -657,25 +886,51 @@ export class GuildQueue {
       this.ffmpegProcess = spawn(actualFfmpeg, ffmpegArgs);
 
       this.ffmpegProcess.on('error', (err) => {
-        console.error('[Music] ffmpeg process spawn error:', err);
+        console.error('[Music FFmpeg Error] process error:', err);
       });
-
-      const inputStream = this.playDlStream || (this.currentProcess ? this.currentProcess.stdout : null);
-
-      if (inputStream && this.ffmpegProcess && this.ffmpegProcess.stdin) {
-        // Prevent EPIPE crash on ffmpeg streams
-        this.ffmpegProcess.stdin.on('error', (err) => {
-          console.warn('[Music Debug] ffmpeg stdin stream error (expected during skip):', err.message);
-        });
-        if (this.ffmpegProcess.stdout) {
-          this.ffmpegProcess.stdout.on('error', (err) => {
-            console.warn('[Music Debug] ffmpeg stdout stream error (expected during skip):', err.message);
-          });
+      this.ffmpegProcess.on('exit', (code, signal) => {
+        // Code 255 = ECONNRESET (Discord closed pipe on disconnect/skip) — normal
+        if (code !== 0 && code !== null && code !== 255) {
+          console.warn(`[Music FFmpeg Exit] process exited with code ${code}, signal ${signal}`);
         }
+      });
+      if (this.ffmpegProcess.stderr) {
+        this.ffmpegProcess.stderr.on('data', (data) => {
+          const msg = data.toString().trim();
+          if (msg && !msg.startsWith('frame=') && !msg.startsWith('size=')
+              && !msg.includes('Connection reset by peer')
+              && !msg.includes('Broken pipe')
+              && !msg.includes('muxing overhead')) {
+            console.warn(`[Music FFmpeg stderr] ${msg}`);
+          }
+        });
+      }
 
-        inputStream.pipe(this.ffmpegProcess.stdin as any);
-      } else {
-        throw new Error('Failed to pipe stdout of source stream to stdin of ffmpeg');
+      if (!directStreamUrl) {
+        const inputStream = this.playDlStream || (this.currentProcess ? this.currentProcess.stdout : null);
+
+        if (inputStream && this.ffmpegProcess && this.ffmpegProcess.stdin) {
+          inputStream.on('error', (err: any) => {
+            console.warn('[Music Debug] Input stream error (ok during skip):', err.message);
+          });
+          if (this.currentProcess) {
+            this.currentProcess.on('error', (err: any) => {
+              console.warn('[Music Debug] currentProcess error (ok during skip):', err.message);
+            });
+          }
+          this.ffmpegProcess.stdin.on('error', (err: any) => {
+            console.warn('[Music Debug] ffmpeg stdin stream error (ok during skip):', err.message);
+          });
+          if (this.ffmpegProcess.stdout) {
+            this.ffmpegProcess.stdout.on('error', (err: any) => {
+              console.warn('[Music Debug] ffmpeg stdout stream error (ok during skip):', err.message);
+            });
+          }
+
+          inputStream.pipe(this.ffmpegProcess.stdin as any);
+        } else {
+          throw new Error('Failed to pipe stdout of source stream to stdin of ffmpeg');
+        }
       }
 
       if (!this.ffmpegProcess || !this.ffmpegProcess.stdout) throw new Error('Failed to create ffmpeg stdout');
@@ -688,7 +943,7 @@ export class GuildQueue {
       resource.volume?.setVolume(this.volume / 100);
 
       this.player.play(resource);
-      console.log(`[Music] Player started playing resource via yt-dlp & FFmpeg with filters: ${afFilters.join(',') || 'none'}.`);
+      console.log(`[Music] Player started playing resource via ${directStreamUrl ? 'yt-dlp direct URL' : 'stream pipe'} & FFmpeg with filters: ${afFilters.join(',') || 'none'}.`);
 
       // Track playback start times
       this.playbackStartTime = Date.now() - Math.floor((seekSeconds * 1000) / this.speed);
@@ -919,29 +1174,29 @@ export class GuildQueue {
       if (!this.currentTrack) {
         // ─── IDLE PANEL ───────────────────────────────────────────────
         embed
-          .setColor(0x7C5CFC)
+          .setColor(0x99CC00)
           .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
-          .setTitle('🎵 Audio Engine Control Panel')
+          .setTitle(`${EMOJIS.SOUNDWAVE} Audio Engine Control Panel`)
           .setDescription(
             '> **No music is currently playing.**\n' +
             '> Start a session by joining a voice channel and using `/play` or `r!play <query>`.\n\n' +
-            '**🔥 Trending Picks**\n' +
+            `**${EMOJIS.SOUNDWAVE} Trending Picks**\n` +
             '`01.` Chill Lofi Beats · Study & Focus\n' +
             '`02.` Synthwave Neon Drive Mix\n' +
             '`03.` Cyberpunk Tokyo Drift Theme'
           )
           .addFields(
-            { name: '📡 Engine Status', value: '```Connected — Idle```', inline: true },
-            { name: '🎚️ DSP Filters', value: '```None Active```', inline: true },
-            { name: '🔁 Loop Mode', value: '```Off```', inline: true }
+            { name: `${EMOJIS.INFO} Engine Status`, value: '```Connected — Idle```', inline: true },
+            { name: `${EMOJIS.CONFIG} DSP Filters`, value: '```None Active```', inline: true },
+            { name: `${EMOJIS.TIMER} Loop Mode`, value: '```Off```', inline: true }
           )
           .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Suite', iconURL: client.user?.displayAvatarURL() })
           .setTimestamp();
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder().setCustomId('music_view_playlists').setLabel('Playlists').setEmoji('📥').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('music_trending_songs').setLabel('Trending').setEmoji('🔥').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('music_discover').setLabel('Discover').setEmoji('🎵').setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId('music_view_playlists').setLabel('Playlists').setEmoji(EMOJIS.TICKS).setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('music_trending_songs').setLabel('Trending').setEmoji(EMOJIS.SOUNDWAVE).setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId('music_discover').setLabel('Discover').setEmoji(EMOJIS.VOICE).setStyle(ButtonStyle.Secondary)
         );
         components.push(row);
 
@@ -971,13 +1226,13 @@ export class GuildQueue {
               : this.currentTrack.url.includes('soundcloud') ? 'SoundCloud'
               : 'YouTube');
 
-          const loopLabel = this.loopMode === 'track' ? '🔂 Track' : this.loopMode === 'queue' ? '🔁 Queue' : '➡️ Off';
-          const statusLabel = isPaused ? '⏸️ Paused' : '▶️ Playing';
+          const loopLabel = this.loopMode === 'track' ? 'Track' : this.loopMode === 'queue' ? 'Queue' : 'Off';
+          const statusLabel = isPaused ? 'Paused' : 'Playing';
 
           embed
-            .setColor(0x7C5CFC)
+            .setColor(0x99CC00)
             .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
-            .setTitle(`${statusLabel} — Now Playing`)
+            .setTitle(`${isPaused ? EMOJIS.TIMER : EMOJIS.SOUNDWAVE} ${statusLabel} — Now Playing`)
             .setDescription(
               `> ### ${titleLink}\n` +
               `> by **${this.currentTrack.artist || 'Various Artists'}** • Requested by **${this.currentTrack.requester}**\n\n` +
@@ -985,33 +1240,32 @@ export class GuildQueue {
               `\`${elapsedStr} / ${durationStr}\``
             )
             .addFields(
-              { name: '🔊 Voice Channel', value: `\`${voiceChannelName}\`\n**${listeners}** listener${listeners !== 1 ? 's' : ''}`, inline: true },
-              { name: '⚙️ Controls', value: `Volume: **${this.volume}%**\nSpeed: **${this.speed}x** | Pitch: **${this.pitch}x**`, inline: true },
-              { name: '💿 Session', value: `Platform: **${platform}**\nQueue: **${this.queue.length}** tracks\nLoop: **${loopLabel}**`, inline: true }
+              { name: `${EMOJIS.VOICE} Voice Channel`, value: `\`${voiceChannelName}\`\n**${listeners}** listener${listeners !== 1 ? 's' : ''}`, inline: true },
+              { name: `${EMOJIS.CONFIG} Controls`, value: `Volume: **${this.volume}%**\nSpeed: **${this.speed}x** | Pitch: **${this.pitch}x**`, inline: true },
+              { name: `${EMOJIS.INFO} Session`, value: `Platform: **${platform}**\nQueue: **${this.queue.length}** tracks\nLoop: **${loopLabel}**`, inline: true }
             )
             .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Suite', iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
-
 
           if (hasValidUrl) embed.setURL(this.currentTrack.url);
           if (this.currentTrack.thumbnail) embed.setThumbnail(this.currentTrack.thumbnail);
 
           // Row 1 — Playback
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_prev').setLabel('Previous').setEmoji('⏮').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_play_pause').setLabel(isPaused ? 'Resume' : 'Pause').setEmoji(isPaused ? '▶️' : '⏸️').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('music_skip').setLabel('Skip').setEmoji('⏭').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_stop').setLabel('Stop').setEmoji('⏹').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('music_loop').setLabel('Loop').setEmoji('🔁').setStyle(this.loopMode !== 'off' ? ButtonStyle.Success : ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId('music_prev').setLabel('Previous').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_play_pause').setLabel(isPaused ? 'Resume' : 'Pause').setEmoji(isPaused ? EMOJIS.APPROVED : EMOJIS.TIMER).setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('music_skip').setLabel('Skip').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_stop').setLabel('Stop').setEmoji(EMOJIS.WRONG).setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('music_loop').setLabel('Loop').setEmoji(EMOJIS.TIMER).setStyle(this.loopMode !== 'off' ? ButtonStyle.Success : ButtonStyle.Secondary)
           );
 
           // Row 2 — Utilities
           const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_queue_btn').setLabel('Queue').setEmoji('📜').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_filters_btn').setLabel('Filters').setEmoji('🎚').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_volume_btn').setLabel('Volume').setEmoji('🔊').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_lyrics').setLabel('Lyrics').setEmoji('🎤').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_settings').setLabel('Settings').setEmoji('⚙').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId('music_queue_btn').setLabel('Queue').setEmoji(EMOJIS.TICKS).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_filters_btn').setLabel('Filters').setEmoji(EMOJIS.CONFIG).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_volume_btn').setLabel('Volume').setEmoji(EMOJIS.VOICE).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_lyrics').setLabel('Lyrics').setEmoji(EMOJIS.INFO).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_settings').setLabel('Settings').setEmoji(EMOJIS.CONFIG).setStyle(ButtonStyle.Secondary)
           );
 
           components.push(row1, row2);
@@ -1045,54 +1299,56 @@ export class GuildQueue {
             : '*No upcoming tracks. Add songs via `/play` or the dashboard.*';
 
           embed
-            .setColor(0x57F287)
-            .setTitle('📋 Playback Queue')
+            .setColor(0x99CC00)
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
+            .setTitle(`${EMOJIS.TICKS} Playback Queue`)
             .setDescription(
-              `> ▶️ **Now Playing**: ${titleLink}\n` +
+              `> ${EMOJIS.SOUNDWAVE} **Now Playing**: ${titleLink}\n` +
               `> Duration: \`${this.currentTrack.duration}\` • By: **${this.currentTrack.requester}**\n\n` +
               `**Upcoming Tracks**\n${queueLines}`
             )
             .addFields({
-              name: '⏱️ Queue Summary',
+              name: `${EMOJIS.TIMER} Queue Summary`,
               value: `• **Total Duration**: ${estHrs > 0 ? `${estHrs}h ` : ''}${estMins}m\n• **Est. End**: <t:${Math.floor((Date.now() + totalSecs * 1000) / 1000)}:t> (<t:${Math.floor((Date.now() + totalSecs * 1000) / 1000)}:R>)`,
               inline: false
             })
-            .setFooter({ text: `Page ${page + 1} / ${totalPages} • Rage Optimiser`, iconURL: client.user?.displayAvatarURL() })
+            .setFooter({ text: `Page ${page + 1} / ${totalPages} • Rage Optimiser Enterprise`, iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_queue_prev').setLabel('Previous').setEmoji('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(page === 0),
-            new ButtonBuilder().setCustomId('music_queue_next').setLabel('Next').setEmoji('➡️').setStyle(ButtonStyle.Secondary).setDisabled(page >= totalPages - 1),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_queue_prev').setLabel('Previous').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Secondary).setDisabled(page === 0),
+            new ButtonBuilder().setCustomId('music_queue_next').setLabel('Next').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Secondary).setDisabled(page >= totalPages - 1),
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
 
         } else if (this.viewMode === 'filters') {
           // ─── DSP FILTERS VIEW ─────────────────────────────────────────
           const filtersList = [
-            { name: 'Bass Boost', key: 'bassboost', emoji: '🔉', desc: 'Amplifies low-end frequencies' },
-            { name: 'Nightcore', key: 'nightcore', emoji: '⚡', desc: 'Faster speed & higher pitch' },
-            { name: '8D Audio', key: '8d', emoji: '🌀', desc: 'Rotary surround sound pan' },
-            { name: 'Vaporwave', key: 'vaporwave', emoji: '🌊', desc: 'Slows pitch & tempo' },
-            { name: 'Treble Boost', key: 'treble', emoji: '🔊', desc: 'High-end frequency clarity' },
-            { name: 'Reverb', key: 'reverb', emoji: '🏔️', desc: 'Spatial audio echo simulation' }
+            { name: 'Bass Boost', key: 'bassboost', desc: 'Amplifies low-end frequencies' },
+            { name: 'Nightcore', key: 'nightcore', desc: 'Faster speed & higher pitch' },
+            { name: '8D Audio', key: '8d', desc: 'Rotary surround sound pan' },
+            { name: 'Vaporwave', key: 'vaporwave', desc: 'Slows pitch & tempo' },
+            { name: 'Treble Boost', key: 'treble', desc: 'High-end frequency clarity' },
+            { name: 'Reverb', key: 'reverb', desc: 'Spatial audio echo simulation' }
           ];
 
           const filterStatus = filtersList.map(f => {
             const on = this.activeFilters.includes(f.key);
-            return `${on ? '🟢' : '⚫'} **${f.emoji} ${f.name}** — ${f.desc}`;
+            return `${on ? EMOJIS.APPROVED : EMOJIS.WRONG} **${f.name}** — ${f.desc}`;
           }).join('\n');
 
           embed
-            .setColor(0x57F287)
-            .setTitle('🎚️ DSP Audio Effects Board')
+            .setColor(0x99CC00)
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
+            .setTitle(`${EMOJIS.CONFIG} DSP Audio Effects Board`)
             .setDescription(
               `> Configure real-time frequency modification filters.\n` +
               `> **Active**: ${this.activeFilters.length > 0 ? this.activeFilters.map(f => `\`${f}\``).join(', ') : 'None'}\n\n` +
               filterStatus
             )
             .addFields({
-              name: '⚡ Speed & Pitch',
+              name: `${EMOJIS.CONFIG} Speed & Pitch`,
               value: `Speed: **${this.speed}x** | Pitch: **${this.pitch}x**`,
               inline: false
             })
@@ -1116,8 +1372,8 @@ export class GuildQueue {
           );
 
           const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_reset_filters').setLabel('Reset All').setEmoji('♻️').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_reset_filters').setLabel('Reset All').setEmoji(EMOJIS.WRONG).setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Primary)
           );
 
           components.push(row1, row2, row3);
@@ -1129,26 +1385,27 @@ export class GuildQueue {
           const volBar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
 
           embed
-            .setColor(0x57F287)
-            .setTitle('🔊 Volume Control')
+            .setColor(0x99CC00)
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
+            .setTitle(`${EMOJIS.VOICE} Volume Control`)
             .setDescription(
               `> Adjust the playback output level.\n\n` +
               `**Current Volume**\n\`\`\`\n[${volBar}] ${this.volume}%\n\`\`\``
             )
             .addFields(
-              { name: '🔉 Min', value: '`0%`', inline: true },
-              { name: '🔊 Current', value: `\`${this.volume}%\``, inline: true },
-              { name: '📢 Max', value: '`200%`', inline: true }
+              { name: `${EMOJIS.VOICE} Min`, value: '`0%`', inline: true },
+              { name: `${EMOJIS.VOICE} Current`, value: `\`${this.volume}%\``, inline: true },
+              { name: `${EMOJIS.VOICE} Max`, value: '`200%`', inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Audio System', iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_volume_minus').setLabel('-10%').setEmoji('🔉').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_volume_plus').setLabel('+10%').setEmoji('🔊').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_volume_mute').setLabel(this.volume === 0 ? 'Unmute' : 'Mute').setEmoji(this.volume === 0 ? '🔊' : '🔇').setStyle(this.volume === 0 ? ButtonStyle.Success : ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('music_volume_minus').setLabel('-10%').setEmoji(EMOJIS.VOICE).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_volume_plus').setLabel('+10%').setEmoji(EMOJIS.VOICE).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_volume_mute').setLabel(this.volume === 0 ? 'Unmute' : 'Mute').setEmoji(this.volume === 0 ? EMOJIS.VOICE : EMOJIS.WRONG).setStyle(this.volume === 0 ? ButtonStyle.Success : ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('music_volume_100').setLabel('Reset 100%').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back').setEmoji('🔙').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
 
@@ -1160,29 +1417,31 @@ export class GuildQueue {
             : `**${this.currentTrack.title}**`;
 
           embed
-            .setColor(0x57F287)
-            .setTitle('🎤 Synced Lyrics')
+            .setColor(0x99CC00)
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
+            .setTitle(`${EMOJIS.INFO} Synced Lyrics`)
             .setDescription(
               `> **Now Playing**: ${titleLink}\n\n` +
               `*Connect a Genius API key in dashboard settings for real-time lyrics.*\n\n` +
-              `🎵 *Instrumental / lyrics not available for this track.*`
+              `*Instrumental / lyrics not available for this track.*`
             )
             .setFooter({ text: 'Rage Optimiser • Lyrics Engine', iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
 
         } else if (this.viewMode === 'settings') {
           // ─── SETTINGS VIEW ────────────────────────────────────────────
           embed
-            .setColor(0x57F287)
-            .setTitle('⚙️ Player Configuration')
+            .setColor(0x99CC00)
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
+            .setTitle(`${EMOJIS.CONFIG} Player Configuration`)
             .setDescription(
               `> Configure player operational settings.\n\n` +
-              `• **Autoplay**: ${this.autoplay ? '🟢 Enabled' : '⚫ Disabled'}\n` +
+              `• **Autoplay**: ${this.autoplay ? `${EMOJIS.APPROVED} Enabled` : `${EMOJIS.WRONG} Disabled`}\n` +
               `• **Loop Mode**: \`${this.loopMode}\`\n` +
               `• **Volume**: \`${this.volume}%\`\n` +
               `• **Speed**: \`${this.speed}x\` | **Pitch**: \`${this.pitch}x\``
@@ -1191,17 +1450,18 @@ export class GuildQueue {
             .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_toggle_autoplay').setLabel(this.autoplay ? 'Disable Autoplay' : 'Enable Autoplay').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_loop').setLabel('Cycle Loop').setEmoji('🔁').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_toggle_autoplay').setLabel(this.autoplay ? 'Disable Autoplay' : 'Enable Autoplay').setEmoji(EMOJIS.CONFIG).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_loop').setLabel('Cycle Loop').setEmoji(EMOJIS.TIMER).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
 
         } else if (this.viewMode === 'playlists') {
           // ─── PLAYLISTS VIEW ───────────────────────────────────────────
           embed
-            .setColor(0x57F287)
-            .setTitle('📥 Playlist Engine')
+            .setColor(0x99CC00)
+            .setAuthor({ name: 'Rage Optimiser Enterprise • Audio Engine' })
+            .setTitle(`${EMOJIS.TICKS} Playlist Engine`)
             .setDescription(
               `> Manage saved playlists and liked tracks.\n\n` +
               `• **Saved Playlists**: ${this.playlists.length} playlists stored\n` +
@@ -1211,9 +1471,9 @@ export class GuildQueue {
             .setTimestamp();
 
           const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('music_save_playlist').setLabel('Save Queue').setEmoji('📥').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_favorite').setLabel('Favorite').setEmoji('❤️').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji('🔙').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('music_save_playlist').setLabel('Save Queue').setEmoji(EMOJIS.TICKS).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_favorite').setLabel('Favorite').setEmoji(EMOJIS.APPROVED).setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('music_view_player').setLabel('Back to Player').setEmoji(EMOJIS.ARROW).setStyle(ButtonStyle.Primary)
           );
           components.push(row1);
         }

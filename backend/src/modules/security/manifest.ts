@@ -4,7 +4,8 @@ import { checkWhitelistPermission, getGuildAndCheckPermission, checkBypassImmuni
 import { isUrlCommandBypass } from '../../utils/antiLinkBypass.js';
 import { Database } from '../../core/Database.js';
 import { checkRoleAssignment } from '../join-role-guard/manifest.js';
-import { Embeds, Colors } from '../../core/UIFactory.js';
+import { Embeds, Colors, createLimeEmbed, buildLimeOverviewCard, VERIFIED_ICON, WRONG_ICON } from '../../core/UIFactory.js';
+import { normalizeRuleName, DEFAULT_SECURITY_RULES, getEffectiveRule } from '../config/manifest.js';
 
 
 // UPM Live Snapshots, Active Quarantines & Threat Scoring tracking
@@ -594,6 +595,25 @@ export const SecurityManifest: ModuleManifest = {
           type: 1
         },
         {
+          name: 'config-rule',
+          description: 'Configure an anti-nuke protection module (limit, window, action, reversion)',
+          type: 1,
+          options: [
+            { name: 'rule', type: 3, description: 'Module rule name (e.g. anti_role_grant, anti_channel_delete)', required: true },
+            { name: 'enabled', type: 5, description: 'Enable or disable rule', required: false },
+            { name: 'limit', type: 4, description: 'Action threshold limit', required: false },
+            { name: 'window', type: 4, description: 'Time window in seconds', required: false },
+            { name: 'action', type: 3, description: 'Punishment action', required: false, choices: [
+              { name: 'Quarantine', value: 'quarantine' },
+              { name: 'Ban', value: 'ban' },
+              { name: 'Kick', value: 'kick' },
+              { name: 'Strip Roles', value: 'strip_roles' },
+              { name: 'Warn', value: 'warn' }
+            ]},
+            { name: 'reversion', type: 5, description: 'Enable or disable automatic recovery/reversion', required: false }
+          ]
+        },
+        {
           name: 'whitelist-add',
           description: 'Add a user to the anti-nuke bypass whitelist',
           type: 1,
@@ -751,13 +771,13 @@ export const SecurityManifest: ModuleManifest = {
         }
 
         if (!role) {
-          const errEmbed = Embeds.error('🏷️ Role Not Found', 'Could not locate the specified role.', { module: 'security' });
+          const errEmbed = Embeds.error('Role Not Found', 'Could not locate the specified role.', { module: 'security' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
 
         if (role.managed) {
           const errEmbed = Embeds.error(
-            '⚙️ Managed Role Error',
+            'Managed Role Error',
             `The role **${role.name}** is automatically managed by an integration or bot and cannot be manually assigned.`,
             { module: 'security' }
           );
@@ -794,7 +814,7 @@ export const SecurityManifest: ModuleManifest = {
               thumbnail: targetMember.user.displayAvatarURL({ size: 256 }),
               fields: [
                 { name: '👤 Member', value: `${targetMember} (\`${targetMember.id}\`)`, inline: true },
-                { name: '🏷️ Role', value: `${role} (\`${role.id}\`)`, inline: true }
+                { name: 'Role', value: `${role} (\`${role.id}\`)`, inline: true }
               ]
             }
           );
@@ -813,7 +833,7 @@ export const SecurityManifest: ModuleManifest = {
             else if (unit === 'd') durationMs = amount * 86400000;
           }
           if (!durationMs) {
-            const errEmbed = Embeds.error('⏱️ Invalid Duration Format', 'Please use a valid duration format such as `10m`, `1h`, `1d`, or `7d`.', { module: 'security' });
+            const errEmbed = Embeds.error('Invalid Duration Format', 'Please use a valid duration format such as `10m`, `1h`, `1d`, or `7d`.', { module: 'security' });
             return interaction.reply({ embeds: [errEmbed], flags: 64 });
           }
           expiresTimestamp = Math.floor((Date.now() + durationMs) / 1000);
@@ -855,19 +875,33 @@ export const SecurityManifest: ModuleManifest = {
             }, durationMs);
           }
 
-          const embedColor = role.color && role.color !== 0 ? role.color : 0x84cc16;
+          const embedColor = role.color && role.color !== 0 ? role.color : '#7C5CFC';
 
-          const embed = new EmbedBuilder()
-            .setColor(embedColor)
-            .setDescription(`<a:approved:1532390590707142956> ${interaction.user} **Has Given** ${role} **to** ${targetMember}`);
+          const embed = createLimeEmbed({
+            author: 'Rage Optimiser • Security & Role Engine',
+            title: 'Role Granted Successfully',
+            description: `${VERIFIED_ICON} ${interaction.user} **has assigned** ${role} **to** ${targetMember}`,
+            fields: [
+              { name: '👤 Target Member', value: `${targetMember} (\`${targetMember.user.tag}\`)`, inline: true },
+              { name: '🎭 Role Assigned', value: `${role} (\`${role.name}\`)`, inline: true },
+              { name: '📝 Reason', value: `\`${reason}\``, inline: false },
+              ...(durationMs ? [{ name: '<:timer:1532620491662037123> Temporary Duration', value: `\`${durationStr}\` (Expires <t:${expiresTimestamp}:R>)`, inline: true }] : [])
+            ],
+            color: embedColor,
+            client
+          });
 
           return interaction.reply({ embeds: [embed] });
 
         } catch (err: any) {
           context.logSyncEvent(`Role Manager: Failed to assign role "${role.name}" to "${targetMember.user.tag}": ${err.message}`, 'warn');
-          const errEmbed = new EmbedBuilder()
-            .setColor(0xef4444)
-            .setDescription(`<:wrong:1532390628330307634> ${interaction.user} Could not assign role: **${err.message}**`);
+          const errEmbed = createLimeEmbed({
+            author: 'Rage Optimiser • Security & Role Engine',
+            title: 'Role Assignment Failed',
+            description: `${WRONG_ICON} Could not assign role to ${targetMember}: **${err.message}**`,
+            color: '#EF4444',
+            client
+          });
           return interaction.reply({ embeds: [errEmbed] });
         }
       }
@@ -902,13 +936,13 @@ export const SecurityManifest: ModuleManifest = {
         }
 
         if (!role) {
-          const errEmbed = Embeds.error('🏷️ Role Not Found', 'Could not locate the specified role.', { module: 'security' });
+          const errEmbed = Embeds.error('Role Not Found', 'Could not locate the specified role.', { module: 'security' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
 
         if (!targetMember.roles.cache.has(role.id)) {
           const warnEmbed = Embeds.warn(
-            '⚠️ Member Missing Role',
+            'Member Missing Role',
             `Member ${targetMember} (\`${targetMember.user.tag}\`) does not have the **${role.name}** role.`,
             { module: 'security' }
           );
@@ -918,7 +952,7 @@ export const SecurityManifest: ModuleManifest = {
         const botMember = guild.members.me;
         if (botMember && role.position >= botMember.roles.highest.position) {
           const errEmbed = Embeds.error(
-            '🛡️ Hierarchy Violation',
+            'Hierarchy Violation',
             `I cannot remove the role **${role.name}** because its position (\`#${role.position}\`) is higher than or equal to my highest role (\`${botMember.roles.highest.name}\`).`,
             { module: 'security' }
           );
@@ -929,11 +963,20 @@ export const SecurityManifest: ModuleManifest = {
           await targetMember.roles.remove(role.id, `Role removed by ${interaction.user.tag}: ${reason}`);
           context.logSyncEvent(`Role Manager: Removed role "${role.name}" (${role.id}) from "${targetMember.user.tag}" by "${interaction.user.tag}". Reason: ${reason}`, 'success');
 
-          const embedColor = role.color && role.color !== 0 ? role.color : 0xef4444;
+          const embedColor = role.color && role.color !== 0 ? role.color : '#EF4444';
 
-          const embed = new EmbedBuilder()
-            .setColor(embedColor)
-            .setDescription(`<:wrong:1532390628330307634> ${interaction.user} **Has Removed** ${role} **from** ${targetMember}`);
+          const embed = createLimeEmbed({
+            author: 'Rage Optimiser • Security & Role Engine',
+            title: 'Role Removed Successfully',
+            description: `${WRONG_ICON} ${interaction.user} **has removed** ${role} **from** ${targetMember}`,
+            fields: [
+              { name: '👤 Target Member', value: `${targetMember} (\`${targetMember.user.tag}\`)`, inline: true },
+              { name: '🎭 Role Removed', value: `${role} (\`${role.name}\`)`, inline: true },
+              { name: '📝 Reason', value: `\`${reason}\``, inline: false }
+            ],
+            color: embedColor,
+            client
+          });
 
           return interaction.reply({ embeds: [embed] });
         } catch (err: any) {
@@ -956,7 +999,7 @@ export const SecurityManifest: ModuleManifest = {
 
         if (customId.startsWith('addrole_undo_')) {
           if (!canManage) {
-            return interaction.reply({ content: '🔒 You require the Manage Roles permission to undo role assignments.', flags: 64 });
+            return interaction.reply({ content: '<:shield:1532403012751065179> You require the Manage Roles permission to undo role assignments.', flags: 64 });
           }
           const parts = customId.split('_');
           const userId = parts[2];
@@ -972,10 +1015,18 @@ export const SecurityManifest: ModuleManifest = {
             await targetMember.roles.remove(role.id, `Role assignment undone by ${interaction.user.tag}`);
             context.logSyncEvent(`Role Manager: ${interaction.user.tag} undid assignment of role "${role.name}" from "${targetMember.user.tag}".`, 'info');
 
-            const embedColor = role.color && role.color !== 0 ? role.color : 0xef4444;
-            const successEmbed = new EmbedBuilder()
-              .setColor(embedColor)
-              .setDescription(`<:wrong:1532390628330307634> ${interaction.user} **Has Removed** ${role} **from** ${targetMember}`);
+            const embedColor = role.color && role.color !== 0 ? role.color : '#EF4444';
+            const successEmbed = createLimeEmbed({
+              author: 'Rage Optimiser • Security & Role Engine',
+              title: 'Role Assignment Undone',
+              description: `${WRONG_ICON} ${interaction.user} **has revoked** ${role} **from** ${targetMember}`,
+              fields: [
+                { name: '👤 Target Member', value: `${targetMember} (\`${targetMember.user.tag}\`)`, inline: true },
+                { name: '🎭 Revoked Role', value: `${role} (\`${role.name}\`)`, inline: true }
+              ],
+              color: embedColor,
+              client
+            });
 
             await interaction.reply({ embeds: [successEmbed] });
           } catch (err: any) {
@@ -996,16 +1047,16 @@ export const SecurityManifest: ModuleManifest = {
             .join(', ') || '*No assigned roles*';
 
           const viewEmbed = new EmbedBuilder()
-            .setTitle(`👤 Role Profile: ${targetMember.user.tag}`)
-            .setColor(targetMember.displayColor || Colors.BRAND)
+            .setTitle(`<:member:1532621317487071426> Role Profile: ${targetMember.user.tag}`)
+            .setColor(0x99CC00)
             .setThumbnail(targetMember.user.displayAvatarURL({ size: 256 }))
             .addFields(
-              { name: '🏷️ Highest Role', value: `${targetMember.roles.highest}`, inline: true },
-              { name: '📊 Total Roles', value: `\`${targetMember.roles.cache.size - 1}\``, inline: true },
-              { name: '🗓️ Joined Server', value: `<t:${Math.floor(targetMember.joinedTimestamp / 1000)}:R>`, inline: true },
-              { name: '📜 Assigned Roles', value: rolesList.length > 1024 ? rolesList.substring(0, 1020) + '...' : rolesList, inline: false }
+              { name: '<:vip:1532620837117759508> Highest Role', value: `${targetMember.roles.highest}`, inline: true },
+              { name: '<:information:1532621274092929124> Total Roles', value: `\`${targetMember.roles.cache.size - 1}\``, inline: true },
+              { name: '<:timer:1532620491662037123> Joined Server', value: `<t:${Math.floor(targetMember.joinedTimestamp / 1000)}:R>`, inline: true },
+              { name: '<:ticket:1532620631466836021> Assigned Roles', value: rolesList.length > 1024 ? rolesList.substring(0, 1020) + '...' : rolesList, inline: false }
             )
-            .setFooter({ text: 'Rage Optimiser Enterprise • Member Role Inspector' })
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
 
           return interaction.reply({ embeds: [viewEmbed], flags: 64 });
@@ -1014,23 +1065,23 @@ export const SecurityManifest: ModuleManifest = {
           const roleId = parts[2];
           const role = guild.roles.cache.get(roleId);
           if (!role) {
-            return interaction.reply({ content: '❌ Role could not be found in this server.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> Role could not be found in this server.', flags: 64 });
           }
 
           const infoEmbed = new EmbedBuilder()
-            .setTitle(`📊 Role Information: @${role.name}`)
-            .setColor(role.color || Colors.BRAND)
+            .setTitle(`<:information:1532621274092929124> Role Information: @${role.name}`)
+            .setColor(0x99CC00)
             .addFields(
-              { name: '🆔 Role ID', value: `\`${role.id}\``, inline: true },
-              { name: '🎨 Hex Color', value: `\`${role.hexColor}\``, inline: true },
-              { name: '📈 Position', value: `\`#${role.position}\``, inline: true },
-              { name: '👥 Member Count', value: `\`${role.members.size}\` members`, inline: true },
-              { name: '📌 Hoisted', value: role.hoist ? '✅ Yes' : '❌ No', inline: true },
-              { name: '💬 Mentionable', value: role.mentionable ? '✅ Yes' : '❌ No', inline: true },
-              { name: '⚙️ Managed / Integration', value: role.managed ? '⚙️ Bot Integration' : '👤 Custom Role', inline: true },
-              { name: '🗓️ Created At', value: `<t:${Math.floor(role.createdTimestamp / 1000)}:F>`, inline: true }
+              { name: '<:link:1532620952087826602> Role ID', value: `\`${role.id}\``, inline: true },
+              { name: '<:config:1532425712844144701> Hex Color', value: `\`${role.hexColor}\``, inline: true },
+              { name: '<:lightpurplearrow:1532621364115013693> Position', value: `\`#${role.position}\``, inline: true },
+              { name: '<:member:1532621317487071426> Member Count', value: `\`${role.members.size}\` members`, inline: true },
+              { name: '<:config:1532425712844144701> Hoisted', value: role.hoist ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No', inline: true },
+              { name: '<:information:1532621274092929124> Mentionable', value: role.mentionable ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No', inline: true },
+              { name: '<:config:1532425712844144701> Managed / Integration', value: role.managed ? 'Bot Integration' : 'Custom Role', inline: true },
+              { name: '<:timer:1532620491662037123> Created At', value: `<t:${Math.floor(role.createdTimestamp / 1000)}:F>`, inline: true }
             )
-            .setFooter({ text: 'Rage Optimiser Enterprise • Role Inspector' })
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
 
           return interaction.reply({ embeds: [infoEmbed], flags: 64 });
@@ -1045,11 +1096,11 @@ export const SecurityManifest: ModuleManifest = {
         const target = interaction.options.getMember('user');
         const reason = interaction.options.getString('reason') || 'No reason provided';
         if (!target) {
-          return interaction.reply({ content: '❌ Target member not found.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Target member not found.', flags: 64 });
         }
         const hasPerm = await getGuildAndCheckPermission(interaction.user.id, context);
         if (!hasPerm && !interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
-          return interaction.reply({ content: '❌ Insufficient permissions to execute softban.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Insufficient permissions to execute softban.', flags: 64 });
         }
         try {
           await target.ban({ deleteMessageSeconds: 604800, reason: `Softban: ${reason}` });
@@ -1065,19 +1116,20 @@ export const SecurityManifest: ModuleManifest = {
             );
           }
           const embed = new EmbedBuilder()
-            .setTitle('🔨 Member Softbanned')
-            .setColor('#f39c12')
+            .setTitle('<:gavel:1532621057318584380> Member Softbanned')
+            .setColor(0x99CC00)
             .setDescription(`**${target.user.tag}** was softbanned (messages purged and unbanned).`)
             .addFields(
-              { name: '📋 Case ID', value: `#${caseId}`, inline: true },
-              { name: '👤 Offender', value: `${target} (\`${target.id}\`)`, inline: true },
-              { name: '🛡️ Moderator', value: `${interaction.user}`, inline: true },
-              { name: '📝 Reason', value: reason, inline: false }
+              { name: '<:ticket:1532620631466836021> Case ID', value: `#${caseId}`, inline: true },
+              { name: '<:member:1532621317487071426> Offender', value: `${target} (\`${target.id}\`)`, inline: true },
+              { name: '<:shield:1532403012751065179> Moderator', value: `${interaction.user}`, inline: true },
+              { name: '<:information:1532621274092929124> Reason', value: reason, inline: false }
             )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed] });
         } catch (err: any) {
-          return interaction.reply({ content: `❌ Softban failed: ${err.message}`, flags: 64 });
+          return interaction.reply({ content: `<:wrong:1532390628330307634> Softban failed: ${err.message}`, flags: 64 });
         }
       }
     },
@@ -1091,11 +1143,11 @@ export const SecurityManifest: ModuleManifest = {
         const durationStr = interaction.options.getString('duration');
         const reason = interaction.options.getString('reason') || 'Temporary role assignment';
         if (!target || !role || !durationStr) {
-          return interaction.reply({ content: '❌ Invalid target or role specified.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Invalid target or role specified.', flags: 64 });
         }
         const hasPerm = await getGuildAndCheckPermission(interaction.user.id, context);
         if (!hasPerm && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageRoles)) {
-          return interaction.reply({ content: '❌ Insufficient permissions to assign temporary roles.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Insufficient permissions to assign temporary roles.', flags: 64 });
         }
         let durationMs = 3600000;
         if (durationStr.endsWith('m')) durationMs = parseInt(durationStr) * 60000;
@@ -1121,19 +1173,20 @@ export const SecurityManifest: ModuleManifest = {
           }, durationMs);
 
           const embed = new EmbedBuilder()
-            .setTitle('⏳ Temporary Role Assigned')
-            .setColor('#3498db')
+            .setTitle('<:timer:1532620491662037123> Temporary Role Assigned')
+            .setColor(0x99CC00)
             .setDescription(`Granted **${role.name}** to **${target.user.tag}**.`)
             .addFields(
-              { name: '📋 Case ID', value: `#${caseId}`, inline: true },
-              { name: '🎭 Role', value: `${role}`, inline: true },
-              { name: '⏱️ Duration', value: durationStr, inline: true },
-              { name: '📝 Reason', value: reason, inline: false }
+              { name: '<:ticket:1532620631466836021> Case ID', value: `#${caseId}`, inline: true },
+              { name: '<:vip:1532620837117759508> Role', value: `${role}`, inline: true },
+              { name: '<:timer:1532620491662037123> Duration', value: durationStr, inline: true },
+              { name: '<:information:1532621274092929124> Reason', value: reason, inline: false }
             )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed] });
         } catch (err: any) {
-          return interaction.reply({ content: `❌ Failed to assign temp role: ${err.message}`, flags: 64 });
+          return interaction.reply({ content: `<:wrong:1532390628330307634> Failed to assign temp role: ${err.message}`, flags: 64 });
         }
       }
     },
@@ -1145,7 +1198,7 @@ export const SecurityManifest: ModuleManifest = {
         const target = interaction.options.getMember('user');
         const db = Database.getDb();
         if (!db) {
-          return interaction.reply({ content: '❌ Database offline.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Database offline.', flags: 64 });
         }
         try {
           let rows: any[] = [];
@@ -1156,13 +1209,13 @@ export const SecurityManifest: ModuleManifest = {
           }
 
           if (!rows || rows.length === 0) {
-            return interaction.reply({ content: `ℹ️ No moderation case records found ${target ? `for ${target.user.tag}` : 'in this server'}.` });
+            return interaction.reply({ content: `<:information:1532621274092929124> No moderation case records found ${target ? `for ${target.user.tag}` : 'in this server'}.` });
           }
 
           const embed = new EmbedBuilder()
-            .setTitle(`📂 Moderation Case History ${target ? `• ${target.user.tag}` : ''}`)
-            .setColor('#7c5cfc')
-            .setFooter({ text: `${guild.name} • Total Cases Logged: ${rows.length}` })
+            .setTitle(`<:information:1532621274092929124> Moderation Case History ${target ? `• ${target.user.tag}` : ''}`)
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
 
           for (const row of rows) {
@@ -1175,7 +1228,7 @@ export const SecurityManifest: ModuleManifest = {
 
           return interaction.reply({ embeds: [embed] });
         } catch (err: any) {
-          return interaction.reply({ content: `❌ Failed to fetch cases: ${err.message}`, flags: 64 });
+          return interaction.reply({ content: `<:wrong:1532390628330307634> Failed to fetch cases: ${err.message}`, flags: 64 });
         }
       }
     },
@@ -1185,9 +1238,10 @@ export const SecurityManifest: ModuleManifest = {
         const member = interaction.options.getMember('user');
         if (!member) {
           const embed = new EmbedBuilder()
-            .setTitle('❌ Security Center Error')
-            .setColor('#e74c3c')
-            .setDescription('Member not found in this guild.');
+            .setTitle('<:wrong:1532390628330307634> Security Center Error')
+            .setColor(0x99CC00)
+            .setDescription('Member not found in this guild.')
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
@@ -1198,9 +1252,10 @@ export const SecurityManifest: ModuleManifest = {
 
         if (!quarantineRoleId) {
           const embed = new EmbedBuilder()
-            .setTitle('❌ Security Center Error')
-            .setColor('#e74c3c')
-            .setDescription('The Quarantine Isolation Role is not configured. Please bind a quarantine role via the Web Dashboard.');
+            .setTitle('<:wrong:1532390628330307634> Security Center Error')
+            .setColor(0x99CC00)
+            .setDescription('The Quarantine Isolation Role is not configured. Please bind a quarantine role via the Web Dashboard.')
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
@@ -1228,21 +1283,23 @@ export const SecurityManifest: ModuleManifest = {
           context.logSyncEvent(interaction.guildId, `Manual Quarantine: ${member.user.username} isolated.`, 'warn');
           
           const embed = new EmbedBuilder()
-            .setTitle('🚨 Security Action: Member Quarantined')
-            .setColor('#e74c3c')
+            .setTitle('<:shield:1532403012751065179> Security Action: Member Quarantined')
+            .setColor(0x99CC00)
             .setDescription(`Successfully quarantined **${member.user.username}** and stripped all administrative/privileged roles to secure the guild.`)
             .addFields(
               { name: 'Target Member', value: `<@${member.user.id}>`, inline: true },
               { name: 'Enforcing Admin', value: `<@${interaction.user.id}>`, inline: true },
-              { name: 'Status', value: '🛑 Isolated in Quarantine', inline: true }
+              { name: 'Status', value: '<:shield:1532403012751065179> Isolated in Quarantine', inline: true }
             )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         } catch (err) {
           const embed = new EmbedBuilder()
-            .setTitle('❌ Security Center Error')
-            .setColor('#e74c3c')
-            .setDescription(`Failed to quarantine member: ${err}`);
+            .setTitle('<:wrong:1532390628330307634> Security Center Error')
+            .setColor(0x99CC00)
+            .setDescription(`Failed to quarantine member: ${err}`)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
       }
@@ -1259,26 +1316,28 @@ export const SecurityManifest: ModuleManifest = {
           context.updateModuleConfig('security', { emergencyMode: true });
           context.logSyncEvent('EMERGENCY LOCKDOWN ENABLED via Slash Command.', 'warn');
           const embed = new EmbedBuilder()
-            .setTitle('🚨 SYSTEM UPDATE: Emergency Lockdown Activated')
-            .setColor('#e74c3c')
+            .setTitle('<:shield:1532403012751065179> SYSTEM UPDATE: Emergency Lockdown Activated')
+            .setColor(0x99CC00)
             .setDescription('**CRITICAL**: All text, voice, and category permissions have been frozen. Only whitelisted administrators can execute changes or send messages.')
             .addFields(
-              { name: 'System State', value: '🔴 EMERGENCY LOCKDOWN', inline: true },
+              { name: 'System State', value: '<:wrong:1532390628330307634> EMERGENCY LOCKDOWN', inline: true },
               { name: 'Triggered By', value: `<@${interaction.user.id}>`, inline: true }
             )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           await interaction.reply({ embeds: [embed] });
         } else {
           context.updateModuleConfig('security', { emergencyMode: false });
           context.logSyncEvent('Emergency Lockdown Disabled.', 'success');
           const embed = new EmbedBuilder()
-            .setTitle('✅ SYSTEM UPDATE: Emergency Lockdown Deactivated')
-            .setColor('#2ecc71')
+            .setTitle('<a:approved:1532390590707142956> SYSTEM UPDATE: Emergency Lockdown Deactivated')
+            .setColor(0x99CC00)
             .setDescription('The guild state has been restored to normal operations. Channel permissions have been unfrozen.')
             .addFields(
-              { name: 'System State', value: '🟢 Normal Operations', inline: true },
+              { name: 'System State', value: '<a:approved:1532390590707142956> Normal Operations', inline: true },
               { name: 'Triggered By', value: `<@${interaction.user.id}>`, inline: true }
             )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           await interaction.reply({ embeds: [embed] });
         }
@@ -1289,24 +1348,26 @@ export const SecurityManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const sub = interaction.options.getSubcommand(false);
         if (!sub) {
-          return interaction.reply({ content: '❌ Please specify a valid subcommand.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Please specify a valid subcommand.', flags: 64 });
         }
 
         if (sub.startsWith('whitelist-')) {
           const hasPermission = await checkWhitelistPermission(interaction.user.id, interaction.guild, context);
           if (!hasPermission) {
             const embed = new EmbedBuilder()
-              .setTitle('🔒 Access Denied')
-              .setColor('#e74c3c')
-              .setDescription('Only the Server Owner and whitelisted users can manage the anti-nuke whitelist.');
+              .setTitle('<:shield:1532403012751065179> Access Denied')
+              .setColor(0x99CC00)
+              .setDescription('Only the Server Owner and whitelisted users can manage the anti-nuke whitelist.')
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
         } else {
           if (!interaction.memberPermissions?.has('Administrator')) {
             const embed = new EmbedBuilder()
-              .setTitle('🔒 Access Denied')
-              .setColor('#e74c3c')
-              .setDescription('Administrator permissions are required to perform security actions.');
+              .setTitle('<:shield:1532403012751065179> Access Denied')
+              .setColor(0x99CC00)
+              .setDescription('Administrator permissions are required to perform security actions.')
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
         }
@@ -1319,6 +1380,53 @@ export const SecurityManifest: ModuleManifest = {
           context.updateModuleConfig('security', { ...config, ...newConfig });
         };
 
+        if (sub === 'config-rule') {
+          const ruleInput = interaction.options.getString('rule', true);
+          const enabledOpt = interaction.options.getBoolean('enabled');
+          const limitOpt = interaction.options.getInteger('limit');
+          const windowOpt = interaction.options.getInteger('window');
+          const actionOpt = interaction.options.getString('action');
+          const reversionOpt = interaction.options.getBoolean('reversion');
+
+          const normalizedKey = normalizeRuleName(ruleInput);
+          const rules = config.rules || {};
+          const existingRule = getEffectiveRule(rules, normalizedKey);
+
+          const updatedRule = {
+            ...existingRule,
+            ...(enabledOpt !== null && enabledOpt !== undefined ? { enabled: enabledOpt } : {}),
+            ...(limitOpt !== null && limitOpt !== undefined ? { limit: limitOpt } : {}),
+            ...(windowOpt !== null && windowOpt !== undefined ? { window: windowOpt } : {}),
+            ...(actionOpt ? { action: actionOpt } : {}),
+            ...(reversionOpt !== null && reversionOpt !== undefined ? { recovery: reversionOpt } : {})
+          };
+
+          const updatedRules = { ...rules, [normalizedKey]: updatedRule };
+          saveConfig({ rules: updatedRules });
+
+          context.logSyncEvent(interaction.guildId, `Anti-Nuke Config: Updated rule "${normalizedKey}" (Limit: ${updatedRule.limit}, Window: ${updatedRule.window}s, Action: ${updatedRule.action}, Reversion: ${updatedRule.recovery}).`, 'success');
+
+          const embed = buildLimeOverviewCard({
+            title: 'ANTI-NUKE MODULE UPDATED',
+            subtitle: `MODULE: ${normalizedKey.toUpperCase()}`,
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '<:config:1532425712844144701> UPDATED CONFIGURATION PARAMETERS',
+                items: [
+                  `Status: ${updatedRule.enabled ? '<a:approved:1532390590707142956> ENABLED' : '<:wrong:1532390628330307634> DISABLED'}`,
+                  `Rate Threshold: \`${updatedRule.limit} actions / ${updatedRule.window} seconds\``,
+                  `Punishment Action: \`${updatedRule.action.toUpperCase()}\``,
+                  `Automatic Reversion: \`${updatedRule.recovery ? 'ENABLED (Auto-Rollback)' : 'DISABLED'}\``
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Security Configuration'
+          });
+
+          return interaction.reply({ embeds: [embed], flags: 64 });
+        }
+
         if (sub === 'health' || sub === 'score') {
           const rules = config.rules || {};
           const ruleCount = Object.keys(rules).length;
@@ -1326,13 +1434,14 @@ export const SecurityManifest: ModuleManifest = {
           const scoreVal = ruleCount > 0 ? Math.round((enabledCount / ruleCount) * 100) : 50;
 
           const embed = new EmbedBuilder()
-            .setTitle('🛡️ Security Health & Score')
-            .setColor(scoreVal > 75 ? '#2ecc71' : scoreVal > 40 ? '#f1c40f' : '#e74c3c')
+            .setTitle('<:shield:1532403012751065179> Security Health & Score')
+            .setColor(0x99CC00)
             .addFields(
               { name: 'Security Score', value: `**${scoreVal}/100**`, inline: true },
               { name: 'Active Protection Rules', value: `${enabledCount} / ${ruleCount}`, inline: true },
-              { name: 'Emergency Lockdown', value: config.emergencyMode ? '🚨 ACTIVATED' : '🟢 Normal', inline: true }
+              { name: 'Emergency Lockdown', value: config.emergencyMode ? '<:wrong:1532390628330307634> ACTIVATED' : '<a:approved:1532390590707142956> Normal', inline: true }
             )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -1342,16 +1451,17 @@ export const SecurityManifest: ModuleManifest = {
           const guild = interaction.guild;
           let riskFactors = [];
           
-          if (!guild.mfaLevel) riskFactors.push('⚠️ 2FA Moderation is not enabled on this server.');
-          if (guild.verificationLevel < 2) riskFactors.push('⚠️ Server verification level is too low (requires higher verification level to prevent bots).');
+          if (!guild.mfaLevel) riskFactors.push('<:wrong:1532390628330307634> 2FA Moderation is not enabled on this server.');
+          if (guild.verificationLevel < 2) riskFactors.push('<:wrong:1532390628330307634> Server verification level is too low (requires higher verification level to prevent bots).');
           
           const adminRoles = guild.roles.cache.filter((r: any) => r.permissions.has(PermissionFlagsBits.Administrator) && r.name !== '@everyone');
-          if (adminRoles.size > 5) riskFactors.push(`⚠️ Excessive Admin Roles: There are ${adminRoles.size} roles with Administrator permissions.`);
+          if (adminRoles.size > 5) riskFactors.push(`<:wrong:1532390628330307634> Excessive Admin Roles: There are ${adminRoles.size} roles with Administrator permissions.`);
 
           const embed = new EmbedBuilder()
-            .setTitle('🔍 Real-time Risk Analysis')
-            .setColor(riskFactors.length > 0 ? '#f1c40f' : '#2ecc71')
-            .setDescription(riskFactors.length > 0 ? riskFactors.join('\n') : '🟢 No critical risk factors identified. Server configuration is hardened.')
+            .setTitle('<:information:1532621274092929124> Real-time Risk Analysis')
+            .setColor(0x99CC00)
+            .setDescription(riskFactors.length > 0 ? riskFactors.join('\n') : '<a:approved:1532390590707142956> No critical risk factors identified. Server configuration is hardened.')
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.editReply({ embeds: [embed] });
         }
@@ -1367,9 +1477,10 @@ export const SecurityManifest: ModuleManifest = {
 
           const lines = dangerousRoles.map((r: any) => `• <@&${r.id}> — Permissions: ${r.permissions.has(PermissionFlagsBits.Administrator) ? 'Admin' : 'Manage Server/Roles/Channels'}`);
           const embed = new EmbedBuilder()
-            .setTitle('🛡️ Privileged Role Scan')
-            .setColor('#4f8cff')
+            .setTitle('<:shield:1532403012751065179> Privileged Role Scan')
+            .setColor(0x99CC00)
             .setDescription(lines.join('\n') || 'No privileged roles found.')
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -1379,9 +1490,10 @@ export const SecurityManifest: ModuleManifest = {
           const whitelist = config.whitelist || [];
           if (whitelist.some((w: any) => (w.targetId === user.id || w === user.id))) {
             const embed = new EmbedBuilder()
-              .setTitle('❌ Security Center Error')
-              .setColor('#e74c3c')
-              .setDescription(`User **${user.username}** is already whitelisted.`);
+              .setTitle('<:wrong:1532390628330307634> Security Center Error')
+              .setColor(0x99CC00)
+              .setDescription(`User **${user.username}** is already whitelisted.`)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
           whitelist.push({
@@ -1397,13 +1509,14 @@ export const SecurityManifest: ModuleManifest = {
           saveConfig({ whitelist });
           context.logSyncEvent(`[Security] Added user ${user.username} to anti-nuke whitelist.`, 'success');
           const embed = new EmbedBuilder()
-            .setTitle('🛡️ Security Whitelist: Member Added')
-            .setColor('#7C5CFC')
+            .setTitle('<:shield:1532403012751065179> Security Whitelist: Member Added')
+            .setColor(0x99CC00)
             .setDescription(`Successfully whitelisted **${user.username}** from Anti-Nuke restrictions. Standard security limitations will not apply to this user.`)
             .addFields(
               { name: 'Whitelisted User', value: `<@${user.id}>`, inline: true },
               { name: 'Authorized By', value: `<@${interaction.user.id}>`, inline: true }
             )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -1413,9 +1526,10 @@ export const SecurityManifest: ModuleManifest = {
           let whitelist = config.whitelist || [];
           if (!whitelist.some((w: any) => (w.targetId === user.id || w === user.id))) {
             const embed = new EmbedBuilder()
-              .setTitle('❌ Security Center Error')
-              .setColor('#e74c3c')
-              .setDescription(`User **${user.username}** is not currently whitelisted.`);
+              .setTitle('<:wrong:1532390628330307634> Security Center Error')
+              .setColor(0x99CC00)
+              .setDescription(`User **${user.username}** is not currently whitelisted.`)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
           whitelist = whitelist.filter((w: any) => {
@@ -1425,13 +1539,14 @@ export const SecurityManifest: ModuleManifest = {
           saveConfig({ whitelist });
           context.logSyncEvent(`[Security] Removed user ${user.username} from anti-nuke whitelist.`, 'info');
           const embed = new EmbedBuilder()
-            .setTitle('🗑️ Security Whitelist: Member Removed')
-            .setColor('#7C5CFC')
+            .setTitle('<:shield:1532403012751065179> Security Whitelist: Member Removed')
+            .setColor(0x99CC00)
             .setDescription(`Successfully removed **${user.username}** from Anti-Nuke bypass whitelist.`)
             .addFields(
               { name: 'Removed User', value: `<@${user.id}>`, inline: true },
               { name: 'Authorized By', value: `<@${interaction.user.id}>`, inline: true }
             )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -1440,9 +1555,10 @@ export const SecurityManifest: ModuleManifest = {
           const whitelist = config.whitelist || [];
           if (whitelist.length === 0) {
             const embed = new EmbedBuilder()
-              .setTitle('🛡️ Security Whitelist')
-              .setColor('#7C5CFC')
-              .setDescription('No users are currently whitelisted.');
+              .setTitle('<:shield:1532403012751065179> Security Whitelist')
+              .setColor(0x99CC00)
+              .setDescription('No users are currently whitelisted.')
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
           const mentions = whitelist.map((w: any) => {
@@ -1450,9 +1566,10 @@ export const SecurityManifest: ModuleManifest = {
             return `<@${id}> (\`${id}\`)`;
           }).join('\n');
           const embed = new EmbedBuilder()
-            .setTitle('🛡️ Whitelisted Users')
-            .setColor('#7C5CFC')
+            .setTitle('<:shield:1532403012751065179> Whitelisted Users')
+            .setColor(0x99CC00)
             .setDescription(mentions)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -1461,16 +1578,18 @@ export const SecurityManifest: ModuleManifest = {
           const list = config.quarantinedUsers || [];
           if (list.length === 0) {
             const embed = new EmbedBuilder()
-              .setTitle('🚨 Quarantined Members')
-              .setColor('#e74c3c')
-              .setDescription('No members are currently isolated in quarantine.');
+              .setTitle('<:shield:1532403012751065179> Quarantined Members')
+              .setColor(0x99CC00)
+              .setDescription('No members are currently isolated in quarantine.')
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
           const lines = list.map((u: any) => `• <@${u.userId}> — Reason: **${u.reason}** (Isolated: <t:${Math.floor(new Date(u.time).getTime() / 1000)}:R>)`);
           const embed = new EmbedBuilder()
-            .setTitle('🚨 Isolated Quarantined Members')
-            .setColor('#e74c3c')
+            .setTitle('<:shield:1532403012751065179> Isolated Quarantined Members')
+            .setColor(0x99CC00)
             .setDescription(lines.join('\n'))
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -1479,48 +1598,50 @@ export const SecurityManifest: ModuleManifest = {
           const minutes = interaction.options.getInteger('minutes') || 15;
           context.logSyncEvent(`[Security] Rollback triggered for the last ${minutes} minutes.`, 'warn');
           const embed = new EmbedBuilder()
-            .setTitle('🔄 Rollback Point Queued')
-            .setColor('#7C5CFC')
-            .setDescription(`Attempting to synchronize last configuration state from backup points. Restoring database values from the last **${minutes} minutes**...`);
+            .setTitle('<:config:1532425712844144701> Rollback Point Queued')
+            .setColor(0x99CC00)
+            .setDescription(`Attempting to synchronize last configuration state from backup points. Restoring database values from the last **${minutes} minutes**...`)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
         if (sub === 'audit') {
-          return interaction.reply({ content: '🔍 **Security Audit Log Timeline** (Recent 10 entries):\nNo suspicious security threats detected.', flags: 64 });
+          return interaction.reply({ content: '<:information:1532621274092929124> **Security Audit Log Timeline** (Recent 10 entries):\nNo suspicious security threats detected.', flags: 64 });
         }
         if (sub === 'hierarchy') {
-          return interaction.reply({ content: '🛡️ **Role Hierarchy Vulnerability Check**:\nAll admin roles are placed correctly in the server role list.', flags: 64 });
+          return interaction.reply({ content: '<:shield:1532403012751065179> **Role Hierarchy Vulnerability Check**:\nAll admin roles are placed correctly in the server role list.', flags: 64 });
         }
         if (sub === 'exposed') {
-          return interaction.reply({ content: '📂 **Exposed Channel Permissions Check**:\n0 channels found with broad public admin rights.', flags: 64 });
+          return interaction.reply({ content: '<:information:1532621274092929124> **Exposed Channel Permissions Check**:\n0 channels found with broad public admin rights.', flags: 64 });
         }
         if (sub === 'inactive-admins') {
-          return interaction.reply({ content: '⏱️ **Inactive Administrator Check** (Last 30 Days):\n0 inactive administrator accounts found.', flags: 64 });
+          return interaction.reply({ content: '<:timer:1532620491662037123> **Inactive Administrator Check** (Last 30 Days):\n0 inactive administrator accounts found.', flags: 64 });
         }
         if (sub === 'permissions') {
-          return interaction.reply({ content: '📊 **Role Permission Score Report**:\nAll roles scored above target baseline (100% compliant).', flags: 64 });
+          return interaction.reply({ content: '<:information:1532621274092929124> **Role Permission Score Report**:\nAll roles scored above target baseline (100% compliant).', flags: 64 });
         }
         if (sub === 'compare') {
-          return interaction.reply({ content: '⚖️ **Security Baseline POST Check**:\nServer state matches target secure configuration.', flags: 64 });
+          return interaction.reply({ content: '<:information:1532621274092929124> **Security Baseline POST Check**:\nServer state matches target secure configuration.', flags: 64 });
         }
         if (sub === 'restore-perms') {
-          return interaction.reply({ content: '✅ **Restore Permissions Overwrites**:\nDefault permission overwrites successfully restored.', flags: 64 });
+          return interaction.reply({ content: '<a:approved:1532390590707142956> **Restore Permissions Overwrites**:\nDefault permission overwrites successfully restored.', flags: 64 });
         }
         if (sub === 'lockdown-status') {
-          return interaction.reply({ content: `🚨 **Emergency Lockdown Status**:\nSystem is currently in **${config.emergencyMode ? '🔴 EMERGENCY LOCKDOWN' : '🟢 NORMAL OPERATION'}** mode.`, flags: 64 });
+          return interaction.reply({ content: `<:shield:1532403012751065179> **Emergency Lockdown Status**:\nSystem is currently in **${config.emergencyMode ? '<:wrong:1532390628330307634> EMERGENCY LOCKDOWN' : '<a:approved:1532390590707142956> NORMAL OPERATION'}** mode.`, flags: 64 });
         }
         if (sub === 'emergency') {
           context.updateModuleConfig('security', { emergencyMode: true });
           context.logSyncEvent('EMERGENCY LOCKDOWN ENABLED via Slash Command.', 'warn');
           const embed = new EmbedBuilder()
-            .setTitle('🚨 SYSTEM UPDATE: Emergency Lockdown Activated')
-            .setColor('#e74c3c')
+            .setTitle('<:shield:1532403012751065179> SYSTEM UPDATE: Emergency Lockdown Activated')
+            .setColor(0x99CC00)
             .setDescription('**CRITICAL**: All permissions frozen. Only whitelisted users can execute changes.')
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed] });
         }
         if (sub === 'trust') {
-          return interaction.reply({ content: '🤝 **Trusted Roles & Admins**:\nOnly server owner and whitelisted bypass users are trusted.', flags: 64 });
+          return interaction.reply({ content: '<:shield:1532403012751065179> **Trusted Roles & Admins**:\nOnly server owner and whitelisted bypass users are trusted.', flags: 64 });
         }
       }
     },
@@ -1540,8 +1661,7 @@ export const SecurityManifest: ModuleManifest = {
         }
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_channel_delete || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_channel_delete');
 
         console.log(`[Anti-Nuke Debug] [channelDelete] Rule config:`, rule);
         if (!rule.enabled) {
@@ -1631,8 +1751,7 @@ export const SecurityManifest: ModuleManifest = {
         if (secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_channel_create || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_channel_create');
 
         console.log(`[Anti-Nuke Debug] [channelCreate] Rule config:`, rule);
         if (!rule.enabled) {
@@ -1705,8 +1824,7 @@ export const SecurityManifest: ModuleManifest = {
         if (secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_channel_update || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_channel_update');
 
         console.log(`[Anti-Nuke Debug] [channelUpdate] Rule config:`, rule);
         if (!rule.enabled) {
@@ -1792,8 +1910,7 @@ export const SecurityManifest: ModuleManifest = {
         if (secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_role_create || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_role_create');
 
         console.log(`[Anti-Nuke Debug] [roleCreate] Rule config:`, rule);
         if (!rule.enabled) {
@@ -1869,8 +1986,7 @@ export const SecurityManifest: ModuleManifest = {
         }
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_role_delete || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_role_delete');
 
         console.log(`[Anti-Nuke Debug] [roleDelete] Rule config:`, rule);
         if (!rule.enabled) {
@@ -1943,8 +2059,7 @@ export const SecurityManifest: ModuleManifest = {
         if (secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_role_update || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_role_update');
 
         console.log(`[Anti-Nuke Debug] [roleUpdate] Rule config:`, rule);
         if (!rule.enabled) {
@@ -2079,8 +2194,7 @@ export const SecurityManifest: ModuleManifest = {
                     console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Executor ${executor.username} bypassed status: ${isBypassed}`);
                     if (!isBypassed) {
                       if (config.roleMonitorMode !== 'Custom Selection' || isMonitored) {
-                        const rules = config.rules || {};
-                        const rule = rules.anti_role_grant || rules.anti_member_update || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+                        const rule = getEffectiveRule(config.rules, 'anti_role_grant');
                         console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Rule config for anti_role_grant:`, rule);
                         if (rule.enabled) {
                           const triggered = checkRateLimit(guild.id, executor.id, 'anti_role_grant', rule.limit, rule.window);
@@ -2140,8 +2254,7 @@ export const SecurityManifest: ModuleManifest = {
                       const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_remove');
                       console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Executor ${executor.username} bypassed status: ${isBypassed}`);
                       if (!isBypassed) {
-                        const rules = config.rules || {};
-                        const rule = rules.anti_role_remove || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+                        const rule = getEffectiveRule(config.rules, 'anti_role_remove');
                         console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Rule config for anti_role_remove:`, rule);
                         if (rule.enabled) {
                           const triggered = checkRateLimit(guild.id, executor.id, 'anti_role_remove', rule.limit, rule.window);
@@ -2189,8 +2302,7 @@ export const SecurityManifest: ModuleManifest = {
                   const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_timeout');
                   console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Executor ${executor.username} bypassed status: ${isBypassed}`);
                   if (!isBypassed) {
-                    const rules = config.rules || {};
-                    const rule = rules.anti_timeout || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+                    const rule = getEffectiveRule(config.rules, 'anti_timeout');
                     console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Rule config for anti_timeout:`, rule);
                     if (rule.enabled) {
                       const triggered = checkRateLimit(guild.id, executor.id, 'anti_timeout', rule.limit, rule.window);
@@ -2226,8 +2338,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_ban || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_ban');
 
         if (!rule.enabled) return;
 
@@ -2266,8 +2377,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_kick || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_kick');
 
         if (!rule.enabled) return;
 
@@ -2277,7 +2387,7 @@ export const SecurityManifest: ModuleManifest = {
 
           // A) Bot Removal Protection (anti_bot_remove)
           if (member.user?.bot) {
-            const ruleBotRemove = rules.anti_bot_remove || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
+            const ruleBotRemove = getEffectiveRule(config.rules, 'anti_bot_remove');
             if (ruleBotRemove.enabled) {
               const [kickLogs, banLogs] = await Promise.all([
                 guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.MemberKick }).catch(() => null),
@@ -2305,7 +2415,7 @@ export const SecurityManifest: ModuleManifest = {
           }
 
           // B) Member Kick Check (anti_kick)
-          const ruleKick = rules.anti_kick || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+          const ruleKick = getEffectiveRule(config.rules, 'anti_kick');
           if (ruleKick.enabled) {
             const fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.MemberKick }).catch(() => null);
             const logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === member.id && isRecentEntry(e));
@@ -2324,7 +2434,7 @@ export const SecurityManifest: ModuleManifest = {
           }
 
           // C) Mass Member Prune Check (anti_prune)
-          const rulePrune = rules.anti_prune || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
+          const rulePrune = getEffectiveRule(config.rules, 'anti_prune');
           if (rulePrune.enabled) {
             const fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.MemberPrune }).catch(() => null);
             const logEntry = fetchedLogs?.entries.find((e: any) => isRecentEntry(e));
@@ -2354,8 +2464,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_bot_add || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_bot_add');
 
         if (!member.user.bot) return;
         if (!rule.enabled) return;
@@ -2425,7 +2534,7 @@ export const SecurityManifest: ModuleManifest = {
           if (logEntry.action === AuditLogEvent.WebhookCreate) ruleName = 'anti_webhook_create';
           if (logEntry.action === AuditLogEvent.WebhookDelete) ruleName = 'anti_webhook_delete';
 
-          const rule = rules[ruleName] || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+          const rule = getEffectiveRule(config.rules, ruleName);
           if (!rule.enabled) return;
 
           if (await isExecutorBypassed(guild, executor.id, config, context, ruleName)) return;
@@ -2471,8 +2580,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_integration || { enabled: true, limit: 2, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_integration');
         if (!rule.enabled) return;
 
         try {
@@ -2514,8 +2622,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_emoji_create || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_emoji_create');
 
         if (!rule.enabled) return;
 
@@ -2554,8 +2661,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_emoji_delete || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_emoji_delete');
 
         if (!rule.enabled) return;
 
@@ -2594,8 +2700,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_emoji_update || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_emoji_update');
 
         if (!rule.enabled) return;
 
@@ -2634,8 +2739,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_emoji_create || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_emoji_create');
 
         if (!rule.enabled) return;
 
@@ -2674,8 +2778,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_emoji_delete || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_emoji_delete');
 
         if (!rule.enabled) return;
 
@@ -2722,8 +2825,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_emoji_update || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_emoji_update');
 
         if (!rule.enabled) return;
 
@@ -2758,8 +2860,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_guild_update || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
+        const rule = getEffectiveRule(config.rules, 'anti_guild_update');
 
         if (!rule.enabled) return;
 
@@ -2831,8 +2932,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rules = config.rules || {};
-        const rule = rules.anti_link || { enabled: true, limit: 3, window: 10, action: 'warn' };
+        const rule = getEffectiveRule(config.rules, 'anti_link');
 
         if (!rule.enabled) return;
 
@@ -2904,7 +3004,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!isAutomodActive && !(message as any)._antiLinkHandled) {
           (message as any)._antiLinkHandled = true;
           const dmEmbed = new EmbedBuilder()
-            .setTitle(`🔗 Anti-Link Enforcement — ${message.guild.name}`)
+            .setTitle(`<:link:1532620952087826602> Anti-Link Enforcement — ${message.guild.name}`)
             .setDescription(`Your message in **#${message.channel.name || 'channel'}** was removed because it contained an unauthorized link.\n\n**Server**: ${message.guild.name}\n**Action**: Message removed & link blocked.`)
             .setColor(0xF59E0B)
             .setFooter({ text: `${message.guild.name} • Security Anti-Link Protection` })
@@ -2919,7 +3019,7 @@ export const SecurityManifest: ModuleManifest = {
             const alertChannel = message.guild.channels.cache.get(config.alertChannelId);
             if (alertChannel && alertChannel.isTextBased()) {
               const alertEmbed = new EmbedBuilder()
-                .setTitle('🚨 Anti-Link Violation Detected')
+                .setTitle('<:shield:1532403012751065179> Anti-Link Violation Detected')
                 .setColor('#ff0055')
                 .setThumbnail(message.author.displayAvatarURL({ size: 256 }) || null)
                 .setDescription(`> **Anti-Link Protection System** intercepted an unauthorized link.`)
@@ -2937,7 +3037,7 @@ export const SecurityManifest: ModuleManifest = {
 
           if (rule.action === 'warn') {
             const dmEmbed = new EmbedBuilder()
-              .setTitle(`🛡️ Security Warning — ${message.guild.name}`)
+              .setTitle(`<:shield:1532403012751065179> Security Warning — ${message.guild.name}`)
               .setColor('#ff4444')
               .setThumbnail(message.guild.iconURL({ size: 256 }) || null)
               .setDescription(`> Your recent message in **#${message.channel.name || 'channel'}** was automatically removed by server security.\n\n**Server**: \`${message.guild.name}\`\n**Target Channel**: <#${message.channel.id}>\n**Reason**: Unauthorized Link Sharing Threshold Exceeded\n**Action Taken**: Message Deleted & Warned`)
@@ -2950,7 +3050,7 @@ export const SecurityManifest: ModuleManifest = {
             await message.member.send({ embeds: [dmEmbed] }).catch(() => {});
 
             const warningEmbed = new EmbedBuilder()
-              .setTitle('🔗 Anti-Link Protection')
+              .setTitle('<:link:1532620952087826602> Anti-Link Protection')
               .setColor('#ff4444')
               .setThumbnail(message.author.displayAvatarURL({ size: 256 }) || null)
               .setDescription(`> ${message.author}, your message was removed because external link sharing exceeds server limits.\n\n**Violator**: ${message.author} (\`${message.author.username}\` • \`ID: ${message.author.id}\`)\n**Channel**: <#${message.channel.id}>\n**Enforcement**: Message Purged & Warned`)
@@ -3379,8 +3479,64 @@ export const SecurityManifest: ModuleManifest = {
         res.json(logs);
       }
     },
-    // BUG-006 FIX: The guildDelete memory eviction handler has been moved to the
-    // events array above where it correctly receives Discord gateway events.
-    // (Previously it was misplaced here in routes, so it never fired.)
+    {
+      path: '/rules',
+      method: 'get',
+      handler: async (req, res, context) => {
+        const modules = context.getModulesState ? context.getModulesState() : [];
+        const secModule = modules.find((m: any) => m.id === 'security');
+        const config = secModule?.config || {};
+        const rules = config.rules || {};
+        const allKeys = Object.keys(DEFAULT_SECURITY_RULES);
+        const effectiveRules: Record<string, any> = {};
+        for (const key of allKeys) {
+          effectiveRules[key] = getEffectiveRule(rules, key);
+        }
+        for (const [k, v] of Object.entries(rules)) {
+          if (!effectiveRules[k]) effectiveRules[k] = v;
+        }
+        res.json({ success: true, rules: effectiveRules });
+      }
+    },
+    {
+      path: '/rules/update',
+      method: 'post',
+      handler: async (req, res, context) => {
+        if (!req.user) {
+          return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        const hasPermission = await getGuildAndCheckPermission(req.user, context);
+        if (!hasPermission) {
+          return res.status(403).json({ success: false, error: 'Access Denied: Only the Owner and whitelisted users can modify anti-nuke rules.' });
+        }
+
+        const { ruleName, enabled, limit, window: rateWindow, action, recovery } = req.body;
+        if (!ruleName) {
+          return res.status(400).json({ success: false, error: 'Missing ruleName parameter' });
+        }
+
+        const normalizedKey = normalizeRuleName(ruleName);
+        const modules = context.getModulesState ? context.getModulesState() : [];
+        const secModule = modules.find((m: any) => m.id === 'security');
+        const currentConfig = secModule?.config || {};
+        const rules = currentConfig.rules || {};
+        const existingRule = getEffectiveRule(rules, normalizedKey);
+
+        const updatedRule = {
+          ...existingRule,
+          ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}),
+          ...(limit !== undefined ? { limit: Number(limit) } : {}),
+          ...(rateWindow !== undefined ? { window: Number(rateWindow) } : {}),
+          ...(action !== undefined ? { action: String(action) } : {}),
+          ...(recovery !== undefined ? { recovery: Boolean(recovery) } : {})
+        };
+
+        const updatedRules = { ...rules, [normalizedKey]: updatedRule };
+        context.updateModuleConfig('security', { ...currentConfig, rules: updatedRules });
+        context.logSyncEvent(context.guildId, `Security Config API: Updated Anti-Nuke rule "${normalizedKey}".`, 'success');
+
+        res.json({ success: true, ruleName: normalizedKey, rule: updatedRule, rules: updatedRules });
+      }
+    }
   ]
 };

@@ -1,11 +1,4 @@
-/**
- * Social Updates Module — Manifest
- *
- * Registers the Social Updates module with the platform.
- * Provides REST API routes for dashboard management, validation, sandbox triggers,
- * and modular Discord slash commands.
- */
-
+import { EmbedBuilder } from 'discord.js';
 import { ModuleManifest } from '../../core/types.js';
 import { SocialSubscriptionRepository } from './SocialSubscriptionRepository.js';
 import { ProviderManager } from './ProviderManager.js';
@@ -70,9 +63,13 @@ export const SocialUpdatesManifest: ModuleManifest = {
         const action = interaction.options.getString('action');
         const isAdmin = interaction.member?.permissions?.has?.('ManageGuild') ||
                         interaction.guild?.ownerId === interaction.user?.id;
-
         if (!isAdmin) {
-          return interaction.reply({ content: '🔒 Requires Manage Server permission.', flags: 64 });
+          const embed = new EmbedBuilder()
+            .setTitle('<:shield:1532403012751065179> Access Denied')
+            .setDescription('Requires Manage Server permission to manage social updates.')
+            .setColor(0xEF4444)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
         const guildId = interaction.guildId;
@@ -81,22 +78,47 @@ export const SocialUpdatesManifest: ModuleManifest = {
         if (action === 'list') {
           const subs = await SocialSubscriptionRepository.findAll(guildId);
           if (subs.length === 0) {
-            return interaction.reply({ content: '📡 **Social Updates** — No subscriptions configured. Use the Web Dashboard to add channels.', flags: 64 });
+            const embed = new EmbedBuilder()
+              .setTitle('<:information:1532621274092929124> Social Updates Subscriptions')
+              .setDescription('No active subscriptions configured. Use the Web Dashboard to add YouTube channels or Instagram accounts.')
+              .setColor(0x99CC00)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            return interaction.reply({ embeds: [embed], flags: 64 });
           }
           const lines = subs.map(s =>
-            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '✅ Active' : '⏸ Paused'} (Health: **${s.validationStatus}**)`
+            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '⏸ Paused'} (Health: **${s.validationStatus}**)`
           );
-          await interaction.reply({ content: `📡 **Social Updates Subscriptions**\n${lines.join('\n')}`, flags: 64 });
+          const embed = new EmbedBuilder()
+            .setTitle('<:information:1532621274092929124> Social Updates Subscriptions')
+            .setDescription(lines.join('\n'))
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (action === 'status') {
           const subs = await SocialSubscriptionRepository.findAll(guildId);
           const active = subs.filter(s => s.enabled).length;
-          await interaction.reply({ content: `📡 **Social Updates Status**\nActive Subscriptions: **${active}** / **${subs.length}**\nSystem diagnostics: OK.`, flags: 64 });
+          const embed = new EmbedBuilder()
+            .setTitle('<:information:1532621274092929124> Social Updates Status')
+            .setDescription(`**Active Subscriptions:** ${active} / ${subs.length}\n**System Diagnostics:** <a:approved:1532390590707142956> Operational`)
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (action === 'forcecheck') {
           if (_scheduler) {
             _scheduler.triggerImmediateCheck();
-            await interaction.reply({ content: '⚡ **Force check** triggered globally across all subscriptions.', flags: 64 });
+            const embed = new EmbedBuilder()
+              .setTitle('<a:approved:1532390590707142956> Global Force Check Initiated')
+              .setDescription('Force check triggered globally across all registered social media subscriptions.')
+              .setColor(0x99CC00)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            return interaction.reply({ embeds: [embed], flags: 64 });
           } else {
-            await interaction.reply({ content: '❌ Scheduler not running.', flags: 64 });
+            const embed = new EmbedBuilder()
+              .setTitle('<:wrong:1532390628330307634> Scheduler Error')
+              .setDescription('Scheduler process is currently offline or not initialized.')
+              .setColor(0xEF4444)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            return interaction.reply({ embeds: [embed], flags: 64 });
           }
         } else if (action === 'validate') {
           await interaction.deferReply({ flags: 64 });
@@ -106,18 +128,26 @@ export const SocialUpdatesManifest: ModuleManifest = {
             const ok = await SubscriptionManager.validateSubscription(sub.id).catch(() => false);
             if (ok) successCount++;
           }
-          await interaction.editReply({ content: `✅ Subscriptions validated. **${successCount}** / **${subs.length}** passed checks.` });
+          const embed = new EmbedBuilder()
+            .setTitle('<a:approved:1532390590707142956> Subscriptions Validated')
+            .setDescription(`**${successCount}** out of **${subs.length}** social subscriptions passed health checks.`)
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.editReply({ embeds: [embed] });
         } else if (action === 'statistics') {
           const analytics = await SocialSubscriptionRepository.getAnalytics(guildId);
-          await interaction.reply({
-            content: `📊 **Social Updates Statistics**\n` +
-                     `• Total Subscriptions: **${analytics.totalSubscriptions}**\n` +
-                     `• Active Subscriptions: **${analytics.activeSubscriptions}**\n` +
-                     `• Notifications Sent: **${analytics.totalNotificationsSent}**\n` +
-                     `• Failed Attempts: **${analytics.totalFailedAttempts}**\n` +
-                     `• Avg Delivery Time: **${analytics.avgDeliveryTimeMs}ms**`,
-            flags: 64
-          });
+          const embed = new EmbedBuilder()
+            .setTitle('<:information:1532621274092929124> Social Updates Analytics & Telemetry')
+            .setColor(0x99CC00)
+            .addFields(
+              { name: 'Total Subscriptions', value: `${analytics.totalSubscriptions}`, inline: true },
+              { name: 'Active Subscriptions', value: `${analytics.activeSubscriptions}`, inline: true },
+              { name: 'Notifications Sent', value: `${analytics.totalNotificationsSent}`, inline: true },
+              { name: 'Failed Attempts', value: `${analytics.totalFailedAttempts}`, inline: true },
+              { name: 'Avg Delivery Time', value: `${analytics.avgDeliveryTimeMs}ms`, inline: true }
+            )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
         }
       }
     },

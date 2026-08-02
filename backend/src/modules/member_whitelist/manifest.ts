@@ -1,6 +1,6 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, Role, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { checkWhitelistPermission, getGuildAndCheckPermission, protections, migrateToUnifiedWhitelist, WHITELIST_MENU_OPTIONS, mapSelectedOptionsToRules, resolveSelectedOptions } from '../../utils/whitelistCheck.js';
+import { checkWhitelistPermission, getGuildAndCheckPermission, protections, migrateToUnifiedWhitelist, WHITELIST_MENU_OPTIONS, mapSelectedOptionsToRules, resolveSelectedOptions, getUnifiedWhitelistEntries } from '../../utils/whitelistCheck.js';
 // BUG-008 FIX: Import the canonical wrapInteraction from Gateway to eliminate the
 // copy-pasted duplicate that caused double-wrapping and divergent bug-fix paths.
 import { wrapInteraction } from '../../core/Gateway.js';
@@ -35,13 +35,19 @@ function sanitizeWhitelistMembers(members: any[]): any[] {
 }
 
 const PUNISHMENTS = [
-  { value: 'quarantine',  label: 'Quarantine',  emoji: '🔒', desc: 'Strip all roles & isolate in quarantine channel' },
-  { value: 'ban',         label: 'Ban',          emoji: '🔨', desc: 'Permanently ban the violator from the server' },
-  { value: 'kick',        label: 'Kick',         emoji: '👟', desc: 'Remove the violator from the server' },
-  { value: 'strip_roles', label: 'Strip Roles',  emoji: '🪄', desc: 'Strip admin roles only, no further action' },
-  { value: 'timeout',     label: 'Timeout',      emoji: '⏱️', desc: 'Temporary mute/timeout the violator' },
+  { value: 'quarantine',  label: 'Quarantine',  emoji: '<:shield:1532403012751065179>', desc: 'Strip all roles & isolate in quarantine channel' },
+  { value: 'ban',         label: 'Ban',          emoji: '<:gavel:1532621057318584380>',  desc: 'Permanently ban the violator from the server' },
+  { value: 'kick',        label: 'Kick',         emoji: '<:gavel:1532621057318584380>',  desc: 'Remove the violator from the server' },
+  { value: 'strip_roles', label: 'Strip Roles',  emoji: '<:shield:1532403012751065179>', desc: 'Strip admin roles only, no further action' },
+  { value: 'timeout',     label: 'Timeout',      emoji: '<:timer:1532620491662037123>',  desc: 'Temporary mute/timeout the violator' },
 ];
-const P_EMOJI: Record<string, string> = { quarantine: '🔒', ban: '🔨', kick: '👟', strip_roles: '🪄', timeout: '⏱️' };
+const P_EMOJI: Record<string, string> = {
+  quarantine: '<:shield:1532403012751065179>',
+  ban: '<:gavel:1532621057318584380>',
+  kick: '<:gavel:1532621057318584380>',
+  strip_roles: '<:shield:1532403012751065179>',
+  timeout: '<:timer:1532620491662037123>'
+};
 
 function buildPunishEmbed(guild: any, rules: Record<string, any>) {
   const verifiedIcon = '<a:approved:1532390590707142956>';
@@ -167,7 +173,7 @@ async function renderWhitelistConfigUI(
       `__**WHITELIST CONFIGURATION**__\n`,
       `**RAGE OPTIMISER** • **${interaction.guild.name}**\n`,
       `**Target Entity**: ${isRole ? `<@&${targetId}>` : `<@${targetId}>`}`,
-      `**Entry Status**: ${isNew ? '✨ Newly Whitelisted' : '⚙️ Active Whitelist Entry'}`,
+      `**Entry Status**: ${isNew ? '<a:approved:1532390590707142956> Newly Whitelisted' : '<:config:1532425712844144701> Active Whitelist Entry'}`,
       `**Audit Notes**: ${record.notes || notesInput || '*None provided*'}\n`,
       `**Protection Bypass Overview**`,
       bypassSummary
@@ -186,7 +192,7 @@ async function renderWhitelistConfigUI(
 
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`wl_config_select_${targetId}_${interaction.user.id}`)
-      .setPlaceholder('⚙️ Choose Permissions to Grant')
+      .setPlaceholder('Choose Permissions to Grant')
       .setMinValues(0)
       .setMaxValues(WHITELIST_MENU_OPTIONS.length)
       .addOptions(
@@ -597,39 +603,7 @@ export const MemberWhitelistManifest: ModuleManifest = {
         }
 
         if (sub === 'list' || sub === 'overview') {
-          const mwMod = modules.find((m: any) => m.id === 'member_whitelist');
-          const secMod = modules.find((m: any) => m.id === 'security');
-          const vpMod = modules.find((m: any) => m.id === 'voice-protection');
-
-          const userSet = new Map<string, string>();
-          const roleSet = new Map<string, string>();
-
-          // Process unified member_whitelist config
-          const mwMembers = mwMod?.config?.members || [];
-          for (const entry of mwMembers) {
-            if (entry && entry.status === 'active') {
-              if (entry.type === 'role') {
-                roleSet.set(entry.roleId || entry.id, entry.name || `Role-${entry.roleId || entry.id}`);
-              } else {
-                userSet.set(entry.userId || entry.id, entry.username || `User-${entry.userId || entry.id}`);
-              }
-            }
-          }
-
-          // Process security whitelist
-          const secConfig = secMod?.config || {};
-          const secWhitelist = secConfig.whitelist || [];
-          for (const w of secWhitelist) {
-            if (w) {
-              const uId = typeof w === 'string' ? w : w.targetId;
-              userSet.set(uId, typeof w === 'string' ? `User-${uId}` : (w.username || `User-${uId}`));
-            }
-          }
-
-          // Process voice protection whitelist
-          const vpConfig = vpMod?.config || {};
-          for (const uId of (vpConfig.whitelistedUsers || [])) userSet.set(uId, `User-${uId}`);
-          for (const rId of (vpConfig.whitelistedRoles || [])) roleSet.set(rId, `Role-${rId}`);
+          const { userSet, roleSet } = getUnifiedWhitelistEntries(modules);
 
           const userMentions = [...userSet.keys()].map(uId => `<@${uId}>`).join('\n') || '*No users whitelisted.*';
           const roleMentions = [...roleSet.keys()].map(rId => `<@&${rId}>`).join('\n') || '*No roles whitelisted.*';

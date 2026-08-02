@@ -100,7 +100,7 @@ export async function executePunishment(
     try {
       const dm = await member.createDM();
       const embed = {
-        title: '🎙️ Voice Protection Notification',
+        title: '<:voicechannelgreen:1532425750278438962> Voice Protection Notification',
         description: `You have been punished in **${guild.name}** for **${reason.toLowerCase()}** in channel **${channel.name}**.`,
         color: 0xe74c3c,
         fields: [

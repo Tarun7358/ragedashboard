@@ -11,17 +11,34 @@ import { MusicManifest } from './modules/music/manifest.js';
 
 dotenv.config();
 
+// Safe serializer that handles circular references (e.g. AudioResource, ChildProcess)
+function safeSerialize(a: unknown): string {
+  if (typeof a !== 'object' || a === null) return String(a);
+  try {
+    const seen = new WeakSet();
+    return JSON.stringify(a, (_, val) => {
+      if (typeof val === 'object' && val !== null) {
+        if (seen.has(val)) return '[Circular]';
+        seen.add(val);
+      }
+      return val;
+    });
+  } catch {
+    return String(a);
+  }
+}
+
 // Redirect console to centralized Logger
 console.log = (...args) => {
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  const msg = args.map(a => safeSerialize(a)).join(' ');
   Logger.info(msg, 'console');
 };
 console.warn = (...args) => {
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  const msg = args.map(a => safeSerialize(a)).join(' ');
   Logger.warn(msg, 'console');
 };
 console.error = (...args) => {
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  const msg = args.map(a => safeSerialize(a)).join(' ');
   Logger.error(msg, 'console');
 };
 
@@ -66,9 +83,9 @@ async function bootstrap() {
         }).catch(() => {}); // ignore if core is down
       },
       () => registry.getRegistry(),
-      (reg) => registry.setRegistry(reg),
+      (reg: any) => registry.setRegistry(reg),
       () => registry.reevaluateAllModules(),
-      (msgObj) => {
+      (msgObj: any) => {
         if (msgObj.type === 'METRICS_UPDATE' || msgObj.type === 'STATE_UPDATE') {
           fetch(`${CORE_API}/api/internal/music/state`, {
             method: 'POST',
@@ -80,14 +97,14 @@ async function bootstrap() {
       () => registry.getModulesState(),
       () => registry.getGlobalSettings(),
       null as any,
-      (id, config) => registry.updateModuleConfig(id, config)
+      (id: string, config: Record<string, any>) => registry.updateModuleConfig(id, config)
     );
 
     (gateway.client as any).registry = registry;
     (gateway.client as any).gatewayInstance = gateway;
 
     const originalUpdate = registry.updateModuleConfig.bind(registry);
-    registry.updateModuleConfig = (id, config) => {
+    registry.updateModuleConfig = (id: string, config: Record<string, any>) => {
       const mod = originalUpdate(id, config);
       if (id === 'security' && gateway) {
         gateway.syncQuarantineQueue();

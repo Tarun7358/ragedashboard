@@ -38,7 +38,7 @@ export const VoiceManifest: ModuleManifest = {
     },
     {
       name: '247',
-      description: '🎙️ Manage 24/7 bot voice presence — keep the bot alive in a voice channel permanently.',
+      description: 'Manage 24/7 bot voice presence — keep the bot alive in a voice channel permanently.',
       options: [
         {
           name: 'join',
@@ -89,7 +89,7 @@ export const VoiceManifest: ModuleManifest = {
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
         if (!isOwner) {
-          return interaction.reply({ content: '🔒 Voice Presence commands require Administrator permissions.', flags: 64 });
+          return interaction.reply({ content: '<:shield:1532403012751065179> Voice Presence commands require Administrator permissions.', flags: 64 });
         }
         const modules = context.getModulesState();
         const voiceMod = modules.find((m: any) => m.id === 'voice');
@@ -98,18 +98,18 @@ export const VoiceManifest: ModuleManifest = {
           const status = voiceMod?.connectionStatus || 'disconnected';
           const channel = channelId ? `<#${channelId}>` : 'Not configured';
           await interaction.reply({
-            content: `🎙️ **Voice Presence Status**\n- **Status**: \`${status}\`\n- **Channel**: ${channel}\n- **Module**: \`${voiceMod?.status || 'unknown'}\``,
+            content: `<:voicechannelgreen:1532425750278438962> **Voice Presence Status**\n- **Status**: \`${status}\`\n- **Channel**: ${channel}\n- **Module**: \`${voiceMod?.status || 'unknown'}\``,
             flags: 64
           });
         } else if (action === 'join') {
-          if (!channelId) return interaction.reply({ content: '❌ No voice channel configured. Set it in the Dashboard → Voice Presence.', flags: 64 });
+          if (!channelId) return interaction.reply({ content: '<:wrong:1532390628330307634> No voice channel configured. Set it in the Dashboard → Voice Presence.', flags: 64 });
           context.logSyncEvent(`Voice command: Owner requested join to channel ${channelId}.`, 'info');
-          await interaction.reply({ content: `✅ Bot will attempt to join <#${channelId}> on the next check cycle (within 10 seconds).`, flags: 64 });
+          await interaction.reply({ content: `<a:approved:1532390590707142956> Bot will attempt to join <#${channelId}> on the next check cycle (within 10 seconds).`, flags: 64 });
         } else if (action === 'leave') {
           context.logSyncEvent('Voice command: Owner requested voice disconnect.', 'info');
-          await interaction.reply({ content: '✅ Voice disconnection queued. Bot will leave its current voice channel.', flags: 64 });
+          await interaction.reply({ content: '<a:approved:1532390590707142956> Voice disconnection queued. Bot will leave its current voice channel.', flags: 64 });
         } else {
-          await interaction.reply({ content: '❌ Unknown action. Use: `status`, `join`, or `leave`.', flags: 64 });
+          await interaction.reply({ content: '<:wrong:1532390628330307634> Unknown action. Use: `status`, `join`, or `leave`.', flags: 64 });
         }
       }
     },
@@ -121,16 +121,16 @@ export const VoiceManifest: ModuleManifest = {
                         interaction.member?.permissions?.has?.('Administrator');
         if (!isAdmin) {
           const embed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle('<:wrong:1532390628330307634> Access Denied')
             .setDescription('Administrator permissions are required to manage the 24/7 Voice Presence system.')
-            .setColor('#e74c3c')
-            .setFooter({ text: 'Rage Optimiser • Voice Presence System' });
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
         const sub = interaction.options.getSubcommand(false);
         if (!sub) {
-          return interaction.reply({ content: '❌ Please use a subcommand: `join`, `leave`, `status`, or `set`.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Please use a subcommand: `join`, `leave`, `status`, or `set`.', flags: 64 });
         }
         const modules = context.getModulesState();
         const voiceMod = modules.find((m: any) => m.id === 'voice');
@@ -143,10 +143,10 @@ export const VoiceManifest: ModuleManifest = {
           // Validate it's actually a voice or stage channel
           if (!channel || (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice)) {
             const embed = new EmbedBuilder()
-              .setTitle('❌ Invalid Channel')
+              .setTitle('<:wrong:1532390628330307634> Invalid Channel')
               .setDescription('The selected channel must be a **Voice or Stage Channel**. Please try again and pick a voice/stage channel from the list.')
-              .setColor('#e74c3c')
-              .setFooter({ text: 'Rage Optimiser • Voice Presence System' });
+              .setColor(0x99CC00)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
 
@@ -181,26 +181,26 @@ export const VoiceManifest: ModuleManifest = {
             );
 
             const embed = new EmbedBuilder()
-              .setTitle('🎙️ 24/7 Voice Presence: Active')
+              .setTitle('<:voicechannelgreen:1532425750278438962> 24/7 Voice Presence: Active')
               .setDescription(`Successfully joined **${channel.name}** and enabled 24/7 persistence. The bot will automatically reconnect if disconnected.`)
               .addFields(
-                { name: '📡 Connected Channel', value: `<#${channel.id}>`, inline: true },
-                { name: '🔁 Auto-Reconnect', value: '`Enabled`', inline: true },
-                { name: '🤫 Mode', value: '`Deafened (Silent)`', inline: true },
-                { name: '⚙️ Configured By', value: `<@${interaction.user.id}>`, inline: true }
+                { name: '<:voicechannelgreen:1532425750278438962> Connected Channel', value: `<#${channel.id}>`, inline: true },
+                { name: '<:config:1532425712844144701> Auto-Reconnect', value: '`Enabled`', inline: true },
+                { name: '<:shield:1532403012751065179> Mode', value: '`Deafened (Silent)`', inline: true },
+                { name: '<:config:1532425712844144701> Configured By', value: `<@${interaction.user.id}>`, inline: true }
               )
-              .setColor('#22c55e')
+              .setColor(0x99CC00)
               .setTimestamp()
-              .setFooter({ text: 'Rage Optimiser • Voice Presence System' });
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
             await interaction.editReply({ embeds: [embed] });
           } catch (err: any) {
             const embed = new EmbedBuilder()
-              .setTitle('❌ Connection Failed')
+              .setTitle('<:wrong:1532390628330307634> Connection Failed')
               .setDescription(`Failed to join the voice channel. Check that the bot has **Connect** and **View Channel** permissions in **${channel.name}**.`)
               .addFields({ name: 'Error Detail', value: `\`${err?.message || err}\`` })
-              .setColor('#e74c3c')
-              .setFooter({ text: 'Rage Optimiser • Voice Presence System' });
+              .setColor(0x99CC00)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             await interaction.editReply({ embeds: [embed] });
           }
         }
@@ -213,10 +213,10 @@ export const VoiceManifest: ModuleManifest = {
 
           if (!existingConnection && !prevChannelId) {
             const embed = new EmbedBuilder()
-              .setTitle('ℹ️ Not Connected')
+              .setTitle('<:information:1532621274092929124> Not Connected')
               .setDescription('The bot is not currently in any voice channel and 24/7 mode is not active.')
-              .setColor('#6b7280')
-              .setFooter({ text: 'Rage Optimiser • Voice Presence System' });
+              .setColor(0x99CC00)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
 
@@ -237,16 +237,16 @@ export const VoiceManifest: ModuleManifest = {
           );
 
           const embed = new EmbedBuilder()
-            .setTitle('🔌 24/7 Voice Presence: Disabled')
+            .setTitle('<:voicechannelgreen:1532425750278438962> 24/7 Voice Presence: Disabled')
             .setDescription('The bot has been disconnected from the voice channel and 24/7 mode has been turned off. Use `/247 join` to re-enable it.')
             .addFields(
-              { name: '📡 Previous Channel', value: prevChannelId ? `<#${prevChannelId}>` : 'Unknown', inline: true },
-              { name: '🔁 Auto-Reconnect', value: '`Disabled`', inline: true },
-              { name: '⚙️ Disabled By', value: `<@${interaction.user.id}>`, inline: true }
+              { name: '<:voicechannelgreen:1532425750278438962> Previous Channel', value: prevChannelId ? `<#${prevChannelId}>` : 'Unknown', inline: true },
+              { name: '<:config:1532425712844144701> Auto-Reconnect', value: '`Disabled`', inline: true },
+              { name: '<:config:1532425712844144701> Disabled By', value: `<@${interaction.user.id}>`, inline: true }
             )
-            .setColor('#f59e0b')
+            .setColor(0x99CC00)
             .setTimestamp()
-            .setFooter({ text: 'Rage Optimiser • Voice Presence System' });
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
           await interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -258,26 +258,25 @@ export const VoiceManifest: ModuleManifest = {
           const isConnected = !!existingConnection;
           const channelId = config.channelId;
 
-          const statusText = isConnected ? '🟢 Connected' : (channelId ? '🟡 Configured (Not Connected)' : '🔴 Not Configured');
-          const statusColor = isConnected ? '#22c55e' : (channelId ? '#f59e0b' : '#e74c3c');
+          const statusText = isConnected ? '<a:approved:1532390590707142956> Connected' : (channelId ? '<:config:1532425712844144701> Configured (Not Connected)' : '<:wrong:1532390628330307634> Not Configured');
 
           const connState = voiceMod?.connectionStatus || (isConnected ? 'connected' : 'disconnected');
           const duration = voiceMod?.connectionDuration || '—';
           const reconnectAttempts = voiceMod?.reconnectAttempts ?? 0;
 
           const embed = new EmbedBuilder()
-            .setTitle('🎙️ 24/7 Voice Presence Status')
+            .setTitle('<:voicechannelgreen:1532425750278438962> 24/7 Voice Presence Status')
             .addFields(
-              { name: '📶 Status', value: statusText, inline: true },
-              { name: '📡 Configured Channel', value: channelId ? `<#${channelId}>` : '`Not Set`', inline: true },
-              { name: '🔗 Gateway State', value: `\`${connState}\``, inline: true },
-              { name: '⏱️ Connection Duration', value: `\`${duration}\``, inline: true },
-              { name: '🔁 Reconnect Attempts', value: `\`${reconnectAttempts}\``, inline: true },
-              { name: '📋 Module Status', value: `\`${voiceMod?.status || 'unknown'}\``, inline: true }
+              { name: '<:stats:1532429110775779459> Status', value: statusText, inline: true },
+              { name: '<:voicechannelgreen:1532425750278438962> Configured Channel', value: channelId ? `<#${channelId}>` : '`Not Set`', inline: true },
+              { name: '<:link:1532620952087826602> Gateway State', value: `\`${connState}\``, inline: true },
+              { name: '<:timer:1532620491662037123> Connection Duration', value: `\`${duration}\``, inline: true },
+              { name: '<:config:1532425712844144701> Reconnect Attempts', value: `\`${reconnectAttempts}\``, inline: true },
+              { name: '<:information:1532621274092929124> Module Status', value: `\`${voiceMod?.status || 'unknown'}\``, inline: true }
             )
-            .setColor(statusColor)
+            .setColor(0x99CC00)
             .setTimestamp()
-            .setFooter({ text: 'Rage Optimiser • Voice Presence System' });
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
           await interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -288,10 +287,10 @@ export const VoiceManifest: ModuleManifest = {
 
           if (!channel || (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice)) {
             const embed = new EmbedBuilder()
-              .setTitle('❌ Invalid Channel')
+              .setTitle('<:wrong:1532390628330307634> Invalid Channel')
               .setDescription('The selected channel must be a **Voice or Stage Channel**. Please pick a voice/stage channel from the list.')
-              .setColor('#e74c3c')
-              .setFooter({ text: 'Rage Optimiser • Voice Presence System' });
+              .setColor(0x99CC00)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
 
@@ -307,16 +306,16 @@ export const VoiceManifest: ModuleManifest = {
           );
 
           const embed = new EmbedBuilder()
-            .setTitle('⚙️ 24/7 Target Channel Updated')
+            .setTitle('<:config:1532425712844144701> 24/7 Target Channel Updated')
             .setDescription(`The 24/7 voice presence target has been updated. The bot will connect to the new channel within **10 seconds**.`)
             .addFields(
-              { name: '📡 New Target Channel', value: `<#${channel.id}>`, inline: true },
-              { name: '🔁 Auto-Connect', value: '`On next cycle`', inline: true },
-              { name: '⚙️ Set By', value: `<@${interaction.user.id}>`, inline: true }
+              { name: '<:voicechannelgreen:1532425750278438962> New Target Channel', value: `<#${channel.id}>`, inline: true },
+              { name: '<:config:1532425712844144701> Auto-Connect', value: '`On next cycle`', inline: true },
+              { name: '<:config:1532425712844144701> Set By', value: `<@${interaction.user.id}>`, inline: true }
             )
-            .setColor('#7C5CFC')
+            .setColor(0x99CC00)
             .setTimestamp()
-            .setFooter({ text: 'Rage Optimiser • Voice Presence System — Use /247 join to connect immediately' });
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
           await interaction.reply({ embeds: [embed], flags: 64 });
         }

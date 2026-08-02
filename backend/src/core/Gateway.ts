@@ -264,7 +264,7 @@ export class Gateway {
   public client: Client;
   private manifests: ModuleManifest[] = [];
 
-  // Per-guild voice tracking (previously scalar, caused multi-guild conflicts)
+  // Per-guild voice tracking for 24/7 Voice Presence module
   private guildVoiceState = new Map<string, {
     connection: any;
     isConnecting: boolean;
@@ -574,7 +574,20 @@ export class Gateway {
     });
 
     this.client.on('interactionCreate', async (interaction) => {
-      if (interaction.isStringSelectMenu() && interaction.customId === 'help_category_select') {
+      if (interaction.isButton() || interaction.isStringSelectMenu()) {
+        const parts = interaction.customId.split(':');
+        if (parts.length > 1) {
+          const targetExecutorId = parts[parts.length - 1];
+          if (/^\d{17,20}$/.test(targetExecutorId) && interaction.user.id !== targetExecutorId) {
+            return interaction.reply({
+              content: `<:wrong:1532390628330307634> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
+              flags: 64
+            }).catch(() => {});
+          }
+        }
+      }
+
+      if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_category_select')) {
         await PrefixHelpCenter.handleSelectMenuInteraction(interaction).catch(console.error);
       } else if (interaction.isButton() && interaction.customId.startsWith('help_')) {
         await PrefixHelpCenter.handleButtonInteraction(interaction).catch(console.error);
@@ -1228,6 +1241,9 @@ export class Gateway {
           }
         }, 2200);
         this.dispatchEvent(`button_${interaction.customId}`, interaction);
+        if (interaction.customId.startsWith('gw_enter_')) {
+          this.dispatchEvent('button_gw_enter_generic', interaction);
+        }
         if (interaction.customId.startsWith('tickets_v2_')) {
           this.dispatchEvent('button_tickets_v2_generic', interaction);
         }

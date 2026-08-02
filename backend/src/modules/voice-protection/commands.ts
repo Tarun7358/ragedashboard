@@ -206,7 +206,7 @@ export async function handleVoiceProtectionSlashCommand(
   // 1. ENABLE
   if (sub === 'enable') {
     if (config.enabled) {
-      return interaction.reply({ ...buildStatusCard({ emoji: '🎙️', title: 'Voice Protection Active', body: 'Voice Protection Engine is already online and monitoring.', accentColor: Colors.SUCCESS }), flags: MessageFlags.IsComponentsV2 });
+      return interaction.reply(buildStatusCard({ emoji: '<:shield:1532403012751065179>', title: 'Voice Protection Active', body: 'Voice Protection Engine is already online and monitoring.', accentColor: Colors.BRAND }));
     }
     await context.updateModuleConfig('voice-protection', { enabled: true });
     
@@ -218,21 +218,21 @@ export async function handleVoiceProtectionSlashCommand(
       await updateVoiceChannelConnection(guild, updatedConfig, context);
     }
 
-    const { components, flags } = buildRichCard({
-      emoji: '🛡️',
+    const { embeds, components } = buildRichCard({
+      emoji: '<:shield:1532403012751065179>',
       title: 'Voice Protection Suite Initialized',
       description: 'Acoustic shield initialized successfully. Real-time decibel analysis and automated spike suppression are now online.',
-      accentColor: Colors.SUCCESS,
-      footerNote: 'Rage Optimiser Enterprise  •  🎙️ Voice Protection',
+      accentColor: Colors.BRAND,
+      footerNote: 'Rage Optimiser • Unbypassable Security',
     });
 
-    return interaction.reply({ components, flags });
+    return interaction.reply({ embeds, components });
   }
 
   // 2. DISABLE
   if (sub === 'disable') {
     if (!config.enabled) {
-      return interaction.reply({ ...buildStatusCard({ emoji: '🎙️', title: 'Voice Protection Offline', body: 'Voice Protection Engine is currently offline.', accentColor: Colors.MUTED }), flags: MessageFlags.IsComponentsV2 });
+      return interaction.reply(buildStatusCard({ emoji: '<:shield:1532403012751065179>', title: 'Voice Protection Offline', body: 'Voice Protection Engine is currently offline.', accentColor: Colors.MUTED }));
     }
     await context.updateModuleConfig('voice-protection', { enabled: false });
 
@@ -244,37 +244,37 @@ export async function handleVoiceProtectionSlashCommand(
       await updateVoiceChannelConnection(guild, updatedConfig, context);
     }
 
-    const { components, flags } = buildRichCard({
-      emoji: '🛡️',
+    const { embeds, components, flags } = buildRichCard({
+      emoji: '<:shield:1532403012751065179>',
       title: 'Voice Protection Suite Disabled',
       description: 'Acoustic shield offline. Voice auditing has been suspended, and connection loops are terminated.',
       accentColor: Colors.MUTED,
-      footerNote: 'Rage Optimiser Enterprise  •  🎙️ Voice Protection',
+      footerNote: 'Rage Optimiser • Unbypassable Security',
     });
 
-    return interaction.reply({ components, flags });
+    return interaction.reply({ embeds, components, flags });
   }
 
   // 3. STATUS
   if (sub === 'status') {
-    const { components, flags } = buildRichCard({
-      emoji: '🎙️',
+    const { embeds, components, flags } = buildRichCard({
+      emoji: '<:shield:1532403012751065179>',
       title: 'Voice Protection — Operational Registry',
       description: 'Live auditory screening engine parameters and shielding matrix status.',
       accentColor: config.enabled ? Colors.SUCCESS : Colors.MUTED,
       fields: [
-        { label: '⚡ System Status',        value: config.enabled ? '🟢 **SHIELD ACTIVE**' : '⚪ **SHIELD OFFLINE**' },
-        { label: '🔊 Loudness Ceiling',     value: `\`${config.threshold ?? 85}%\` RMS` },
-        { label: '⏳ Audit Duration',       value: `\`${config.duration ?? 3}s\`` },
-        { label: '⚖️ Enforcement Action',   value: `\`${(config.punishment ?? 'servermute').toUpperCase()}\`` },
-        { label: '🔇 Mute Duration',        value: `\`${config.muteDuration ?? 30}s\`` },
-        { label: '🌀 Penalty Cooldown',     value: `\`${config.cooldown ?? 60}s\`` },
-        { label: '📁 Audit Log Channel',    value: config.logChannel ? `<#${config.logChannel}>` : '`Not Configured`' },
+        { label: '<:shield:1532403012751065179> System Status',        value: config.enabled ? '<a:approved:1532390590707142956> **SHIELD ACTIVE**' : '<:wrong:1532390628330307634> **SHIELD OFFLINE**' },
+        { label: '<:voicechannelgreen:1532425750278438962> Loudness Ceiling',     value: `\`${config.threshold ?? 85}%\` RMS` },
+        { label: '<:timer:1532620491662037123> Audit Duration',       value: `\`${config.duration ?? 3}s\`` },
+        { label: '<:gavel:1532621057318584380> Enforcement Action',   value: `\`${(config.punishment ?? 'servermute').toUpperCase()}\`` },
+        { label: '<:config:1532425712844144701> Mute Duration',        value: `\`${config.muteDuration ?? 30}s\`` },
+        { label: '<:config:1532425712844144701> Penalty Cooldown',     value: `\`${config.cooldown ?? 60}s\`` },
+        { label: '<:config:1532425712844144701> Audit Log Channel',    value: config.logChannel ? `<#${config.logChannel}>` : '`Not Configured`' },
       ],
-      footerNote: 'Rage Optimiser Enterprise  •  🎙️ Voice Protection Suite',
+      footerNote: 'Rage Optimiser • Unbypassable Security',
     });
 
-    return interaction.reply({ components, flags });
+    return interaction.reply({ embeds, components, flags });
   }
 
   // 4. CONFIG
@@ -295,15 +295,15 @@ export async function handleVoiceProtectionSlashCommand(
     if (logChannel !== null) updates.logChannel = logChannel.id;
 
     if (Object.keys(updates).length === 0) {
-      return interaction.reply({ content: '❌ You must specify at least one configuration option to update.', flags: 64 });
+      return interaction.reply({ content: '<:wrong:1532390628330307634> You must specify at least one configuration option to update.', flags: 64 });
     }
 
     await context.updateModuleConfig('voice-protection', updates);
 
     const embed = new EmbedBuilder()
-      .setTitle('⚙️ Configuration Synced')
+      .setTitle('<:config:1532425712844144701> Configuration Synced')
       .setDescription('Successfully updated Voice Protection settings parameters:')
-      .setColor(0x7c5cfc)
+      .setColor(0x99CC00)
       .addFields(
         Object.keys(updates).map(k => ({ 
           name: k.replace(/([A-Z])/g, ' $1').toUpperCase(), 
@@ -312,7 +312,7 @@ export async function handleVoiceProtectionSlashCommand(
         }))
       )
       .setTimestamp()
-      .setFooter({ text: 'Rage Optimiser Premium Security' });
+      .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
     return interaction.reply({ embeds: [embed], flags: 64 });
   }
@@ -330,45 +330,45 @@ export async function handleVoiceProtectionSlashCommand(
         : (config.ignoredRoles || []).map((id: string) => `<@&${id}>`).join('\n') || '*No roles currently ignored.*';
 
       const embed = new EmbedBuilder()
-        .setTitle(`🎙️ Ignored ${type === 'channel' ? 'Channels' : 'Roles'} Registry`)
-        .setColor(0x7c5cfc)
+        .setTitle(`<:voicechannelgreen:1532425750278438962> Ignored ${type === 'channel' ? 'Channels' : 'Roles'} Registry`)
+        .setColor(0x99CC00)
         .setDescription(list)
         .setTimestamp()
-        .setFooter({ text: 'Rage Optimiser Premium Security' });
+        .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
       return interaction.reply({ embeds: [embed], flags: 64 });
     }
 
     if (type === 'channel') {
-      if (!targetChannel) return interaction.reply({ content: '❌ You must specify a target channel.', flags: 64 });
+      if (!targetChannel) return interaction.reply({ content: '<:wrong:1532390628330307634> You must specify a target channel.', flags: 64 });
       let channels = config.ignoredChannels || [];
       if (action === 'add') {
-        if (channels.includes(targetChannel.id)) return interaction.reply({ content: '❌ Channel is already ignored.', flags: 64 });
+        if (channels.includes(targetChannel.id)) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel is already ignored.', flags: 64 });
         channels.push(targetChannel.id);
       } else {
-        if (!channels.includes(targetChannel.id)) return interaction.reply({ content: '❌ Channel is not ignored.', flags: 64 });
+        if (!channels.includes(targetChannel.id)) return interaction.reply({ content: '<:wrong:1532390628330307634> Channel is not ignored.', flags: 64 });
         channels = channels.filter((id: string) => id !== targetChannel.id);
       }
       await context.updateModuleConfig('voice-protection', { ignoredChannels: channels });
     } else {
-      if (!targetRole) return interaction.reply({ content: '❌ You must specify a target role.', flags: 64 });
+      if (!targetRole) return interaction.reply({ content: '<:wrong:1532390628330307634> You must specify a target role.', flags: 64 });
       let roles = config.ignoredRoles || [];
       if (action === 'add') {
-        if (roles.includes(targetRole.id)) return interaction.reply({ content: '❌ Role is already ignored.', flags: 64 });
+        if (roles.includes(targetRole.id)) return interaction.reply({ content: '<:wrong:1532390628330307634> Role is already ignored.', flags: 64 });
         roles.push(targetRole.id);
       } else {
-        if (!roles.includes(targetRole.id)) return interaction.reply({ content: '❌ Role is not ignored.', flags: 64 });
+        if (!roles.includes(targetRole.id)) return interaction.reply({ content: '<:wrong:1532390628330307634> Role is not ignored.', flags: 64 });
         roles = roles.filter((id: string) => id !== targetRole.id);
       }
       await context.updateModuleConfig('voice-protection', { ignoredRoles: roles });
     }
 
     const embed = new EmbedBuilder()
-      .setTitle('⚙️ Exemption List Updated')
+      .setTitle('<:config:1532425712844144701> Exemption List Updated')
       .setDescription(`Successfully **${action === 'add' ? 'added' : 'removed'}** the target ${type} from the ignore list.`)
-      .setColor(0x7c5cfc)
+      .setColor(0x99CC00)
       .setTimestamp()
-      .setFooter({ text: 'Rage Optimiser Premium Security' });
+      .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
     return interaction.reply({ embeds: [embed], flags: 64 });
   }
@@ -386,45 +386,45 @@ export async function handleVoiceProtectionSlashCommand(
         : (config.whitelistedRoles || []).map((id: string) => `<@&${id}>`).join('\n') || '*No roles currently whitelisted.*';
 
       const embed = new EmbedBuilder()
-        .setTitle(`🛡️ Whitelisted Immune ${type === 'user' ? 'Users' : 'Roles'} Registry`)
-        .setColor(0x2ecc71)
+        .setTitle(`<:shield:1532403012751065179> Whitelisted Immune ${type === 'user' ? 'Users' : 'Roles'} Registry`)
+        .setColor(0x99CC00)
         .setDescription(list)
         .setTimestamp()
-        .setFooter({ text: 'Rage Optimiser Premium Security' });
+        .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
       return interaction.reply({ embeds: [embed], flags: 64 });
     }
 
     if (type === 'user') {
-      if (!targetUser) return interaction.reply({ content: '❌ You must specify a target user.', flags: 64 });
+      if (!targetUser) return interaction.reply({ content: '<:wrong:1532390628330307634> You must specify a target user.', flags: 64 });
       let users = config.whitelistedUsers || [];
       if (action === 'add') {
-        if (users.includes(targetUser.id)) return interaction.reply({ content: '❌ User is already whitelisted.', flags: 64 });
+        if (users.includes(targetUser.id)) return interaction.reply({ content: '<:wrong:1532390628330307634> User is already whitelisted.', flags: 64 });
         users.push(targetUser.id);
       } else {
-        if (!users.includes(targetUser.id)) return interaction.reply({ content: '❌ User is not whitelisted.', flags: 64 });
+        if (!users.includes(targetUser.id)) return interaction.reply({ content: '<:wrong:1532390628330307634> User is not whitelisted.', flags: 64 });
         users = users.filter((id: string) => id !== targetUser.id);
       }
       await context.updateModuleConfig('voice-protection', { whitelistedUsers: users });
     } else {
-      if (!targetRole) return interaction.reply({ content: '❌ You must specify a target role.', flags: 64 });
+      if (!targetRole) return interaction.reply({ content: '<:wrong:1532390628330307634> You must specify a target role.', flags: 64 });
       let roles = config.whitelistedRoles || [];
       if (action === 'add') {
-        if (roles.includes(targetRole.id)) return interaction.reply({ content: '❌ Role is already whitelisted.', flags: 64 });
+        if (roles.includes(targetRole.id)) return interaction.reply({ content: '<:wrong:1532390628330307634> Role is already whitelisted.', flags: 64 });
         roles.push(targetRole.id);
       } else {
-        if (!roles.includes(targetRole.id)) return interaction.reply({ content: '❌ Role is not whitelisted.', flags: 64 });
+        if (!roles.includes(targetRole.id)) return interaction.reply({ content: '<:wrong:1532390628330307634> Role is not whitelisted.', flags: 64 });
         roles = roles.filter((id: string) => id !== targetRole.id);
       }
       await context.updateModuleConfig('voice-protection', { whitelistedRoles: roles });
     }
 
     const embed = new EmbedBuilder()
-      .setTitle('🛡️ Immunity List Updated')
+      .setTitle('<:shield:1532403012751065179> Immunity List Updated')
       .setDescription(`Successfully **${action === 'add' ? 'added' : 'removed'}** the target ${type} from the whitelist immunity registry.`)
-      .setColor(0x2ecc71)
+      .setColor(0x99CC00)
       .setTimestamp()
-      .setFooter({ text: 'Rage Optimiser Premium Security' });
+      .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
     return interaction.reply({ embeds: [embed], flags: 64 });
   }
@@ -445,28 +445,28 @@ export async function handleVoiceProtectionSlashCommand(
       await context.updateModuleConfig('voice-protection', { stats: emptyStats });
       
       const embed = new EmbedBuilder()
-        .setTitle('📊 Metrics Registry Purged')
+        .setTitle('<:information:1532621274092929124> Metrics Registry Purged')
         .setDescription('Voice Protection telemetry and detection frequency statistics have been reset to zero.')
-        .setColor(0xe74c3c)
+        .setColor(0x99CC00)
         .setTimestamp()
-        .setFooter({ text: 'Rage Optimiser Premium Security' });
+        .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
       return interaction.reply({ embeds: [embed], flags: 64 });
     }
 
     const stats = config.stats || {};
     const embed = new EmbedBuilder()
-      .setTitle('📊 Voice Protection — Auditing Telemetry')
+      .setTitle('<:information:1532621274092929124> Voice Protection — Auditing Telemetry')
       .setDescription('Telemetry data and loudness spikes logged by the active audio analysis engine.')
-      .setColor(0x7c5cfc)
+      .setColor(0x99CC00)
       .addFields(
-        { name: '📈 Total Violations', value: `\`${stats.totalDetections || 0}\` times`, inline: true },
-        { name: '🔇 Enforced Penalties', value: `\`${stats.totalMutes || 0}\` mutes`, inline: true },
-        { name: '🔊 Mean Level (RMS)', value: `\`${stats.avgLoudness || 0}%\``, inline: true },
-        { name: '🔥 Peak Audio Surge', value: `\`${stats.peakLoudness || 0}%\``, inline: true }
+        { name: '<:wrong:1532390628330307634> Total Violations', value: `\`${stats.totalDetections || 0}\` times`, inline: true },
+        { name: '<:shield:1532403012751065179> Enforced Penalties', value: `\`${stats.totalMutes || 0}\` mutes`, inline: true },
+        { name: '<:voicechannelgreen:1532425750278438962> Mean Level (RMS)', value: `\`${stats.avgLoudness || 0}%\``, inline: true },
+        { name: '<:information:1532621274092929124> Peak Audio Surge', value: `\`${stats.peakLoudness || 0}%\``, inline: true }
       )
       .setTimestamp()
-      .setFooter({ text: 'Rage Optimiser Premium Security' });
+      .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
     // Add top offenders
     const topUsers = Object.entries(stats.mostDetectedUsers || {})
@@ -477,7 +477,7 @@ export async function handleVoiceProtectionSlashCommand(
       const offenderList = topUsers
         .map(([id, userObj]: any) => `• <@${id}> — **${userObj.count}** violations logged`)
         .join('\n');
-      embed.addFields({ name: '🚨 Highest Frequency Offenders', value: offenderList });
+      embed.addFields({ name: '<:wrong:1532390628330307634> Highest Frequency Offenders', value: offenderList });
     }
 
     return interaction.reply({ embeds: [embed], flags: 64 });
@@ -496,7 +496,7 @@ export async function handleVoiceProtectionMoveCommand(client: any, interaction:
                         await checkWhitelistPermission(interaction.user.id, guild, context, 'voice_protection');
   if (!hasPermission) {
     return interaction.reply({
-      content: '❌ You do not have permission to change the Voice Protection monitoring channel.',
+      content: '<:wrong:1532390628330307634> You do not have permission to change the Voice Protection monitoring channel.',
       flags: 64
     });
   }
@@ -508,7 +508,7 @@ export async function handleVoiceProtectionMoveCommand(client: any, interaction:
   // Step 1: Validate Voice Protection module is enabled
   if (!vpMod || vpMod.status !== 'enabled') {
     return interaction.reply({
-      content: '❌ Voice Protection is currently disabled.',
+      content: '<:wrong:1532390628330307634> Voice Protection is currently disabled.',
       flags: 64
     });
   }
@@ -519,7 +519,7 @@ export async function handleVoiceProtectionMoveCommand(client: any, interaction:
   const isVoice = channel.isVoiceBased?.() || channel.type === 2 || channel.type === 13;
   if (!isVoice) {
     return interaction.reply({
-      content: '❌ Selected channel is not a Voice Channel.',
+      content: '<:wrong:1532390628330307634> Selected channel is not a Voice Channel.',
       flags: 64
     });
   }
@@ -528,7 +528,7 @@ export async function handleVoiceProtectionMoveCommand(client: any, interaction:
   const me = guild.members.me || (await guild.members.fetch(client.user.id).catch(() => null));
   if (!me) {
     return interaction.reply({
-      content: '❌ Unknown error: Could not fetch bot member in guild.',
+      content: '<:wrong:1532390628330307634> Unknown error: Could not fetch bot member in guild.',
       flags: 64
     });
   }
@@ -538,7 +538,7 @@ export async function handleVoiceProtectionMoveCommand(client: any, interaction:
       !permissions?.has(PermissionFlagsBits.Connect) || 
       !permissions?.has(PermissionFlagsBits.MuteMembers)) {
     return interaction.reply({
-      content: '❌ I don\'t have the required permissions to monitor that voice channel.',
+      content: '<:wrong:1532390628330307634> I don\'t have the required permissions to monitor that voice channel.',
       flags: 64
     });
   }
@@ -548,7 +548,7 @@ export async function handleVoiceProtectionMoveCommand(client: any, interaction:
     const conn = getVoiceConnection(guildId);
     if (conn && conn.joinConfig.channelId === channel.id) {
       return interaction.reply({
-        content: '⚠️ Voice Protection is already monitoring this voice channel.',
+        content: '<:wrong:1532390628330307634> Voice Protection is already monitoring this voice channel.',
         flags: 64
       });
     }
@@ -613,16 +613,16 @@ export async function handleVoiceProtectionMoveCommand(client: any, interaction:
 
     // Step 8: Success Embed
     const embed = new EmbedBuilder()
-      .setTitle('🛡️ Voice Protection Moved')
-      .setColor(0x7c5cfc)
+      .setTitle('<:shield:1532403012751065179> Voice Protection Moved')
+      .setColor(0x99CC00)
       .addFields(
-        { name: 'Previous Channel', value: previousChannel ? `🎤 ${previousChannel.name}` : '🎤 None', inline: true },
-        { name: 'Current Channel', value: `🎤 ${channel.name}`, inline: true },
-        { name: 'Status', value: '🟢 Monitoring', inline: true },
+        { name: 'Previous Channel', value: previousChannel ? `<:voicechannelgreen:1532425750278438962> ${previousChannel.name}` : '<:voicechannelgreen:1532425750278438962> None', inline: true },
+        { name: 'Current Channel', value: `<:voicechannelgreen:1532425750278438962> ${channel.name}`, inline: true },
+        { name: 'Status', value: '<a:approved:1532390590707142956> Monitoring', inline: true },
         { name: 'Changed By', value: `<@${interaction.user.id}>`, inline: true },
         { name: 'Time', value: `<t:${Math.floor(now / 1000)}:F>`, inline: true }
       )
-      .setFooter({ text: 'Rage Optimiser • Voice Protection' })
+      .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });
@@ -639,7 +639,7 @@ export async function handleVoiceProtectionMoveCommand(client: any, interaction:
   } catch (err: any) {
     console.error('[Voice Protection] Failed to switch voice channel:', err);
     await interaction.editReply({
-      content: `❌ Failed to switch Voice Protection. Please check the logs. Error: ${err.message || err}`
+      content: `<:wrong:1532390628330307634> Failed to switch Voice Protection. Please check the logs. Error: ${err.message || err}`
     });
   }
 }

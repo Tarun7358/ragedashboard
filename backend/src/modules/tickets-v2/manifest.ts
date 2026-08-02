@@ -80,21 +80,22 @@ export const TicketsV2Manifest: ModuleManifest = {
           // Render legacy panel
           try {
             const embed = new EmbedBuilder()
-              .setTitle('✉️ Customer Support Ticket')
+              .setTitle('<:ticket:1532620631466836021> Customer Support Ticket')
               .setDescription('Need assistance from our staff? Click the button below to open a private support ticket.')
-              .setColor('#4f8cff')
+              .setColor(0x99CC00)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
               .setTimestamp();
             const btn = new ButtonBuilder()
               .setCustomId('ticket_btn_create')
               .setLabel('Create Ticket')
               .setStyle(ButtonStyle.Primary)
-              .setEmoji('✉️');
+              .setEmoji('<:ticket:1532620631466836021>');
             const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btn);
             await interaction.reply({ embeds: [embed], components: [row] });
             context.logSyncEvent('Ticket Support (Legacy Fallback): Posted ticket board.', 'info');
           } catch (err) {
             console.error(err);
-            await interaction.reply({ content: '❌ Failed to post legacy ticket board.', flags: 64 });
+            await interaction.reply({ content: '<:wrong:1532390628330307634> Failed to post legacy ticket board.', flags: 64 });
           }
           return;
         }
@@ -102,7 +103,7 @@ export const TicketsV2Manifest: ModuleManifest = {
         // V2 Flow
         const panelName = interaction.options.getString('panel');
         const db = Database.getDb();
-        if (!db) return interaction.reply({ content: '❌ Database not available.', flags: 64 });
+        if (!db) return interaction.reply({ content: '<:wrong:1532390628330307634> Database not available.', flags: 64 });
 
         let panelRow: any = null;
         if (panelName) {
@@ -113,7 +114,7 @@ export const TicketsV2Manifest: ModuleManifest = {
 
         if (!panelRow) {
           return interaction.reply({ 
-            content: '❌ No active Ticket Panel config found. Please create and enable a panel on the dashboard.', 
+            content: '<:wrong:1532390628330307634> No active Ticket Panel config found. Please create and enable a panel on the dashboard.', 
             flags: 64 
           });
         }
@@ -122,20 +123,20 @@ export const TicketsV2Manifest: ModuleManifest = {
           const config = JSON.parse(panelRow.configJson);
           
           const embed = new EmbedBuilder()
-            .setTitle(config.title || 'Support Ticket Panel')
+            .setTitle(config.title || '<:ticket:1532620631466836021> Support Ticket Panel')
             .setDescription(config.description || 'Click an option below to open a support ticket.')
-            .setColor((config.color || '#d4af37') as any);
+            .setColor((config.color || 0x99CC00) as any);
           
           if (config.thumbnail) embed.setThumbnail(config.thumbnail);
           if (config.image) embed.setImage(config.image);
-          if (config.footer) embed.setFooter({ text: config.footer });
+          embed.setFooter({ text: config.footer || 'Rage Optimiser • Unbypassable Security' });
 
           // Render options either as buttons or dropdown
           const rows: any[] = [];
           const options = config.options || [];
 
           if (options.length === 0) {
-            return interaction.reply({ content: '❌ Panel has no configured support categories.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> Panel has no configured support categories.', flags: 64 });
           }
 
           if (config.layoutType === 'dropdown') {
@@ -172,7 +173,7 @@ export const TicketsV2Manifest: ModuleManifest = {
           context.logSyncEvent(`Ticket Support vNext: Posted panel "${panelRow.name}".`, 'info');
         } catch (err: any) {
           console.error(err);
-          await interaction.reply({ content: `❌ Failed to render panel: ${err.message}`, flags: 64 });
+          await interaction.reply({ content: `<:wrong:1532390628330307634> Failed to render panel: ${err.message}`, flags: 64 });
         }
       }
     },
@@ -183,12 +184,12 @@ export const TicketsV2Manifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const globalSettings = context.getGlobalSettings ? context.getGlobalSettings() : {};
         if (!globalSettings.useV2Tickets) {
-          return interaction.reply({ content: '❌ Ticket System V2 is not active. Please use legacy controls.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Ticket System V2 is not active. Please use legacy controls.', flags: 64 });
         }
 
         const ticket = await TicketService.getTicketByChannelId(interaction.channelId);
         if (!ticket) {
-          return interaction.reply({ content: '❌ This command can only be used inside a ticket channel.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> This command can only be used inside a ticket channel.', flags: 64 });
         }
 
         const action = interaction.options.getString('action');
@@ -199,7 +200,7 @@ export const TicketsV2Manifest: ModuleManifest = {
         const isStaff = interaction.member?.permissions?.has(PermissionFlagsBits.ManageMessages);
 
         if (action === 'claim') {
-          if (!isStaff) return interaction.reply({ content: '🔒 Staff only.', flags: 64 });
+          if (!isStaff) return interaction.reply({ content: '<:shield:1532403012751065179> Staff only.', flags: 64 });
           await TicketService.claimTicket(ticket.id, interaction.user.id, interaction.user.username, interaction.user.displayAvatarURL());
           
           // Grant permissions
@@ -210,11 +211,11 @@ export const TicketsV2Manifest: ModuleManifest = {
             ReadMessageHistory: true
           });
 
-          await interaction.reply({ content: `🙋‍♂️ **Ticket claimed** by ${interaction.user}.` });
+          await interaction.reply({ content: `<a:approved:1532390590707142956> **Ticket claimed** by ${interaction.user}.` });
           context.logSyncEvent(`Ticket vNext: Ticket ${ticket.ticketId} claimed by staff member "${userTag(interaction.user)}".`, 'success');
         } 
         else if (action === 'close') {
-          await interaction.reply({ content: `🔒 **Closing ticket...** Channel will be removed in 5 seconds.` });
+          await interaction.reply({ content: `<:shield:1532403012751065179> **Closing ticket...** Channel will be removed in 5 seconds.` });
           
           await TicketService.closeTicket(ticket.id, userTag(interaction.user));
           context.logSyncEvent(`Ticket vNext: Ticket ${ticket.ticketId} closed by "${userTag(interaction.user)}".`, 'info');
@@ -228,8 +229,8 @@ export const TicketsV2Manifest: ModuleManifest = {
           }, 5000);
         }
         else if (action === 'escalate') {
-          if (!isStaff) return interaction.reply({ content: '🔒 Staff only.', flags: 64 });
-          if (!targetRole) return interaction.reply({ content: '❌ Please specify a role to escalate to.', flags: 64 });
+          if (!isStaff) return interaction.reply({ content: '<:shield:1532403012751065179> Staff only.', flags: 64 });
+          if (!targetRole) return interaction.reply({ content: '<:wrong:1532390628330307634> Please specify a role to escalate to.', flags: 64 });
 
           await interaction.channel.permissionOverwrites.edit(targetRole.id, {
             ViewChannel: true,
@@ -245,25 +246,25 @@ export const TicketsV2Manifest: ModuleManifest = {
             escalatedTo: targetRole.id
           });
 
-          await interaction.reply({ content: `🚨 **Ticket escalated** to role **${targetRole.name}**.` });
+          await interaction.reply({ content: `<:shield:1532403012751065179> **Ticket escalated** to role **${targetRole.name}**.` });
           context.logSyncEvent(`Ticket vNext: Escalated ticket ${ticket.ticketId} to role "${targetRole.name}".`, 'warn');
         }
         else if (action === 'reopen') {
           if (ticket.status !== 'closed') {
-            return interaction.reply({ content: '❌ Ticket is not closed.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> Ticket is not closed.', flags: 64 });
           }
           await TicketService.updateTicket(ticket.id, {
             status: 'open',
             reopenedAt: Date.now(),
             reopenedCount: ticket.reopenedCount + 1
           });
-          await interaction.reply({ content: '🔓 **Ticket re-opened.**' });
+          await interaction.reply({ content: '<a:approved:1532390590707142956> **Ticket re-opened.**' });
         }
         else if (action === 'transcript') {
-          return interaction.reply({ content: `📜 **Ticket Transcript Exported**:\nNo messages cached for this channel template. Download complete transcript via the Web Dashboard.`, flags: 64 });
+          return interaction.reply({ content: `<:ticket:1532620631466836021> **Ticket Transcript Exported**:\nNo messages cached for this channel template. Download complete transcript via the Web Dashboard.`, flags: 64 });
         }
         else if (action === 'assign') {
-          if (!targetUser) return interaction.reply({ content: '❌ Please specify a user to assign.', flags: 64 });
+          if (!targetUser) return interaction.reply({ content: '<:wrong:1532390628330307634> Please specify a user to assign.', flags: 64 });
           await TicketService.claimTicket(ticket.id, targetUser.id, targetUser.username, targetUser.displayAvatarURL());
           await interaction.channel.permissionOverwrites.edit(targetUser.id, {
             ViewChannel: true,
@@ -271,36 +272,36 @@ export const TicketsV2Manifest: ModuleManifest = {
             AttachFiles: true,
             ReadMessageHistory: true
           });
-          return interaction.reply({ content: `✅ Ticket successfully assigned to ${targetUser}.` });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Ticket successfully assigned to ${targetUser}.` });
         }
         else if (action === 'unassign') {
           await TicketService.updateTicket(ticket.id, { claimedById: undefined, claimedByName: undefined });
-          return interaction.reply({ content: '✅ Ticket handler unassigned.' });
+          return interaction.reply({ content: '<a:approved:1532390590707142956> Ticket handler unassigned.' });
         }
         else if (action === 'history') {
-          return interaction.reply({ content: `📈 **Ticket response history statistics**:\n• Created: **<t:${Math.floor(ticket.createdAt / 1000)}:R>**\n• Category: **${(ticket as any).panelCategory || 'General Assistance'}**\n• Status: **${ticket.status}**`, flags: 64 });
+          return interaction.reply({ content: `<:information:1532621274092929124> **Ticket response history statistics**:\n• Created: **<t:${Math.floor(ticket.createdAt / 1000)}:R>**\n• Category: **${(ticket as any).panelCategory || 'General Assistance'}**\n• Status: **${ticket.status}**`, flags: 64 });
         }
         else if (action === 'priority') {
           const priorityVal = newName || 'medium';
           await TicketService.updateTicket(ticket.id, { priority: priorityVal });
-          return interaction.reply({ content: `✅ Ticket priority set to **${priorityVal.toUpperCase()}**.` });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Ticket priority set to **${priorityVal.toUpperCase()}**.` });
         }
         else if (action === 'move') {
-          if (!newName) return interaction.reply({ content: '❌ Please specify category ID to move to.', flags: 64 });
+          if (!newName) return interaction.reply({ content: '<:wrong:1532390628330307634> Please specify category ID to move to.', flags: 64 });
           const catChannel = interaction.guild?.channels.cache.get(newName);
           if (!catChannel || catChannel.type !== ChannelType.GuildCategory) {
-            return interaction.reply({ content: '❌ Invalid Category channel ID.', flags: 64 });
+            return interaction.reply({ content: '<:wrong:1532390628330307634> Invalid Category channel ID.', flags: 64 });
           }
           await interaction.channel.setParent(catChannel.id, { lockPermissions: false });
-          return interaction.reply({ content: `✅ Ticket channel moved to category **${catChannel.name}**.` });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Ticket channel moved to category **${catChannel.name}**.` });
         }
         else if (action === 'note') {
           const noteText = newName || 'General staff note.';
           context.logSyncEvent(`[Ticket Note] ${noteText}`, 'info');
-          return interaction.reply({ content: `📝 **Note added to ticket timeline**: "${noteText}"`, flags: 64 });
+          return interaction.reply({ content: `<:information:1532621274092929124> **Note added to ticket timeline**: "${noteText}"`, flags: 64 });
         }
         else if (action === 'merge') {
-          return interaction.reply({ content: '🔗 **Merge tickets**: Ticket merge completed. Timeline events consolidated.', flags: 64 });
+          return interaction.reply({ content: '<:link:1532620952087826602> **Merge tickets**: Ticket merge completed. Timeline events consolidated.', flags: 64 });
         }
       }
     },
@@ -319,7 +320,7 @@ export const TicketsV2Manifest: ModuleManifest = {
         }
         else if (type === 'tickets_v2_claim') {
           const ticket = await TicketService.getTicketByChannelId(interaction.channelId);
-          if (!ticket) return interaction.reply({ content: '❌ Ticket not found.', flags: 64 });
+          if (!ticket) return interaction.reply({ content: '<:wrong:1532390628330307634> Ticket not found.', flags: 64 });
           
           await TicketService.claimTicket(ticket.id, interaction.user.id, interaction.user.username, interaction.user.displayAvatarURL());
           
@@ -330,12 +331,12 @@ export const TicketsV2Manifest: ModuleManifest = {
             ReadMessageHistory: true
           });
 
-          await interaction.reply({ content: `🙋‍♂️ **Ticket claimed** by ${interaction.user}.` });
+          await interaction.reply({ content: `<a:approved:1532390590707142956> **Ticket claimed** by ${interaction.user}.` });
           context.logSyncEvent(`Ticket vNext: Ticket ${ticket.ticketId} claimed by staff member "${userTag(interaction.user)}".`, 'success');
         }
         else if (type === 'tickets_v2_close') {
           const ticket = await TicketService.getTicketByChannelId(interaction.channelId);
-          if (!ticket) return interaction.reply({ content: '❌ Ticket not found.', flags: 64 });
+          if (!ticket) return interaction.reply({ content: '<:wrong:1532390628330307634> Ticket not found.', flags: 64 });
 
           // Render confirm button row
           const confirmBtn = new ButtonBuilder()
@@ -346,16 +347,16 @@ export const TicketsV2Manifest: ModuleManifest = {
           const row = new ActionRowBuilder<ButtonBuilder>().addComponents(confirmBtn);
 
           await interaction.reply({ 
-            content: '⚠️ Are you sure you want to close this ticket?', 
+            content: '<:wrong:1532390628330307634> Are you sure you want to close this ticket?', 
             components: [row],
             flags: 64
           });
         }
         else if (type === 'tickets_v2_confirm_close') {
           const ticket = await TicketService.getTicketById(parts[1]);
-          if (!ticket) return interaction.reply({ content: '❌ Ticket not found.', flags: 64 });
+          if (!ticket) return interaction.reply({ content: '<:wrong:1532390628330307634> Ticket not found.', flags: 64 });
 
-          await interaction.reply({ content: `🔒 **Closing ticket...** Channel will be deleted in 5 seconds.` });
+          await interaction.reply({ content: `<:shield:1532403012751065179> **Closing ticket...** Channel will be deleted in 5 seconds.` });
 
           await TicketService.closeTicket(ticket.id, userTag(interaction.user));
           context.logSyncEvent(`Ticket vNext: Ticket ${ticket.ticketId} closed by "${userTag(interaction.user)}".`, 'info');
@@ -532,14 +533,14 @@ export const TicketsV2Manifest: ModuleManifest = {
 // Spawn guided modal OR directly create ticket depending on option questionnaire config
 async function handleTicketOpenFlow(client: any, interaction: any, context: any, panelId: string, optionId: string) {
   const db = Database.getDb();
-  if (!db) return interaction.reply({ content: '❌ Database not available.', flags: 64 });
+  if (!db) return interaction.reply({ content: '<:wrong:1532390628330307634> Database not available.', flags: 64 });
 
   const panelRow = await db.get('SELECT * FROM ticket_panels WHERE id = ?', [panelId]);
-  if (!panelRow) return interaction.reply({ content: '❌ Panel config not found.', flags: 64 });
+  if (!panelRow) return interaction.reply({ content: '<:wrong:1532390628330307634> Panel config not found.', flags: 64 });
 
   const config = JSON.parse(panelRow.configJson);
   const option = (config.options || []).find((o: any) => o.id === optionId);
-  if (!option) return interaction.reply({ content: '❌ Option not found.', flags: 64 });
+  if (!option) return interaction.reply({ content: '<:wrong:1532390628330307634> Option not found.', flags: 64 });
 
   const forms = option.forms || [];
   if (forms.length > 0) {
@@ -571,14 +572,14 @@ async function handleTicketOpenFlow(client: any, interaction: any, context: any,
 // Internal runner to build ticket channel, database logs, and welcome board
 async function executeTicketCreation(client: any, interaction: any, context: any, panelId: string, optionId: string, modalResponses: Record<string, string>) {
   const db = Database.getDb();
-  if (!db) return interaction.editReply('❌ Database not available.');
+  if (!db) return interaction.editReply('<:wrong:1532390628330307634> Database not available.');
 
   const panelRow = await db.get('SELECT * FROM ticket_panels WHERE id = ?', [panelId]);
-  if (!panelRow) return interaction.editReply('❌ Panel config not found.');
+  if (!panelRow) return interaction.editReply('<:wrong:1532390628330307634> Panel config not found.');
 
   const config = JSON.parse(panelRow.configJson);
   const option = (config.options || []).find((o: any) => o.id === optionId);
-  if (!option) return interaction.editReply('❌ Option not found.');
+  if (!option) return interaction.editReply('<:wrong:1532390628330307634> Option not found.');
 
   try {
     const guild = interaction.guild;
@@ -647,11 +648,11 @@ async function executeTicketCreation(client: any, interaction: any, context: any
 
     // Send Welcome Embed inside the Ticket channel
     const welcomeEmbed = new EmbedBuilder()
-      .setAuthor({ name: 'Rage Optimiser Enterprise • Support Desk' })
-      .setTitle(`✉️ Support Ticket Channel Spawned`)
+      .setAuthor({ name: 'Rage Optimiser' })
+      .setTitle(`<:ticket:1532620631466836021> Support Ticket Channel Spawned`)
       .setDescription(`Welcome ${creator}! Support category: **${option.label}**\nOur support team has been notified and will assist you shortly. Use the control buttons below to claim or close this ticket.`)
-      .setColor('#7C5CFC')
-      .setFooter({ text: 'Rage Optimiser v4.2 • Enterprise Support' })
+      .setColor(0x99CC00)
+      .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
       .setTimestamp();
 
 
@@ -672,13 +673,13 @@ async function executeTicketCreation(client: any, interaction: any, context: any
       .setCustomId('tickets_v2_claim')
       .setLabel('Claim Ticket')
       .setStyle(ButtonStyle.Success)
-      .setEmoji('🙋‍♂️');
+      .setEmoji('<a:approved:1532390590707142956>');
 
     const closeBtn = new ButtonBuilder()
       .setCustomId('tickets_v2_close')
       .setLabel('Close Ticket')
       .setStyle(ButtonStyle.Danger)
-      .setEmoji('🔒');
+      .setEmoji('<:shield:1532403012751065179>');
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(claimBtn, closeBtn);
 
@@ -688,10 +689,10 @@ async function executeTicketCreation(client: any, interaction: any, context: any
       components: [row]
     });
 
-    await interaction.editReply(`✅ Ticket created successfully! Go to ${ticketChannel}.`);
+    await interaction.editReply(`<a:approved:1532390590707142956> Ticket created successfully! Go to ${ticketChannel}.`);
     context.logSyncEvent(`Ticket vNext: Ticket ${ticket.ticketId} successfully spawned in channel ${ticketChannel.name}.`, 'success');
   } catch (err: any) {
     console.error(err);
-    await interaction.editReply(`❌ Failed to spawn ticket channel: ${err.message}`);
+    await interaction.editReply(`<:wrong:1532390628330307634> Failed to spawn ticket channel: ${err.message}`);
   }
 }

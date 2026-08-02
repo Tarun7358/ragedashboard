@@ -70,6 +70,44 @@ export class PrefixRegistry {
     'ticket-close': 'close'
   };
 
+  private static executeMap = new Map<string, Function>();
+
+  public static get(name: string): (PrefixCommandMeta & { execute?: Function }) | undefined {
+    const canonical = this.aliasMap.get(name.toLowerCase()) || name.toLowerCase();
+    const meta = this.commandsMap.get(canonical);
+    if (!meta) return undefined;
+    return {
+      ...meta,
+      execute: this.executeMap.get(canonical)
+    };
+  }
+
+  public static register(meta: Partial<PrefixCommandMeta> & { name: string; description: string; category: string; execute?: Function }): void {
+    const name = meta.name.toLowerCase();
+    const commandMeta: PrefixCommandMeta = {
+      name,
+      description: meta.description,
+      category: meta.category,
+      usage: meta.usage || `r!${name}`,
+      aliases: meta.aliases || [],
+      userPermissions: meta.userPermissions || [],
+      botPermissions: meta.botPermissions || ['SendMessages', 'EmbedLinks'],
+      cooldownSeconds: meta.cooldownSeconds || 3,
+      examples: meta.examples || [`r!${name}`],
+      moduleOwnerId: 'core',
+      dangerLevel: meta.dangerLevel || 'Low'
+    };
+
+    if (meta.execute) {
+      this.executeMap.set(name, meta.execute);
+    }
+
+    this.commandsMap.set(name, commandMeta);
+    for (const alias of commandMeta.aliases) {
+      this.aliasMap.set(alias.toLowerCase(), name);
+    }
+  }
+
   public static initialize(manifests: ModuleManifest[]): void {
     this.manifests = manifests;
     this.commandsMap.clear();
@@ -249,6 +287,64 @@ export class PrefixRegistry {
       this.commandsMap.set(b.name, b);
       for (const a of b.aliases) {
         this.aliasMap.set(a, b.name);
+      }
+    }
+
+    // Register enterprise shortcuts with accurate category mappings
+    const shortcutCategoryMap: Record<string, string> = {
+      antinuke: 'Security',
+      extraowner: 'Security',
+      antispam: 'AutoMod',
+      antilink: 'AutoMod',
+      automod: 'AutoMod',
+      raidmode: 'Security',
+      emergency: 'Security',
+      permissions: 'Security',
+      verification: 'Verification',
+      leveling: 'Leveling & Economy',
+      social: 'Social Updates',
+      'social-updates': 'Social Updates',
+      jtc: 'Voice',
+      voiceprotection: 'Voice',
+      logging: 'Logging',
+      tickets: 'Tickets',
+      notes: 'Moderation',
+      autorole: 'Welcome',
+      goodbye: 'Welcome',
+      birthday: 'Welcome',
+      boost: 'Welcome',
+      milestones: 'Welcome',
+      config: 'Configuration',
+      setup: 'Configuration',
+      modules: 'System',
+      premium: 'System',
+      status: 'System',
+      performance: 'System',
+      telemetry: 'System',
+      health: 'System',
+      uptime: 'System',
+      cache: 'System',
+      memory: 'System',
+      developer: 'System',
+      reload: 'System',
+      restart: 'System',
+      sync: 'System',
+      debug: 'System'
+    };
+
+    for (const [name, cat] of Object.entries(shortcutCategoryMap)) {
+      if (!this.commandsMap.has(name)) {
+        this.commandsMap.set(name, {
+          name,
+          description: `Enterprise ${name} control interface`,
+          category: cat,
+          usage: `r!${name}`,
+          aliases: [],
+          cooldownSeconds: 3,
+          examples: [`r!${name}`],
+          moduleOwnerId: 'rage-enterprise',
+          dangerLevel: ['emergency', 'reload', 'restart'].includes(name) ? 'High' : 'Low'
+        });
       }
     }
   }

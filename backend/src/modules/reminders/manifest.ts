@@ -21,10 +21,10 @@ async function fireReminder(client: any, reminder: IReminder, context: any) {
     if (!user) return;
 
     const embed = new EmbedBuilder()
-      .setTitle('⏰ Reminder!')
+      .setTitle('<:timer:1532620491662037123> Reminder!')
       .setDescription(reminder.message)
-      .setColor('#4f8cff')
-      .setFooter({ text: `Set by ${reminder.userTag}` })
+      .setColor(0x99CC00)
+      .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
       .setTimestamp();
 
     // Try DM first
@@ -121,7 +121,7 @@ export const RemindersManifest: ModuleManifest = {
         const rMod = modules.find((m: any) => m.id === 'reminders');
 
         if (!rMod || rMod.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Reminder module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<:wrong:1532390628330307634> Reminder module is not enabled.', flags: 64 });
         }
 
         let reminders: IReminder[] = rMod.config?.reminders || [];
@@ -133,10 +133,10 @@ export const RemindersManifest: ModuleManifest = {
           const repeat = interaction.options.getString('repeat') || null;
           const ms = parseMs(timeStr);
 
-          if (ms < 5000) return interaction.reply({ content: '❌ Minimum reminder time is 5 seconds.', flags: 64 });
+          if (ms < 5000) return interaction.reply({ content: '<:wrong:1532390628330307634> Minimum reminder time is 5 seconds.', flags: 64 });
 
           const userReminders = reminders.filter(r => r.userId === interaction.user.id);
-          if (userReminders.length >= 10) return interaction.reply({ content: '❌ You can only have up to 10 active reminders.', flags: 64 });
+          if (userReminders.length >= 10) return interaction.reply({ content: '<:wrong:1532390628330307634> You can only have up to 10 active reminders.', flags: 64 });
 
           const remindAt = new Date(Date.now() + ms);
           const reminder: IReminder = {
@@ -159,39 +159,40 @@ export const RemindersManifest: ModuleManifest = {
           reminderTimers.set(reminder.id, timer);
 
           const embed = new EmbedBuilder()
-            .setTitle('⏰ Reminder Set!')
+            .setTitle('<:timer:1532620491662037123> Reminder Set!')
             .setDescription(`I'll remind you <t:${Math.floor(remindAt.getTime() / 1000)}:R>:\n**${message}**`)
-            .setColor('#4f8cff')
+            .setColor(0x99CC00)
             .addFields(
               { name: 'ID', value: `\`${reminder.id}\``, inline: true },
               { name: 'Repeat', value: repeat || 'None', inline: true }
-            );
+            )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
         if (sub === 'list') {
           const mine = reminders.filter(r => r.userId === interaction.user.id);
-          if (mine.length === 0) return interaction.reply({ content: '📋 You have no active reminders.', flags: 64 });
+          if (mine.length === 0) return interaction.reply({ content: '<:information:1532621274092929124> You have no active reminders.', flags: 64 });
           const lines = mine.map((r, i) => `**${i + 1}.** \`${r.id}\` — <t:${Math.floor(new Date(r.remindAt).getTime() / 1000)}:R> — ${r.message.substring(0, 50)}${r.message.length > 50 ? '...' : ''}`);
-          return interaction.reply({ content: `⏰ **Your Reminders (${mine.length}):**\n${lines.join('\n')}`, flags: 64 });
+          return interaction.reply({ content: `<:timer:1532620491662037123> **Your Reminders (${mine.length}):**\n${lines.join('\n')}`, flags: 64 });
         }
 
         if (sub === 'cancel') {
           const id = interaction.options.getString('id');
           const rem = reminders.find(r => r.id === id && r.userId === interaction.user.id);
-          if (!rem) return interaction.reply({ content: `❌ Reminder \`${id}\` not found.`, flags: 64 });
+          if (!rem) return interaction.reply({ content: `<:wrong:1532390628330307634> Reminder \`${id}\` not found.`, flags: 64 });
           const existing = reminderTimers.get(id);
           if (existing) { clearTimeout(existing); reminderTimers.delete(id); }
           saveReminders(reminders.filter(r => r.id !== id));
-          return interaction.reply({ content: `🗑️ Cancelled reminder \`${id}\`.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Cancelled reminder \`${id}\`.`, flags: 64 });
         }
 
         if (sub === 'snooze') {
           const id = interaction.options.getString('id');
           const timeStr = interaction.options.getString('time');
           const rem = reminders.find(r => r.id === id && r.userId === interaction.user.id);
-          if (!rem) return interaction.reply({ content: `❌ Reminder \`${id}\` not found.`, flags: 64 });
+          if (!rem) return interaction.reply({ content: `<:wrong:1532390628330307634> Reminder \`${id}\` not found.`, flags: 64 });
 
           const existing = reminderTimers.get(id);
           if (existing) { clearTimeout(existing); reminderTimers.delete(id); }
@@ -204,7 +205,7 @@ export const RemindersManifest: ModuleManifest = {
           const timer = setTimeout(() => fireReminder(client, { ...rem, remindAt: newRemindAt }, context), ms);
           reminderTimers.set(id, timer);
 
-          return interaction.reply({ content: `😴 Snoozed reminder \`${id}\` for **${timeStr}**! Will remind you <t:${Math.floor(newRemindAt.getTime() / 1000)}:R>.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Snoozed reminder \`${id}\` for **${timeStr}**! Will remind you <t:${Math.floor(newRemindAt.getTime() / 1000)}:R>.`, flags: 64 });
         }
 
         if (sub === 'clear') {
@@ -214,7 +215,7 @@ export const RemindersManifest: ModuleManifest = {
             if (t) { clearTimeout(t); reminderTimers.delete(r.id); }
           }
           saveReminders(reminders.filter(r => r.userId !== interaction.user.id));
-          return interaction.reply({ content: `🗑️ Cleared all ${mine.length} of your reminders.`, flags: 64 });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Cleared all ${mine.length} of your reminders.`, flags: 64 });
         }
       }
     },

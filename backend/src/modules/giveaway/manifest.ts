@@ -46,21 +46,21 @@ async function endGiveaway(client: any, giveaway: IGiveaway, context: any, reaso
     const winnerMentions = winners.length > 0 ? winners.map((id: string) => `<@${id}>`).join(', ') : 'No valid entries';
 
     // End card — Components V2
-    const { components, flags } = buildRichCard({
-      emoji: '🏆',
+    const { embeds, components, flags } = buildRichCard({
+      emoji: '<:booster:1532621228492460172>',
       title: `Giveaway Ended — ${gw.prize}`,
       accentColor: Colors.GOLD,
       fields: [
-        { label: '🏆 Winners',  value: winnerMentions },
+        { label: '<:member:1532621317487071426> Winners',  value: winnerMentions },
         { label: '📦 Prize',    value: gw.prize },
         { label: '👤 Hosted by', value: gw.hostTag },
-        { label: '📋 Reason',   value: reason },
+        { label: '<:information:1532621274092929124> Reason',   value: reason },
       ],
-      footerNote: `Rage Optimiser Enterprise  •  🎉 Giveaway Manager`,
+      footerNote: `Rage Optimiser Enterprise  •  Giveaway Manager`,
     });
 
     if (msg) {
-      await msg.edit({ components, flags, embeds: [] }).catch(() => {});
+      await msg.edit({ embeds, components, flags }).catch(() => {});
     }
 
     if (winners.length > 0) {
@@ -208,30 +208,30 @@ export const GiveawayManifest: ModuleManifest = {
           const gwId = makeId();
 
           // Giveaway panel — Components V2 with enter button
-          const { components, flags } = buildRichCard({
-            emoji: '🎉',
+          const { embeds, components, flags } = buildRichCard({
+            emoji: '<:booster:1532621228492460172>',
             title: `GIVEAWAY — ${prize}`,
             description: description || undefined,
             accentColor: Colors.GOLD,
             fields: [
-              { label: '🏆 Winners',         value: `**${winnerCount}** winner${winnerCount > 1 ? 's' : ''}` },
-              { label: '⏰ Ends',            value: ts(Math.floor(endsAt.getTime() / 1000)) },
+              { label: '<:member:1532621317487071426> Winners',         value: `**${winnerCount}** winner${winnerCount > 1 ? 's' : ''}` },
+              { label: '<:timer:1532620491662037123> Ends',            value: ts(Math.floor(endsAt.getTime() / 1000)) },
               { label: '👤 Hosted By',       value: `${interaction.user}` },
               ...(requiredRole ? [{ label: '🎭 Required Role', value: `${requiredRole}` }] : []),
               { label: '🆔 Giveaway ID',     value: `\`${gwId}\`` },
             ],
-            footerNote: `Rage Optimiser Enterprise  •  🎉 Giveaway Manager  •  Click Enter to participate!`,
+            footerNote: `Rage Optimiser Enterprise  •  Giveaway Manager  •  Click Enter to participate!`,
             actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
               new ButtonBuilder()
                 .setCustomId(`gw_enter_${gwId}`)
                 .setLabel('Enter Giveaway')
                 .setStyle(ButtonStyle.Success)
-                .setEmoji('🎉')
+                .setEmoji('<:booster:1532621228492460172>')
             ) as any,
           });
 
           await interaction.deferReply({ flags: 64 });
-          const msg = await targetChannel.send({ components, flags });
+          const msg = await targetChannel.send({ embeds, components, flags });
 
           const giveaway: IGiveaway = {
             id: gwId,
@@ -293,13 +293,13 @@ export const GiveawayManifest: ModuleManifest = {
           saveGiveaways(giveaways);
 
           const mentions = newWinners.map((id: string) => `<@${id}>`).join(', ');
-          const { components, flags } = buildStatusCard({
-            emoji: '🔄',
+          const { embeds, components } = buildStatusCard({
+            emoji: '<:booster:1532621228492460172>',
             title: 'Reroll Complete!',
             body: `New winner(s): ${mentions}`,
             accentColor: Colors.BRAND,
           });
-          await interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          await interaction.reply({ embeds, components });
         }
 
         // ─── LIST ─────────────────────────────────────────────────
@@ -307,15 +307,15 @@ export const GiveawayManifest: ModuleManifest = {
           const active = giveaways.filter(g => !g.ended);
           if (active.length === 0) return interaction.reply({ content: '📋 No active giveaways.', flags: 64 });
           const lines = active.map(g =>
-            `🎉 **${g.prize}** — Ends ${ts(Math.floor(new Date(g.endsAt).getTime() / 1000))} — ID: \`${g.id}\``
+            `<:booster:1532621228492460172> **${g.prize}** — Ends ${ts(Math.floor(new Date(g.endsAt).getTime() / 1000))} — ID: \`${g.id}\``
           );
-          const { components, flags } = buildListCard({
-            emoji: '🎉',
+          const { embeds, components } = buildListCard({
+            emoji: '<:booster:1532621228492460172>',
             title: `Active Giveaways (${active.length})`,
             entries: lines,
             accentColor: Colors.GOLD,
           });
-          await interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          await interaction.reply({ embeds, components });
         }
 
         // ─── DELETE ───────────────────────────────────────────────
@@ -338,25 +338,25 @@ export const GiveawayManifest: ModuleManifest = {
           const gw = giveaways.find(g => g.id === id);
           if (!gw) return interaction.reply({ content: `❌ Giveaway \`${id}\` not found.`, flags: 64 });
 
-          const statusIcon = (gw as any).paused ? '⏸️ Paused' : gw.ended ? '✅ Ended' : '🟢 Active';
-          const { components, flags } = buildRichCard({
-            emoji: '🎉',
+          const statusIcon = (gw as any).paused ? '⏸️ Paused' : gw.ended ? '<a:approved:1532390590707142956> Ended' : '<a:approved:1532390590707142956> Active';
+          const { embeds, components, flags } = buildRichCard({
+            emoji: '<:booster:1532621228492460172>',
             title: `Giveaway Info — ${gw.prize}`,
             accentColor: Colors.GOLD,
             fields: [
-              { label: '📋 Status',       value: statusIcon },
-              { label: '🏆 Winners',      value: `${gw.winnerCount}` },
-              { label: '📝 Entries',      value: `${(gw.entries || []).length}` },
+              { label: '<:information:1532621274092929124> Status',       value: statusIcon },
+              { label: '<:member:1532621317487071426> Winners',      value: `${gw.winnerCount}` },
+              { label: '<:information:1532621274092929124> Entries',      value: `${(gw.entries || []).length}` },
               { label: '👤 Host',         value: gw.hostTag },
-              { label: '⏰ Ends / Ended', value: ts(Math.floor(new Date(gw.endsAt).getTime() / 1000), 'F') },
+              { label: '<:timer:1532620491662037123> Ends / Ended', value: ts(Math.floor(new Date(gw.endsAt).getTime() / 1000), 'F') },
               { label: '🆔 ID',           value: `\`${gw.id}\`` },
               ...(gw.ended && gw.winnerIds && gw.winnerIds.length > 0
-                ? [{ label: '🎖️ Winners', value: gw.winnerIds.map((id: string) => `<@${id}>`).join(', ') }]
+                ? [{ label: '<:member:1532621317487071426> Winners', value: gw.winnerIds.map((id: string) => `<@${id}>`).join(', ') }]
                 : []),
             ],
-            footerNote: `Rage Optimiser Enterprise  •  🎉 Giveaway Manager`,
+            footerNote: `Rage Optimiser Enterprise  •  Giveaway Manager`,
           });
-          await interaction.reply({ components, flags });
+          await interaction.reply({ embeds, components, flags });
         }
 
         else if (sub === 'pause') {
@@ -441,36 +441,36 @@ export const GiveawayManifest: ModuleManifest = {
           const lines = past.slice(0, 10).map(g =>
             `🏆 **${g.prize}** — Won by ${g.winnerIds?.map(w => `<@${w}>`).join(', ') || 'no one'} — \`${g.id}\``
           );
-          const { components, flags } = buildListCard({
-            emoji: '⏳',
+          const { embeds, components } = buildListCard({
+            emoji: '<:timer:1532620491662037123>',
             title: 'Giveaway History',
             subtitle: `Last ${Math.min(10, past.length)} giveaways`,
             entries: lines,
             accentColor: Colors.MUTED,
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds, components });
         }
 
         else if (sub === 'stats') {
           const total = giveaways.length;
           const active = giveaways.filter(g => !g.ended).length;
-          const { components, flags } = buildRichCard({
-            emoji: '📊',
+          const { embeds, components, flags } = buildRichCard({
+            emoji: '<:stats:1532429110775779459>',
             title: 'Giveaway System Statistics',
             accentColor: Colors.BRAND,
             fields: [
-              { label: '🟢 Active Giveaways', value: `**${active}**` },
-              { label: '✅ Ended Giveaways',  value: `**${total - active}**` },
+              { label: '<a:approved:1532390590707142956> Active Giveaways', value: `**${active}**` },
+              { label: '<a:approved:1532390590707142956> Ended Giveaways',  value: `**${total - active}**` },
               { label: '📦 Total Hosted',     value: `**${total}**` },
             ],
-            footerNote: `Rage Optimiser Enterprise  •  🎉 Giveaway Manager`,
+            footerNote: `Rage Optimiser Enterprise  •  Giveaway Manager`,
           });
-          return interaction.reply({ components, flags });
+          return interaction.reply({ embeds, components, flags });
         }
       }
     },
     {
-      name: 'button',
+      name: 'button_gw_enter_generic',
       handler: async (client: any, interaction: any, context: any) => {
         if (!interaction.customId?.startsWith('gw_enter_')) return;
         const gwId = interaction.customId.replace('gw_enter_', '');

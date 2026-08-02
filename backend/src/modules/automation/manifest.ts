@@ -37,13 +37,13 @@ export const AutomationManifest: ModuleManifest = {
         const action = interaction.options.getString('action');
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
-        if (!isOwner) return interaction.reply({ content: '🔒 Requires Administrator.', flags: 64 });
+        if (!isOwner) return interaction.reply({ content: '<:wrong:1532390628330307634> Requires Administrator.', flags: 64 });
         const modules = context.getModulesState();
         const autoMod = modules.find((m: any) => m.id === 'automation');
         if (action === 'status' || action === 'list') {
           const roleId = autoMod?.config?.roleId;
           const lines = [
-            `⚡ **Automation Studio Status**`,
+            `<:config:1532425712844144701> **Automation Studio Status**`,
             `- **Module**: \`${autoMod?.status || 'unknown'}\``,
             `- **Auto-Role on Join**: ${roleId ? `<@&${roleId}>` : 'Not configured'}`,
             `- **Progress**: ${autoMod?.progress || 0}%`
@@ -86,10 +86,10 @@ export const AutomationManifest: ModuleManifest = {
         try {
           const content = message.content?.toLowerCase();
           if (content === '!rage') {
-            await message.reply('🔥 **RAGE OPTIMISER Core System is Online!** ⚡\nEverything is operational. Manage your settings on the local Dashboard.');
+            await message.reply('<a:approved:1532390590707142956> **RAGE OPTIMISER Core System is Online!**\nEverything is operational. Manage your settings on the local Dashboard.');
             context.logSyncEvent(`Automation Studio: Handled keyword trigger "!rage" in #${message.channel.name}.`, 'success');
           } else if (content === '!support' || content?.includes('need help')) {
-            await message.reply('🎫 Need help? Please open a support ticket using the ticket board or by running the `/setup-tickets` slash command!');
+            await message.reply('<:information:1532621274092929124> Need help? Please open a support ticket using the ticket board or by running the `/setup-tickets` slash command!');
             context.logSyncEvent(`Automation Studio: Handled keyword trigger for support help in #${message.channel.name}.`, 'info');
           }
         } catch (err) {

@@ -53,7 +53,7 @@ export const AuditManifest: any = {
 
         if (sub === 'timeline') {
           const embed = new EmbedBuilder()
-            .setTitle('📋 Unified Audit Timeline Logs')
+            .setTitle('<:information:1532621274092929124> Unified Audit Timeline Logs')
             .setColor('#7C5CFC')
             .setDescription('• **[10 mins ago]**: Whitelist change: added tarun7358 to bypass list.\n• **[12 mins ago]**: Voice effect sent: soundboard "applause" in Voice #1.\n• **[15 mins ago]**: Config update: welcome channel set to #general.\n• **[20 mins ago]**: Backup created snapshot BP-142.')
             .setTimestamp();
@@ -61,22 +61,22 @@ export const AuditManifest: any = {
         }
 
         if (sub === 'export') {
-          return interaction.reply({ content: '📥 **Audit timeline data exported**: 4 records saved to JSON output format.', flags: 64 });
+          return interaction.reply({ content: '<a:approved:1532390590707142956> **Audit timeline data exported**: 4 records saved to JSON output format.', flags: 64 });
         }
 
         if (sub === 'clear') {
           context.logSyncEvent('Audit timeline database log cleared by owner.', 'warn');
-          return interaction.reply({ content: '🗑️ **Audit Timeline Cleared**: Log entries database has been emptied.' });
+          return interaction.reply({ content: '<a:approved:1532390590707142956> **Audit Timeline Cleared**: Log entries database has been emptied.' });
         }
 
         if (sub === 'filter') {
           const type = interaction.options.getString('type');
-          return interaction.reply({ content: `🔍 **Filtered Timeline** (Filter: \`${type}\`):\nNo matching events found.`, flags: 64 });
+          return interaction.reply({ content: `<:information:1532621274092929124> **Filtered Timeline** (Filter: \`${type}\`):\nNo matching events found.`, flags: 64 });
         }
 
         if (sub === 'stats') {
           const embed = new EmbedBuilder()
-            .setTitle('📊 Audit Logs Distribution')
+            .setTitle('<:stats:1532429110775779459> Audit Logs Distribution')
             .setColor('#7C5CFC')
             .addFields(
               { name: 'Security logs', value: '4 events', inline: true },

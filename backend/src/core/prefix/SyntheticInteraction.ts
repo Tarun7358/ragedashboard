@@ -142,8 +142,65 @@ export class SyntheticInteraction {
 
     const verifiedIcon = '<a:approved:1532390590707142956>';
     const wrongIcon = '<:wrong:1532390628330307634>';
+    const shieldIcon = '<:shield:1532403012751065179>';
+    const timerIcon = '<:timer:1532620491662037123>';
+    const ticketIcon = '<:ticket:1532620631466836021>';
+    const configIcon = '<:config:1532425712844144701>';
+    const memberIcon = '<:member:1532621317487071426>';
+    const botIcon = '<:bot:1532621107746570391>';
+    const infoIcon = '<:information:1532621274092929124>';
+    const statsIcon = '<:stats:1532429110775779459>';
+    const gavelIcon = '<:gavel:1532621057318584380>';
 
-    // Case 1: Convert raw string content to reference Lime single-line card
+    const sanitizeText = (str: string): string => {
+      if (!str || typeof str !== 'string') return str;
+      return str
+        .replace(/<a:verifiedtwitter:\d+>/g, verifiedIcon)
+        .replace(/• ᴵˢ ɢʟᴏʙᴀʟ/g, '')
+        .replace(/✅/g, verifiedIcon)
+        .replace(/❌/g, wrongIcon)
+        .replace(/🔒/g, shieldIcon)
+        .replace(/🛡️/g, shieldIcon)
+        .replace(/⚠️/g, wrongIcon)
+        .replace(/⏳/g, timerIcon)
+        .replace(/⏱️/g, timerIcon)
+        .replace(/🔨/g, gavelIcon)
+        .replace(/📊/g, statsIcon)
+        .replace(/📈/g, statsIcon)
+        .replace(/⚙️/g, configIcon)
+        .replace(/🔧/g, configIcon)
+        .replace(/👥/g, memberIcon)
+        .replace(/👤/g, memberIcon)
+        .replace(/🤖/g, botIcon)
+        .replace(/ℹ️/g, infoIcon)
+        .replace(/📋/g, infoIcon)
+        .replace(/📝/g, infoIcon)
+        .replace(/🎟️/g, ticketIcon)
+        .replace(/🎫/g, ticketIcon)
+        .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|<:shield:\d+>|<:timer:\d+>|[❌✅🔒⚠️🛡️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|<:shield:\d+>|<:timer:\d+>|[❌✅🔒⚠️🛡️])+/g, (match: string) => {
+          if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️')) {
+            return wrongIcon;
+          }
+          if (match.includes('🔒') || match.includes('🛡️') || match.includes('<:shield:')) {
+            return shieldIcon;
+          }
+          return verifiedIcon;
+        });
+    };
+
+    // Filter out invalid or non-ActionRow components
+    if (Array.isArray(copy.components)) {
+      copy.components = copy.components.filter((c: any) => {
+        if (!c) return false;
+        // Keep valid ActionRowBuilders or objects with type === 1 (ActionRow) or components array
+        return typeof c.addComponents === 'function' || c.type === 1 || (Array.isArray(c.components) && !c.accentColor);
+      });
+      if (copy.components.length === 0) {
+        delete copy.components;
+      }
+    }
+
+    // Case 1: Convert raw string content to standard EmbedBuilder
     if (copy.content && (typeof copy.content === 'string') && (!copy.embeds || copy.embeds.length === 0)) {
       const isErr = copy.content.includes('❌') || 
                     copy.content.includes('🔒') || 
@@ -152,63 +209,71 @@ export class SyntheticInteraction {
                     copy.content.toLowerCase().includes('denied') ||
                     copy.content.toLowerCase().includes('invalid');
 
-      const cleanContent = copy.content.replace(/^[❌✅🔒⚠️🧊🌡️🔓🧹🔨✏️⏱️🔕👁️📋📜📈📝🔗🏓🪙🎲😂☀️💡]+\s*/, '').trim();
+      const cleanContent = sanitizeText(copy.content.replace(/^[❌✅🔒⚠️🧊🌡️🔓🧹🔨✏️⏱️🔕👁️📋📜📈📝🔗🏓🪙🎲😂☀️💡]+\s*/, '').trim());
       const icon = isErr ? wrongIcon : verifiedIcon;
-      const color = isErr ? 0xef4444 : 0x84cc16;
+      const color = isErr ? 0xEF4444 : 0x99CC00;
 
       copy.embeds = [
         new EmbedBuilder()
           .setColor(color)
           .setDescription(`${icon} ${this.user} ${cleanContent}`.trim())
+          .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+          .setTimestamp()
       ];
       delete copy.content;
     }
-    // Case 2: Embeds array provided -> Sanitize icons & colors to match Lime GG reference UI
+    // Case 2: Embeds array provided -> Sanitize icons, colors, and footer
     else if (Array.isArray(copy.embeds)) {
       copy.embeds = copy.embeds.map((emb: any) => {
         if (!emb) return emb;
         let json = typeof emb.toJSON === 'function' ? emb.toJSON() : { ...emb };
 
-        // Clean description
-        if (json.description) {
-          json.description = json.description
-            .replace(/<a:verifiedtwitter:\d+>/g, verifiedIcon)
-            .replace(/• ᴵˢ ɢʟᴏʙᴀʟ/g, '')
-            .replace(/✅/g, verifiedIcon)
-            .replace(/❌/g, wrongIcon)
-            .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])+/g, (match: string) => {
-              if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️') || match.includes('🔒')) {
-                return wrongIcon;
-              }
-              return verifiedIcon;
-            });
+        // Clean title & description
+        if (json.title) json.title = sanitizeText(json.title);
+        if (json.description) json.description = sanitizeText(json.description);
+
+        // Clean fields
+        if (Array.isArray(json.fields)) {
+          json.fields = json.fields.map((f: any) => ({
+            ...f,
+            name: sanitizeText(f.name),
+            value: sanitizeText(f.value)
+          }));
         }
 
-        // Clean title
-        if (json.title) {
-          json.title = json.title
-            .replace(/✅/g, verifiedIcon)
-            .replace(/❌/g, wrongIcon)
-            .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])+/g, (match: string) => {
-              if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️') || match.includes('🔒')) {
-                return wrongIcon;
-              }
-              return verifiedIcon;
-            });
+        // Clean author name
+        if (json.author && json.author.name) {
+          json.author.name = sanitizeText(json.author.name);
         }
 
         // Clean footer
-        if (json.footer && json.footer.text) {
-          json.footer.text = json.footer.text.replace(/Unbypassable Security \| Menu Expired Rescue it/gi, 'Rage Optimiser • Security Engine');
+        if (!json.footer || !json.footer.text) {
+          json.footer = { text: 'Rage Optimiser • Unbypassable Security' };
+        } else {
+          json.footer.text = json.footer.text
+            .replace(/Unbypassable Security \| Menu Expired Rescue it/gi, 'Rage Optimiser • Unbypassable Security')
+            .replace(/Rage Optimiser • Security Engine/gi, 'Rage Optimiser • Unbypassable Security')
+            .replace(/Rage Optimiser • IS GLOBAL/gi, 'Rage Optimiser • Unbypassable Security');
         }
 
-        // Replace default violet color #7c5cfc with Lime Green #84cc16
-        if (!json.color || json.color === 0x7c5cfc || json.color === 8150268) {
-          json.color = 0x84cc16;
+        // Replace default violet color #7c5cfc / #84cc16 with primary 0x99CC00
+        if (!json.color || json.color === 0x7c5cfc || json.color === 8150268 || json.color === 0x84cc16) {
+          json.color = 0x99CC00;
         }
 
         return EmbedBuilder.from(json);
       });
+    }
+
+    if (!copy.content && (!copy.embeds || copy.embeds.length === 0) && (!copy.components || copy.components.length === 0) && (!copy.files || copy.files.length === 0)) {
+      copy.embeds = [
+        new EmbedBuilder()
+          .setColor(0x99CC00)
+          .setTitle(`${verifiedIcon} Command Executed`)
+          .setDescription(`Command \`${this.commandName}\` completed successfully.`)
+          .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+          .setTimestamp()
+      ];
     }
 
     return copy;

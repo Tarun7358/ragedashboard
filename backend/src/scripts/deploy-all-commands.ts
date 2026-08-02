@@ -29,7 +29,7 @@ import { SocialUpdatesManifest } from '../modules/social-updates/manifest.js';
 import { AnalyticsManifest } from '../modules/analytics/manifest.js';
 import { AuditManifest } from '../modules/audit/manifest.js';
 import { PaymentManifest } from '../modules/payment/manifest.js';
-
+import { ConfigManifest } from '../modules/config/manifest.js';
 
 dotenv.config();
 
@@ -46,6 +46,7 @@ const clientStr = clientId as string;
 const guildStr = guildId as string;
 
 const manifests = [
+  ConfigManifest,
   SecurityManifest,
   LoggingManifest,
   BackupsManifest,

@@ -2,18 +2,21 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 
 // Helper to get stats
-function getServerStats(guild: any) {
+function getServerStats(guild: any, context?: any) {
+  const registry = context?.getRegistry ? context.getRegistry() : null;
+  const onlineCount = guild.approximatePresenceCount ??
+    (registry?.onlineCount !== undefined ? registry.onlineCount : guild.members.cache.filter((m: any) => Boolean(m.presence && m.presence.status !== 'offline')).size);
   return {
-    totalMembers: guild.memberCount,
-    onlineMembers: guild.members.cache.filter((m: any) => m.presence?.status !== 'offline').size || 0,
+    totalMembers: guild.memberCount || registry?.memberCount || 0,
+    onlineMembers: onlineCount || 0,
     boosts: guild.premiumSubscriptionCount || 0,
-    channels: guild.channels.cache.size
+    channels: guild.channels.cache.size || 0
   };
 }
 
 // Generate the embed based on the page using Lime GG Reference UI
 function generateDashboardEmbed(guild: any, page: string, client: any, context: any) {
-  const stats = getServerStats(guild);
+  const stats = getServerStats(guild, context);
   const verifiedIcon = '<a:approved:1532390590707142956>';
   const shieldIcon = '<:shield:1532403012751065179>';
   
@@ -152,10 +155,10 @@ function generateDashboardComponents(config: any = {}, activePage: string = 'hom
     { id: 'dbn_members', label: 'Members', emoji: safeEmoji(client, ':membericons:', '👥'), page: 'members' },
     { id: 'dbn_messages', label: 'Messages', emoji: safeEmoji(client, ':paperplane:', '💬'), page: 'messages' },
     { id: 'dbn_voice', label: 'Voice', emoji: safeEmoji(client, ':voicechannellimitedgreen:', '🎙️'), page: 'voice' },
-    { id: 'dbn_tickets', label: 'Tickets', emoji: '🎫', page: 'tickets' },
+    { id: 'dbn_tickets', label: 'Tickets', emoji: '<:ticket:1532620631466836021>', page: 'tickets' },
     { id: 'dbn_events', label: 'Events', emoji: safeEmoji(client, ':announcements~3:', '🎉'), page: 'events' },
-    { id: 'dbn_stats', label: 'Statistics', emoji: safeEmoji(client, ':stats:', '📊'), page: 'stats' },
-    { id: 'dbn_more', label: 'More', emoji: '⚙️', page: 'more' }
+    { id: 'dbn_stats', label: 'Statistics', emoji: safeEmoji(client, ':stats:', '<:stats:1532429110775779459>'), page: 'stats' },
+    { id: 'dbn_more', label: 'More', emoji: '<:config:1532425712844144701>', page: 'more' }
   ];
 
   // Filter only enabled pages

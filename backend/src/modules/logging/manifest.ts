@@ -142,10 +142,10 @@ export const LoggingManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
-        if (!isOwner) return interaction.reply({ content: '🔒 Requires Administrator.', flags: 64 });
+        if (!isOwner) return interaction.reply({ content: '<:wrong:1532390628330307634> Requires Administrator.', flags: 64 });
         
         const subcommand = interaction.options.getSubcommand(false);
-        if (!subcommand) return interaction.reply({ content: '❌ Please use a valid subcommand.', flags: 64 });
+        if (!subcommand) return interaction.reply({ content: '<:wrong:1532390628330307634> Please use a valid subcommand.', flags: 64 });
         const modules = context.getModulesState();
         const logMod = modules.find((m: any) => m.id === 'logging');
         const config = logMod?.config || {};
@@ -156,16 +156,16 @@ export const LoggingManifest: ModuleManifest = {
           validCategories.forEach(cat => {
             const catConfig = config[cat];
             if (catConfig && catConfig.enabled && catConfig.channelId) {
-              desc += `🟢 **${cat.toUpperCase()}**: <#${catConfig.channelId}> (\`${catConfig.channelId}\`)\n`;
+              desc += `<a:approved:1532390590707142956> **${cat.toUpperCase()}**: <#${catConfig.channelId}> (\`${catConfig.channelId}\`)\n`;
             } else {
-              desc += `🔴 **${cat.toUpperCase()}**: *Unconfigured / Disabled*\n`;
+              desc += `<:wrong:1532390628330307634> **${cat.toUpperCase()}**: *Unconfigured / Disabled*\n`;
             }
           });
           if (!desc) desc = '*No categories configured.*';
           
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('🛡️ Advanced Logging Center — Telemetry Matrix')
+            .setTitle('<:shield:1532403012751065179> Advanced Logging Center — Telemetry Matrix')
             .setDescription(
               `> ### Server Audit Distribution Configuration\n` +
               `> Real-time event logging pipelines and assigned Discord channel targets.\n\n` +
@@ -179,7 +179,7 @@ export const LoggingManifest: ModuleManifest = {
           const query = interaction.options.getString('query');
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('🔍 Logging Center — Audit Search Results')
+            .setTitle('<:information:1532621274092929124> Logging Center — Audit Search Results')
             .setDescription(`> ### Telemetry Search: \`${query}\`\n\n*No matching telemetry entries found in the active log cache.*`)
             .setFooter({ text: 'Rage Optimiser • Audit Telemetry', iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
@@ -188,7 +188,7 @@ export const LoggingManifest: ModuleManifest = {
           const targetUser = interaction.options.getUser('user');
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('👤 Logging Center — User Audit History')
+            .setTitle('<:member:1532621317487071426> Logging Center — User Audit History')
             .setDescription(`> ### Filter Target: ${targetUser} (\`${targetUser?.id}\`)\n\n*No recent audit log events recorded for this user.*`)
             .setFooter({ text: 'Rage Optimiser • User Audit Log', iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
@@ -196,7 +196,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'timeline') {
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('📈 Logging Center — Live Timeline')
+            .setTitle('<:stats:1532429110775779459> Logging Center — Live Timeline')
             .setDescription(
               `> ### Real-Time Event Stream\n` +
               `> View live visual event timeline graphs on the Web Dashboard under **Logs Timeline**.\n\n` +
@@ -208,7 +208,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'voice') {
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('🔊 Logging Center — Voice Health Telemetry')
+            .setTitle('<:voicechannelgreen:1532425750278438962> Logging Center — Voice Health Telemetry')
             .setDescription(
               `> ### Voice Infrastructure Diagnostics\n` +
               `> All voice channel telemetry pipelines are operating within normal parameters.\n\n` +
@@ -222,7 +222,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'export') {
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('📥 Logging Center — Audit Export')
+            .setTitle('<a:approved:1532390590707142956> Logging Center — Audit Export')
             .setDescription(
               `> ### Log Export Engine\n` +
               `> Telemetry logs can be exported directly via the Web Dashboard.\n\n` +
@@ -234,7 +234,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'categories') {
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('📁 Logging Center — Category Toggles')
+            .setTitle('<:config:1532425712844144701> Logging Center — Category Toggles')
             .setDescription(
               `> ### Valid Audit Categories\n` +
               `\`${validCategories.join('` • `')}\`\n\n` +
@@ -246,7 +246,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'stats') {
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('📊 Logging Center — Performance Stats')
+            .setTitle('<:stats:1532429110775779459> Logging Center — Performance Stats')
             .setDescription(
               `> ### Audit Engine Telemetry\n\n` +
               `\`\`\`\n` +
@@ -263,16 +263,16 @@ export const LoggingManifest: ModuleManifest = {
           const days = interaction.options.getInteger('days');
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('⏱️ Logging Center — Retention Updated')
+            .setTitle('<:config:1532425712844144701> Logging Center — Retention Updated')
             .setDescription(`> ### Log Lifecycle Modified\n> Audit log retention lifecycle window set to **${days} days**.`)
             .setFooter({ text: 'Rage Optimiser • Lifecycle Engine', iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (subcommand === 'live') {
-          context.logSyncEvent('📡 Logging Center: Live logs telemetry test initiated.', 'success');
+          context.logSyncEvent('Logging Center: Live logs telemetry test initiated.', 'success');
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('📡 Logging Center — Live Simulation')
+            .setTitle('<a:approved:1532390590707142956> Logging Center — Live Simulation')
             .setDescription(`> ### Mock Event Telemetry\n> Mock live activity stream initiated. Check your Web Dashboard under **Logs Timeline**.`)
             .setFooter({ text: 'Rage Optimiser • Simulation Engine', iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
@@ -282,12 +282,12 @@ export const LoggingManifest: ModuleManifest = {
           
           let actualCategory = validCategories.find(c => c.toLowerCase() === category);
           if (!actualCategory) {
-             return interaction.reply({ content: `❌ Invalid category. Valid options: ${validCategories.join(', ')}`, flags: 64 });
+             return interaction.reply({ content: `<:wrong:1532390628330307634> Invalid category. Valid options: ${validCategories.join(', ')}`, flags: 64 });
           }
 
           if (subcommand === 'channel') {
             const ch = interaction.options.getChannel('channel');
-            if (!ch) return interaction.reply({ content: '❌ Please specify a channel.', flags: 64 });
+            if (!ch) return interaction.reply({ content: '<:wrong:1532390628330307634> Please specify a channel.', flags: 64 });
             
             const newConfig = { ...config };
             if (!newConfig[actualCategory]) newConfig[actualCategory] = { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
@@ -296,7 +296,7 @@ export const LoggingManifest: ModuleManifest = {
             context.logSyncEvent(`Logging Center: ${actualCategory} log channel updated to #${ch.name} via slash command.`, 'success');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`✅ Logging Channel Updated — ${actualCategory.toUpperCase()}`)
+              .setTitle(`<a:approved:1532390590707142956> Logging Channel Updated — ${actualCategory.toUpperCase()}`)
               .setDescription(`> ### Target Channel Assigned\n> **Category**: \`${actualCategory.toUpperCase()}\` → Target: ${ch} (\`${ch.id}\`)`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
@@ -306,7 +306,7 @@ export const LoggingManifest: ModuleManifest = {
             context.logSyncEvent(`Logging Center: ${actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`${enabled ? '🟢' : '🔴'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${actualCategory.toUpperCase()}`)
+              .setTitle(`${enabled ? '<a:approved:1532390590707142956>' : '<:wrong:1532390628330307634>'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${actualCategory.toUpperCase()}`)
               .setDescription(`> ### Telemetry Pipeline Status\n> Category **${actualCategory.toUpperCase()}** logging is now **${enabled ? 'ENABLED' : 'DISABLED'}**.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
@@ -314,7 +314,7 @@ export const LoggingManifest: ModuleManifest = {
           } else if (subcommand === 'reset') {
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`♻️ Category Reset — ${actualCategory.toUpperCase()}`)
+              .setTitle(`<a:approved:1532390590707142956> Category Reset — ${actualCategory.toUpperCase()}`)
               .setDescription(`> ### Configuration Restored\n> Category **${actualCategory.toUpperCase()}** configuration has been reset to defaults.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
@@ -322,14 +322,14 @@ export const LoggingManifest: ModuleManifest = {
           } else if (subcommand === 'test') {
             const catConfig = config[actualCategory];
             if (!catConfig || !catConfig.channelId) {
-              return interaction.reply({ content: `❌ **${actualCategory}** does not have a configured channel.`, flags: 64 });
+              return interaction.reply({ content: `<:wrong:1532390628330307634> **${actualCategory}** does not have a configured channel.`, flags: 64 });
             }
             try {
               const channel = await interaction.guild?.channels.fetch(catConfig.channelId).catch(() => null);
               if (channel && channel.isTextBased()) {
                 const embed = new EmbedBuilder()
                   .setColor(0x84cc16)
-                  .setTitle(`🧪 Audit Verification — ${actualCategory.toUpperCase()}`)
+                  .setTitle(`<:information:1532621274092929124> Audit Verification — ${actualCategory.toUpperCase()}`)
                   .setDescription(
                     `> ### Test Log Telemetry Event\n` +
                     `> Triggered by ${interaction.user} (\`${interaction.user.id}\`)\n\n` +
@@ -337,18 +337,17 @@ export const LoggingManifest: ModuleManifest = {
                     `**Status**: \`Operational — 200 OK\``
                   )
                   .addFields(
-                    { name: '📡 System Check', value: '```Event Pipeline Validated```', inline: true },
-                    { name: '⏱️ Timestamp', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
+                    { name: '<:shield:1532403012751065179> System Check', value: '```Event Pipeline Validated```', inline: true },
+                    { name: '<:config:1532425712844144701> Timestamp', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
                   )
                   .setFooter({ text: 'Rage Optimiser • Audit System Test', iconURL: client.user?.displayAvatarURL() })
                   .setTimestamp();
                 await channel.send({ embeds: [embed] });
-                await interaction.reply({ content: `✅ Test log dispatched to ${channel}.`, flags: 64 });
               } else {
-                await interaction.reply({ content: `❌ Could not find or access channel ID ${catConfig.channelId}.`, flags: 64 });
+                await interaction.reply({ content: `<:wrong:1532390628330307634> Could not find or access channel ID ${catConfig.channelId}.`, flags: 64 });
               }
             } catch(e) {
-              await interaction.reply({ content: `❌ Error sending test log. Check permissions.`, flags: 64 });
+              await interaction.reply({ content: `<:wrong:1532390628330307634> Error sending test log. Check permissions.`, flags: 64 });
             }
           }
         }

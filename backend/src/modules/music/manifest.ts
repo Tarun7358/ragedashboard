@@ -9,7 +9,7 @@ import {
   TextInputBuilder, 
   TextInputStyle 
 } from 'discord.js';
-import { QueueManager, Track, GuildQueue, getPlaybackProgress } from './QueueManager.js';
+import { QueueManager, Track, GuildQueue, getPlaybackProgress, EMOJIS } from './QueueManager.js';
 import play from 'play-dl';
 import spotifyUrlInfo from 'spotify-url-info';
 
@@ -17,17 +17,75 @@ import spotifyUrlInfo from 'spotify-url-info';
 const spotifyFn = (spotifyUrlInfo.default || spotifyUrlInfo) as any;
 const spotify = spotifyFn(fetch as any);
 
-// Permission checking helper
+function formatSpotifyDuration(spTrack: any): string {
+  const ms = spTrack.duration_ms || spTrack.durationInMs || (typeof spTrack.duration === 'number' ? spTrack.duration : 0);
+  if (!ms) return 'Unknown';
+  const sec = Math.floor(ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function createLimeEmbed(options: {
+  author?: string;
+  title: string;
+  description?: string;
+  fields?: { name: string; value: string; inline?: boolean }[];
+  color?: string;
+  commandBox?: string;
+  thumbnail?: string;
+  footerText?: string;
+  client?: any;
+}) {
+  const embed = new EmbedBuilder()
+    .setAuthor({ name: options.author || 'Rage Optimiser Enterprise • Audio Engine' })
+    .setTitle(options.title.startsWith('###') ? options.title : `### ${options.title}`)
+    .setColor((options.color || '#7C5CFC') as any)
+    .setFooter({ 
+      text: options.footerText || `Rage Optimiser v4.2 • Enterprise Protection`, 
+      iconURL: options.client?.user?.displayAvatarURL?.() 
+    })
+    .setTimestamp();
+
+  if (options.description) {
+    embed.setDescription(options.description);
+  }
+
+  if (options.fields && options.fields.length > 0) {
+    embed.addFields(options.fields);
+  }
+
+  if (options.commandBox) {
+    embed.addFields({
+      name: `${EMOJIS.CONFIG} System Command`,
+      value: `\`\`\`${options.commandBox}\`\`\``,
+      inline: false
+    });
+  }
+
+  if (options.thumbnail && options.thumbnail.startsWith('http')) {
+    embed.setThumbnail(options.thumbnail);
+  }
+
+  return embed;
+}
+
 function checkVoicePermissions(interaction: any, queue: GuildQueue): boolean {
   const memberVoiceChannel = interaction.member?.voice?.channel;
   if (!memberVoiceChannel) {
     interaction.reply({
       embeds: [
-        new EmbedBuilder()
-          .setTitle('⚠️ Voice Connection Required')
-          .setDescription('You must be connected to a voice channel to use music control interfaces.')
-          .setColor('#EF4444')
-          .setFooter({ text: 'Rage Optimiser Security Gate' })
+        createLimeEmbed({
+          author: 'Rage Optimiser Security Gate',
+          title: `${EMOJIS.WRONG} Voice Channel Required`,
+          description: 'You must be connected to an active voice channel in this server to use music control interfaces.',
+          fields: [
+            { name: `${EMOJIS.MEMBER} Member`, value: `\`${interaction.user?.username || 'User'}\``, inline: true },
+            { name: `${EMOJIS.VOICE} Required Action`, value: '`Join a Voice Channel`', inline: true }
+          ],
+          commandBox: 'r!play <song name>',
+          color: '#EF4444'
+        })
       ],
       flags: 64
     }).catch(() => {});
@@ -38,11 +96,16 @@ function checkVoicePermissions(interaction: any, queue: GuildQueue): boolean {
     if (memberVoiceChannel.id !== queue.connection.joinConfig.channelId) {
       interaction.reply({
         embeds: [
-          new EmbedBuilder()
-            .setTitle('⚠️ Voice Channel Mismatch')
-            .setDescription(`You must be in the same voice channel as the bot (**🔊 <#${queue.connection.joinConfig.channelId}>**) to control playback.`)
-            .setColor('#EF4444')
-            .setFooter({ text: 'Rage Optimiser Security Gate' })
+          createLimeEmbed({
+            author: 'Rage Optimiser Security Gate',
+            title: `${EMOJIS.WRONG} Voice Channel Mismatch`,
+            description: `You must be in the same voice channel as the bot to control playback.`,
+            fields: [
+              { name: `${EMOJIS.VOICE} Bot Channel`, value: `<#${queue.connection.joinConfig.channelId}>`, inline: true },
+              { name: `${EMOJIS.MEMBER} Your Channel`, value: `<#${memberVoiceChannel.id}>`, inline: true }
+            ],
+            color: '#EF4444'
+          })
         ],
         flags: 64
       }).catch(() => {});
@@ -80,20 +143,44 @@ export const MusicManifest: ModuleManifest = {
       path: '/stats',
       handler: async (req: any, res: any, context: any) => {
         const queue = QueueManager.getQueue(context.guildId);
+
+        let activeListeners = 0;
+        if (queue.connection?.joinConfig.channelId) {
+          const vc = await context.client?.channels.fetch(queue.connection.joinConfig.channelId).catch(() => null);
+          if (vc) activeListeners = vc.members.filter((m: any) => !m.user.bot).size;
+        }
+
+        const playCountMap = new Map<string, { title: string; playCount: number; duration: string }>();
+        for (const track of queue.playHistory) {
+          const key = track.url || track.title;
+          const existing = playCountMap.get(key);
+          if (existing) {
+            existing.playCount++;
+          } else {
+            playCountMap.set(key, { title: track.title, playCount: 1, duration: track.duration });
+          }
+        }
+        const mostPlayed = Array.from(playCountMap.values())
+          .sort((a, b) => b.playCount - a.playCount)
+          .slice(0, 5);
+
+        const userActionMap = new Map<string, number>();
+        for (const track of queue.playHistory) {
+          if (track.requester && track.requester !== 'Autoplay Engine' && track.requester !== 'Dashboard') {
+            userActionMap.set(track.requester, (userActionMap.get(track.requester) || 0) + 1);
+          }
+        }
+        const activeUsers = Array.from(userActionMap.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([username, actionCount]) => ({ username, actionCount }));
+
         const stats = {
-          totalStreams: queue.playHistory.length + 124,
-          avgListeningTime: '42 mins',
-          activeListeners: queue.connection ? 3 : 0,
-          mostPlayed: [
-            { title: 'Lofi Chill Hip Hop Beat', playCount: 42, duration: '2:45' },
-            { title: 'Synthwave Nightride Theme', playCount: 29, duration: '3:15' },
-            { title: 'Acoustic Guitar Session', playCount: 18, duration: '4:10' }
-          ],
-          activeUsers: [
-            { username: 'rdxyz', actionCount: 84 },
-            { username: 'tarun', actionCount: 42 },
-            { username: 'guest', actionCount: 15 }
-          ]
+          totalStreams: queue.playHistory.length,
+          avgListeningTime: 'N/A',
+          activeListeners,
+          mostPlayed,
+          activeUsers
         };
         res.json(stats);
       }
@@ -215,7 +302,7 @@ export const MusicManifest: ModuleManifest = {
                     title: spTrack.name,
                     artist: spTrack.artists?.[0]?.name || 'Spotify Artist',
                     url: `search:${spTrack.name} ${spTrack.artists?.[0]?.name || ''}`,
-                    duration: '3:30',
+                    duration: formatSpotifyDuration(spTrack),
                     thumbnail: 'https://storage.googleapis.com/pr-newsroom-wp/1/2018/11/Spotify_Logo_CMYK_Green.png',
                     requester: 'Dashboard',
                     platform: 'Spotify'
@@ -340,88 +427,11 @@ export const MusicManifest: ModuleManifest = {
     }
   ],
   events: [
-    {
-      name: 'messageCreate',
-      handler: async (client: any, message: any, context: any) => {
-        if (message.author.bot || !message.guild) return;
+    // NOTE: Music prefix commands (r!play, r!skip, etc.) are handled exclusively
+    // by the clutch-music bot (Rage Music). The Core bot must NOT intercept them.
+    // The messageCreate handler has been removed to prevent double-command execution.
+    // Dashboard REST API routes above handle all web-based music controls.
 
-        console.log(`[DEBUG messageCreate] Message: "${message.content}"`);
-
-        const modules = context.getModulesState ? context.getModulesState() : [];
-        const musicModule = modules.find((m: any) => m.id === 'music');
-        if (!musicModule) {
-          console.log(`[DEBUG messageCreate] Music module not found in modules list.`);
-          return;
-        }
-        if (musicModule.status !== 'enabled') {
-          console.log(`[DEBUG messageCreate] Music module is disabled (status: ${musicModule.status}).`);
-          return;
-        }
-
-        const config = musicModule.config || {};
-        console.log(`[DEBUG messageCreate] Prefix Enabled: ${config.prefixEnabled}, Prefix: ${config.musicPrefix}`);
-        if (config.prefixEnabled === false) {
-          console.log(`[DEBUG messageCreate] Prefix commands are disabled.`);
-          return;
-        }
-
-        const prefix = config.musicPrefix || 'r!';
-        if (!message.content.startsWith(prefix)) return;
-
-        console.log(`[DEBUG messageCreate] Matched prefix. Parsing args for command.`);
-        const args = message.content.slice(prefix.length).trim().split(/ +/);
-        const commandName = args.shift()?.toLowerCase();
-
-        if (!commandName) return;
-
-        const handlerObj = MusicManifest.events?.find(e => e.name === `command_${commandName}`);
-        if (handlerObj && handlerObj.handler) {
-          let repliedMessage: any = null;
-          const mockInteraction = {
-            isCommand: () => true,
-            commandName,
-            options: {
-              getString: (name: string) => args.join(' '), 
-              getInteger: (name: string) => parseInt(args[0]) || 0
-            },
-            guild: message.guild,
-            member: message.member,
-            user: message.author,
-            channel: message.channel,
-            channelId: message.channelId,
-            deferReply: async () => {},
-            reply: async (content: any) => {
-              repliedMessage = await message.channel.send(content).catch((e: any) => {
-                console.error("mockInteraction.reply failed:", e);
-                return null;
-              });
-              return repliedMessage;
-            },
-            editReply: async (content: any) => {
-              if (repliedMessage) {
-                return repliedMessage.edit(content).catch(async (e: any) => {
-                  console.warn("mockInteraction.editReply edit failed, falling back to send:", e);
-                  repliedMessage = await message.channel.send(content).catch((e: any) => console.error("mockInteraction.send fallback failed:", e));
-                  return repliedMessage;
-                });
-              } else {
-                repliedMessage = await message.channel.send(content).catch((e: any) => {
-                  console.error("mockInteraction.editReply send failed:", e);
-                  return null;
-                });
-                return repliedMessage;
-              }
-            },
-          };
-
-          try {
-            await handlerObj.handler(client, mockInteraction, context);
-          } catch (err) {
-            console.error(`Error executing prefix command ${commandName}:`, err);
-          }
-        }
-      }
-    },
     {
       name: 'command_play',
       handler: async (client: any, interaction: any, context: any) => {
@@ -431,10 +441,18 @@ export const MusicManifest: ModuleManifest = {
         if (!interaction.member?.voice?.channel) {
           return interaction.reply({
             embeds: [
-              new EmbedBuilder()
-                .setTitle('⚠️ Voice Channel Required')
-                .setDescription('You must be connected to a voice channel to request songs.')
-                .setColor('#EF4444')
+              createLimeEmbed({
+                author: 'Rage Optimiser Security Gate',
+                title: `${EMOJIS.WRONG} Voice Channel Required`,
+                description: 'You must be connected to an active voice channel to request audio streams.',
+                fields: [
+                  { name: `${EMOJIS.MEMBER} Member`, value: `\`${interaction.user?.username || 'User'}\``, inline: true },
+                  { name: `${EMOJIS.VOICE} Required State`, value: '`Connected to VC`', inline: true }
+                ],
+                commandBox: 'r!play <song name>',
+                color: '#EF4444',
+                client
+              })
             ],
             flags: 64
           });
@@ -459,10 +477,12 @@ export const MusicManifest: ModuleManifest = {
             if (!playlist) {
               return interaction.editReply({
                 embeds: [
-                  new EmbedBuilder()
-                    .setTitle('❌ YouTube Playlist Import Failed')
-                    .setDescription('Could not extract playlist information. Ensure the playlist is public or unlisted.')
-                    .setColor('#EF4444')
+                  createLimeEmbed({
+                    title: `${EMOJIS.WRONG} YouTube Playlist Import Failed`,
+                    description: 'Could not extract playlist information. Ensure the playlist is public or unlisted.',
+                    color: '#EF4444',
+                    client
+                  })
                 ]
               });
             }
@@ -471,10 +491,12 @@ export const MusicManifest: ModuleManifest = {
             if (!allVideos || allVideos.length === 0) {
               return interaction.editReply({
                 embeds: [
-                  new EmbedBuilder()
-                    .setTitle('❌ Playlist Empty')
-                    .setDescription('No videos found in this YouTube playlist.')
-                    .setColor('#EF4444')
+                  createLimeEmbed({
+                    title: `${EMOJIS.WRONG} Playlist Empty`,
+                    description: 'No videos found in this YouTube playlist.',
+                    color: '#EF4444',
+                    client
+                  })
                 ]
               });
             }
@@ -485,7 +507,7 @@ export const MusicManifest: ModuleManifest = {
               url: video.url,
               duration: video.durationRaw || '3:00',
               thumbnail: video.thumbnails?.[0]?.url || '',
-              requester: interaction.user.tag,
+              requester: interaction.user.username ?? interaction.user.tag,
               platform: 'YouTube'
             }));
 
@@ -496,16 +518,25 @@ export const MusicManifest: ModuleManifest = {
 
             return interaction.editReply({
               embeds: [
-                new EmbedBuilder()
-                  .setTitle('📥 YouTube Playlist Imported')
-                  .setDescription(`Successfully imported and Fisher-Yates shuffled **${playlistTracks.length}** tracks from **${playlist.title || 'YouTube Playlist'}**.`)
-                  .setColor('#EF4444')
+                createLimeEmbed({
+                  title: `${EMOJIS.TICKS} YouTube Playlist Enqueued`,
+                  description: `Successfully imported and Fisher-Yates shuffled **${playlistTracks.length}** tracks from **${playlist.title || 'YouTube Playlist'}**.`,
+                  fields: [
+                    { name: `${EMOJIS.TICKS} Playlist Tracks`, value: `\`${playlistTracks.length}\``, inline: true },
+                    { name: `${EMOJIS.CONFIG} Shuffled`, value: '`Yes (Fisher-Yates)`', inline: true },
+                    { name: `${EMOJIS.MEMBER} Imported By`, value: `\`${interaction.user.username}\``, inline: true }
+                  ],
+                  commandBox: 'r!queue',
+                  color: '#7C5CFC',
+                  client
+                })
               ],
               components: [
                 new ActionRowBuilder<ButtonBuilder>().addComponents(
                   new ButtonBuilder()
                     .setCustomId('music_open_controls')
-                    .setLabel('🎛️ Open Controls')
+                    .setLabel('Open Controls')
+                    .setEmoji(EMOJIS.CONFIG)
                     .setStyle(ButtonStyle.Success)
                 )
               ]
@@ -518,10 +549,12 @@ export const MusicManifest: ModuleManifest = {
             if (!tracks || tracks.length === 0) {
               return interaction.editReply({
                 embeds: [
-                  new EmbedBuilder()
-                    .setTitle('❌ Spotify Import Failed')
-                    .setDescription('Could not extract any valid audio tracks from this Spotify link.')
-                    .setColor('#EF4444')
+                  createLimeEmbed({
+                    title: `${EMOJIS.WRONG} Spotify Import Failed`,
+                    description: 'Could not extract any valid audio tracks from this Spotify link.',
+                    color: '#EF4444',
+                    client
+                  })
                 ]
               });
             }
@@ -530,9 +563,9 @@ export const MusicManifest: ModuleManifest = {
               title: spTrack.name,
               artist: spTrack.artists?.[0]?.name || 'Spotify Artist',
               url: `search:${spTrack.name} ${spTrack.artists?.[0]?.name || ''}`,
-              duration: '3:30',
+              duration: formatSpotifyDuration(spTrack),
               thumbnail: 'https://storage.googleapis.com/pr-newsroom-wp/1/2018/11/Spotify_Logo_CMYK_Green.png',
-              requester: interaction.user.tag,
+              requester: interaction.user.username ?? interaction.user.tag,
               platform: 'Spotify'
             }));
 
@@ -545,16 +578,25 @@ export const MusicManifest: ModuleManifest = {
 
             return interaction.editReply({
               embeds: [
-                new EmbedBuilder()
-                  .setTitle(isPlaylistOrAlbum ? '📥 Spotify Playlist Imported' : '📥 Spotify Track Imported')
-                  .setDescription(`Successfully imported ${isPlaylistOrAlbum ? 'and Fisher-Yates shuffled ' : ''}**${spTracks.length}** Spotify tracks.`)
-                  .setColor('#1DB954')
+                createLimeEmbed({
+                  title: isPlaylistOrAlbum ? `${EMOJIS.TICKS} Spotify Playlist Enqueued` : `${EMOJIS.TICKS} Spotify Track Enqueued`,
+                  description: `Successfully imported ${isPlaylistOrAlbum ? 'and Fisher-Yates shuffled ' : ''}**${spTracks.length}** Spotify tracks.`,
+                  fields: [
+                    { name: `${EMOJIS.VOICE} Platform`, value: '`Spotify`', inline: true },
+                    { name: `${EMOJIS.TICKS} Track Count`, value: `\`${spTracks.length}\``, inline: true },
+                    { name: `${EMOJIS.MEMBER} Requester`, value: `\`${interaction.user.username}\``, inline: true }
+                  ],
+                  commandBox: 'r!queue',
+                  color: '#1DB954',
+                  client
+                })
               ],
               components: [
                 new ActionRowBuilder<ButtonBuilder>().addComponents(
                   new ButtonBuilder()
                     .setCustomId('music_open_controls')
-                    .setLabel('🎛️ Open Controls')
+                    .setLabel('Open Controls')
+                    .setEmoji(EMOJIS.CONFIG)
                     .setStyle(ButtonStyle.Success)
                 )
               ]
@@ -566,10 +608,12 @@ export const MusicManifest: ModuleManifest = {
           if (!search || search.length === 0) {
             return interaction.editReply({
               embeds: [
-                new EmbedBuilder()
-                  .setTitle('❌ Search Results Empty')
-                  .setDescription(`No tracks found matching query: \`${query}\``)
-                  .setColor('#EF4444')
+                createLimeEmbed({
+                  title: `${EMOJIS.WRONG} Search Results Empty`,
+                  description: `No tracks found matching query: \`${query}\``,
+                  color: '#EF4444',
+                  client
+                })
               ]
             });
           }
@@ -579,23 +623,34 @@ export const MusicManifest: ModuleManifest = {
             title: trackInfo.title || 'Unknown Title',
             artist: trackInfo.channel?.name || 'Various Artists',
             url: trackInfo.url,
-            duration: trackInfo.durationRaw || '3:00',
+            duration: trackInfo.durationRaw || 'Unknown',
             thumbnail: trackInfo.thumbnails?.[0]?.url || '',
             requester: interaction.user.tag,
-            views: trackInfo.views ? trackInfo.views.toLocaleString() : '1.1M',
-            uploadDate: trackInfo.uploadedAt || '2023-08-25',
+            views: trackInfo.views ? trackInfo.views.toLocaleString() : 'N/A',
+            uploadDate: trackInfo.uploadedAt || 'N/A',
             platform: 'YouTube'
           };
 
           await queue.play(track, interaction.member.voice.channel);
 
-          const embed = new EmbedBuilder()
-            .setTitle('➕ Track Added to Queue')
-            .setDescription(`[${track.title}](${track.url})`)
-            .setColor('#7C5CFC');
-          if (track.thumbnail && track.thumbnail.startsWith('http')) {
-            embed.setThumbnail(track.thumbnail);
-          }
+          const hasValidUrl = track.url && track.url.startsWith('http');
+          const titleLink = hasValidUrl ? `[${track.title}](${track.url})` : `**${track.title}**`;
+
+          const embed = createLimeEmbed({
+            title: `${EMOJIS.SOUNDWAVE} Track Enqueued & Playing`,
+            description: `Successfully added requested audio track to the active queue!\n\n${titleLink}`,
+            fields: [
+              { name: `${EMOJIS.TIMER} Duration`, value: `\`${track.duration}\``, inline: true },
+              { name: `${EMOJIS.VOICE} Platform`, value: `\`${track.platform}\``, inline: true },
+              { name: `${EMOJIS.MEMBER} Requester`, value: `\`${track.requester}\``, inline: true },
+              { name: `${EMOJIS.STATS} Views`, value: `\`${track.views || 'N/A'}\``, inline: true },
+              { name: `${EMOJIS.INFO} Uploaded`, value: `\`${track.uploadDate || 'N/A'}\``, inline: true }
+            ],
+            commandBox: 'r!queue',
+            thumbnail: track.thumbnail,
+            color: '#7C5CFC',
+            client
+          });
 
           return interaction.editReply({
             embeds: [embed],
@@ -603,7 +658,8 @@ export const MusicManifest: ModuleManifest = {
               new ActionRowBuilder<ButtonBuilder>().addComponents(
                 new ButtonBuilder()
                   .setCustomId('music_open_controls')
-                  .setLabel('🎛️ Open Controls')
+                  .setLabel('Open Controls')
+                  .setEmoji(EMOJIS.CONFIG)
                   .setStyle(ButtonStyle.Success)
               )
             ]
@@ -613,10 +669,12 @@ export const MusicManifest: ModuleManifest = {
           console.error(err);
           return interaction.editReply({
             embeds: [
-              new EmbedBuilder()
-                .setTitle('❌ Stream Initialization Error')
-                .setDescription('Failed to fetch video information. Ensure this is not age-restricted or region blocked.')
-                .setColor('#EF4444')
+              createLimeEmbed({
+                title: `${EMOJIS.WRONG} Stream Initialization Error`,
+                description: 'Failed to fetch video information. Ensure this is not age-restricted or region blocked.',
+                color: '#EF4444',
+                client
+              })
             ]
           });
         }
@@ -625,27 +683,27 @@ export const MusicManifest: ModuleManifest = {
     {
       name: 'command_help',
       handler: async (client: any, interaction: any, context: any) => {
-        const embed = new EmbedBuilder()
-          .setTitle('🎵 Rage Music - Command Help')
-          .setDescription('Here is a list of all available prefix commands for the music bot. Use the prefix `r!` before each command.')
-          .setColor('#7C5CFC')
-          .addFields(
-            { name: 'r!play <query>', value: 'Stream audio from YouTube, Spotify, or SoundCloud.', inline: false },
-            { name: 'r!pause', value: 'Pause current song playback.', inline: true },
-            { name: 'r!resume', value: 'Resume paused song playback.', inline: true },
-            { name: 'r!skip', value: 'Skip the currently playing track.', inline: true },
-            { name: 'r!back', value: 'Play the previously played track.', inline: true },
-            { name: 'r!stop', value: 'Stop playback and clear the active queue.', inline: true },
-            { name: 'r!queue', value: 'Show the upcoming track list.', inline: true },
-            { name: 'r!shuffle', value: 'Randomize the order of the queue.', inline: true },
-            { name: 'r!loop <track|queue|off>', value: 'Change loop mode.', inline: true },
-            { name: 'r!autoplay', value: 'Toggle autoplay mode.', inline: true },
-            { name: 'r!volume <percent>', value: 'Adjust playback volume (0-200%).', inline: true },
-            { name: 'r!clear', value: 'Clear the entire upcoming queue.', inline: true },
-            { name: 'r!help', value: 'Display this help message.', inline: true }
-          )
-          .setFooter({ text: 'Rage Optimiser Audio Engine' })
-          .setTimestamp();
+        const embed = createLimeEmbed({
+          title: '🎵 Music Engine Command Reference',
+          description: 'Here is a list of all available high-fidelity audio system commands. Prefix with `r!`.',
+          fields: [
+            { name: '🎵 r!play <query>', value: 'Stream audio from YouTube, Spotify, SoundCloud', inline: true },
+            { name: '⏸️ r!pause', value: 'Pause active stream playback', inline: true },
+            { name: '▶️ r!resume', value: 'Resume paused audio stream', inline: true },
+            { name: '⏭️ r!skip', value: 'Skip current playing track', inline: true },
+            { name: '⏮️ r!back', value: 'Replay previous track from history', inline: true },
+            { name: '🛑 r!stop', value: 'Terminate playback & clear queue', inline: true },
+            { name: '📋 r!queue', value: 'Show upcoming track list', inline: true },
+            { name: '🔀 r!shuffle', value: 'Randomize upcoming queue order', inline: true },
+            { name: '🔁 r!loop <mode>', value: 'Change loop mode (track/queue/off)', inline: true },
+            { name: '📻 r!autoplay', value: 'Toggle auto recommendation engine', inline: true },
+            { name: '🔊 r!volume <0-200>', value: 'Adjust software gain level', inline: true },
+            { name: '🗑️ r!clear', value: 'Flush all upcoming queue items', inline: true }
+          ],
+          commandBox: 'r!play <song name>',
+          color: '#7C5CFC',
+          client
+        });
 
         return interaction.reply({ embeds: [embed] });
       }
@@ -656,7 +714,18 @@ export const MusicManifest: ModuleManifest = {
         const queue = QueueManager.getQueue(interaction.guild.id);
         if (!checkVoicePermissions(interaction, queue)) return;
         queue.pause();
-        await interaction.reply({ content: '⏸️ Playback paused.', flags: 64 });
+        const embed = createLimeEmbed({
+          title: '⏸️ Audio Stream Paused',
+          description: 'Successfully paused current audio playback stream.',
+          fields: [
+            { name: '🎵 Active Track', value: `\`${queue.currentTrack?.title?.slice(0, 30) || 'Current Track'}\``, inline: true },
+            { name: '👤 Paused By', value: `\`${interaction.user.username}\``, inline: true }
+          ],
+          commandBox: 'r!resume',
+          color: '#F59E0B',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
       }
     },
     {
@@ -665,7 +734,18 @@ export const MusicManifest: ModuleManifest = {
         const queue = QueueManager.getQueue(interaction.guild.id);
         if (!checkVoicePermissions(interaction, queue)) return;
         queue.resume();
-        await interaction.reply({ content: '▶️ Playback resumed.', flags: 64 });
+        const embed = createLimeEmbed({
+          title: '▶️ Audio Stream Resumed',
+          description: 'Successfully resumed active audio playback stream.',
+          fields: [
+            { name: '🎵 Active Track', value: `\`${queue.currentTrack?.title?.slice(0, 30) || 'Current Track'}\``, inline: true },
+            { name: '👤 Resumed By', value: `\`${interaction.user.username}\``, inline: true }
+          ],
+          commandBox: 'r!pause',
+          color: '#10B981',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
       }
     },
     {
@@ -673,8 +753,73 @@ export const MusicManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const queue = QueueManager.getQueue(interaction.guild.id);
         if (!checkVoicePermissions(interaction, queue)) return;
+        const currentTitle = queue.currentTrack?.title || 'Current Track';
         queue.skip();
-        await interaction.reply({ content: '⏭️ Track skipped.', flags: 64 });
+        const embed = createLimeEmbed({
+          title: '⏭️ Track Skipped',
+          description: `Skipped **${currentTitle}**! Moving to the next track...`,
+          fields: [
+            { name: '👤 Skipped By', value: `\`${interaction.user.username}\``, inline: true },
+            { name: '📋 Remaining Queue', value: `\`${queue.queue.length} track(s)\``, inline: true }
+          ],
+          commandBox: 'r!queue',
+          color: '#7C5CFC',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
+      }
+    },
+    {
+      name: 'command_back',
+      handler: async (client: any, interaction: any, context: any) => {
+        const queue = QueueManager.getQueue(interaction.guild.id);
+        if (!checkVoicePermissions(interaction, queue)) return;
+        const prevTrack = queue.playHistory[1];
+        if (prevTrack) {
+          if (queue.currentTrack) queue.queue.unshift(queue.currentTrack);
+          queue.queue.unshift(prevTrack);
+          queue.skip();
+          const embed = createLimeEmbed({
+            title: '⏮️ Replaying Previous Track',
+            description: `Replaying **[${prevTrack.title}](${prevTrack.url})** from history!`,
+            fields: [
+              { name: '⏱️ Duration', value: `\`${prevTrack.duration}\``, inline: true },
+              { name: '👤 Requested By', value: `\`${interaction.user.username}\``, inline: true }
+            ],
+            commandBox: 'r!skip',
+            color: '#7C5CFC',
+            client
+          });
+          await interaction.reply({ embeds: [embed] });
+        } else {
+          const embed = createLimeEmbed({
+            title: '❌ No History Found',
+            description: 'There are no previously played tracks in the session history buffer.',
+            color: '#EF4444',
+            client
+          });
+          await interaction.reply({ embeds: [embed] });
+        }
+      }
+    },
+    {
+      name: 'command_autoplay',
+      handler: async (client: any, interaction: any, context: any) => {
+        const queue = QueueManager.getQueue(interaction.guild.id);
+        if (!checkVoicePermissions(interaction, queue)) return;
+        queue.autoplay = !queue.autoplay;
+        await queue.updatePanel(client);
+        const embed = createLimeEmbed({
+          title: '📻 Autoplay Engine Updated',
+          description: 'Automatic recommendation system setting toggled.',
+          fields: [
+            { name: '📻 Autoplay Status', value: queue.autoplay ? '`ENABLED`' : '`DISABLED`', inline: true },
+            { name: '👤 Toggled By', value: `\`${interaction.user.username}\``, inline: true }
+          ],
+          color: queue.autoplay ? '#10B981' : '#6B7280',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
       }
     },
     {
@@ -683,7 +828,18 @@ export const MusicManifest: ModuleManifest = {
         const queue = QueueManager.getQueue(interaction.guild.id);
         if (!checkVoicePermissions(interaction, queue)) return;
         queue.stop();
-        await interaction.reply({ content: '🛑 Playback stopped and queue cleared.', flags: 64 });
+        const embed = createLimeEmbed({
+          title: '🛑 Playback Terminated & Queue Cleared',
+          description: 'Successfully released voice connection resources and flushed the session queue.',
+          fields: [
+            { name: '👤 Executed By', value: `\`${interaction.user.username}\``, inline: true },
+            { name: '📋 Queue Status', value: '`Cleared (0 tracks)`', inline: true }
+          ],
+          commandBox: 'r!play <song name>',
+          color: '#EF4444',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
       }
     },
     {
@@ -693,7 +849,18 @@ export const MusicManifest: ModuleManifest = {
         queue.viewMode = 'queue';
         queue.queuePage = 0;
         await queue.updatePanel(client);
-        await interaction.reply({ content: '📋 Switched Control Panel to Queue View.', flags: 64 });
+        const embed = createLimeEmbed({
+          title: '📋 Playback Queue Panel Active',
+          description: `Control panel view set to **Queue View**.`,
+          fields: [
+            { name: '📋 Upcoming Tracks', value: `\`${queue.queue.length}\``, inline: true },
+            { name: '👤 Requested By', value: `\`${interaction.user.username}\``, inline: true }
+          ],
+          commandBox: 'r!queue',
+          color: '#7C5CFC',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
       }
     },
     {
@@ -706,7 +873,18 @@ export const MusicManifest: ModuleManifest = {
           [queue.queue[i], queue.queue[j]] = [queue.queue[j], queue.queue[i]];
         }
         await queue.updatePanel(client);
-        await interaction.reply({ content: '🔀 Shuffled queue.', flags: 64 });
+        const embed = createLimeEmbed({
+          title: '🔀 Queue Order Randomized',
+          description: `Fisher-Yates algorithm reordered **${queue.queue.length}** upcoming tracks in session queue.`,
+          fields: [
+            { name: '📋 Total Tracks', value: `\`${queue.queue.length}\``, inline: true },
+            { name: '👤 Shuffled By', value: `\`${interaction.user.username}\``, inline: true }
+          ],
+          commandBox: 'r!queue',
+          color: '#7C5CFC',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
       }
     },
     {
@@ -717,7 +895,17 @@ export const MusicManifest: ModuleManifest = {
         const mode = interaction.options.getString('mode') as 'track' | 'queue' | 'off';
         queue.loopMode = mode;
         await queue.updatePanel(client);
-        await interaction.reply({ content: `🔁 Loop mode set to: **${mode}**`, flags: 64 });
+        const embed = createLimeEmbed({
+          title: '🔁 Loop Mode Updated',
+          description: `Playback repeat mode changed.`,
+          fields: [
+            { name: '🔁 Loop Setting', value: `\`${mode.toUpperCase()}\``, inline: true },
+            { name: '👤 Configured By', value: `\`${interaction.user.username}\``, inline: true }
+          ],
+          color: '#7C5CFC',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
       }
     },
     {
@@ -728,7 +916,17 @@ export const MusicManifest: ModuleManifest = {
         const vol = interaction.options.getInteger('percent');
         queue.setVolume(vol);
         await queue.updatePanel(client);
-        await interaction.reply({ content: `🔊 Volume set to **${vol}%**`, flags: 64 });
+        const embed = createLimeEmbed({
+          title: '🔊 Software Gain Level Adjusted',
+          description: `Audio output volume level changed.`,
+          fields: [
+            { name: '🔊 Volume Level', value: `\`${vol}%\``, inline: true },
+            { name: '👤 Adjusted By', value: `\`${interaction.user.username}\``, inline: true }
+          ],
+          color: '#7C5CFC',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
       }
     },
     {
@@ -736,9 +934,21 @@ export const MusicManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const queue = QueueManager.getQueue(interaction.guild.id);
         if (!checkVoicePermissions(interaction, queue)) return;
+        const count = queue.queue.length;
         queue.queue = [];
         await queue.updatePanel(client);
-        await interaction.reply({ content: '🗑️ Queue cleared.', flags: 64 });
+        const embed = createLimeEmbed({
+          title: '🗑️ Session Queue Flushed',
+          description: `Successfully cleared all pending tracks from upcoming queue.`,
+          fields: [
+            { name: '📋 Removed Count', value: `\`${count} track(s)\``, inline: true },
+            { name: '👤 Cleared By', value: `\`${interaction.user.username}\``, inline: true }
+          ],
+          commandBox: 'r!play <song name>',
+          color: '#EF4444',
+          client
+        });
+        await interaction.reply({ embeds: [embed] });
       }
     },
     
@@ -874,6 +1084,16 @@ export const MusicManifest: ModuleManifest = {
         const queue = QueueManager.getQueue(interaction.guildId);
         queue.viewMode = 'settings';
         await queue.updatePanel(client);
+      }
+    },
+    {
+      name: 'button_music_toggle_autoplay',
+      handler: async (client: any, interaction: any, context: any) => {
+        const queue = QueueManager.getQueue(interaction.guildId);
+        if (!checkVoicePermissions(interaction, queue)) return;
+
+        queue.autoplay = !queue.autoplay;
+        await queue.updatePanel(client);
         await interaction.deferUpdate().catch(() => {});
       }
     },
@@ -943,12 +1163,29 @@ export const MusicManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const queue = QueueManager.getQueue(interaction.guildId);
         if (!interaction.member?.voice?.channel) return interaction.reply({ content: '❌ You must be in a voice channel.', flags: 64 });
-        
-        const trending = [
-          { title: 'Chill Lofi Beats', artist: 'Lofi Records', url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk', duration: '3:00', thumbnail: 'https://i.ytimg.com/vi/jfKfPfyJRdk/hqdefault.jpg', requester: interaction.user.tag, platform: 'YouTube' as const }
-        ];
-        await queue.play(trending[0], interaction.member.voice.channel);
-        await interaction.reply({ content: '🔥 Enqueued and playing trending Chill Lofi Beats!', flags: 64 });
+
+        await interaction.deferReply({ flags: 64 }).catch(() => {});
+        try {
+          const search = await play.search('trending music', { limit: 1 }).catch(() => []);
+          if (search && search.length > 0) {
+            const trackInfo = search[0];
+            const track: Track = {
+              title: trackInfo.title || 'Trending Track',
+              artist: trackInfo.channel?.name || 'Various Artists',
+              url: trackInfo.url,
+              duration: trackInfo.durationRaw || 'Unknown',
+              thumbnail: trackInfo.thumbnails?.[0]?.url || '',
+              requester: interaction.user.tag,
+              platform: 'YouTube'
+            };
+            await queue.play(track, interaction.member.voice.channel);
+            return interaction.editReply({ content: `🔥 Enqueued and playing trending track: **[${track.title}](${track.url})**!` });
+          } else {
+            return interaction.editReply({ content: '❌ Could not find trending music right now.' });
+          }
+        } catch (err) {
+          return interaction.editReply({ content: '❌ Failed to fetch trending music.' });
+        }
       }
     },
     {
@@ -1305,7 +1542,7 @@ export const MusicManifest: ModuleManifest = {
                 title: spTrack.name,
                 artist: spTrack.artists?.[0]?.name || 'Spotify Artist',
                 url: `search:${spTrack.name} ${spTrack.artists?.[0]?.name || ''}`,
-                duration: '3:30',
+            duration: formatSpotifyDuration(spTrack),
                 thumbnail: 'https://storage.googleapis.com/pr-newsroom-wp/1/2018/11/Spotify_Logo_CMYK_Green.png',
                 requester: interaction.user.tag,
                 platform: 'Spotify'
@@ -1326,11 +1563,11 @@ export const MusicManifest: ModuleManifest = {
             title: trackInfo.title || 'Unknown Title',
             artist: trackInfo.channel?.name || 'Various Artists',
             url: trackInfo.url,
-            duration: trackInfo.durationRaw || '3:00',
+            duration: trackInfo.durationRaw || 'Unknown',
             thumbnail: trackInfo.thumbnails?.[0]?.url || '',
             requester: interaction.user.tag,
-            views: trackInfo.views ? trackInfo.views.toLocaleString() : '1.1M',
-            uploadDate: trackInfo.uploadedAt || '2023-08-25',
+            views: trackInfo.views ? trackInfo.views.toLocaleString() : 'N/A',
+            uploadDate: trackInfo.uploadedAt || 'N/A',
             platform: 'YouTube'
           };
 
@@ -1359,11 +1596,7 @@ const isMusicBot = (client: any) => client.user?.id === '1520323151928623125';
 
 const checkMusicBot = async (client: any, interaction: any) => {
   if (!isMusicBot(client)) {
-    if (interaction.replied || interaction.deferred) {
-      await interaction.editReply({ content: '❌ Music commands must be run on the dedicated music bot (Rage Music).', components: [] }).catch(() => {});
-    } else {
-      await interaction.reply({ content: '❌ Music commands must be run on the dedicated music bot (Rage Music).', flags: 64 }).catch(() => {});
-    }
+    // Silently return false so the Core bot never sends error messages or responds to music commands
     return false;
   }
   return true;

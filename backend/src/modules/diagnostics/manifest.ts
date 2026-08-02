@@ -1,12 +1,12 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
-import { Colors, Embeds, buildRichCard, buildListCard, buildStatusCard, fmt } from '../../core/UIFactory.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { Colors, Embeds, buildLimeOverviewCard, fmt, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, MEMBER_ICON, BOT_ICON, INFO_ICON } from '../../core/UIFactory.js';
 
 function getPingStatus(ms: number) {
-  if (ms < 100) return '🟢 Ultra Fast';
-  if (ms < 250) return '🟡 Normal';
-  if (ms < 500) return '🟠 Moderate Lag';
-  return '🔴 High Latency';
+  if (ms < 100) return `${VERIFIED_ICON} Ultra Fast`;
+  if (ms < 250) return `${INFO_ICON} Normal`;
+  if (ms < 500) return `${TIMER_ICON} Moderate Lag`;
+  return `${WRONG_ICON} High Latency`;
 }
 
 function createPingEmbed(client: any, roundTripMs: number, wsPingMs: number) {
@@ -15,31 +15,39 @@ function createPingEmbed(client: any, roundTripMs: number, wsPingMs: number) {
   const uptimeSec = process.uptime();
   const startTime = Math.floor((Date.now() - uptimeSec * 1000) / 1000);
   const heapMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
-  const pingColor = ws < 150 ? Colors.SUCCESS : ws < 300 ? Colors.WARN : Colors.DANGER;
 
-  return Embeds.info(
-    '🏓 Latency & Speed Monitor',
-    'Live connection speed, WebSocket latency, and REST API round-trip metrics.',
-    {
-      module: 'system',
-      footer: 'Rage Optimiser Enterprise  •  🔧 Diagnostics  •  Real-time Data',
-      fields: [
-        { name: '📡 WebSocket Latency', value: `\`${ws}ms\` — ${getPingStatus(ws)}`,    inline: true },
-        { name: '⚡ REST Round-Trip',   value: `\`${rt}ms\` — ${getPingStatus(rt)}`,    inline: true },
-        { name: '⏱️ Online Since',      value: `<t:${startTime}:R>`,                    inline: true },
-        { name: '💾 RAM Heap',          value: `\`${heapMb} MB\``,                      inline: true },
-        { name: '🧩 Shard',            value: `\`#0 ONLINE\``,                          inline: true },
-        { name: '⚙️ Node.js',          value: `\`${process.version}\``,                 inline: true },
-      ],
-    }
-  ).setColor(pingColor);
+  return buildLimeOverviewCard({
+    title: 'LATENCY & SPEED MONITOR',
+    subtitle: 'LIVE SYSTEM DIAGNOSTICS & TELEMETRY',
+    color: ws < 150 ? Colors.BRAND : ws < 300 ? Colors.WARN : Colors.DANGER,
+    sections: [
+      {
+        title: '<:link:1532620952087826602> CONNECTION PERFORMANCE',
+        items: [
+          `WebSocket Latency: \`${ws}ms\` — ${getPingStatus(ws)}`,
+          `REST Round-Trip: \`${rt}ms\` — ${getPingStatus(rt)}`,
+          `Online Uptime: <t:${startTime}:R>`
+        ]
+      },
+      {
+        title: '<:config:1532425712844144701> INFRASTRUCTURE & RUNTIME',
+        items: [
+          `RAM Heap Usage: \`${heapMb} MB\``,
+          `Shard Cluster Status: \`#0 ONLINE\``,
+          `Node.js Engine: \`${process.version}\``
+        ]
+      }
+    ],
+    footerText: 'Rage Optimiser Enterprise • Diagnostics Telemetry'
+  });
 }
 
 function createPingComponents(userId: string) {
   const button = new ButtonBuilder()
     .setCustomId(`ping_refresh_${userId}`)
-    .setLabel('🔄 Refresh')
-    .setStyle(ButtonStyle.Primary);
+    .setLabel('Refresh Diagnostics')
+    .setEmoji(VERIFIED_ICON)
+    .setStyle(ButtonStyle.Success);
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(button)];
 }
 
@@ -93,7 +101,7 @@ export const DiagnosticsManifest: ModuleManifest = {
     }
   },
   commands: [
-    { name: 'ping', description: '🏓 Check real-time bot latency, WebSocket speed, and API response time' },
+    { name: 'ping', description: 'Check real-time bot latency, WebSocket speed, and API response time' },
     {
       name: 'diagnostics',
       description: 'System health and diagnostics',
@@ -141,46 +149,65 @@ export const DiagnosticsManifest: ModuleManifest = {
           const modules = context.getModulesState ? context.getModulesState() : [];
           const enabledMods = modules.filter((m: any) => m.status === 'enabled').length;
           const errorMods = modules.filter((m: any) => m.status === 'error').length;
-          const health = errorMods === 0 ? '🟢 Healthy' : `🔴 ${errorMods} error(s)`;
-          const accentColor = errorMods > 0 ? Colors.DANGER : Colors.SUCCESS;
+          const healthStatus = errorMods === 0 ? `${VERIFIED_ICON} System Operational` : `${WRONG_ICON} ${errorMods} Module Error(s)`;
 
-          const { components, flags } = buildRichCard({
-            emoji: '🩺',
-            title: 'Bot Health Report',
-            accentColor,
-            fields: [
-              { label: '🩺 Health',         value: health },
-              { label: '📡 WS Ping',        value: `\`${client.ws.ping}ms\`` },
-              { label: '⏱️ Uptime',         value: `${days}d ${hours}h ${minutes}m` },
-              { label: '🏠 Guilds',         value: `\`${fmt(client.guilds?.cache?.size || 0)}\`` },
-              { label: '👥 Users (cached)', value: `\`${fmt(client.users?.cache?.size || 0)}\`` },
-              { label: '🔌 Modules',        value: `${enabledMods} active${errorMods > 0 ? `, **${errorMods} error**` : ''}` },
-              { label: '💾 Heap Used',      value: `\`${(memory.heapUsed / 1024 / 1024).toFixed(1)} MB\`` },
-              { label: '📈 RSS',            value: `\`${(memory.rss / 1024 / 1024).toFixed(1)} MB\`` },
-              { label: '⚙️ Node.js',        value: `\`${process.version}\`` },
+          const embed = buildLimeOverviewCard({
+            title: 'BOT HEALTH & SYSTEM AUDIT',
+            subtitle: 'REAL-TIME METRICS & CORE STATUS',
+            color: errorMods > 0 ? Colors.DANGER : Colors.BRAND,
+            sections: [
+              {
+                title: '<:shield:1532403012751065179> CORE SECURITY ENGINE STATUS',
+                items: [
+                  `Engine Health: ${healthStatus}`,
+                  `WebSocket Ping: \`${client.ws.ping}ms\``,
+                  `Runtime Uptime: \`${days}d ${hours}h ${minutes}m\``
+                ]
+              },
+              {
+                title: '<:stats:1532429110775779459> CACHE & CONNECTIVITY',
+                items: [
+                  `Connected Guilds: \`${fmt(client.guilds?.cache?.size || 0)}\``,
+                  `Cached User Members: \`${fmt(client.users?.cache?.size || 0)}\``,
+                  `Active Modules: \`${enabledMods} active\`${errorMods > 0 ? ` (**${errorMods} error**)` : ''}`
+                ]
+              },
+              {
+                title: '<:config:1532425712844144701> MEMORY & PLATFORM',
+                items: [
+                  `RAM Heap Used: \`${(memory.heapUsed / 1024 / 1024).toFixed(1)} MB\``,
+                  `Resident Set Size (RSS): \`${(memory.rss / 1024 / 1024).toFixed(1)} MB\``,
+                  `Node Environment: \`${process.version}\``
+                ]
+              }
             ],
-            footerNote: 'Rage Optimiser Enterprise  •  🔧 Diagnostics',
+            footerText: 'Rage Optimiser Enterprise • System Health Center'
           });
-          return interaction.reply({ components, flags });
+          return interaction.reply({ embeds: [embed] });
         }
 
         // ─── MEMORY ──────────────────────────────────────────────
         if (sub === 'memory') {
           const memory = process.memoryUsage();
-          const { components, flags } = buildRichCard({
-            emoji: '💾',
-            title: 'Memory Usage',
-            accentColor: Colors.VOICE,
-            fields: [
-              { label: '💾 Heap Used',      value: `\`${(memory.heapUsed / 1024 / 1024).toFixed(2)} MB\`` },
-              { label: '📦 Heap Total',     value: `\`${(memory.heapTotal / 1024 / 1024).toFixed(2)} MB\`` },
-              { label: '📈 RSS',            value: `\`${(memory.rss / 1024 / 1024).toFixed(2)} MB\`` },
-              { label: '🔌 External',       value: `\`${(memory.external / 1024 / 1024).toFixed(2)} MB\`` },
-              { label: '🗄️ Array Buffers', value: `\`${(memory.arrayBuffers / 1024 / 1024).toFixed(2)} MB\`` },
+          const embed = buildLimeOverviewCard({
+            title: 'MEMORY ALLOCATION & BREAKDOWN',
+            subtitle: 'PROCESS MEMORY USAGE METRICS',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '<:config:1532425712844144701> HEAP & RSS STATS',
+                items: [
+                  `Heap Used: \`${(memory.heapUsed / 1024 / 1024).toFixed(2)} MB\``,
+                  `Heap Total: \`${(memory.heapTotal / 1024 / 1024).toFixed(2)} MB\``,
+                  `Resident Set Size (RSS): \`${(memory.rss / 1024 / 1024).toFixed(2)} MB\``,
+                  `External Allocation: \`${(memory.external / 1024 / 1024).toFixed(2)} MB\``,
+                  `Array Buffers: \`${(memory.arrayBuffers / 1024 / 1024).toFixed(2)} MB\``
+                ]
+              }
             ],
-            footerNote: 'Rage Optimiser Enterprise  •  🔧 Diagnostics',
+            footerText: 'Rage Optimiser Enterprise • Memory Diagnostics'
           });
-          return interaction.reply({ components, flags });
+          return interaction.reply({ embeds: [embed] });
         }
 
         // ─── UPTIME ──────────────────────────────────────────────
@@ -188,146 +215,211 @@ export const DiagnosticsManifest: ModuleManifest = {
           const uptime = process.uptime();
           const startedAt = new Date(Date.now() - uptime * 1000);
           const startSec = Math.floor(startedAt.getTime() / 1000);
-          const { components, flags } = buildRichCard({
-            emoji: '⏱️',
-            title: 'Bot Uptime',
-            accentColor: Colors.SUCCESS,
-            fields: [
-              { label: '🕐 Running Since', value: `<t:${startSec}:R>` },
-              { label: '📅 Started At',   value: `<t:${startSec}:F>` },
+          const embed = buildLimeOverviewCard({
+            title: 'BOT UPTIME & LIFETIME',
+            subtitle: 'PROCESS RUNTIME METRICS',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '⏱️ RUNTIME DURATION',
+                items: [
+                  `Running Duration: <t:${startSec}:R>`,
+                  `Initial Launch Time: <t:${startSec}:F>`
+                ]
+              }
             ],
-            footerNote: 'Rage Optimiser Enterprise  •  🔧 Diagnostics',
+            footerText: 'Rage Optimiser Enterprise • Uptime Diagnostics'
           });
-          return interaction.reply({ components, flags });
+          return interaction.reply({ embeds: [embed] });
         }
 
         // ─── MODULES ─────────────────────────────────────────────
         if (sub === 'modules') {
           const modules = context.getModulesState ? context.getModulesState() : [];
-          const statusIcon = (s: string) => s === 'enabled' ? '🟢' : s === 'ready' ? '🔵' : s === 'error' ? '🔴' : '⚪';
-          const lines = modules.map((m: any) => `${statusIcon(m.status)} **${m.name}** — \`${m.status}\` (${m.progress}%)`);
-          const { components, flags } = buildListCard({
-            emoji: '🔌',
-            title: 'Module Status',
-            subtitle: `${modules.length} total modules`,
-            entries: lines,
-            accentColor: Colors.BRAND,
+          const statusIcon = (s: string) => s === 'enabled' ? VERIFIED_ICON : s === 'ready' ? INFO_ICON : s === 'error' ? WRONG_ICON : '⚪';
+          const lines = modules.map((m: any) => `${statusIcon(m.status)} **${m.name}** — \`${m.status.toUpperCase()}\` (${m.progress}%)`);
+          const embed = buildLimeOverviewCard({
+            title: 'MODULE ENGINE STATUS',
+            subtitle: `${modules.length} TOTAL MODULES INITIALIZED`,
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '🧩 REGISTERED MODULES',
+                items: lines
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Module Health'
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds: [embed] });
         }
 
         // ─── GATEWAY ─────────────────────────────────────────────
         if (sub === 'gateway') {
           const ping = client.ws.ping;
-          const statusStr = ping < 100 ? '🟢 Excellent' : ping < 250 ? '🟡 Good' : ping < 500 ? '🟠 Degraded' : '🔴 Poor';
+          const statusStr = ping < 100 ? `${VERIFIED_ICON} Excellent` : ping < 250 ? `${INFO_ICON} Good` : ping < 500 ? `${TIMER_ICON} Degraded` : `${WRONG_ICON} Poor`;
           const wsStatus = client.ws.status === 0 ? 'READY' : String(client.ws.status);
-          const { components, flags } = buildStatusCard({
-            emoji: '📡',
-            title: 'Discord Gateway Status',
-            body: `Gateway connection is operational.`,
-            accentColor: ping < 150 ? Colors.SUCCESS : ping < 300 ? Colors.WARN : Colors.DANGER,
-            fields: [
-              { label: '📡 WS Ping',   value: `\`${ping}ms\` — ${statusStr}` },
-              { label: '🔗 Status',    value: `\`${wsStatus}\`` },
+          const embed = buildLimeOverviewCard({
+            title: 'DISCORD GATEWAY STATUS',
+            subtitle: 'LIVE WEBSOCKET STREAM HEALTH',
+            color: ping < 150 ? Colors.BRAND : ping < 300 ? Colors.WARN : Colors.DANGER,
+            sections: [
+              {
+                title: '📡 GATEWAY METRICS',
+                items: [
+                  `WebSocket Ping: \`${ping}ms\` — ${statusStr}`,
+                  `Connection Status Code: \`${wsStatus}\``,
+                  `Shard Node: \`#0 ONLINE\``
+                ]
+              }
             ],
+            footerText: 'Rage Optimiser Enterprise • Gateway Diagnostics'
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds: [embed] });
         }
 
         if (sub === 'database') {
           try {
             const db = context.db;
-            const status = db ? '🟢 Connected' : '🔴 Not available';
-            const { components, flags } = buildStatusCard({
-              emoji: '🗄️',
-              title: 'Database Status',
-              body: `SQLite connection is **${db ? 'healthy' : 'unavailable'}**.`,
-              accentColor: db ? Colors.SUCCESS : Colors.DANGER,
-              fields: [{ label: '🔌 Connection', value: status }],
+            const status = db ? `${VERIFIED_ICON} Operational` : `${WRONG_ICON} Offline / Unavailable`;
+            const embed = buildLimeOverviewCard({
+              title: 'DATABASE ENGINE STATUS',
+              subtitle: 'SQLITE INFRASTRUCTURE HEALTH',
+              color: db ? Colors.BRAND : Colors.DANGER,
+              sections: [
+                {
+                  title: '🗄️ PERSISTENCE STATE',
+                  items: [
+                    `Database Connection: ${status}`,
+                    `Engine Type: \`SQLite 3 (Hardened WAL Mode)\``
+                  ]
+                }
+              ],
+              footerText: 'Rage Optimiser Enterprise • Database Diagnostics'
             });
-            return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+            return interaction.reply({ embeds: [embed] });
           } catch {
-            return interaction.reply({ content: '🗄️ **Database Status**: 🔴 Error checking connection.', flags: 64 });
+            return interaction.reply({ content: `${WRONG_ICON} **Database Status**: Error checking connection.`, flags: 64 });
           }
         }
 
         if (sub === 'shards') {
-          const { components, flags } = buildStatusCard({
-            emoji: '🧩',
-            title: 'Shard Status',
-            body: '• Shard **#0**: 🟢 **ONLINE** — Gateway connected',
-            accentColor: Colors.SUCCESS,
+          const embed = buildLimeOverviewCard({
+            title: 'SHARD CLUSTER STATUS',
+            subtitle: 'SHARDING ARCHITECTURE METRICS',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '🧩 ACTIVE SHARDS',
+                items: [
+                  `Shard #0: ${VERIFIED_ICON} ONLINE — Gateway Connected`
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Shard Diagnostics'
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds: [embed] });
         }
 
         if (sub === 'host') {
           const memory = process.memoryUsage();
-          const { components, flags } = buildRichCard({
-            emoji: '💻',
-            title: 'Host Server Information',
-            accentColor: Colors.INFO,
-            fields: [
-              { label: '💿 Platform',  value: `\`Node.js ${process.version}\`` },
-              { label: '📈 RSS',       value: `\`${(memory.rss / 1024 / 1024).toFixed(2)} MB\`` },
-              { label: '💾 Heap',      value: `\`${(memory.heapUsed / 1024 / 1024).toFixed(2)} MB\`` },
+          const embed = buildLimeOverviewCard({
+            title: 'HOST SERVER INFORMATION',
+            subtitle: 'SYSTEM RUNTIME ENVIRONMENT',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '💻 HOST INFRASTRUCTURE',
+                items: [
+                  `Node.js Platform: \`${process.version}\``,
+                  `Resident Set Size (RSS): \`${(memory.rss / 1024 / 1024).toFixed(2)} MB\``,
+                  `Heap Used: \`${(memory.heapUsed / 1024 / 1024).toFixed(2)} MB\``
+                ]
+              }
             ],
-            footerNote: 'Rage Optimiser Enterprise  •  🔧 Diagnostics',
+            footerText: 'Rage Optimiser Enterprise • Host Diagnostics'
           });
-          return interaction.reply({ components, flags });
+          return interaction.reply({ embeds: [embed] });
         }
 
         if (sub === 'api') {
-          const { components, flags } = buildStatusCard({
-            emoji: '🌐',
-            title: 'Discord REST API',
-            body: '**Status**: 🟢 **OPERATIONAL** — HTTPS 200, latency ~85ms',
-            accentColor: Colors.SUCCESS,
+          const embed = buildLimeOverviewCard({
+            title: 'DISCORD REST API HEALTH',
+            subtitle: 'HTTP ENDPOINT AUDIT',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '🌐 REST API METRICS',
+                items: [
+                  `API Status: ${VERIFIED_ICON} OPERATIONAL — HTTPS 200`,
+                  `Estimated Latency: \`~85ms\``
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • API Diagnostics'
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds: [embed] });
         }
 
         if (sub === 'db') {
-          const { components, flags } = buildRichCard({
-            emoji: '🗄️',
-            title: 'Database Performance',
-            accentColor: Colors.SUCCESS,
-            fields: [
-              { label: '⚡ Query Latency',    value: '`0.12ms`' },
-              { label: '🔗 Connections',      value: '`1 active`' },
-              { label: '🗄️ Engine',          value: '`SQLite 3`' },
+          const embed = buildLimeOverviewCard({
+            title: 'DATABASE QUERY PERFORMANCE',
+            subtitle: 'QUERY SPEED & CONNECTIONS',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '⚡ LATENCY & METRICS',
+                items: [
+                  `Query Response Time: \`0.12ms\``,
+                  `Active Pool Connections: \`1 Active\``,
+                  `Storage Engine: \`SQLite 3 WAL\``
+                ]
+              }
             ],
-            footerNote: 'Rage Optimiser Enterprise  •  🔧 Diagnostics',
+            footerText: 'Rage Optimiser Enterprise • DB Telemetry'
           });
-          return interaction.reply({ components, flags });
+          return interaction.reply({ embeds: [embed] });
         }
 
         if (sub === 'cache') {
           const guilds = client.guilds.cache.size;
           const channels = client.channels.cache.size;
           const users = client.users.cache.size;
-          const { components, flags } = buildRichCard({
-            emoji: '💾',
-            title: 'Memory Cache Statistics',
-            accentColor: Colors.VOICE,
-            fields: [
-              { label: '🏠 Guilds Cached',   value: `\`${fmt(guilds)}\`` },
-              { label: '📢 Channels Cached', value: `\`${fmt(channels)}\`` },
-              { label: '👥 Users Cached',    value: `\`${fmt(users)}\`` },
+          const embed = buildLimeOverviewCard({
+            title: 'MEMORY CACHE STATISTICS',
+            subtitle: 'IN-MEMORY COLLECTION CAPACITY',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '📦 CACHED OBJECTS',
+                items: [
+                  `Cached Guilds: \`${fmt(guilds)}\``,
+                  `Cached Channels: \`${fmt(channels)}\``,
+                  `Cached Member Users: \`${fmt(users)}\``
+                ]
+              }
             ],
-            footerNote: 'Rage Optimiser Enterprise  •  🔧 Diagnostics',
+            footerText: 'Rage Optimiser Enterprise • Cache Diagnostics'
           });
-          return interaction.reply({ components, flags });
+          return interaction.reply({ embeds: [embed] });
         }
 
         if (sub === 'events') {
-          const { components, flags } = buildStatusCard({
-            emoji: '📡',
-            title: 'Event Throughput',
-            body: '• **Events last minute**: `12`\n• **Dispatch queue size**: `0`',
-            accentColor: Colors.INFO,
+          const embed = buildLimeOverviewCard({
+            title: 'EVENT THROUGHPUT METRICS',
+            subtitle: 'GATEWAY DISPATCH RATE',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '📡 DISPATCH RATE',
+                items: [
+                  `Events Processed (Last Minute): \`12\``,
+                  `Current Dispatch Queue Size: \`0\``
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Event Telemetry'
           });
-          return interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
+          return interaction.reply({ embeds: [embed] });
         }
       }
     }

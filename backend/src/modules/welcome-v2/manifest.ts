@@ -73,8 +73,8 @@ async function checkBirthdays(client: any, context: any) {
         if (!member) continue;
 
         const defaultEmbed = {
-          title: '🎉 Happy Birthday, {user}!',
-          description: 'Wishing **{userTag}** a fantastic birthday today! 🎂🎈',
+          title: '<:information:1532621274092929124> Happy Birthday, {user}!',
+          description: 'Wishing **{userTag}** a fantastic birthday today!',
           color: '#d4af37',
           showAvatar: true
         };
@@ -100,7 +100,7 @@ async function checkBirthdays(client: any, context: any) {
 
         const content = config.birthdaysMessage 
           ? parseWelcomeVariables(config.birthdaysMessage, member) 
-          : `🎉 Happy Birthday ${member}!`;
+          : `<:information:1532621274092929124> Happy Birthday ${member}!`;
 
         await channel.send({ content, embeds: [embed] });
         context.logSyncEvent(`Welcome vNext: Dispatched birthday greetings for "${userTag(member.user)}"`, 'success');
@@ -299,16 +299,16 @@ export const WelcomeV2Manifest: ModuleManifest = {
               const channel = await member.guild.channels.fetch(config.milestonesChannelId).catch(() => null);
               if (channel && channel.isTextBased()) {
                 const defaultMileEmbed = {
-                  title: '📈 Server Milestone Reached!',
-                  description: 'Congratulations! **{server}** has officially hit **{memberCount}** members! 🎉',
-                  color: '#d4af37'
+                  title: '<:information:1532621274092929124> Server Milestone Reached!',
+                  description: 'Congratulations! **{server}** has officially hit **{memberCount}** members!',
+                  color: '#99CC00'
                 };
                 const embedConfig = config.milestonesEmbed || defaultMileEmbed;
                 const embed = buildWelcomeEmbed(embedConfig, member);
                 
                 const content = config.milestonesMessage
                   ? parseWelcomeVariables(config.milestonesMessage, member)
-                  : `📈 Server Milestone Reached!`;
+                  : `<:information:1532621274092929124> Server Milestone Reached!`;
 
                 await channel.send({
                   content,
@@ -383,9 +383,9 @@ export const WelcomeV2Manifest: ModuleManifest = {
               const channel = await newMember.guild.channels.fetch(config.boostChannelId).catch(() => null);
               if (channel && channel.isTextBased()) {
                 const defaultBoostEmbed = {
-                  title: '✨ Server Boosted!',
-                  description: 'Thank you so much to {user} for boosting the server! 🚀💖',
-                  color: '#f47fff',
+                  title: '<:booster:1532621228492460172> Server Boosted!',
+                  description: 'Thank you so much to {user} for boosting the server!',
+                  color: '#99CC00',
                   showAvatar: true
                 };
                 const embedConfig = config.boostEmbed || defaultBoostEmbed;
@@ -393,7 +393,7 @@ export const WelcomeV2Manifest: ModuleManifest = {
 
                 const content = config.boostMessage
                   ? parseWelcomeVariables(config.boostMessage, newMember)
-                  : `✨ Server Boosted by ${newMember}!`;
+                  : `<:booster:1532621228492460172> Server Boosted by ${newMember}!`;
 
                 await channel.send({
                   content,
@@ -414,16 +414,16 @@ export const WelcomeV2Manifest: ModuleManifest = {
               const channel = await newMember.guild.channels.fetch(config.unboostChannelId).catch(() => null);
               if (channel && channel.isTextBased()) {
                 const defaultUnboostEmbed = {
-                  title: '😢 Server Unboosted',
+                  title: '<:wrong:1532390628330307634> Server Unboosted',
                   description: 'Oh no! **{userTag}** is no longer boosting the server.',
-                  color: '#ff4444'
+                  color: '#99CC00'
                 };
                 const embedConfig = config.unboostEmbed || defaultUnboostEmbed;
                 const embed = buildWelcomeEmbed(embedConfig, newMember);
 
                 const content = config.unboostMessage
                   ? parseWelcomeVariables(config.unboostMessage, newMember)
-                  : `😢 Server Unboosted by ${newMember}`;
+                  : `<:wrong:1532390628330307634> Server Unboosted by ${newMember}`;
 
                 await channel.send({
                   content,
