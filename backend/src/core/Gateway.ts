@@ -850,8 +850,8 @@ export class Gateway {
         return PrefixHelpCenter.handleHelp(message, parsed.args[0]);
       }
 
-      // Lookup Command Metadata
-      const cmdMeta = PrefixRegistry.getCommand(parsed.commandName);
+      // Lookup Command Metadata (use .get() to include the execute function for PrefixRegistry-only commands)
+      const cmdMeta = PrefixRegistry.get(parsed.commandName);
       if (!cmdMeta) {
         // Ignore music commands so the music module can handle them without clashing
         const musicCommands = ['play', 'pause', 'resume', 'skip', 'back', 'stop', 'queue', 'shuffle', 'loop', 'autoplay', 'volume', 'clear'];

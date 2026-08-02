@@ -148,6 +148,19 @@ export const SocialUpdatesManifest: ModuleManifest = {
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
+        } else {
+          const embed = new EmbedBuilder()
+            .setTitle('<:information:1532621274092929124> Social Updates Control Manual')
+            .setDescription([
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates status\`** — View overall system operational status`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates list\`** — List all configured social subscriptions`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates forcecheck\`** — Trigger immediate global update scan`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates validate\`** — Validate health of registered subscriptions`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates statistics\`** — View analytics and delivery telemetry`
+            ].join('\n'))
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
         }
       }
     },
