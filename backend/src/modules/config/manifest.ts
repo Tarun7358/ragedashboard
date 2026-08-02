@@ -1410,7 +1410,8 @@ export function registerConfigCommands(): void {
         if (action === 'add' || action === 'subscribe') {
           const provider = args[2]?.toLowerCase();
           const sourceId = args[3];
-          const channel = message.mentions.channels.first();
+          const channelArg = args[4];
+          const channel = message.mentions.channels.first() || (channelArg ? message.guild!.channels.cache.get(channelArg.replace(/[<#>]/g, '')) : null);
 
           if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channel) {
             return message.reply({

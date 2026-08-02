@@ -148,10 +148,82 @@ export const SocialUpdatesManifest: ModuleManifest = {
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
+        } else if (action === 'add' || action === 'subscribe') {
+          const rawArgs = context?.parsed?.args || [];
+          const provider = interaction.options?.getString?.('provider')?.toLowerCase() || rawArgs[1]?.toLowerCase();
+          const sourceId = interaction.options?.getString?.('source') || rawArgs[2];
+          const channelArg = rawArgs[3];
+          const channel = interaction.options?.getChannel?.('channel') ||
+                          interaction.message?.mentions?.channels?.first() ||
+                          (channelArg && interaction.guild ? interaction.guild.channels.cache.get(channelArg.replace(/[<#>]/g, '')) : null);
+
+          if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channel) {
+            const embed = new EmbedBuilder()
+              .setTitle('<:wrong:1532390628330307634> Invalid Add Syntax')
+              .setDescription([
+                `> **Syntax**: \`r!social-updates add <youtube|instagram> <sourceId_or_handle> <#discordChannel>\``,
+                `> **Example YouTube**: \`r!social-updates add youtube UC_x5XG1OV2P6uZZ5FSM9Ttw #announcements\``,
+                `> **Example Instagram**: \`r!social-updates add instagram nature #social-feed\``
+              ].join('\n'))
+              .setColor(0xEF4444)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            return interaction.reply({ embeds: [embed], flags: 64 });
+          }
+
+          const res = await SubscriptionManager.addSubscription(guildId, provider, sourceId, channel.id, {});
+          if (!res.success) {
+            const embed = new EmbedBuilder()
+              .setTitle('<:wrong:1532390628330307634> Subscription Error')
+              .setDescription(`Failed to add social feed: \`${res.error}\``)
+              .setColor(0xEF4444)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            return interaction.reply({ embeds: [embed], flags: 64 });
+          }
+
+          const embed = new EmbedBuilder()
+            .setTitle('<a:approved:1532390590707142956> Social Account Subscribed')
+            .setDescription(`Successfully subscribed **${provider.toUpperCase()}** account \`${res.subscription?.sourceName || sourceId}\` to **<#${channel.id}>**.`)
+            .addFields(
+              { name: 'Subscription ID', value: `\`${res.subscription?.id}\``, inline: true },
+              { name: 'Platform', value: `\`${provider.toUpperCase()}\``, inline: true },
+              { name: 'Target Channel', value: `<#${channel.id}>`, inline: true }
+            )
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
+        } else if (action === 'remove' || action === 'delete' || action === 'unsubscribe') {
+          const subId = interaction.options?.getString?.('id') || context?.parsed?.args[1];
+          if (!subId) {
+            const embed = new EmbedBuilder()
+              .setTitle('<:wrong:1532390628330307634> Invalid Remove Syntax')
+              .setDescription(`> **Syntax**: \`r!social-updates remove <subscription_id>\`\n> *(Use \`r!social-updates list\` to view IDs)*`)
+              .setColor(0xEF4444)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            return interaction.reply({ embeds: [embed], flags: 64 });
+          }
+
+          const res = await SubscriptionManager.removeSubscription(guildId, subId);
+          if (!res.success) {
+            const embed = new EmbedBuilder()
+              .setTitle('<:wrong:1532390628330307634> Removal Error')
+              .setDescription(`\`${res.error}\``)
+              .setColor(0xEF4444)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            return interaction.reply({ embeds: [embed], flags: 64 });
+          }
+
+          const embed = new EmbedBuilder()
+            .setTitle('<a:approved:1532390590707142956> Social Account Removed')
+            .setDescription(`Successfully deleted social subscription \`${subId}\`.`)
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
         } else {
           const embed = new EmbedBuilder()
             .setTitle('<:information:1532621274092929124> Social Updates Control Manual')
             .setDescription([
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates add <yt|ig> <handle/id> <#channel>\`** — Add new social feed`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates remove <id>\`** — Remove a social subscription`,
               `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates status\`** — View overall system operational status`,
               `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates list\`** — List all configured social subscriptions`,
               `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates forcecheck\`** — Trigger immediate global update scan`,
