@@ -347,5 +347,150 @@ export class PrefixRegistry {
         });
       }
     }
+
+    // Register Music prefix commands (music module uses commands: [] — handlers registered via events)
+    const musicCommands: PrefixCommandMeta[] = [
+      {
+        name: 'play',
+        description: 'Play a song from YouTube, Spotify, SoundCloud or a direct URL.',
+        category: 'Voice',
+        usage: 'r!play <song name | URL>',
+        aliases: ['p'],
+        cooldownSeconds: 2,
+        examples: ['r!play Blinding Lights', 'r!play https://youtu.be/xxx'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'pause',
+        description: 'Pause the currently playing track.',
+        category: 'Voice',
+        usage: 'r!pause',
+        aliases: [],
+        cooldownSeconds: 2,
+        examples: ['r!pause'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'resume',
+        description: 'Resume a paused track.',
+        category: 'Voice',
+        usage: 'r!resume',
+        aliases: [],
+        cooldownSeconds: 2,
+        examples: ['r!resume'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'skip',
+        description: 'Skip the current track and play the next one in queue.',
+        category: 'Voice',
+        usage: 'r!skip',
+        aliases: ['s'],
+        cooldownSeconds: 2,
+        examples: ['r!skip'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'back',
+        description: 'Go back to the previously played track.',
+        category: 'Voice',
+        usage: 'r!back',
+        aliases: ['prev', 'previous'],
+        cooldownSeconds: 2,
+        examples: ['r!back'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'stop',
+        description: 'Stop playback, clear the queue and disconnect from voice.',
+        category: 'Voice',
+        usage: 'r!stop',
+        aliases: ['leave', 'disconnect'],
+        cooldownSeconds: 2,
+        examples: ['r!stop'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'queue',
+        description: 'View the current music playback queue.',
+        category: 'Voice',
+        usage: 'r!queue',
+        aliases: ['q'],
+        cooldownSeconds: 2,
+        examples: ['r!queue'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'shuffle',
+        description: 'Shuffle the current music queue randomly.',
+        category: 'Voice',
+        usage: 'r!shuffle',
+        aliases: [],
+        cooldownSeconds: 2,
+        examples: ['r!shuffle'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'loop',
+        description: 'Toggle loop mode: off, track, or queue.',
+        category: 'Voice',
+        usage: 'r!loop <off|track|queue>',
+        aliases: ['repeat'],
+        cooldownSeconds: 2,
+        examples: ['r!loop track', 'r!loop queue', 'r!loop off'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'volume',
+        description: 'Adjust the playback volume (1-200).',
+        category: 'Voice',
+        usage: 'r!volume <1-200>',
+        aliases: ['vol'],
+        cooldownSeconds: 2,
+        examples: ['r!volume 80'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'nowplaying',
+        description: 'Display the currently playing track with progress bar.',
+        category: 'Voice',
+        usage: 'r!nowplaying',
+        aliases: ['np', 'current'],
+        cooldownSeconds: 2,
+        examples: ['r!nowplaying', 'r!np'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      },
+      {
+        name: 'autoplay',
+        description: 'Toggle autoplay mode to queue related tracks automatically.',
+        category: 'Voice',
+        usage: 'r!autoplay <on|off>',
+        aliases: [],
+        cooldownSeconds: 3,
+        examples: ['r!autoplay on', 'r!autoplay off'],
+        moduleOwnerId: 'music',
+        dangerLevel: 'Low'
+      }
+    ];
+
+    for (const mc of musicCommands) {
+      if (!this.commandsMap.has(mc.name)) {
+        this.commandsMap.set(mc.name, mc);
+        for (const alias of mc.aliases) {
+          this.aliasMap.set(alias, mc.name);
+        }
+      }
+    }
   }
 }
