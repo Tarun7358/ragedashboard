@@ -86,7 +86,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
           const lines = subs.map(s =>
-            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '⏸ Paused'} (Health: **${s.validationStatus}**)`
+            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<:wrong:1532390628330307634> Paused'} (Health: **${s.validationStatus}**)`
           );
           const embed = new EmbedBuilder()
             .setTitle('<:information:1532621274092929124> Social Updates Subscriptions')

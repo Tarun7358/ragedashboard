@@ -1368,8 +1368,8 @@ export function registerConfigCommands(): void {
         }
       }
 
-      // Social Updates Sub-Configuration (`r!config social ...` / `r!config socialupdates ...`)
-      if (moduleName === 'social' || moduleName === 'socialupdates' || moduleName === 'feeds') {
+      // Social Updates Sub-Configuration (`r!config social ...` / `r!config social-updates ...`)
+      if (moduleName === 'social' || moduleName === 'socialupdates' || moduleName === 'social-updates' || moduleName === 'social_updates' || moduleName === 'feeds') {
         const action = args[1]?.toLowerCase();
         const guildId = message.guild!.id;
         await SocialSubscriptionRepository.ensureTable().catch(() => {});
@@ -1514,14 +1514,14 @@ export function registerConfigCommands(): void {
       const extraOwnerRows = hubDb ? await hubDb.all<any>('SELECT * FROM extra_owners WHERE guildId = ?', [message.guild!.id]).catch(() => []) : [];
       const socialSubs = await SocialSubscriptionRepository.findAll(message.guild!.id).catch(() => []);
 
-      const antinukeStatus = isModEnabled('anti-nuke') ? '🟢 Enabled — *Protections Active*' : '🔴 Disabled — *Protections Offline*';
-      const automodStatus = isModEnabled('automod') ? '🟢 Enabled — *Anti-Link & Anti-Spam Active*' : '🔴 Disabled — *Filters Offline*';
-      const ticketStatus = isModEnabled('tickets') ? '🟢 Enabled — *Support Panels Active*' : '🔴 Disabled — *Panels Closed*';
-      const voiceStatus = isModEnabled('voice-protection') ? '🟢 Enabled — *Voice Security Active*' : '🔴 Disabled — *Security Inactive*';
-      const levelingStatus = isModEnabled('leveling') ? '🟢 Enabled — *XP Engine Active*' : '🔴 Disabled — *XP Paused*';
-      const verifStatus = isModEnabled('verification') ? '🟢 Enabled — *Gateway Active*' : '🔴 Disabled — *Gateway Offline*';
-      const socialStatus = socialSubs.length > 0 ? `🟢 Active — *${socialSubs.length} Live Feeds*` : '⚪ Inactive — *No Feeds Configured*';
-      const extraOwnerStatus = extraOwnerRows.length > 0 ? `🟢 Active — *${extraOwnerRows.length} Extra Owners*` : '⚪ None — *Owner Only*';
+      const antinukeStatus = isModEnabled('anti-nuke') ? `${APPROVED_ICON} Enabled — *Protections Active*` : `${WRONG_EMOJI} Disabled — *Protections Offline*`;
+      const automodStatus = isModEnabled('automod') ? `${APPROVED_ICON} Enabled — *Anti-Link & Anti-Spam Active*` : `${WRONG_EMOJI} Disabled — *Filters Offline*`;
+      const ticketStatus = isModEnabled('tickets') ? `${APPROVED_ICON} Enabled — *Support Panels Active*` : `${WRONG_EMOJI} Disabled — *Panels Closed*`;
+      const voiceStatus = isModEnabled('voice-protection') ? `${APPROVED_ICON} Enabled — *Voice Security Active*` : `${WRONG_EMOJI} Disabled — *Security Inactive*`;
+      const levelingStatus = isModEnabled('leveling') ? `${APPROVED_ICON} Enabled — *XP Engine Active*` : `${WRONG_EMOJI} Disabled — *XP Paused*`;
+      const verifStatus = isModEnabled('verification') ? `${APPROVED_ICON} Enabled — *Gateway Active*` : `${WRONG_EMOJI} Disabled — *Gateway Offline*`;
+      const socialStatus = socialSubs.length > 0 ? `${APPROVED_ICON} Active — *${socialSubs.length} Live Feeds*` : `${WRONG_EMOJI} Inactive — *No Feeds Configured*`;
+      const extraOwnerStatus = extraOwnerRows.length > 0 ? `${APPROVED_ICON} Active — *${extraOwnerRows.length} Extra Owners*` : `${WRONG_EMOJI} None — *Owner Only*`;
 
       const curPrefix = PrefixResolver.getPrefix(message.guild!.id);
 
@@ -1529,7 +1529,7 @@ export function registerConfigCommands(): void {
         title: 'Interactive Discord Control Panel',
         description: [
           `👋 Welcome to the **Rage Optimiser In-Discord Control Hub**!\n`,
-          `> ${CONFIG_EMOJI} **Current Server Prefix**: \`${curPrefix}\` | **Live System State**: 🟢 Operational\n`,
+          `> ${CONFIG_EMOJI} **Current Server Prefix**: \`${curPrefix}\` | **Live System State**: ${APPROVED_ICON} Operational\n`,
           `--------------------------------------------------`,
           `• ${SHIELD_EMOJI} **Anti-Nuke**: ${antinukeStatus}`,
           `• <:link:1532620952087826602> **AutoMod**: ${automodStatus}`,
