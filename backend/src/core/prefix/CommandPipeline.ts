@@ -44,7 +44,7 @@ export class CommandPipeline {
   public static async execute(
     message: Message,
     parsed: ParsedCommand,
-    cmdMeta: PrefixCommandMeta,
+    cmdMeta: PrefixCommandMeta & { execute?: Function },
     manifests: any[],
     extra: any
   ): Promise<any> {
@@ -148,6 +148,13 @@ export class CommandPipeline {
           await eventObj.handler(ctx.message.client, syntheticInteraction, ctx.extra);
           break;
         }
+      }
+
+      // Fallback: commands registered directly via PrefixRegistry.register() with their own execute()
+      // (e.g. extraowner, temprole) don't have a manifest event — call execute() directly.
+      if (!handlerFound && typeof cmdMeta.execute === 'function') {
+        handlerFound = true;
+        await cmdMeta.execute(ctx.message, ctx.args, ctx.extra);
       }
 
       this.locks.delete(lockKey);
