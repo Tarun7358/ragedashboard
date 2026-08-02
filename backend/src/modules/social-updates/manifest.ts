@@ -153,9 +153,14 @@ export const SocialUpdatesManifest: ModuleManifest = {
           const provider = interaction.options?.getString?.('provider')?.toLowerCase() || rawArgs[1]?.toLowerCase();
           const sourceId = interaction.options?.getString?.('source') || rawArgs[2];
           const channelArg = rawArgs[3];
-          const channel = interaction.options?.getChannel?.('channel') ||
-                          interaction.message?.mentions?.channels?.first() ||
-                          (channelArg && interaction.guild ? interaction.guild.channels.cache.get(channelArg.replace(/[<#>]/g, '')) : null);
+          const channelId = channelArg ? channelArg.replace(/[<#>]/g, '') : null;
+          let channel = interaction.options?.getChannel?.('channel') ||
+                        interaction.message?.mentions?.channels?.first() ||
+                        (channelId && interaction.guild ? interaction.guild.channels.cache.get(channelId) : null);
+
+          if (!channel && channelId && interaction.guild) {
+            channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+          }
 
           if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channel) {
             const embed = new EmbedBuilder()

@@ -1411,7 +1411,11 @@ export function registerConfigCommands(): void {
           const provider = args[2]?.toLowerCase();
           const sourceId = args[3];
           const channelArg = args[4];
-          const channel = message.mentions.channels.first() || (channelArg ? message.guild!.channels.cache.get(channelArg.replace(/[<#>]/g, '')) : null);
+          const channelId = channelArg ? channelArg.replace(/[<#>]/g, '') : null;
+          let channel = message.mentions.channels.first() || (channelId ? message.guild!.channels.cache.get(channelId) : null);
+          if (!channel && channelId && message.guild) {
+            channel = await message.guild.channels.fetch(channelId).catch(() => null);
+          }
 
           if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channel) {
             return message.reply({
