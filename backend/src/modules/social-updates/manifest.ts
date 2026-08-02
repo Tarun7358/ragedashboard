@@ -153,13 +153,17 @@ export const SocialUpdatesManifest: ModuleManifest = {
           const provider = interaction.options?.getString?.('provider')?.toLowerCase() || rawArgs[1]?.toLowerCase();
           const sourceId = interaction.options?.getString?.('source') || rawArgs[2];
           const channelArg = rawArgs[3];
-          const channelId = channelArg ? channelArg.replace(/[<#>]/g, '') : null;
-          let channel = interaction.options?.getChannel?.('channel') ||
-                        interaction.message?.mentions?.channels?.first() ||
-                        (channelId && interaction.guild ? interaction.guild.channels.cache.get(channelId) : null);
-
-          if (!channel && channelId && interaction.guild) {
-            channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+          let channel = interaction.options?.getChannel?.('channel') || interaction.message?.mentions?.channels?.first();
+          if (!channel && channelArg && interaction.guild) {
+            const cleanId = channelArg.replace(/[<#>]/g, '');
+            channel = interaction.guild.channels.cache.get(cleanId);
+            if (!channel && /^\d{17,20}$/.test(cleanId)) {
+              channel = await interaction.guild.channels.fetch(cleanId).catch(() => null);
+            }
+            if (!channel) {
+              const cleanName = channelArg.toLowerCase().replace(/^#/, '');
+              channel = interaction.guild.channels.cache.find((c: any) => c.name.toLowerCase() === cleanName);
+            }
           }
 
           if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channel) {

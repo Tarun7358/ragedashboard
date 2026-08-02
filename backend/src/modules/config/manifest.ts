@@ -1411,10 +1411,17 @@ export function registerConfigCommands(): void {
           const provider = args[2]?.toLowerCase();
           const sourceId = args[3];
           const channelArg = args[4];
-          const channelId = channelArg ? channelArg.replace(/[<#>]/g, '') : null;
-          let channel = message.mentions.channels.first() || (channelId ? message.guild!.channels.cache.get(channelId) : null);
-          if (!channel && channelId && message.guild) {
-            channel = await message.guild.channels.fetch(channelId).catch(() => null);
+          let channel: any = message.mentions.channels.first();
+          if (!channel && channelArg && message.guild) {
+            const cleanId = channelArg.replace(/[<#>]/g, '');
+            channel = message.guild.channels.cache.get(cleanId);
+            if (!channel && /^\d{17,20}$/.test(cleanId)) {
+              channel = await message.guild.channels.fetch(cleanId).catch(() => null);
+            }
+            if (!channel) {
+              const cleanName = channelArg.toLowerCase().replace(/^#/, '');
+              channel = message.guild.channels.cache.find((c: any) => c.name.toLowerCase() === cleanName);
+            }
           }
 
           if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channel) {
