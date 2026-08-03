@@ -1,6 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
+import { buildLimeOverviewCard, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, SHIELD_ICON, CONFIG_ICON, Colors } from '../../core/UIFactory.js';
 
 // Safe display name helper
 function userTag(user: any): string {
@@ -237,9 +238,49 @@ export const CommunityManifest: ModuleManifest = {
     {
       name: 'command_ping',
       handler: async (client: any, interaction: any, context: any) => {
-        const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
-        const latency = sent.createdTimestamp - interaction.createdTimestamp;
-        await interaction.editReply(`🏓 Pong! Latency is ${latency}ms. API Latency is ${Math.round(client.ws.ping)}ms`);
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferReply().catch(() => {});
+        }
+
+        const wsPing = Math.round(client.ws.ping);
+        const uptimeSec = process.uptime();
+        const startTime = Math.floor((Date.now() - uptimeSec * 1000) / 1000);
+        const heapMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
+
+        const getStatus = (ms: number) => {
+          if (ms < 100) return `${VERIFIED_ICON} Ultra Fast`;
+          if (ms < 250) return `${TIMER_ICON} Normal Speed`;
+          if (ms < 500) return `${TIMER_ICON} Moderate Lag`;
+          return `${WRONG_ICON} High Latency`;
+        };
+
+        const pingColor = wsPing < 150 ? Colors.LIME : wsPing < 300 ? Colors.WARN : Colors.DANGER;
+
+        const embed = buildLimeOverviewCard({
+          title: 'LATENCY & SPEED MONITOR',
+          subtitle: 'LIVE SYSTEM PERFORMANCE',
+          color: pingColor,
+          sections: [
+            {
+              title: `${SHIELD_ICON} GATEWAY & API LATENCY`,
+              items: [
+                `WebSocket Latency: \`${wsPing}ms\` — ${getStatus(wsPing)}`,
+                `Online Since: <t:${startTime}:R>`
+              ]
+            },
+            {
+              title: `${CONFIG_ICON} HARDWARE & NODE ENVIRONMENT`,
+              items: [
+                `RAM Heap: \`${heapMb} MB\``,
+                `Shard: \`#0 ONLINE\``,
+                `Runtime: \`Node.js ${process.version}\``
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Speed Test'
+        });
+
+        await interaction.editReply({ embeds: [embed] }).catch(() => {});
       }
     },
     {

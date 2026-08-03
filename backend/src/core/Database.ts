@@ -203,7 +203,7 @@ export class Database {
       'upm_snapshots', 'guild_warnings', 'guild_verifications',
       'guild_xp', 'guild_economy', 'discord_sessions', 'public_feed',
       'sync_logs', 'schema_migrations', 'tickets', 'ticket_messages',
-      'ticket_panels', 'moderation_cases', 'persistent_music_queues'
+      'ticket_panels', 'moderation_cases', 'persistent_music_queues', 'prebot_whitelist', 'prebot_2fa_config'
     ];
 
     const rows = await this.all<{ name: string }>(
@@ -595,6 +595,26 @@ export class Database {
         permissionsJson TEXT NOT NULL DEFAULT '{"antinukeBypass":true,"manageWhitelists":true,"manageLockdowns":true}',
         addedAt INTEGER NOT NULL,
         PRIMARY KEY (guildId, userId)
+      );`,
+      `CREATE TABLE IF NOT EXISTS prebot_whitelist (
+        guildId TEXT NOT NULL,
+        botId TEXT NOT NULL,
+        botName TEXT NOT NULL,
+        allowedPerms TEXT NOT NULL DEFAULT '[]',
+        createRole INTEGER DEFAULT 1,
+        roleName TEXT,
+        roleColor TEXT,
+        addedBy TEXT NOT NULL,
+        addedAt INTEGER NOT NULL,
+        notes TEXT,
+        PRIMARY KEY (guildId, botId)
+      );`,
+      `CREATE TABLE IF NOT EXISTS prebot_2fa_config (
+        guildId TEXT PRIMARY KEY,
+        ownerId TEXT NOT NULL,
+        secret TEXT NOT NULL,
+        isEnabled INTEGER DEFAULT 0,
+        createdAt INTEGER NOT NULL
       );`,
     ];
 

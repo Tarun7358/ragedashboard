@@ -416,6 +416,9 @@ export const BlacklistManifest: ModuleManifest = {
         const entries: IBlacklistEntry[] = blMod.config?.entries || [];
 
         if (member.user.bot) {
+          const musicClientId = process.env.MUSIC_CLIENT_ID || '1520323151928623125';
+          if (member.id === musicClientId || member.id === client.user?.id) return;
+
           const botEntry = entries.find(e => e.type === 'bot' && e.value === member.user.id);
           if (botEntry) {
             await member.kick('Blacklisted bot').catch(() => {});

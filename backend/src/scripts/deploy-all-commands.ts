@@ -28,8 +28,8 @@ import { JoinRoleAssignmentGuardManifest } from '../modules/join-role-guard/mani
 import { SocialUpdatesManifest } from '../modules/social-updates/manifest.js';
 import { AnalyticsManifest } from '../modules/analytics/manifest.js';
 import { AuditManifest } from '../modules/audit/manifest.js';
-import { PaymentManifest } from '../modules/payment/manifest.js';
 import { ConfigManifest } from '../modules/config/manifest.js';
+import { BotStatsManifest } from '../modules/botstats/manifest.js';
 
 dotenv.config();
 
@@ -72,7 +72,7 @@ const manifests = [
   TicketsV2Manifest,
   AnalyticsManifest,
   AuditManifest,
-  PaymentManifest,
+  BotStatsManifest,
 ];
 
 

@@ -122,6 +122,7 @@ export const ModuleMeta = {
   analytics: { icon: '<:stats:1532429110775779459>', name: 'Analytics', color: Colors.BRAND },
   music: { icon: '<:voicechannelgreen:1532425750278438962>', name: 'Music', color: Colors.MUSIC },
   help: { icon: CONFIG_ICON, name: 'Command Hub', color: Colors.BRAND },
+  prebot_whitelist: { icon: BOT_ICON, name: 'PreBot Whitelist', color: Colors.INFO },
   system: { icon: BOT_ICON, name: 'System', color: Colors.MUTED },
 } as const;
 

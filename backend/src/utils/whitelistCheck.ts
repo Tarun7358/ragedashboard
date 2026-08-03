@@ -85,10 +85,74 @@ export function isModuleBypassed(enabledModules: string[] | undefined, ruleId?: 
 
 import { Database } from '../core/Database.js';
 
+// ── In-Memory High-Speed RAM Cache for Extra Owners ──────────────────────────
+// Key: guildId -> Value: Map<userId, { permissionsJson?: string }>
+const extraOwnersCache = new Map<string, Map<string, { permissionsJson?: string }>>();
+const extraOwnersLoadedGuilds = new Set<string>();
+
+/**
+ * Hydrate or pre-warm extra owners RAM cache from SQLite.
+ * If guildId is provided, loads for that specific guild.
+ * If guildId is omitted, pre-warms all extra owners across all guilds at startup.
+ */
+export async function loadExtraOwnersCache(guildId?: string): Promise<void> {
+  try {
+    const db = Database.getDb();
+    if (!db) return;
+
+    if (guildId) {
+      const rows = await db.all<{ userId: string; permissionsJson: string }>(
+        'SELECT userId, permissionsJson FROM extra_owners WHERE guildId = ?',
+        [guildId]
+      );
+      const guildMap = new Map<string, { permissionsJson?: string }>();
+      for (const row of rows) {
+        guildMap.set(row.userId, { permissionsJson: row.permissionsJson });
+      }
+      extraOwnersCache.set(guildId, guildMap);
+      extraOwnersLoadedGuilds.add(guildId);
+    } else {
+      const rows = await db.all<{ guildId: string; userId: string; permissionsJson: string }>(
+        'SELECT guildId, userId, permissionsJson FROM extra_owners'
+      );
+      extraOwnersCache.clear();
+      extraOwnersLoadedGuilds.clear();
+      for (const row of rows) {
+        if (!extraOwnersCache.has(row.guildId)) {
+          extraOwnersCache.set(row.guildId, new Map());
+        }
+        extraOwnersCache.get(row.guildId)!.set(row.userId, { permissionsJson: row.permissionsJson });
+        extraOwnersLoadedGuilds.add(row.guildId);
+      }
+    }
+  } catch (err: any) {
+    // Non-fatal — fallback to on-demand read if DB schema not ready
+  }
+}
+
+export function updateExtraOwnerInCache(guildId: string, userId: string, permissionsJson?: string): void {
+  if (!extraOwnersCache.has(guildId)) {
+    extraOwnersCache.set(guildId, new Map());
+  }
+  extraOwnersCache.get(guildId)!.set(userId, { permissionsJson: permissionsJson || '{"antinukeBypass":true,"manageWhitelists":true,"manageLockdowns":true}' });
+  extraOwnersLoadedGuilds.add(guildId);
+}
+
+export function removeExtraOwnerFromCache(guildId: string, userId: string): void {
+  const guildMap = extraOwnersCache.get(guildId);
+  if (guildMap) {
+    guildMap.delete(userId);
+  }
+}
+
+export function getExtraOwnerFromCache(guildId: string, userId: string): { permissionsJson?: string } | undefined {
+  return extraOwnersCache.get(guildId)?.get(userId);
+}
+
 export async function isOwnerOrExtraOwner(userId: string, guild: any): Promise<boolean> {
   if (!guild || !userId) return false;
 
-  // 1. Guild Owner or Bot Owner
+  // 1. Guild Owner or Bot Owner (Instant RAM)
   if (userId === guild.ownerId || 
       userId === process.env.OWNER_ID ||
       userId === guild.client?.application?.owner?.id ||
@@ -96,17 +160,14 @@ export async function isOwnerOrExtraOwner(userId: string, guild: any): Promise<b
     return true;
   }
 
-  // 2. Extra Owner Delegated Authority check from SQLite
-  try {
-    const db = Database.getDb();
-    if (db && guild.id) {
-      const extraOwner = await db.get(
-        'SELECT userId FROM extra_owners WHERE guildId = ? AND userId = ?',
-        [guild.id, userId]
-      );
-      if (extraOwner) return true;
+  // 2. Extra Owner check from RAM Cache (Instant 0ms RAM lookup)
+  if (guild.id) {
+    if (!extraOwnersLoadedGuilds.has(guild.id)) {
+      await loadExtraOwnersCache(guild.id);
     }
-  } catch {}
+    const cached = extraOwnersCache.get(guild.id)?.has(userId);
+    if (cached) return true;
+  }
 
   return false;
 }
@@ -119,23 +180,20 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
       userId === guild.client?.application?.owner?.id ||
       ((guild.client?.application?.owner as any)?.members && (guild.client?.application?.owner as any).members.has(userId))) return true;
 
-  // 1b. Extra Owner Delegated Authority check from SQLite
-  try {
-    const db = Database.getDb();
-    if (db && guild.id) {
-      const extraOwner = await db.get<{ permissionsJson: string }>(
-        'SELECT permissionsJson FROM extra_owners WHERE guildId = ? AND userId = ?',
-        [guild.id, userId]
-      );
-      if (extraOwner) {
-        let perms = { antinukeBypass: true, manageWhitelists: true, manageLockdowns: true };
-        try { perms = JSON.parse(extraOwner.permissionsJson); } catch {}
-        if (!ruleId || perms.antinukeBypass) return true;
-      }
+  // 1b. Extra Owner Delegated Authority check from RAM Cache (Instant 0ms RAM lookup)
+  if (guild.id) {
+    if (!extraOwnersLoadedGuilds.has(guild.id)) {
+      await loadExtraOwnersCache(guild.id);
     }
-  } catch {}
+    const extraOwnerData = extraOwnersCache.get(guild.id)?.get(userId);
+    if (extraOwnerData) {
+      let perms = { antinukeBypass: true, manageWhitelists: true, manageLockdowns: true };
+      try { perms = JSON.parse(extraOwnerData.permissionsJson || '{}'); } catch {}
+      if (!ruleId || perms.antinukeBypass) return true;
+    }
+  }
 
-  const modules = context.getModulesState ? context.getModulesState() : [];
+  const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
 
   // 2. Check member_whitelist (users / roles / bots in unified member_whitelist)
   const mwModule = modules.find((m: any) => m && m.id === 'member_whitelist');
@@ -233,8 +291,9 @@ export async function checkBypassImmunity(
     return true;
   }
 
-  // 2. Sibling Music Bot always bypasses
-  if (process.env.MUSIC_CLIENT_ID && userId === process.env.MUSIC_CLIENT_ID) {
+  // 2. Sibling Music Bot & System Bot always bypass
+  const musicClientId = process.env.MUSIC_CLIENT_ID || '1520323151928623125';
+  if (userId === musicClientId || (guild.client?.user && userId === guild.client.user.id)) {
     return true;
   }
 
@@ -243,7 +302,7 @@ export async function checkBypassImmunity(
 }
 
 export function migrateToUnifiedWhitelist(context: any) {
-  const modules = context.getModulesState ? context.getModulesState() : [];
+  const modules = context.getModulesState ? context.getModulesState(context.guildId) : [];
   const mwModule = modules.find((m: any) => m.id === 'member_whitelist');
   if (!mwModule) return;
 

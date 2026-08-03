@@ -430,12 +430,13 @@ export const AutomodManifest: ModuleManifest = {
         }
 
         const config = amMod.config || {};
+        if (config.autoModEnabled === false) return;
         const content = message.content.toLowerCase();
         let deleted = false;
         let reason = '';
 
         // 1. AntiLink Filter with Ignored Channels & Ignored Roles Bypass
-        const blockLinks = config.blockLinks !== false;
+        const blockLinks = config.blockLinks !== false && config.antiLinkEnabled !== false && config.autoModEnabled !== false;
         const LINK_REGEX = /(?:https?:\/\/|ftps?:\/\/|www\.|discord(?:app)?\.(?:gg|com|io|me)|dsc\.gg|disboard\.org|[a-zA-Z0-9-]+\.(?:com|net|org|gg|io|me|xyz|co|uk|in|info|online|site|app|tech|store|top|live|shop|vip|fun|club|pro|link|bot|ai|dev|[a-zA-Z]{2,})\b)/i;
         const hasLink = LINK_REGEX.test(content) || content.includes('http://') || content.includes('https://') || content.includes('www.') || content.includes('discord.gg') || content.includes('discord.com/invite') || content.includes('dsc.gg');
 

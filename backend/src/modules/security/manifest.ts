@@ -1,8 +1,9 @@
 import { AuditLogEvent, PermissionFlagsBits, EmbedBuilder, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { checkWhitelistPermission, getGuildAndCheckPermission, checkBypassImmunity } from '../../utils/whitelistCheck.js';
+import { checkWhitelistPermission, getGuildAndCheckPermission, checkBypassImmunity, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import { isUrlCommandBypass } from '../../utils/antiLinkBypass.js';
 import { Database } from '../../core/Database.js';
+import { getPrebotEntry, PREBOT_PERMISSIONS } from '../prebot_whitelist/manifest.js';
 import { checkRoleAssignment } from '../join-role-guard/manifest.js';
 import { Embeds, Colors, createLimeEmbed, buildLimeOverviewCard, VERIFIED_ICON, WRONG_ICON } from '../../core/UIFactory.js';
 import { normalizeRuleName, DEFAULT_SECURITY_RULES, getEffectiveRule } from '../config/manifest.js';
@@ -1661,7 +1662,8 @@ export const SecurityManifest: ModuleManifest = {
         }
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_channel_delete');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_channel_delete', config);
 
         console.log(`[Anti-Nuke Debug] [channelDelete] Rule config:`, rule);
         if (!rule.enabled) {
@@ -1703,30 +1705,42 @@ export const SecurityManifest: ModuleManifest = {
 
           if (rule.recovery !== false) {
             console.log(`[Anti-Nuke Debug] [channelDelete] Executing recovery (re-creating deleted channel #${channel.name})`);
-            const restoredChannel = await guild.channels.create({
+            const channelOptions: any = {
               name: channel.name,
               type: channel.type,
               parent: channel.parentId || undefined,
+              topic: channel.topic || undefined,
+              nsfw: Boolean(channel.nsfw),
+              rateLimitPerUser: channel.rateLimitPerUser || 0,
               permissionOverwrites: channel.permissionOverwrites?.cache ? Array.from(channel.permissionOverwrites.cache.values()).map((o: any) => ({
                 id: o.id,
                 type: o.type,
                 allow: o.allow?.bitfield ?? o.allow,
                 deny: o.deny?.bitfield ?? o.deny
               })) : []
-            }).catch((err: any) => {
+            };
+
+            if (channel.bitrate) channelOptions.bitrate = channel.bitrate;
+            if (channel.userLimit) channelOptions.userLimit = channel.userLimit;
+
+            const restoredChannel = await guild.channels.create(channelOptions).catch((err: any) => {
               console.error('[Anti-Nuke Debug] [channelDelete] Failed to re-create channel:', err);
               return null;
             });
 
             if (restoredChannel) {
+              if (typeof channel.position === 'number') {
+                await restoredChannel.setPosition(channel.position).catch(() => {});
+              }
+
               if (channel.type === ChannelType.GuildCategory || channel.type === 4) {
                 const orphanedChildren = guild.channels.cache.filter((c: any) => c.parentId === channel.id);
                 for (const [, child] of orphanedChildren) {
                   await (child as any).setParent(restoredChannel.id, { lockPermissions: false }).catch(() => {});
                 }
-                context.logSyncEvent(guild.id, `Restored Category #${channel.name} and re-linked ${orphanedChildren.size} child channels.`, 'success');
+                context.logSyncEvent(guild.id, `Restored Category #${channel.name} at position ${channel.position} and re-linked ${orphanedChildren.size} child channels.`, 'success');
               } else {
-                context.logSyncEvent(guild.id, `Re-created deleted channel #${channel.name}.`, 'success');
+                context.logSyncEvent(guild.id, `Re-created deleted channel #${channel.name} at position #${channel.position}.`, 'success');
               }
             }
           }
@@ -1751,7 +1765,8 @@ export const SecurityManifest: ModuleManifest = {
         if (secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_channel_create');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_channel_create', config);
 
         console.log(`[Anti-Nuke Debug] [channelCreate] Rule config:`, rule);
         if (!rule.enabled) {
@@ -1824,7 +1839,8 @@ export const SecurityManifest: ModuleManifest = {
         if (secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_channel_update');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_channel_update', config);
 
         console.log(`[Anti-Nuke Debug] [channelUpdate] Rule config:`, rule);
         if (!rule.enabled) {
@@ -1910,7 +1926,8 @@ export const SecurityManifest: ModuleManifest = {
         if (secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_role_create');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_role_create', config);
 
         console.log(`[Anti-Nuke Debug] [roleCreate] Rule config:`, rule);
         if (!rule.enabled) {
@@ -1986,7 +2003,8 @@ export const SecurityManifest: ModuleManifest = {
         }
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_role_delete');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_role_delete', config);
 
         console.log(`[Anti-Nuke Debug] [roleDelete] Rule config:`, rule);
         if (!rule.enabled) {
@@ -2027,16 +2045,24 @@ export const SecurityManifest: ModuleManifest = {
 
           if (rule.recovery) {
             console.log(`[Anti-Nuke Debug] [roleDelete] Executing recovery (restoring deleted role)`);
-            await guild.roles.create({
+            const restoredRole = await guild.roles.create({
               name: role.name,
               color: role.color,
               hoist: role.hoist,
               permissions: role.permissions,
               mentionable: role.mentionable,
-              position: role.position,
               reason: 'Anti-Nuke Recovery: Restoring deleted role'
-            }).catch(console.error);
-            context.logSyncEvent(guild.id, `Re-created deleted role "${role.name}".`, 'success');
+            }).catch((err: any) => {
+              console.error('[Anti-Nuke Debug] [roleDelete] Failed to re-create role:', err);
+              return null;
+            });
+
+            if (restoredRole && typeof role.position === 'number') {
+              await restoredRole.setPosition(role.position).catch(() => {});
+              context.logSyncEvent(guild.id, `Re-created deleted role "${role.name}" at hierarchy position #${role.position}.`, 'success');
+            } else if (restoredRole) {
+              context.logSyncEvent(guild.id, `Re-created deleted role "${role.name}".`, 'success');
+            }
           }
 
           console.log(`[Anti-Nuke Debug] [roleDelete] Punishing violator ${executor.username} with action ${rule.action}`);
@@ -2059,7 +2085,8 @@ export const SecurityManifest: ModuleManifest = {
         if (secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_role_update');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_role_update', config);
 
         console.log(`[Anti-Nuke Debug] [roleUpdate] Rule config:`, rule);
         if (!rule.enabled) {
@@ -2139,18 +2166,11 @@ export const SecurityManifest: ModuleManifest = {
         if (secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
+        if (config.antiNukeEnabled === false) return;
         
         try {
           const guild = newMember.guild;
           if (!guild) return;
-
-          // Proactively try to update the live snapshot to match current guild state
-          try {
-            const snap = await captureLiveSnapshot(guild);
-            await saveLiveSnapshotToDb(guild.id, snap);
-          } catch (snapErr) {
-            console.error('Failed to update live snapshot on member update:', snapErr);
-          }
 
           const oldRoles = oldMember.roles.cache;
           const newRoles = newMember.roles.cache;
@@ -2338,7 +2358,8 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_ban');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_ban', config);
 
         if (!rule.enabled) return;
 
@@ -2377,7 +2398,8 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_kick');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_kick', config);
 
         if (!rule.enabled) return;
 
@@ -2459,14 +2481,23 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'guildMemberAdd',
       handler: async (client: any, member: any, context: any) => {
+        if (!member.user.bot) return;
+
+        // System Bot Immunity: Rage Music Bot & Rage Optimiser itself can NEVER be kicked
+        const musicClientId = process.env.MUSIC_CLIENT_ID || '1520323151928623125';
+        if (member.id === musicClientId || member.id === client.user?.id) {
+          context.logSyncEvent(member.guild.id, `🎵 [System Bot Immunity]: Exemption granted for Rage Music Bot / System Bot (${member.user.username}). Bot join permitted.`, 'info');
+          return;
+        }
+
         const modules = context.getModulesState ? context.getModulesState() : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_bot_add');
-
-        if (!member.user.bot) return;
+        if (config.antiNukeEnabled === false) return;
+        if (config.prebotEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_bot_add', config);
         if (!rule.enabled) return;
 
         try {
@@ -2479,20 +2510,170 @@ export const SecurityManifest: ModuleManifest = {
 
           const executor = logEntry.executor;
           if (!executor || executor.id === client.user.id) return;
-          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_bot_add')) return;
 
-          const triggered = checkRateLimit(guild.id, executor.id, 'anti_bot_add', rule.limit, rule.window);
-          if (!triggered) return;
+          // STEP 1: Authority Check — Is executor Owner or ExtraOwner or Whitelisted?
+          const isOwner = await isOwnerOrExtraOwner(executor.id, guild);
+          const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_bot_add');
+          const isTrustedExecutor = isOwner || isBypassed;
 
-          context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized bot add of ${member.user.username} by ${executor.username}.`, 'warn');
+          if (!isTrustedExecutor) {
+            // Executor is UNAUTHORIZED -> Trigger standard Anti-Nuke punishment
+            const triggered = checkRateLimit(guild.id, executor.id, 'anti_bot_add', rule.limit, rule.window);
+            if (!triggered) return;
 
-          if (rule.recovery !== false) {
-            await member.kick('Anti-Nuke Recovery: Kicking unauthorized bot').catch(console.error);
+            context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized bot add of ${member.user.username} by ${executor.username}.`, 'warn');
+
+            if (rule.recovery !== false) {
+              await member.kick('Anti-Nuke Recovery: Kicking unauthorized bot').catch(console.error);
+            }
+
+            await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Bot Addition (${member.user.username})`, rule.action, config, context, 'anti_bot_add');
+            return;
           }
 
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Bot Addition (${member.user.username})`, rule.action, config, context, 'anti_bot_add');
+          // STEP 2: Executor IS Trusted -> Check PreBot Whitelist Registry
+          const prebotEntry = await getPrebotEntry(guild.id, member.id);
+
+          if (!prebotEntry) {
+            // Bot is NOT Pre-Whitelisted -> Kick bot & send warning DM to executor
+            context.logSyncEvent(guild.id, `⚠️ [PreBot Whitelist Violation]: Bot ${member.user.username} (${member.id}) was invited by trusted user ${executor.username} but was NOT pre-registered. Kicking bot.`, 'warn');
+
+            await member.kick('PreBot Whitelist Security: Bot is not pre-registered').catch(console.error);
+
+            // Send DM warning to the trusted executor
+            try {
+              const warningDmEmbed = new EmbedBuilder()
+                .setTitle(`${WRONG_ICON} PreBot Whitelist Security Alert`)
+                .setColor(Colors.WARN)
+                .setDescription([
+                  `**RAGE OPTIMISER** • **${guild.name}**\n`,
+                  `> Bot **<@${member.id}>** (\`${member.user.username}\`) attempted to join **${guild.name}** but was **NOT pre-registered** in the PreBot Whitelist.`,
+                  `> Under Rage Optimiser's **Zero-Trust Security Architecture**, all bots must be pre-approved with an explicit permission profile prior to joining.\n`,
+                  `**Action Taken**: Bot was automatically removed from the server.`,
+                  `\n**How to Approve This Bot**:`,
+                  `Run the command below in your server before inviting the bot again:`,
+                  `> \`/prebot add bot:@${member.user.username}\` or \`r!prebot add ${member.id}\``
+                ].join('\n'))
+                .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
+                .setTimestamp();
+
+              await executor.send({ embeds: [warningDmEmbed] }).catch(() => {});
+            } catch (dmErr) {}
+
+            return;
+          }
+
+          // STEP 3: Bot IS Pre-Whitelisted -> Enforce Permission Profile
+          context.logSyncEvent(guild.id, `🛡️ [PreBot Whitelist Verified]: Approved bot ${member.user.username} (${member.id}) joined. Applying permission profile...`, 'success');
+
+          // Strip any non-managed roles the bot received on join
+          const botRoles = member.roles.cache.filter((r: any) => !r.managed && r.id !== guild.id);
+          if (botRoles.size > 0) {
+            for (const [rId] of botRoles) {
+              await member.roles.remove(rId, 'PreBot Security: Stripping unauthorized join roles').catch(() => {});
+            }
+          }
+
+          // Handle Dedicated Trusted Role creation & assignment
+          if (prebotEntry.createRole) {
+            const roleName = prebotEntry.roleName || `[Trusted] ${prebotEntry.botName}`;
+            let trustedRole = guild.roles.cache.find((r: any) => r.name === roleName);
+
+            // Calculate bitfield flags for allowed permissions
+            let permBitfield = 0n;
+            for (const pKey of prebotEntry.allowedPerms) {
+              const item = PREBOT_PERMISSIONS.find(i => i.key === pKey);
+              if (item) {
+                permBitfield |= item.flag;
+              }
+            }
+
+            if (!trustedRole) {
+              trustedRole = await guild.roles.create({
+                name: roleName,
+                color: prebotEntry.roleColor || '#99CC00',
+                permissions: permBitfield,
+                reason: `PreBot Whitelist: Dedicated trusted role for ${prebotEntry.botName}`
+              }).catch((e: any) => {
+                console.error('[PreBot] Failed to create role:', e);
+                return null;
+              });
+            } else {
+              // Update permissions on existing role
+              await trustedRole.setPermissions(permBitfield, 'PreBot Whitelist: Synchronizing profile permissions').catch(() => {});
+            }
+
+            if (trustedRole) {
+              await member.roles.add(trustedRole.id, 'PreBot Whitelist: Assigning dedicated trusted role').catch(() => {});
+            }
+          }
+
+          context.logSyncEvent(guild.id, `✅ [PreBot Whitelist Active]: Bot ${member.user.username} verified and secured under Zero-Trust policy.`, 'success');
         } catch (err) {
-          console.error(err);
+          console.error('[PreBot Security] Error handling guildMemberAdd:', err);
+        }
+      }
+    },
+    {
+      name: 'guildMemberUpdate',
+      handler: async (client: any, oldMember: any, newMember: any, context: any) => {
+        if (!newMember.user.bot) return;
+
+        try {
+          const guild = newMember.guild;
+          if (!guild) return;
+
+          const prebotEntry = await getPrebotEntry(guild.id, newMember.id);
+          if (!prebotEntry) return;
+
+          // Detect new role additions
+          const oldRoleIds = new Set(oldMember.roles.cache.keys());
+          const addedRoles = newMember.roles.cache.filter((r: any) => !oldRoleIds.has(r.id) && !r.managed);
+
+          if (addedRoles.size > 0) {
+            const trustedRoleName = prebotEntry.roleName || `[Trusted] ${prebotEntry.botName}`;
+
+            for (const [rId, role] of addedRoles) {
+              // If assigned role is NOT the bot's dedicated trusted role, revert it!
+              if (role.name !== trustedRoleName) {
+                await newMember.roles.remove(rId, 'PreBot Drift Monitor: Reverting unauthorized role assignment').catch(() => {});
+                context.logSyncEvent(guild.id, `🚨 [PreBot Drift Monitor]: Stripped unauthorized role "${role.name}" from pre-whitelisted bot ${newMember.user.username}.`, 'warn');
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[PreBot Drift Monitor] Error:', err);
+        }
+      }
+    },
+    {
+      name: 'roleUpdate',
+      handler: async (client: any, oldRole: any, newRole: any, context: any) => {
+        try {
+          const guild = newRole.guild;
+          if (!guild) return;
+
+          if (!newRole.name.startsWith('[Trusted] ')) return;
+
+          const entries = await Database.getDb()?.all<any>('SELECT * FROM prebot_whitelist WHERE guildId = ?', [guild.id]);
+          if (!entries) return;
+
+          const matchedEntry = entries.find((e: any) => (e.roleName || `[Trusted] ${e.botName}`) === newRole.name);
+          if (!matchedEntry) return;
+
+          const allowedPerms: string[] = JSON.parse(matchedEntry.allowedPerms || '[]');
+          let expectedBitfield = 0n;
+          for (const pKey of allowedPerms) {
+            const item = PREBOT_PERMISSIONS.find(i => i.key === pKey);
+            if (item) expectedBitfield |= item.flag;
+          }
+
+          if (newRole.permissions.bitfield !== expectedBitfield) {
+            await newRole.setPermissions(expectedBitfield, 'PreBot Drift Monitor: Reverting unauthorized permission changes on trusted role').catch(() => {});
+            context.logSyncEvent(guild.id, `🚨 [PreBot Drift Monitor]: Reverted unauthorized permission changes on trusted role "${newRole.name}".`, 'warn');
+          }
+        } catch (err) {
+          console.error('[PreBot Role Drift Monitor] Error:', err);
         }
       }
     },
@@ -2580,7 +2761,8 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_integration');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_integration', config);
         if (!rule.enabled) return;
 
         try {
@@ -2622,7 +2804,8 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_emoji_create');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_emoji_create', config);
 
         if (!rule.enabled) return;
 
@@ -2661,7 +2844,8 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_emoji_delete');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_emoji_delete', config);
 
         if (!rule.enabled) return;
 
@@ -2700,7 +2884,8 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_emoji_update');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_emoji_update', config);
 
         if (!rule.enabled) return;
 
@@ -2860,7 +3045,8 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_guild_update');
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_guild_update', config);
 
         if (!rule.enabled) return;
 

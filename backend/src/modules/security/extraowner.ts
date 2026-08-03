@@ -3,6 +3,8 @@ import { Database } from '../../core/Database.js';
 import { createLimeEmbed } from '../../core/UIFactory.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 
+import { updateExtraOwnerInCache, removeExtraOwnerFromCache, loadExtraOwnersCache } from '../../utils/whitelistCheck.js';
+
 const VIP_EMOJI = '<:vip:1532620837117759508>';
 const SHIELD_EMOJI = '<:shield:1532403012751065179>';
 const APPROVED_ICON = '<a:approved:1532390590707142956>';
@@ -79,6 +81,8 @@ export function registerExtraOwnerCommands(): void {
             [message.guild!.id, targetMember.id, message.author.id, defaultPerms, now]
           );
 
+          updateExtraOwnerInCache(message.guild!.id, targetMember.id, defaultPerms);
+
           const embed = createLimeEmbed({
             title: 'Extra Owner Granted Successfully',
             description: `${APPROVED_ICON} Granted delegated Extra Owner authority to ${targetMember.user.tag}.`,
@@ -115,6 +119,8 @@ export function registerExtraOwnerCommands(): void {
             'DELETE FROM extra_owners WHERE guildId = ? AND userId = ?',
             [message.guild!.id, targetMember.id]
           );
+
+          removeExtraOwnerFromCache(message.guild!.id, targetMember.id);
 
           return message.reply({
             embeds: [createLimeEmbed({
@@ -161,6 +167,7 @@ export function registerExtraOwnerCommands(): void {
       if (sub === 'reset') {
         try {
           await db.run('DELETE FROM extra_owners WHERE guildId = ?', [message.guild!.id]);
+          await loadExtraOwnersCache(message.guild!.id);
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Extra Owners Reset',

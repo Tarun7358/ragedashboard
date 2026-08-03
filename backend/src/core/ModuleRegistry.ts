@@ -1,6 +1,6 @@
 import { ModuleState, DiscordResourceRegistry, ModuleManifest, LogEntry } from './types.js';
 import { Database } from './Database.js';
-import { migrateToUnifiedWhitelist } from '../utils/whitelistCheck.js';
+import { migrateToUnifiedWhitelist, loadExtraOwnersCache } from '../utils/whitelistCheck.js';
 import { EmbedBuilder } from 'discord.js';
 
 
@@ -95,7 +95,8 @@ export class ModuleRegistry {
         this.reevaluateAllModules(guildId);
         this.triggerWhitelistMigration(guildId);
       }
-      console.log(`[ModuleRegistry] Successfully pre-loaded ${rows.length} guild configurations from SQLite.`);
+      await loadExtraOwnersCache();
+      console.log(`[ModuleRegistry] Successfully pre-loaded ${rows.length} guild configurations and Extra Owners RAM cache from SQLite.`);
     } catch (e: any) {
       console.error('[ModuleRegistry] Failed to pre-load guild configurations:', e.message);
     }

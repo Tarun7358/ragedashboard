@@ -13,31 +13,31 @@ const CONFIG_EMOJI = '<:config:1532425712844144701>';
 const SHIELD_EMOJI = '<:shield:1532403012751065179>';
 
 export const DEFAULT_SECURITY_RULES: Record<string, { enabled: boolean; limit: number; window: number; action: string; recovery: boolean }> = {
-  anti_role_grant:     { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_role_remove:    { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_role_update:    { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_role_create:    { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_role_delete:    { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_role_grant: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_role_remove: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_role_update: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_role_create: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_role_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_channel_create: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
   anti_channel_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_channel_update: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_ban:            { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_kick:           { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_timeout:        { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_bot_add:        { enabled: true, limit: 1, window: 10, action: 'ban',        recovery: true },
-  anti_bot_remove:     { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_ban: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_kick: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_timeout: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_bot_add: { enabled: true, limit: 1, window: 10, action: 'ban', recovery: true },
+  anti_bot_remove: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_webhook_create: { enabled: true, limit: 2, window: 10, action: 'quarantine', recovery: true },
   anti_webhook_delete: { enabled: true, limit: 2, window: 10, action: 'quarantine', recovery: true },
   anti_webhook_update: { enabled: true, limit: 2, window: 10, action: 'quarantine', recovery: true },
-  anti_guild_update:   { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_prune:          { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_emoji_create:   { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_emoji_delete:   { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_emoji_update:   { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_guild_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_prune: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_emoji_create: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_emoji_delete: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_emoji_update: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
   anti_sticker_create: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
   anti_sticker_delete: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
   anti_sticker_update: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_link:           { enabled: true, limit: 3, window: 10, action: 'warn',       recovery: false }
+  anti_link: { enabled: true, limit: 3, window: 10, action: 'warn', recovery: false }
 };
 
 const RULE_ALIAS_MAP: Record<string, string> = {
@@ -97,14 +97,110 @@ export function normalizeRuleName(input: string): string {
   return `anti_${cleaned}`;
 }
 
-export function getEffectiveRule(rules: Record<string, any> | undefined, ruleKey: string): { enabled: boolean; limit: number; window: number; action: string; recovery: boolean; [key: string]: any } {
+export function getEffectiveRule(rules: any, ruleKey: string, secConfig?: any): { enabled: boolean; limit: number; window: number; action: string; recovery: boolean; [key: string]: any } {
   const normalizedKey = normalizeRuleName(ruleKey);
   const defaultConfig = DEFAULT_SECURITY_RULES[normalizedKey] || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
-  const customConfig = rules?.[normalizedKey] || rules?.[ruleKey] || {};
+  const actualRules = (rules && typeof rules === 'object' && 'rules' in rules) ? rules.rules : rules;
+  const actualConfig = secConfig || ((rules && typeof rules === 'object' && ('antiNukeEnabled' in rules || 'rules' in rules)) ? rules : undefined);
+
+  const customConfig = actualRules?.[normalizedKey] || actualRules?.[ruleKey] || {};
+  const isMasterEnabled = actualConfig ? actualConfig.antiNukeEnabled !== false : true;
   return {
     ...defaultConfig,
-    ...customConfig
+    ...customConfig,
+    enabled: isMasterEnabled ? (customConfig.enabled !== undefined ? Boolean(customConfig.enabled) : defaultConfig.enabled) : false
   };
+}
+
+export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
+  const rules = secConfig?.rules || {};
+  const isMasterEnabled = secConfig?.antiNukeEnabled !== false;
+  const formattedSections: Array<{ title: string; items: string[] }> = [];
+
+  const categoryDefinitions: Record<string, { label: string; title: string; keys: string[] }> = {
+    group_roles: {
+      label: 'ROLE PROTECTIONS',
+      title: '<:shield:1532403012751065179> ROLE PROTECTION MODULES',
+      keys: ['anti_role_grant', 'anti_role_remove', 'anti_role_update', 'anti_role_create', 'anti_role_delete']
+    },
+    group_channels: {
+      label: 'CHANNEL PROTECTIONS',
+      title: '<:shield:1532403012751065179> CHANNEL PROTECTION MODULES',
+      keys: ['anti_channel_create', 'anti_channel_delete', 'anti_channel_update']
+    },
+    group_members: {
+      label: 'MEMBER & MODERATION PROTECTIONS',
+      title: '<:gavel:1532621057318584380> MEMBER & MODERATION MODULES',
+      keys: ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune']
+    },
+    group_server: {
+      label: 'SERVER & WEBHOOK PROTECTIONS',
+      title: '<:config:1532425712844144701> SERVER & WEBHOOK MODULES',
+      keys: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_link']
+    }
+  };
+
+  const selectedKey = targetGroup?.toLowerCase();
+  const normalizedGroup = selectedKey === 'roles' || selectedKey === 'role' ? 'group_roles'
+    : selectedKey === 'channels' || selectedKey === 'channel' ? 'group_channels'
+    : selectedKey === 'members' || selectedKey === 'member' || selectedKey === 'mods' ? 'group_members'
+    : selectedKey === 'server' || selectedKey === 'webhooks' || selectedKey === 'webhook' ? 'group_server'
+    : selectedKey && categoryDefinitions[selectedKey] ? selectedKey
+    : undefined;
+
+  const activeGroups = normalizedGroup ? { [normalizedGroup]: categoryDefinitions[normalizedGroup] } : categoryDefinitions;
+
+  for (const [gKey, gDef] of Object.entries(activeGroups)) {
+    const items: string[] = [];
+    for (const key of gDef.keys) {
+      const rule = getEffectiveRule(rules, key, secConfig);
+      const isRuleActive = rule.enabled;
+      const statusIcon = isRuleActive ? VERIFIED_ICON : WRONG_EMOJI;
+      const revertStr = rule.recovery ? 'Auto-Revert: ON' : 'Auto-Revert: OFF';
+      const masterOffTag = isMasterEnabled ? '' : ' *(Master OFF)*';
+      items.push(`${statusIcon} **${key}**: \`${rule.limit} per ${rule.window}s\` | Action: \`${rule.action.toUpperCase()}\` | \`${revertStr}\`${masterOffTag}`);
+    }
+    formattedSections.push({ title: gDef.title, items });
+  }
+
+  const isFiltered = !!normalizedGroup;
+  const groupLabel = normalizedGroup ? categoryDefinitions[normalizedGroup]?.label : 'ALL PROTECTION CATEGORIES';
+
+  const overviewCard = buildLimeOverviewCard({
+    title: isFiltered ? `ANTI-NUKE CATEGORY INSPECTION MATRIX` : 'ANTI-NUKE MODULE CONFIGURATION MATRIX',
+    subtitle: isMasterEnabled
+      ? (isFiltered ? `INSPECTING: ${groupLabel}` : 'MASTER STATUS: 🟢 ENABLED (ACTIVE)')
+      : 'MASTER STATUS: 🔴 DISABLED (INACTIVE — ALL PROTECTIONS PAUSED)',
+    color: isMasterEnabled ? Colors.BRAND : Colors.DANGER,
+    sections: formattedSections,
+    footerText: 'Rage Optimiser Enterprise • Security Configuration'
+  });
+
+  const ruleSelectMenu = new StringSelectMenuBuilder()
+    .setCustomId('an_rule_select')
+    .setPlaceholder(isFiltered ? `Inspecting: ${groupLabel}...` : 'Inspect Anti-Nuke Protection Category...')
+    .addOptions([
+      { label: 'Role Protections (Grant, Remove, Create, Delete)', value: 'group_roles', emoji: '<:shield:1532403012751065179>', description: 'Role creation, deletion & assignment rules' },
+      { label: 'Channel Protections (Create, Delete, Update)', value: 'group_channels', emoji: '<:shield:1532403012751065179>', description: 'Channel creation, deletion & modification rules' },
+      { label: 'Member & Mod Protections (Ban, Kick, Timeout)', value: 'group_members', emoji: '<:gavel:1532621057318584380>', description: 'Ban, kick, timeout, bot add, prune rules' },
+      { label: 'Server & Webhook Protections (Webhook, Guild)', value: 'group_server', emoji: '<:config:1532425712844144701>', description: 'Webhook & server modification rules' }
+    ]);
+
+  const rowSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(ruleSelectMenu);
+
+  const buttonList: ButtonBuilder[] = [];
+  if (isFiltered) {
+    buttonList.push(new ButtonBuilder().setCustomId('an_view_full').setLabel('Overview Matrix').setStyle(ButtonStyle.Primary).setEmoji('<:config:1532425712844144701>'));
+  }
+  buttonList.push(
+    new ButtonBuilder().setCustomId('an_toggle_all').setLabel('Toggle Anti-Nuke').setStyle(secConfig.antiNukeEnabled ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<:shield:1532403012751065179>'),
+    new ButtonBuilder().setCustomId('an_toggle_raid').setLabel('Toggle Raid Mode').setStyle(secConfig.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji('<:shield:1532403012751065179>'),
+    new ButtonBuilder().setCustomId('an_emergency_lock').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger).setEmoji('<:shield:1532403012751065179>')
+  );
+
+  const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(buttonList.slice(0, 5));
+
+  return { embeds: [overviewCard], components: [rowSelect, rowButtons] };
 }
 
 export function registerConfigCommands(): void {
@@ -191,9 +287,15 @@ export function registerConfigCommands(): void {
     ],
     cooldownSeconds: 3,
     userPermissions: ['Administrator'],
-    botPermissions: ['Administrator'],
     execute: async (message: Message, args: string[], extra?: any) => {
-      const moduleName = args[0]?.toLowerCase();
+      // Alias argument normalizer (e.g. r!antinuke threshold anti_role_grant 11)
+      let effectiveArgs = [...args];
+      const antinukeSubActions = ['status', 'threshold', 'punishment', 'reversion', 'recovery', 'rollback', 'enable', 'disable', 'toggle', 'module', 'set', 'matrix', 'list'];
+      if (effectiveArgs.length > 0 && antinukeSubActions.includes(effectiveArgs[0]?.toLowerCase())) {
+        effectiveArgs.unshift('antinuke');
+      }
+
+      const moduleName = effectiveArgs[0]?.toLowerCase();
       const db = Database.getDb();
 
       if (!db) {
@@ -248,7 +350,7 @@ export function registerConfigCommands(): void {
 
       // Anti-Nuke Sub-Configuration Suite (`r!config antinuke ...`)
       if (moduleName === 'antinuke') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         const secConfig = secModule?.config || {};
@@ -265,61 +367,16 @@ export function registerConfigCommands(): void {
         };
 
         // Status matrix output (`r!config antinuke status`)
-        if (!action || action === 'status' || action === 'list' || action === 'matrix') {
-          const formattedSections: Array<{ title: string; items: string[] }> = [];
-
-          const categories: Record<string, string[]> = {
-            'ROLE PROTECTION MODULES': ['anti_role_grant', 'anti_role_remove', 'anti_role_update', 'anti_role_create', 'anti_role_delete'],
-            'CHANNEL PROTECTION MODULES': ['anti_channel_create', 'anti_channel_delete', 'anti_channel_update'],
-            'MEMBER & MODERATION MODULES': ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune'],
-            'SERVER & WEBHOOK MODULES': ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_link']
-          };
-
-          for (const [catName, ruleKeys] of Object.entries(categories)) {
-            const items: string[] = [];
-            for (const key of ruleKeys) {
-              const rule = getEffectiveRule(rules, key);
-              const statusIcon = rule.enabled ? VERIFIED_ICON : WRONG_EMOJI;
-              const revertStr = rule.recovery ? 'Auto-Revert: ON' : 'Auto-Revert: OFF';
-              items.push(`${statusIcon} **${key}**: \`${rule.limit} per ${rule.window}s\` | Action: \`${rule.action.toUpperCase()}\` | \`${revertStr}\``);
-            }
-            formattedSections.push({ title: catName, items });
-          }
-
-          const overviewCard = buildLimeOverviewCard({
-            title: 'ANTI-NUKE MODULE CONFIGURATION MATRIX',
-            subtitle: 'PER-MODULE LIMITS, WINDOW RATES & REVERSION SETTINGS',
-            color: Colors.BRAND,
-            sections: formattedSections,
-            footerText: 'Rage Optimiser Enterprise • Security Configuration'
-          });
-
-          const ruleSelectMenu = new StringSelectMenuBuilder()
-            .setCustomId('an_rule_select')
-            .setPlaceholder('Inspect Anti-Nuke Protection Category...')
-            .addOptions([
-              { label: 'Role Protections (Grant, Remove, Create, Delete)', value: 'group_roles', emoji: '<:shield:1532403012751065179>', description: 'Role creation, deletion & assignment rules' },
-              { label: 'Channel Protections (Create, Delete, Update)', value: 'group_channels', emoji: '<:shield:1532403012751065179>', description: 'Channel creation, deletion & modification rules' },
-              { label: 'Member & Mod Protections (Ban, Kick, Timeout)', value: 'group_members', emoji: '<:gavel:1532621057318584380>', description: 'Ban, kick, timeout, bot add, prune rules' },
-              { label: 'Server & Webhook Protections (Webhook, Guild)', value: 'group_server', emoji: '<:config:1532425712844144701>', description: 'Webhook & server modification rules' }
-            ]);
-
-          const rowSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(ruleSelectMenu);
-
-          const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('an_toggle_all').setLabel('Toggle Anti-Nuke').setStyle(secConfig.antiNukeEnabled ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<:shield:1532403012751065179>'),
-            new ButtonBuilder().setCustomId('an_toggle_raid').setLabel('Toggle Raid Mode').setStyle(secConfig.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji('<:shield:1532403012751065179>'),
-            new ButtonBuilder().setCustomId('an_view_whitelists').setLabel('Whitelists').setStyle(ButtonStyle.Secondary).setEmoji('<:member:1532621317487071426>'),
-            new ButtonBuilder().setCustomId('an_emergency_lock').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger).setEmoji('<:shield:1532403012751065179>')
-          );
-
-          return message.reply({ embeds: [overviewCard], components: [rowSelect, rowButtons] });
+        if (!action || action === 'status' || action === 'list' || action === 'matrix' || ['group_roles', 'group_channels', 'group_members', 'group_server', 'roles', 'role', 'channels', 'channel', 'members', 'member', 'server', 'webhooks', 'webhook'].includes(action)) {
+          const targetCategory = ['group_roles', 'group_channels', 'group_members', 'group_server', 'roles', 'role', 'channels', 'channel', 'members', 'member', 'server', 'webhooks', 'webhook'].includes(action) ? action : effectiveArgs[2];
+          const payload = buildAntiNukeOverview(secConfig, targetCategory);
+          return message.reply(payload);
         }
 
         // Configure Punishment (`r!config antinuke punishment <event> <action>`)
         if (action === 'punishment') {
-          const eventInput = args[2];
-          const punishment = args[3]?.toLowerCase();
+          const eventInput = effectiveArgs[2];
+          const punishment = effectiveArgs[3]?.toLowerCase();
           const validActions = ['quarantine', 'ban', 'kick', 'strip_roles', 'warn'];
 
           if (!eventInput || !punishment || !validActions.includes(punishment)) {
@@ -346,23 +403,24 @@ export function registerConfigCommands(): void {
           });
         }
 
-        // Configure Threshold (`r!config antinuke threshold <event> <limit> <window_seconds>`)
+        // Configure Threshold (`r!config antinuke threshold <event> <limit> [window_seconds]`)
         if (action === 'threshold') {
-          const eventInput = args[2];
-          const limit = parseInt(args[3], 10);
-          const windowRate = parseInt(args[4], 10);
+          const eventInput = effectiveArgs[2];
+          const limit = parseInt(effectiveArgs[3], 10);
+          const parsedWindow = parseInt(effectiveArgs[4], 10);
 
-          if (!eventInput || isNaN(limit) || isNaN(windowRate) || limit < 1 || windowRate < 1) {
+          if (!eventInput || isNaN(limit) || limit < 1) {
             return message.reply({
               embeds: [createLimeEmbed({
                 title: 'Anti-Nuke Threshold Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke threshold <event> <limit_count> <window_seconds>\`\nExample: \`r!config antinuke threshold channel_delete 2 10\``
+                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke threshold <event> <limit_count> [window_seconds]\`\nExample: \`r!config antinuke threshold channel_delete 2 10\``
               })]
             });
           }
 
           const targetRuleKey = normalizeRuleName(eventInput);
           const currentRule = getEffectiveRule(rules, targetRuleKey);
+          const windowRate = !isNaN(parsedWindow) && parsedWindow > 0 ? parsedWindow : (currentRule.window || 10);
           const updatedRule = { ...currentRule, limit, window: windowRate };
           const updatedRules = { ...rules, [targetRuleKey]: updatedRule };
 
@@ -378,8 +436,8 @@ export function registerConfigCommands(): void {
 
         // Configure Reversion / Auto-Rollback (`r!config antinuke reversion <event> <on|off|true|false>`)
         if (action === 'reversion' || action === 'recovery' || action === 'rollback') {
-          const eventInput = args[2];
-          const toggleInput = args[3]?.toLowerCase();
+          const eventInput = effectiveArgs[2];
+          const toggleInput = effectiveArgs[3]?.toLowerCase();
 
           if (!eventInput || !['on', 'off', 'true', 'false', 'enable', 'disable'].includes(toggleInput)) {
             return message.reply({
@@ -406,19 +464,24 @@ export function registerConfigCommands(): void {
           });
         }
 
-        // Enable or Disable Individual Module (`r!config antinuke enable <event>` / `disable <event>`)
-        if (action === 'enable' || action === 'disable' || action === 'toggle') {
-          const eventInput = args[2];
+        // Enable or Disable Individual Module or Master Anti-Nuke (`r!config antinuke on/off` or `enable <event>`)
+        if (action === 'enable' || action === 'disable' || action === 'toggle' || action === 'on' || action === 'off') {
+          const eventInput = effectiveArgs[2];
           if (!eventInput) {
+            // Master Anti-Nuke Toggle
+            const isEnabled = action === 'on' || action === 'enable' || (action === 'toggle' && !secConfig.antiNukeEnabled);
+            if (extra?.updateModuleConfig) {
+              extra.updateModuleConfig('security', { ...secConfig, antiNukeEnabled: isEnabled });
+            }
             return message.reply({
               embeds: [createLimeEmbed({
-                title: 'Anti-Nuke Module Toggle Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke <enable|disable> <event>\`\nExample: \`r!config antinuke disable role_remove\``
+                title: 'Master Anti-Nuke Protection Toggle',
+                description: `${APPROVED_ICON} Entire Anti-Nuke Protection Engine is now **\`${isEnabled ? 'ENABLED (ACTIVE)' : 'DISABLED (INACTIVE)'}\`**.`
               })]
             });
           }
 
-          const isEnabled = action === 'enable' || (action === 'toggle' && args[3]?.toLowerCase() === 'on');
+          const isEnabled = action === 'enable' || action === 'on' || (action === 'toggle' && effectiveArgs[3]?.toLowerCase() === 'on');
           const targetRuleKey = normalizeRuleName(eventInput);
           const currentRule = getEffectiveRule(rules, targetRuleKey);
           const updatedRule = { ...currentRule, enabled: isEnabled };
@@ -436,11 +499,11 @@ export function registerConfigCommands(): void {
 
         // Single Bulk Module Command (`r!config antinuke module <event> <limit> <window> <punishment> <reversion>`)
         if (action === 'module' || action === 'set') {
-          const eventInput = args[2];
-          const limit = parseInt(args[3], 10);
-          const windowRate = parseInt(args[4], 10);
-          const punishment = args[5]?.toLowerCase();
-          const reversionInput = args[6]?.toLowerCase();
+          const eventInput = effectiveArgs[2];
+          const limit = parseInt(effectiveArgs[3], 10);
+          const windowRate = parseInt(effectiveArgs[4], 10);
+          const punishment = effectiveArgs[5]?.toLowerCase();
+          const reversionInput = effectiveArgs[6]?.toLowerCase();
 
           if (!eventInput || isNaN(limit) || isNaN(windowRate) || !punishment) {
             return message.reply({
@@ -467,10 +530,39 @@ export function registerConfigCommands(): void {
         }
       }
 
+      // PreBot Whitelist Guard Master Toggle (`r!config prebot ...`)
+      if (moduleName === 'prebot' || moduleName === 'prebotwhitelist') {
+        const action = effectiveArgs[1]?.toLowerCase() || 'status';
+        const modules = extra?.getModulesState ? extra.getModulesState() : [];
+        const secModule = modules.find((m: any) => m.id === 'security');
+        const secConfig = secModule?.config || {};
+
+        if (action === 'on' || action === 'off' || action === 'enable' || action === 'disable' || action === 'toggle') {
+          const isEnabled = action === 'on' || action === 'enable' || (action === 'toggle' && secConfig.prebotEnabled === false);
+          if (extra?.updateModuleConfig) {
+            extra.updateModuleConfig('security', { ...secConfig, prebotEnabled: isEnabled });
+          }
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Master PreBot Whitelist Guard Toggle',
+              description: `${APPROVED_ICON} PreBot Whitelist Guard is now **\`${isEnabled ? 'ENABLED (ACTIVE)' : 'DISABLED (INACTIVE)'}\`**.\n\n${isEnabled ? 'Unapproved bots will be automatically kicked on join.' : 'Bot join enforcement is paused. Bots can join freely without pre-registration.'}`
+            })]
+          });
+        }
+
+        const isEnabled = secConfig.prebotEnabled !== false;
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'PreBot Whitelist Guard Status',
+            description: `> **Status**: **\`${isEnabled ? 'ENABLED (ACTIVE)' : 'DISABLED (INACTIVE)'}\`**\n\nUse \`r!prebot on\` or \`r!prebot off\` to toggle PreBot Whitelist bot join enforcement.`
+          })]
+        });
+      }
+
       // Audit & Event Logging Sub-Configuration (`r!config logging ...`)
       if (moduleName === 'logging') {
-        const action = args[1]?.toLowerCase();
-        const category = args[2]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
+        const category = effectiveArgs[2]?.toLowerCase();
 
         if (action === 'set' || action === 'channel') {
           const targetChannel = message.mentions.channels.first();
@@ -510,7 +602,7 @@ export function registerConfigCommands(): void {
 
       // AutoMod Sub-Configuration (`r!config automod ...`)
       if (moduleName === 'automod') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const amModule = modules.find((m: any) => m.id === 'automod');
         const amConfig = amModule?.config || {};
@@ -525,25 +617,32 @@ export function registerConfigCommands(): void {
         };
 
         if (!action || action === 'status' || action === 'view' || action === 'matrix') {
-          const antispamIcon = amConfig.antiSpamEnabled ? APPROVED_ICON : WRONG_EMOJI;
-          const antilinkIcon = amConfig.antiLinkEnabled ? APPROVED_ICON : WRONG_EMOJI;
-          const blacklistIcon = amConfig.wordBlacklistEnabled ? APPROVED_ICON : WRONG_EMOJI;
-          const capsIcon = amConfig.capsLimitEnabled ? APPROVED_ICON : WRONG_EMOJI;
-          const emojiIcon = amConfig.emojiSpamEnabled ? APPROVED_ICON : WRONG_EMOJI;
+          const isMasterActive = amConfig.autoModEnabled !== false && amConfig.antiSpamEnabled !== false;
+          const isAntiSpamActive = isMasterActive && (amConfig.antiSpamEnabled === true || Boolean(amConfig.maxSpamMessages));
+          const isAntiLinkActive = isMasterActive && amConfig.blockLinks !== false && amConfig.antiLinkEnabled !== false;
+          const isBlacklistActive = isMasterActive && (amConfig.wordBlacklistEnabled === true || (Array.isArray(amConfig.badWords) && amConfig.badWords.length > 0));
+          const isCapsActive = isMasterActive && (amConfig.preventCapsSpam === true || amConfig.capsLimitEnabled === true);
+          const isEmojiActive = isMasterActive && (amConfig.emojiSpamEnabled === true);
+
+          const antispamIcon = isAntiSpamActive ? APPROVED_ICON : WRONG_EMOJI;
+          const antilinkIcon = isAntiLinkActive ? APPROVED_ICON : WRONG_EMOJI;
+          const blacklistIcon = isBlacklistActive ? APPROVED_ICON : WRONG_EMOJI;
+          const capsIcon = isCapsActive ? APPROVED_ICON : WRONG_EMOJI;
+          const emojiIcon = isEmojiActive ? APPROVED_ICON : WRONG_EMOJI;
 
           const overviewCard = buildLimeOverviewCard({
             title: 'AUTOMOD MODULE CONFIGURATION MATRIX',
-            subtitle: 'CONTENT FILTERS & SPAM PROTECTION PARAMETERS',
-            color: Colors.BRAND,
+            subtitle: isMasterActive ? 'CONTENT FILTERS & SPAM PROTECTION PARAMETERS' : 'MASTER AUTOMOD STATUS: 🔴 DISABLED (INACTIVE — ALL FILTERS OFF)',
+            color: isMasterActive ? Colors.BRAND : Colors.DANGER,
             sections: [
               {
                 title: '<:link:1532620952087826602> AUTOMOD PROTECTION FILTERS',
                 items: [
-                  `${antispamIcon} **Anti-Spam Filter**: \`${amConfig.antiSpamEnabled ? 'ENABLED' : 'DISABLED'}\` | Limit: \`${amConfig.maxMessages || 5} msgs / ${amConfig.windowSeconds || 5}s\` | Action: \`${(amConfig.spamAction || 'mute').toUpperCase()}\``,
-                  `${antilinkIcon} **Anti-Link Filter**: \`${amConfig.antiLinkEnabled ? 'ENABLED' : 'DISABLED'}\` | Invites: \`${amConfig.allowDiscordInvites ? 'ALLOWED' : 'BLOCKED'}\` | Action: \`${(amConfig.linkAction || 'delete').toUpperCase()}\``,
-                  `${blacklistIcon} **Word Blacklist**: \`${amConfig.wordBlacklistEnabled ? 'ENABLED' : 'DISABLED'}\` | Words: \`${(amConfig.blacklist || []).length} keywords\``,
-                  `${capsIcon} **Caps Limit**: \`${amConfig.capsLimitEnabled ? 'ENABLED' : 'DISABLED'}\` | Max: \`${amConfig.maxCapsPercent || 70}%\``,
-                  `${emojiIcon} **Emoji Spam**: \`${amConfig.emojiSpamEnabled ? 'ENABLED' : 'DISABLED'}\` | Max: \`${amConfig.maxEmojis || 10} emojis\``
+                  `${antispamIcon} **Anti-Spam Filter**: \`${isAntiSpamActive ? 'ENABLED' : 'DISABLED'}\` | Limit: \`${amConfig.maxMessages || amConfig.maxSpamMessages || 5} msgs / ${amConfig.windowSeconds || amConfig.spamWindowSeconds || 5}s\` | Action: \`${(amConfig.spamAction || 'mute').toUpperCase()}\``,
+                  `${antilinkIcon} **Anti-Link Filter**: \`${isAntiLinkActive ? 'ENABLED' : 'DISABLED'}\` | Invites: \`${amConfig.allowInvites || amConfig.allowDiscordInvites ? 'ALLOWED' : 'BLOCKED'}\` | Action: \`${(amConfig.punishment || amConfig.linkAction || 'delete').toUpperCase()}\``,
+                  `${blacklistIcon} **Word Blacklist**: \`${isBlacklistActive ? 'ENABLED' : 'DISABLED'}\` | Words: \`${(amConfig.badWords || amConfig.blacklist || []).length} keywords\``,
+                  `${capsIcon} **Caps Limit**: \`${isCapsActive ? 'ENABLED' : 'DISABLED'}\` | Max: \`${amConfig.maxCapsPercent || 70}%\``,
+                  `${emojiIcon} **Emoji Spam**: \`${isEmojiActive ? 'ENABLED' : 'DISABLED'}\` | Max: \`${amConfig.maxEmojis || 10} emojis\``
                 ]
               }
             ],
@@ -553,11 +652,29 @@ export function registerConfigCommands(): void {
           return message.reply({ embeds: [overviewCard] });
         }
 
+        if (action === 'on' || action === 'off' || action === 'enable' || action === 'disable') {
+          const isEnabled = action === 'on' || action === 'enable';
+          updateAmConfig({
+            antiSpamEnabled: isEnabled,
+            blockLinks: isEnabled,
+            antiLinkEnabled: isEnabled,
+            wordBlacklistEnabled: isEnabled,
+            preventCapsSpam: isEnabled,
+            emojiSpamEnabled: isEnabled
+          });
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Master AutoMod Protection Toggle',
+              description: `${APPROVED_ICON} All AutoMod content filters (Anti-Spam, Anti-Link, Blacklist, Caps, Emoji) are now **\`${isEnabled ? 'ENABLED (ACTIVE)' : 'DISABLED (INACTIVE)'}\`**.`
+            })]
+          });
+        }
+
         if (action === 'antispam') {
-          const toggle = args[2]?.toLowerCase();
-          const maxMsgs = parseInt(args[3], 10);
-          const windowSec = parseInt(args[4], 10);
-          const pAction = args[5]?.toLowerCase();
+          const toggle = effectiveArgs[2]?.toLowerCase();
+          const maxMsgs = parseInt(effectiveArgs[3], 10);
+          const windowSec = parseInt(effectiveArgs[4], 10);
+          const pAction = effectiveArgs[5]?.toLowerCase();
 
           if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
             return message.reply({
@@ -585,9 +702,9 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'antilink') {
-          const toggle = args[2]?.toLowerCase();
-          const invitesOpt = args[3]?.toLowerCase();
-          const pAction = args[4]?.toLowerCase();
+          const toggle = effectiveArgs[2]?.toLowerCase();
+          const invitesOpt = effectiveArgs[3]?.toLowerCase();
+          const pAction = effectiveArgs[4]?.toLowerCase();
 
           if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
             return message.reply({
@@ -599,9 +716,12 @@ export function registerConfigCommands(): void {
           }
 
           const isEnabled = ['on', 'enable'].includes(toggle);
-          const updates: Record<string, any> = { antiLinkEnabled: isEnabled };
+          const updates: Record<string, any> = { antiLinkEnabled: isEnabled, blockLinks: isEnabled };
           if (invitesOpt) updates.allowDiscordInvites = ['on', 'true', 'allow'].includes(invitesOpt);
-          if (pAction && ['delete', 'warn', 'mute'].includes(pAction)) updates.linkAction = pAction;
+          if (pAction && ['delete', 'warn', 'mute'].includes(pAction)) {
+            updates.linkAction = pAction;
+            updates.punishment = pAction;
+          }
 
           updateAmConfig(updates);
 
@@ -614,8 +734,8 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'blacklist') {
-          const subAct = args[2]?.toLowerCase();
-          const wordInput = args.slice(3).join(' ').trim();
+          const subAct = effectiveArgs[2]?.toLowerCase();
+          const wordInput = effectiveArgs.slice(3).join(' ').trim();
           const currentList: string[] = amConfig.blacklist || [];
 
           if (subAct === 'add' && wordInput) {
@@ -663,8 +783,8 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'caps') {
-          const toggle = args[2]?.toLowerCase();
-          const percent = parseInt(args[3], 10);
+          const toggle = effectiveArgs[2]?.toLowerCase();
+          const percent = parseInt(effectiveArgs[3], 10);
 
           if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
             return message.reply({
@@ -690,8 +810,8 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'emoji') {
-          const toggle = args[2]?.toLowerCase();
-          const count = parseInt(args[3], 10);
+          const toggle = effectiveArgs[2]?.toLowerCase();
+          const count = parseInt(effectiveArgs[3], 10);
 
           if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
             return message.reply({
@@ -719,7 +839,7 @@ export function registerConfigCommands(): void {
 
       // Welcome & Onboarding Sub-Configuration (`r!config welcome ...`)
       if (moduleName === 'welcome') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const welcModule = modules.find((m: any) => m.id === 'welcome-v2');
         const welcConfig = welcModule?.config || {};
@@ -763,7 +883,7 @@ export function registerConfigCommands(): void {
 
         if (action === 'channel') {
           const channel = message.mentions.channels.first();
-          if (args[2]?.toLowerCase() === 'none' || args[2]?.toLowerCase() === 'disable') {
+          if (effectiveArgs[2]?.toLowerCase() === 'none' || effectiveArgs[2]?.toLowerCase() === 'disable') {
             updateWelcConfig({ channelId: null });
             return message.reply({
               embeds: [createLimeEmbed({
@@ -792,7 +912,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'message' || action === 'text') {
-          const msgText = args.slice(2).join(' ').trim();
+          const msgText = effectiveArgs.slice(2).join(' ').trim();
           if (!msgText) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -812,8 +932,8 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'dm') {
-          const toggle = args[2]?.toLowerCase();
-          const dmMsg = args.slice(3).join(' ').trim();
+          const toggle = effectiveArgs[2]?.toLowerCase();
+          const dmMsg = effectiveArgs.slice(3).join(' ').trim();
 
           if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
             return message.reply({
@@ -838,7 +958,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'autorole') {
-          const subAct = args[2]?.toLowerCase();
+          const subAct = effectiveArgs[2]?.toLowerCase();
           const role = message.mentions.roles.first();
           const currentRoles: string[] = welcConfig.autoroleIds || [];
 
@@ -875,7 +995,7 @@ export function registerConfigCommands(): void {
 
       // Voice Protection Sub-Configuration (`r!config voiceprotection ...`)
       if (moduleName === 'voiceprotection' || moduleName === 'vp') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const vpModule = modules.find((m: any) => m.id === 'voice-protection');
         const vpConfig = vpModule?.config || {};
@@ -916,7 +1036,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'threshold') {
-          const val = parseInt(args[2], 10);
+          const val = parseInt(effectiveArgs[2], 10);
           if (isNaN(val) || val < 1 || val > 100) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -936,7 +1056,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'action' || action === 'punishment') {
-          const pAction = args[2]?.toLowerCase();
+          const pAction = effectiveArgs[2]?.toLowerCase();
           if (!pAction || !['servermute', 'deafen', 'kick', 'quarantine'].includes(pAction)) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -956,7 +1076,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'enable' || action === 'disable' || action === 'toggle') {
-          const isEnabled = action === 'enable' || (action === 'toggle' && args[2]?.toLowerCase() === 'on');
+          const isEnabled = action === 'enable' || (action === 'toggle' && effectiveArgs[2]?.toLowerCase() === 'on');
           updateVpConfig({ enabled: isEnabled });
           return message.reply({
             embeds: [createLimeEmbed({
@@ -969,7 +1089,7 @@ export function registerConfigCommands(): void {
 
       // Join-To-Create Voice Manager Sub-Configuration (`r!config jtc ...`)
       if (moduleName === 'jtc' || moduleName === 'jointocreate') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const jtcModule = modules.find((m: any) => m.id === 'joinToCreate' || m.id === 'voice_manager');
         const jtcConfig = jtcModule?.config || {};
@@ -1031,7 +1151,7 @@ export function registerConfigCommands(): void {
 
       // Tickets Sub-Configuration (`r!config tickets ...`)
       if (moduleName === 'tickets') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const tktModule = modules.find((m: any) => m.id === 'tickets-v2' || m.id === 'tickets');
         const tktConfig = tktModule?.config || {};
@@ -1092,7 +1212,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'staff') {
-          const subAct = args[2]?.toLowerCase();
+          const subAct = effectiveArgs[2]?.toLowerCase();
           const role = message.mentions.roles.first();
           const currentStaff: string[] = tktConfig.supportRoleIds || [];
 
@@ -1127,9 +1247,17 @@ export function registerConfigCommands(): void {
         }
       }
 
+      // PreBot Whitelist Sub-Configuration (`r!config prebot ...`)
+      if (moduleName === 'prebot' || moduleName === 'prebotwhitelist') {
+        const prebotCmd = PrefixRegistry.getCommand('prebot');
+        if (prebotCmd && prebotCmd.execute) {
+          return prebotCmd.execute(message, effectiveArgs.slice(1), extra);
+        }
+      }
+
       // Leveling & XP Sub-Configuration (`r!config leveling ...`)
       if (moduleName === 'leveling' || moduleName === 'levels' || moduleName === 'xp') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const lvlModule = modules.find((m: any) => m.id === 'leveling');
         const lvlConfig = lvlModule?.config || {};
@@ -1170,7 +1298,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'enable' || action === 'disable' || action === 'toggle') {
-          const isEnabled = action === 'enable' || (action === 'toggle' && args[2]?.toLowerCase() === 'on');
+          const isEnabled = action === 'enable' || (action === 'toggle' && effectiveArgs[2]?.toLowerCase() === 'on');
           updateLvlConfig({ enabled: isEnabled });
           return message.reply({
             embeds: [createLimeEmbed({
@@ -1181,7 +1309,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'xp') {
-          const xpVal = parseInt(args[2], 10);
+          const xpVal = parseInt(effectiveArgs[2], 10);
           if (isNaN(xpVal) || xpVal < 1 || xpVal > 1000) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -1202,7 +1330,7 @@ export function registerConfigCommands(): void {
 
         if (action === 'channel') {
           const channel = message.mentions.channels.first();
-          if (args[2]?.toLowerCase() === 'current' || args[2]?.toLowerCase() === 'none') {
+          if (effectiveArgs[2]?.toLowerCase() === 'current' || effectiveArgs[2]?.toLowerCase() === 'none') {
             updateLvlConfig({ levelUpChannelId: null });
             return message.reply({
               embeds: [createLimeEmbed({
@@ -1233,7 +1361,7 @@ export function registerConfigCommands(): void {
 
       // Member Verification Sub-Configuration (`r!config verification ...`)
       if (moduleName === 'verification' || moduleName === 'verify') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const verifModule = modules.find((m: any) => m.id === 'verification');
         const verifConfig = verifModule?.config || {};
@@ -1318,7 +1446,7 @@ export function registerConfigCommands(): void {
 
       // Server Automation Sub-Configuration (`r!config automation ...`)
       if (moduleName === 'automation' || moduleName === 'auto') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const autoModule = modules.find((m: any) => m.id === 'automation');
         const autoConfig = autoModule?.config || {};
@@ -1355,7 +1483,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'autopublish') {
-          const toggle = args[2]?.toLowerCase();
+          const toggle = effectiveArgs[2]?.toLowerCase();
           const isEnabled = ['on', 'enable', 'true'].includes(toggle || '');
           updateAutoConfig({ autoPublish: isEnabled });
 
@@ -1370,9 +1498,9 @@ export function registerConfigCommands(): void {
 
       // Social Updates Sub-Configuration (`r!config social ...` / `r!config social-updates ...`)
       if (moduleName === 'social' || moduleName === 'socialupdates' || moduleName === 'social-updates' || moduleName === 'social_updates' || moduleName === 'feeds') {
-        const action = args[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase();
         const guildId = message.guild!.id;
-        await SocialSubscriptionRepository.ensureTable().catch(() => {});
+        await SocialSubscriptionRepository.ensureTable().catch(() => { });
 
         if (!action || action === 'status' || action === 'list' || action === 'view') {
           const subs = await SocialSubscriptionRepository.findAll(guildId);
@@ -1408,9 +1536,9 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'add' || action === 'subscribe') {
-          const provider = args[2]?.toLowerCase();
-          const sourceId = args[3];
-          const channelArg = args[4];
+          const provider = effectiveArgs[2]?.toLowerCase();
+          const sourceId = effectiveArgs[3];
+          const channelArg = effectiveArgs[4];
           let channel: any = message.mentions.channels.first();
           if (!channel && channelArg && message.guild) {
             const cleanId = channelArg.replace(/[<#>]/g, '');
@@ -1452,7 +1580,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'remove' || action === 'delete' || action === 'unsubscribe') {
-          const subId = args[2];
+          const subId = effectiveArgs[2];
           if (!subId) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -1711,20 +1839,25 @@ export const ConfigManifest: ModuleManifest = {
     {
       name: 'command_config',
       handler: async (client: any, interaction: any, extra: any) => {
-        const subcommand = interaction.options?.getSubcommand?.() || 'overview';
-        const action = interaction.options?.getString?.('action') || interaction.options?.getString?.('filter') || interaction.options?.getString?.('category') || '';
-        const param = interaction.options?.getString?.('parameter') || interaction.options?.getString?.('platform') || '';
-        const val = interaction.options?.getString?.('value') || interaction.options?.getString?.('source') || '';
-        const target = interaction.options?.getUser?.('target') || interaction.options?.getMember?.('target');
-        const channel = interaction.options?.getChannel?.('channel');
+        let args: string[] = [];
 
-        const args: string[] = [];
-        if (subcommand && subcommand !== 'overview') args.push(subcommand);
-        if (action) args.push(action);
-        if (param) args.push(param);
-        if (val) args.push(val);
-        if (target) args.push(`<@${target.id}>`);
-        if (channel) args.push(`<#${channel.id}>`);
+        if (interaction._antigravity_wrapped && interaction.parsed?.args) {
+          args = interaction.parsed.args;
+        } else {
+          const subcommand = interaction.options?.getSubcommand?.() || 'overview';
+          const action = interaction.options?.getString?.('action') || interaction.options?.getString?.('filter') || interaction.options?.getString?.('category') || '';
+          const param = interaction.options?.getString?.('parameter') || interaction.options?.getString?.('platform') || '';
+          const val = interaction.options?.getString?.('value') || interaction.options?.getString?.('source') || '';
+          const target = interaction.options?.getUser?.('target') || interaction.options?.getMember?.('target');
+          const channel = interaction.options?.getChannel?.('channel');
+
+          if (subcommand && subcommand !== 'overview') args.push(subcommand);
+          if (action) args.push(action);
+          if (param) args.push(param);
+          if (val) args.push(val);
+          if (target) args.push(`<@${target.id}>`);
+          if (channel) args.push(`<#${channel.id}>`);
+        }
 
         const cmdMeta = PrefixRegistry.get('config');
         if (cmdMeta && cmdMeta.execute) {
@@ -1747,7 +1880,7 @@ export const ConfigManifest: ModuleManifest = {
         const preset = interaction.values?.[0] || 'standard';
         let presetName = 'Standard Profile';
         let desc = 'Balanced protection for active communities.';
-        
+
         if (preset === 'relaxed') {
           presetName = 'Relaxed Profile';
           desc = 'Basic protection with higher tolerance limits.';
@@ -1774,12 +1907,109 @@ export const ConfigManifest: ModuleManifest = {
         });
 
         if (interaction.replied || interaction.deferred) {
+          await interaction.followUp({ embeds: [embed], flags: 64 }).catch(() => { });
+        } else {
+          await interaction.reply({ embeds: [embed], flags: 64 }).catch(() => { });
+        }
+
+        context?.logSyncEvent?.(`Setup Wizard: Guild configured with ${presetName}.`, 'success');
+      }
+    },
+    {
+      name: 'select_an_rule_select',
+      handler: async (client: any, interaction: any, extra: any) => {
+        const selectedGroup = interaction.values?.[0];
+        const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
+        const secModule = modules.find((m: any) => m.id === 'security');
+        const secConfig = secModule?.config || {};
+
+        const payload = buildAntiNukeOverview(secConfig, selectedGroup);
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(payload).catch(() => {});
+        } else {
+          await interaction.update(payload).catch(() => {});
+        }
+      }
+    },
+    {
+      name: 'button_an_view_full',
+      handler: async (client: any, interaction: any, extra: any) => {
+        const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
+        const secModule = modules.find((m: any) => m.id === 'security');
+        const secConfig = secModule?.config || {};
+
+        const payload = buildAntiNukeOverview(secConfig);
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(payload).catch(() => {});
+        } else {
+          await interaction.update(payload).catch(() => {});
+        }
+      }
+    },
+    {
+      name: 'button_an_toggle_all',
+      handler: async (client: any, interaction: any, extra: any) => {
+        const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
+        const secModule = modules.find((m: any) => m.id === 'security');
+        const secConfig = secModule?.config || {};
+        const newStatus = !secConfig.antiNukeEnabled;
+
+        if (extra?.updateModuleConfig) {
+          extra.updateModuleConfig('security', { ...secConfig, antiNukeEnabled: newStatus });
+        }
+        const updatedConfig = { ...secConfig, antiNukeEnabled: newStatus };
+        const payload = buildAntiNukeOverview(updatedConfig);
+
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(payload).catch(() => {});
+        } else {
+          await interaction.update(payload).catch(() => {});
+        }
+      }
+    },
+    {
+      name: 'button_an_toggle_raid',
+      handler: async (client: any, interaction: any, extra: any) => {
+        const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
+        const secModule = modules.find((m: any) => m.id === 'security');
+        const secConfig = secModule?.config || {};
+        const newStatus = !secConfig.raidModeEnabled;
+
+        if (extra?.updateModuleConfig) {
+          extra.updateModuleConfig('security', { ...secConfig, raidModeEnabled: newStatus });
+        }
+        const updatedConfig = { ...secConfig, raidModeEnabled: newStatus };
+        const payload = buildAntiNukeOverview(updatedConfig);
+
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(payload).catch(() => {});
+        } else {
+          await interaction.update(payload).catch(() => {});
+        }
+      }
+    },
+    {
+      name: 'button_an_emergency_lock',
+      handler: async (client: any, interaction: any, extra: any) => {
+        const embed = createLimeEmbed({
+          title: '<:shield:1532403012751065179> Emergency Lockdown Executed',
+          description: `${APPROVED_ICON} Server text channels locked down successfully.`
+        });
+        if (interaction.replied || interaction.deferred) {
           await interaction.followUp({ embeds: [embed], flags: 64 }).catch(() => {});
         } else {
           await interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
         }
-
-        context?.logSyncEvent?.(`Setup Wizard: Guild configured with ${presetName}.`, 'success');
+      }
+    },
+    {
+      name: 'select_config_category_select',
+      handler: async (client: any, interaction: any, extra: any) => {
+        const selectedModule = interaction.values?.[0] || 'overview';
+        const cmdMeta = PrefixRegistry.get('config');
+        if (cmdMeta && cmdMeta.execute) {
+          await cmdMeta.execute(interaction, [selectedModule], extra);
+        }
       }
     }
   ]

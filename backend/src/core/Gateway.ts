@@ -1,12 +1,12 @@
-import { Client, GatewayIntentBits, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags, Options } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } from '@discordjs/voice';
 import { DiscordResourceRegistry, ModuleManifest, ModuleState } from './types.js';
 import { Database } from './Database.js';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { Embeds, Colors, Components, buildRichCard, buildStatusCard } from './UIFactory.js';
+import { Embeds, Colors, Components, buildRichCard, buildStatusCard, buildLimeOverviewCard, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, CONFIG_ICON, BOT_ICON, LINK_ICON, MEMBER_ICON, TIMER_ICON } from './UIFactory.js';
 import type { PublicFeedManager } from './PublicFeedManager.js';
 import { AnalyticsService } from './AnalyticsService.js';
-import { protections } from '../utils/whitelistCheck.js';
+import { protections, isOwnerOrExtraOwner } from '../utils/whitelistCheck.js';
 import { PrefixResolver } from './prefix/PrefixResolver.js';
 import { PrefixParser } from './prefix/PrefixParser.js';
 import { SyntheticInteraction } from './prefix/SyntheticInteraction.js';
@@ -17,6 +17,8 @@ import { FuzzySuggestions } from './prefix/FuzzySuggestions.js';
 import { PrefixAnalytics } from './prefix/PrefixAnalytics.js';
 import { PrefixHelpCenter } from './prefix/PrefixHelpCenter.js';
 import { CommandPipeline } from './prefix/CommandPipeline.js';
+import { InteractionRouter } from './InteractionRouter.js';
+import { PayloadFormatter } from './PayloadFormatter.js';
 
 function stripEphemeral(options?: any) {
   if (options && typeof options === 'object') {
@@ -30,87 +32,12 @@ function stripEphemeral(options?: any) {
   return options;
 }
 
+/**
+ * transformContentToLimeCard — now a thin passthrough to PayloadFormatter.normalize().
+ * All formatting logic lives in PayloadFormatter (single source of truth).
+ */
 function transformContentToLimeCard(options: any, user: any) {
-  if (!options) return options;
-  if (typeof options === 'string') {
-    options = { content: options };
-  }
-  if (typeof options === 'object') {
-    stripEphemeral(options);
-
-    const verifiedIcon = '<a:approved:1532390590707142956>';
-    const wrongIcon = '<:wrong:1532390628330307634>';
-
-    // Case 1: Convert raw string content to reference Lime single-line card
-    if (options.content && (typeof options.content === 'string') && (!options.embeds || options.embeds.length === 0)) {
-      const isErr = options.content.includes('❌') || 
-                    options.content.includes('🔒') || 
-                    options.content.toLowerCase().includes('failed') || 
-                    options.content.toLowerCase().includes('error') || 
-                    options.content.toLowerCase().includes('denied') ||
-                    options.content.toLowerCase().includes('invalid');
-
-      const cleanContent = options.content.replace(/^[❌✅🔒⚠️🧊🌡️🔓🧹🔨✏️⏱️🔕👁️📋📜📈📝🔗🏓🪙🎲😂☀️💡]+\s*/, '').trim();
-      const icon = isErr ? wrongIcon : verifiedIcon;
-      const color = isErr ? 0xef4444 : 0x84cc16;
-      const userTag = user ? `${user}` : '';
-
-      options.embeds = [
-        new EmbedBuilder()
-          .setColor(color)
-          .setDescription(`${icon} ${userTag} ${cleanContent}`.trim())
-      ];
-      delete options.content;
-    }
-    // Case 2: Embeds array provided -> Sanitize icons & colors to match Lime GG reference UI
-    else if (Array.isArray(options.embeds)) {
-      options.embeds = options.embeds.map((emb: any) => {
-        if (!emb) return emb;
-        let json = typeof emb.toJSON === 'function' ? emb.toJSON() : { ...emb };
-
-        // Clean description
-        if (json.description) {
-          json.description = json.description
-            .replace(/<a:verifiedtwitter:\d+>/g, verifiedIcon)
-            .replace(/• ᴵˢ ɢʟᴏʙᴀʟ/g, '')
-            .replace(/✅/g, verifiedIcon)
-            .replace(/❌/g, wrongIcon)
-            .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])+/g, (match: string) => {
-              if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️') || match.includes('🔒')) {
-                return wrongIcon;
-              }
-              return verifiedIcon;
-            });
-        }
-
-        // Clean title
-        if (json.title) {
-          json.title = json.title
-            .replace(/✅/g, verifiedIcon)
-            .replace(/❌/g, wrongIcon)
-            .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|[❌✅🔒⚠️])+/g, (match: string) => {
-              if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️') || match.includes('🔒')) {
-                return wrongIcon;
-              }
-              return verifiedIcon;
-            });
-        }
-
-        // Clean footer
-        if (json.footer && json.footer.text) {
-          json.footer.text = json.footer.text.replace(/(?:Secure\s+)?Unbypassable\s+Security(?:\s*\|\s*Menu\s+Expired\s+Rescue\s+it)?/gi, 'Rage Optimiser • Security Engine');
-        }
-
-        // Replace default violet color #7c5cfc with Lime Green #84cc16
-        if (!json.color || json.color === 0x7c5cfc || json.color === 8150268) {
-          json.color = 0x84cc16;
-        }
-
-        return EmbedBuilder.from(json);
-      });
-    }
-  }
-  return options;
+  return PayloadFormatter.normalize(options, user);
 }
 
 export function wrapInteraction(interaction: any) {
@@ -263,6 +190,7 @@ export function wrapInteraction(interaction: any) {
 export class Gateway {
   public client: Client;
   private manifests: ModuleManifest[] = [];
+  private router!: InteractionRouter;
 
   // Per-guild voice tracking for 24/7 Voice Presence module
   private guildVoiceState = new Map<string, {
@@ -328,7 +256,20 @@ export class Gateway {
         GatewayIntentBits.GuildBans,
         GatewayIntentBits.GuildInvites,
         GatewayIntentBits.GuildIntegrations
-      ]
+      ],
+      sweepers: {
+        ...Options.DefaultSweeperSettings,
+        guildMembers: {
+          interval: 900, // Sweep inactive offline members every 15 minutes (900 seconds)
+          filter: () => (member) => {
+            // Preserve primary server owner, bot itself, and members active in voice
+            if (member.id === member.guild?.ownerId) return false;
+            if (member.id === member.client?.user?.id) return false;
+            if (member.voice?.channelId) return false;
+            return true; // Prune inactive member object to conserve RAM heap
+          }
+        }
+      }
     });
 
     this.setupListeners();
@@ -336,7 +277,16 @@ export class Gateway {
 
   public registerModuleManifests(manifests: ModuleManifest[]) {
     this.manifests = manifests;
+    if (this.router) {
+      this.router.updateManifests(manifests);
+    }
     PrefixRegistry.initialize(manifests);
+
+    console.log(`[Gateway] ═══════════════════════════════════════`);
+    console.log(`[Gateway] InteractionRouter active routes: slash, button, selectMenu, modal, autocomplete, help`);
+    console.log(`[Gateway] Pipeline middleware stack: permissions → cooldown → moduleGuard → analytics → executor`);
+    console.log(`[Gateway] Duplicate command warnings: ${PrefixRegistry.getDuplicateWarnings()}`);
+    console.log(`[Gateway] ═══════════════════════════════════════`);
   }
 
   public async connect() {
@@ -440,38 +390,111 @@ export class Gateway {
         }
       } catch (e) {}
 
-      // Send a welcome DM to the server owner
+      // Send welcome message to server owner (DM) and guild channel
       try {
+        const musicClientId = process.env.MUSIC_CLIENT_ID || '1520323151928623125';
+        const musicPerms = process.env.MUSIC_BOT_PERMISSIONS || '36700160';
+        const musicInviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${musicClientId}&permissions=${musicPerms}&scope=bot%20applications.commands&guild_id=${guild.id}`;
+
+        const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setLabel('Add Rage Music Bot')
+            .setStyle(ButtonStyle.Link)
+            .setURL(musicInviteUrl),
+          new ButtonBuilder()
+            .setLabel('Support Server')
+            .setStyle(ButtonStyle.Link)
+            .setURL('https://discord.gg/rageoptimiser')
+        );
+
+        const welcomeEmbed = buildLimeOverviewCard({
+          title: 'WELCOME TO RAGE OPTIMISER ENTERPRISE',
+          subtitle: `EXECUTIVE SECURITY & MANAGEMENT GUIDE FOR ${guild.name.toUpperCase()}`,
+          color: Colors.BRAND,
+          thumbnail: guild.iconURL({ size: 256 }) || undefined,
+          sections: [
+            {
+              title: `${CONFIG_ICON} GENERAL SERVER CONFIGURATION`,
+              items: [
+                'Use `r!config` or `/config` to access the interactive server dashboard.',
+                'Configure Anti-Nuke thresholds, AutoMod filters, Audit Logging, Levels, Backups, and Member Verification.'
+              ]
+            },
+            {
+              title: `${SHIELD_ICON} CONFIDENTIAL SECURITY ENGINE: PREBOT WHITELIST & 2FA`,
+              items: [
+                'Rage Optimiser features an unbypassable **PreBot Whitelist & 2FA Suite** to pre-approve trusted bots with custom role profiles upon join and block unauthorized bots.',
+                '',
+                '**Confidential Owner Commands (Hidden from public slash & help menus)**:',
+                '• `r!prebot add <bot_id | @bot>` — Pre-approve & configure permission profile',
+                '• `r!prebot quickadd <bot_id | @bot>` — Quick add with standard permissions',
+                '• `r!prebot 2fa setup` — Setup Google Authenticator 2FA (Owner Only)',
+                '• `r!prebot 2fa confirm <code>` — Confirm & activate 2FA protection',
+                '• `r!prebot 2fa status` — Check live 2FA enforcement status',
+                '• `r!prebot 2fa disable <code>` — Disable 2FA enforcement',
+                '• `r!prebot remove <bot_id | @bot>` — Revoke bot whitelist entry',
+                '• `r!prebot list` — View approved bot registry',
+                '• `r!extraowner add <@user>` — Delegate owner clearance to trusted team members',
+                '',
+                '*Keep these commands confidential to maintain maximum server security.*'
+              ]
+            },
+            {
+              title: `${LINK_ICON} ADD RAGE MUSIC BOT (OPTIONAL)`,
+              items: [
+                'Music streaming and voice features run on a **dedicated high-performance audio engine**.',
+                `[${VERIFIED_ICON} Click Here to Invite Rage Music to ${guild.name}](${musicInviteUrl})`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Server Owner Security Clearance'
+        });
+
+        // 1. Direct Message to Server Owner
         const owner = await guild.fetchOwner().catch(() => null);
         if (owner) {
-          const musicClientId = process.env.MUSIC_CLIENT_ID || '1520323151928623125';
-          const musicPerms = process.env.MUSIC_BOT_PERMISSIONS || '36700160';
-          const musicInviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${musicClientId}&permissions=${musicPerms}&scope=bot%20applications.commands&guild_id=${guild.id}`;
+          await owner.user.send({ embeds: [welcomeEmbed], components: [actionRow] }).catch(() => {});
+        }
 
-          await owner.user.send({
-            embeds: [{
-              title: '👋 Thanks for inviting Rage Optimiser!',
-              description: `Your server **${guild.name}** is now ready.\nYou can configure all features immediately through your real-time dashboard.`,
-              fields: [
-                {
-                  name: '⚙️ Configure the Bot',
-                  value: 'Use the real-time dashboard to set up security, moderation, logging, levels, backups, and more!',
-                  inline: false
-                },
-                {
-                  name: '🎵 Add Rage Music Bot (Optional)',
-                  value: `Music features run on a **separate dedicated bot** for best performance.\n[Invite Rage Music to ${guild.name}](${musicInviteUrl})`,
-                  inline: false
-                }
-              ],
-              color: 0x22c55e,
-              footer: { text: 'Rage Optimiser' },
-              timestamp: new Date().toISOString()
-            }]
-          }).catch(() => {});
+        // 2. Channel Message to Guild System Channel or first sendable text channel
+        const systemChan = guild.systemChannel || guild.channels.cache.find(
+          (c: any) => c.isTextBased() && c.permissionsFor(guild.members.me)?.has(PermissionFlagsBits.SendMessages)
+        );
+        if (systemChan) {
+          const channelEmbed = buildLimeOverviewCard({
+            title: 'RAGE OPTIMISER ENTERPRISE • BOT INITIALIZATION',
+            subtitle: `UNBYPASSABLE PROTECTION & MANAGEMENT ENGINE FOR ${guild.name.toUpperCase()}`,
+            color: Colors.BRAND,
+            thumbnail: guild.iconURL({ size: 256 }) || undefined,
+            sections: [
+              {
+                title: `${SHIELD_ICON} SYSTEM CAPABILITIES`,
+                items: [
+                  '• Anti-Nuke Protection & Dynamic Thresholds (`r!config antinuke`)',
+                  '• PreBot Whitelist & Google 2FA Protection (`r!prebot`)',
+                  '• Real-time Audit Logging, Moderation, Levels & Music Streaming'
+                ]
+              },
+              {
+                title: `${CONFIG_ICON} QUICK START`,
+                items: [
+                  'Use `/config` or `r!config` to open the server control dashboard.\nUse `r!help` to browse the full command matrix.'
+                ]
+              },
+              {
+                title: `${LINK_ICON} RAGE MUSIC BOT INTEGRATION`,
+                items: [
+                  `High-performance audio streaming is available via **Rage Music Bot**.\n[${VERIFIED_ICON} Click Here to Add Rage Music](${musicInviteUrl})`
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • System Initialized'
+          });
+
+          await (systemChan as any).send({ embeds: [channelEmbed], components: [actionRow] }).catch(() => {});
         }
       } catch (e) {
-        console.error('[Gateway] Error handling guildCreate welcome DM:', e);
+        console.error('[Gateway] Error handling guildCreate welcome onboarding:', e);
       }
     });
 
@@ -573,26 +596,21 @@ export class Gateway {
       this.dispatchEvent('messageUpdate', { oldMessage, newMessage });
     });
 
-    this.client.on('interactionCreate', async (interaction) => {
-      if (interaction.isButton() || interaction.isStringSelectMenu()) {
-        const parts = interaction.customId.split(':');
-        if (parts.length > 1) {
-          const targetExecutorId = parts[parts.length - 1];
-          if (/^\d{17,20}$/.test(targetExecutorId) && interaction.user.id !== targetExecutorId) {
-            return interaction.reply({
-              content: `<:wrong:1532390628330307634> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
-              flags: 64
-            }).catch(() => {});
-          }
-        }
-      }
-
-      if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_category_select')) {
-        await PrefixHelpCenter.handleSelectMenuInteraction(interaction).catch(console.error);
-      } else if (interaction.isButton() && interaction.customId.startsWith('help_')) {
-        await PrefixHelpCenter.handleButtonInteraction(interaction).catch(console.error);
-      }
+    // ── Single interactionCreate listener via InteractionRouter ─────────────
+    // All interaction types (slash, button, selectMenu, modal, autocomplete, help)
+    // are routed through InteractionRouter.route() — no double-dispatch, no race conditions.
+    this.router = new InteractionRouter({
+      dispatchEvent: (name: string, ...args: any[]) => this.dispatchEvent(name, ...args),
+      wrapInteraction: (i: any) => wrapInteraction(i),
+      manifests: this.manifests,
+      getManifests: () => this.manifests,
+      logSyncEvent: (msg: string, type?: 'info' | 'warn' | 'success') => this.logSyncEvent(msg, type || 'info'),
+      getModulesState: (gId?: string) => this.getModulesState(gId),
+      getRegistry: (gId?: string) => this.getRegistry(gId),
+      getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId),
+      updateModuleConfig: (gId: string | undefined, id: string, config: Record<string, any>) => this.updateModuleConfig(gId, id, config),
     });
+    this.client.on('interactionCreate', (raw) => this.router.route(raw));
 
     this.client.on('messageCreate', async (message) => {
       if (!message.author || message.author.bot) return;
@@ -744,62 +762,60 @@ export class Gateway {
         }
       }
 
-      // Handle built-in prefix command: r!prefix
-      if (parsed.commandName === 'prefix') {
+      // Handle built-in prefix command: r!prefix & r!setprefix
+      if (parsed.commandName === 'prefix' || parsed.commandName === 'setprefix') {
         const guildId = message.guildId;
         if (!guildId) {
-          return message.reply('Custom prefixes can only be configured inside a server.');
+          return message.reply(`${WRONG_ICON} Custom prefixes can only be configured inside a server.`);
         }
 
-        const isOwnerOrAdmin = message.guild?.ownerId === message.author.id ||
-          message.author.id === process.env.OWNER_ID ||
-          Boolean(message.member?.permissions.has(PermissionFlagsBits.Administrator));
+        const isAuthorized = await isOwnerOrExtraOwner(message.author.id, message.guild!);
 
         const firstArg = parsed.args[0]?.toLowerCase();
 
         if (!firstArg || firstArg === 'list' || firstArg === 'show') {
           const curPrefix = PrefixResolver.getPrefix(guildId);
           const embed = Embeds.info(
-            '⚙️ Server Prefix Settings',
-            `Current prefix: **\`${curPrefix}\`**   •   Default fallback: **\`r!\`**\n\nChange with: \`${curPrefix}prefix set <new>\` or \`${curPrefix}prefix <new>\``,
+            `${CONFIG_ICON} Server Prefix Settings`,
+            `Current prefix: **\`${curPrefix}\`**   •   Default fallback: **\`r!\`**\n\nChange with: \`${curPrefix}prefix set <new>\` or \`${curPrefix}setprefix <new>\`\n*Restricted to Server Owner & Extra Owners.*`,
             { module: 'system' }
           );
           return message.reply({ embeds: [embed] });
         }
 
         if (firstArg === 'reset') {
-          if (!isOwnerOrAdmin) {
-            return message.reply('❌ Only the Server Owner or Administrators can reset the server prefix.');
+          if (!isAuthorized) {
+            return message.reply(`${WRONG_ICON} **Access Denied**: Resetting the server prefix is strictly restricted to the **Server Owner** (<@${message.guild?.ownerId}>) and designated **Extra Owners**.`);
           }
           const updated = await PrefixResolver.resetPrefix(guildId);
           const embed = Embeds.success(
-            '✅ Prefix Reset',
+            `${VERIFIED_ICON} Prefix Reset`,
             `Server prefix has been reset to the default: **\`${updated}\`**`,
             { module: 'system' }
           );
           return message.reply({ embeds: [embed] });
         }
 
-        // Handle either "r!prefix set !" or "r!prefix !"
-        const targetPrefix = firstArg === 'set' ? parsed.args[1] : parsed.args[0];
+        // Handle either "r!prefix set !" or "r!prefix !" or "r!setprefix !"
+        const targetPrefix = parsed.commandName === 'setprefix' ? parsed.args[0] : (firstArg === 'set' ? parsed.args[1] : parsed.args[0]);
         if (!targetPrefix) {
-          return message.reply('❌ Please specify a new prefix. Example: `r!prefix set !` or `r!prefix !`');
+          return message.reply(`${WRONG_ICON} Please specify a new prefix. Example: \`r!prefix set !\` or \`r!setprefix !\``);
         }
 
-        if (!isOwnerOrAdmin) {
-          return message.reply('❌ Only the Server Owner or Administrators can change the server prefix.');
+        if (!isAuthorized) {
+          return message.reply(`${WRONG_ICON} **Access Denied**: Changing the server prefix is strictly restricted to the **Server Owner** (<@${message.guild?.ownerId}>) and designated **Extra Owners**.`);
         }
 
         try {
           const updated = await PrefixResolver.setPrefix(guildId, targetPrefix);
           const embed = Embeds.success(
-            '✅ Server Prefix Updated',
+            `${VERIFIED_ICON} Server Prefix Updated`,
             `Prefix for **${message.guild?.name}** has been changed to **\`${updated}\`**`,
             { module: 'system' }
           );
           return message.reply({ embeds: [embed] });
         } catch (err: any) {
-          return message.reply(`❌ Failed to update prefix: ${err.message}`);
+          return message.reply(`${WRONG_ICON} Failed to update prefix: ${err.message}`);
         }
       }
 
@@ -811,32 +827,40 @@ export class Gateway {
         const heapMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
 
         const getStatus = (ms: number) => {
-          if (ms < 100) return '🟢 Ultra Fast';
-          if (ms < 250) return '🟡 Normal Speed';
-          if (ms < 500) return '🟠 Moderate Lag';
-          return '🔴 High Latency';
+          if (ms < 100) return `${VERIFIED_ICON} Ultra Fast`;
+          if (ms < 250) return `${TIMER_ICON} Normal Speed`;
+          if (ms < 500) return `${TIMER_ICON} Moderate Lag`;
+          return `${WRONG_ICON} High Latency`;
         };
 
-        const sentMsg = await message.reply('🏓 Measuring ping...').catch(() => null);
+        const sentMsg = await message.reply(`${TIMER_ICON} Measuring ping...`).catch(() => null);
         const roundTrip = sentMsg ? Math.max(1, sentMsg.createdTimestamp - message.createdTimestamp) : 10;
-        const pingColor = wsPing < 150 ? Colors.SUCCESS : wsPing < 300 ? Colors.WARN : Colors.DANGER;
+        const pingColor = wsPing < 150 ? Colors.LIME : wsPing < 300 ? Colors.WARN : Colors.DANGER;
 
-        const embed = Embeds.info(
-          '🏓 Latency & Speed Monitor',
-          'Live connection speed and performance metrics for **Rage Optimiser**.',
-          {
-            module: 'system',
-            footer: 'Rage Optimiser Enterprise  •  Speed Test',
-            fields: [
-              { name: '📡 WebSocket Latency',    value: `\`${wsPing}ms\` — ${getStatus(wsPing)}`,    inline: true },
-              { name: '⚡ REST Round-Trip',      value: `\`${roundTrip}ms\` — ${getStatus(roundTrip)}`, inline: true },
-              { name: '⏱️ Online Since',         value: `<t:${startTime}:R>`,                         inline: true },
-              { name: '💾 RAM Heap',             value: `\`${heapMb} MB\``,                           inline: true },
-              { name: '🧩 Shard',               value: `\`#0 ONLINE\``,                               inline: true },
-              { name: '⚙️ Node.js',             value: `\`${process.version}\``,                      inline: true },
-            ],
-          }
-        ).setColor(pingColor);
+        const embed = buildLimeOverviewCard({
+          title: 'LATENCY & SPEED MONITOR',
+          subtitle: 'LIVE SYSTEM PERFORMANCE',
+          color: pingColor,
+          sections: [
+            {
+              title: `${SHIELD_ICON} GATEWAY & API LATENCY`,
+              items: [
+                `WebSocket Latency: \`${wsPing}ms\` — ${getStatus(wsPing)}`,
+                `REST Round-Trip: \`${roundTrip}ms\` — ${getStatus(roundTrip)}`,
+                `Online Since: <t:${startTime}:R>`
+              ]
+            },
+            {
+              title: `${CONFIG_ICON} HARDWARE & NODE ENVIRONMENT`,
+              items: [
+                `RAM Heap: \`${heapMb} MB\``,
+                `Shard: \`#0 ONLINE\``,
+                `Runtime: \`Node.js ${process.version}\``
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Speed Test'
+        });
 
         if (sentMsg) {
           return sentMsg.edit({ content: null, embeds: [embed] }).catch(() => {});
@@ -850,23 +874,17 @@ export class Gateway {
         return PrefixHelpCenter.handleHelp(message, parsed.args[0]);
       }
 
-      // Lookup Command Metadata (use .get() to include the execute function for PrefixRegistry-only commands)
+      // Lookup Command Metadata — single registry path, no executeMap fallback needed
       const cmdMeta = PrefixRegistry.get(parsed.commandName);
       if (!cmdMeta) {
-        // Ignore music commands so the music module can handle them without clashing
-        const musicCommands = ['play', 'pause', 'resume', 'skip', 'back', 'stop', 'queue', 'shuffle', 'loop', 'autoplay', 'volume', 'clear'];
-        if (musicCommands.includes(parsed.commandName)) {
-          return;
-        }
-
         PrefixAnalytics.trackFailure('unknown');
         const allCmds = PrefixRegistry.getAllCommands().map(c => c.name);
         const suggested = FuzzySuggestions.suggest(parsed.commandName, allCmds);
         const curPfx = PrefixResolver.getPrefix(message.guildId || undefined);
         const unknownDesc = suggested
-          ? `Command \`${parsed.commandName}\` was not found.\n\n> 💡 Did you mean **\`${curPfx}${suggested}\`**?`
+          ? `Command \`${parsed.commandName}\` was not found.\n\n> <:information:1532621274092929124> Did you mean **\`${curPfx}${suggested}\`**?`
           : `Unknown command \`${curPfx}${parsed.commandName}\`.\n\nType **\`${curPfx}help\`** or **\`/help\`** to view all commands.`;
-        const unknownEmbed = Embeds.error('❓ Command Not Found', unknownDesc, { module: 'system' });
+        const unknownEmbed = Embeds.error('Command Not Found', unknownDesc, { module: 'system' });
         await message.reply({ embeds: [unknownEmbed] }).catch(() => {});
         return;
       }
@@ -1122,180 +1140,6 @@ export class Gateway {
       }
     });
 
-    // Slash Command & Component Button routing
-    this.client.on('interactionCreate', async (rawInteraction) => {
-      const interaction = wrapInteraction(rawInteraction);
-
-      if (interaction.isAutocomplete()) {
-        const focusedValue = interaction.options.getFocused();
-        const filtered = protections.filter(p => 
-          p.label.toLowerCase().includes(focusedValue.toLowerCase()) || 
-          p.key.toLowerCase().includes(focusedValue.toLowerCase())
-        );
-        await interaction.respond(
-          filtered.slice(0, 25).map(choice => ({ name: choice.label, value: choice.key }))
-        ).catch(console.error);
-        return;
-      }
-
-      if (interaction.isChatInputCommand()) {
-        const { commandName } = interaction;
-        // SYSTEM MAINTENANCE MODE CHECK — per-guild owner bypass (no global OWNER_ID)
-        // H-2 FIX: pass guildId so each guild's settings are checked, not always 'default_guild'
-        const settings = this.getGlobalSettings(interaction.guildId || undefined);
-        if (settings.maintenanceMode) {
-          const isOwner = interaction.user.id === interaction.guild?.ownerId || 
-                          interaction.user.id === this.client.application?.owner?.id ||
-                          ((this.client.application?.owner as any)?.members && (this.client.application?.owner as any).members.has(interaction.user.id));
-          const member = interaction.member;
-          let isAdmin = isOwner;
-          if (!isAdmin && member && typeof member.permissions !== 'string') {
-             isAdmin = (member.permissions as any).has(PermissionFlagsBits.Administrator);
-          }
-          if (!isAdmin) {
-             this.logSyncEvent(`Blocked command /${commandName} from ${interaction.user.username} due to active Maintenance Mode.`, 'warn');
-             if (interaction.isRepliable()) {
-               await interaction.reply({
-                 content: '🚧 **System Maintenance Mode Active**\nThe server is currently in lockdown mode. All public bot commands are temporarily disabled. Please check back later.',
-                 flags: 64
-               }).catch(() => {});
-             }
-             return;
-          }
-        }
-
-
-        this.logSyncEvent(`Slash command executed: /${commandName}`, 'info');
-        if (interaction.guildId) {
-          AnalyticsService.trackCommand(interaction.guildId, commandName).catch(() => {});
-        }
-
-        // Dispatch command handler matching the active modules
-        for (const manifest of this.manifests) {
-          if (manifest.commands) {
-            const cmd = manifest.commands.find(c => c.name === commandName);
-            if (cmd) {
-
-              const eventObj = manifest.events?.find(e => e.name === `command_${commandName}`);
-              if (eventObj) {
-                try {
-                  const cmdGuildId = interaction.guildId || undefined;
-                  await eventObj.handler(this.client, interaction, { 
-                    guildId: cmdGuildId,
-                    client: this.client,
-                    logSyncEvent: (msgOrGuildId: string | undefined, msgOrType?: string, type?: 'info' | 'warn' | 'success') => {
-                      if (type !== undefined) {
-                        this.logSyncEvent(msgOrGuildId, msgOrType, type);
-                      } else {
-                        this.logSyncEvent(cmdGuildId, msgOrGuildId, msgOrType as any);
-                      }
-                    },
-                    getModulesState: (gId?: string) => this.getModulesState(gId || cmdGuildId),
-                    getRegistry: () => this.getRegistry(cmdGuildId),
-                    getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId || cmdGuildId),
-                    updateModuleConfig: (id: string, config: Record<string, any>) => this.updateModuleConfig(cmdGuildId, id, config),
-                    registry: {
-                      logWhitelistAudit: (guildId: string | undefined, audit: any) => {
-                        // Forward to the real registry via the internal logSyncEvent broadcast
-                        const gId = guildId || cmdGuildId || process.env.GUILD_ID;
-                        this.logSyncEvent(gId, `[Audit] ${audit.action || 'whitelist change'}`, 'info');
-                      },
-                      logWhitelistActivity: (guildId: string | undefined, activity: any) => {
-                        const gId = guildId || cmdGuildId || process.env.GUILD_ID;
-                        this.logSyncEvent(gId, `[Activity] ${activity.action || ''} ${activity.target || ''}`.trim(), 'info');
-                      }
-                    }
-                  });
-                  return;
-                } catch (err) {
-                  console.error(`Error executing command ${commandName} handler:`, err);
-                  const replyPayload = {
-                    content: '❌ An internal error occurred while executing this command.',
-                    flags: 64
-                  };
-                  if (interaction.replied || interaction.deferred) {
-                    await interaction.followUp(replyPayload).catch(() => {});
-                  } else {
-                    await interaction.reply(replyPayload).catch(() => {});
-                  }
-                  return;
-                }
-              }
-            }
-          }
-        }
-
-        const replyPayload = {
-          content: `❌ Command /${commandName} is registered but no module handler is currently active.`,
-          flags: 64
-        };
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(replyPayload).catch(() => {});
-        } else {
-          await interaction.reply(replyPayload).catch(() => {});
-        }
-      } else if (interaction.isButton()) {
-        setTimeout(() => {
-          if (!interaction.replied && !interaction.deferred) {
-            interaction.deferUpdate().catch(() => {});
-          }
-        }, 2200);
-        this.dispatchEvent(`button_${interaction.customId}`, interaction);
-        if (interaction.customId.startsWith('gw_enter_')) {
-          this.dispatchEvent('button_gw_enter_generic', interaction);
-        }
-        if (interaction.customId.startsWith('tickets_v2_')) {
-          this.dispatchEvent('button_tickets_v2_generic', interaction);
-        }
-        if (interaction.customId.startsWith('payment_')) {
-          this.dispatchEvent('button_payment_generic', interaction);
-        }
-        if (interaction.customId.startsWith('addrole_')) {
-          this.dispatchEvent('button_addrole_generic', interaction);
-        }
-        if (interaction.customId.startsWith('wl_')) {
-          this.dispatchEvent('button_wl_generic', interaction);
-        }
-        if (interaction.customId.startsWith('sec_')) {
-          this.dispatchEvent('button_sec_generic', interaction);
-        }
-        if (interaction.customId.startsWith('mod_')) {
-          this.dispatchEvent('button_mod_generic', interaction);
-        }
-        if (interaction.customId.startsWith('help_btn_')) {
-          PrefixHelpCenter.handleButtonInteraction(interaction).catch(() => {});
-        }
-      } else if (interaction.isAnySelectMenu()) {
-        setTimeout(() => {
-          if (!interaction.replied && !interaction.deferred) {
-            interaction.deferUpdate().catch(() => {});
-          }
-        }, 2200);
-        this.dispatchEvent(`select_${interaction.customId}`, interaction);
-        if (interaction.customId.startsWith('tickets_v2_')) {
-          this.dispatchEvent('select_tickets_v2_generic', interaction);
-        }
-        if (interaction.customId.startsWith('payment_')) {
-          this.dispatchEvent('select_payment_generic', interaction);
-        }
-        if (interaction.customId === 'help_category_select') {
-          PrefixHelpCenter.handleSelectMenuInteraction(interaction).catch(() => {});
-        }
-      } else if (interaction.isModalSubmit()) {
-        setTimeout(() => {
-          if (!interaction.replied && !interaction.deferred) {
-            interaction.deferUpdate().catch(() => {});
-          }
-        }, 2200);
-        this.dispatchEvent(`modal_${interaction.customId}`, interaction);
-        if (interaction.customId.startsWith('tickets_v2_')) {
-          this.dispatchEvent('modal_tickets_v2_generic', interaction);
-        }
-        if (interaction.customId.startsWith('payment_')) {
-          this.dispatchEvent('modal_payment_generic', interaction);
-        }
-      }
-    });
   }
 
   public async syncRegistry(guildId?: string) {
@@ -1483,11 +1327,11 @@ export class Gateway {
     }
   }
 
-  private dispatchEvent(eventName: string, ...args: any[]) {
-    this.dispatchEventForGuild(eventName, undefined, ...args);
+  private async dispatchEvent(eventName: string, ...args: any[]): Promise<void> {
+    return this.dispatchEventForGuild(eventName, undefined, ...args);
   }
 
-  private dispatchEventForGuild(eventName: string, guildIdOverride: string | undefined, ...args: any[]) {
+  private async dispatchEventForGuild(eventName: string, guildIdOverride: string | undefined, ...args: any[]): Promise<void> {
     const resolveGuildId = (eventArgs: any[]): string | undefined => {
       if (!eventArgs || eventArgs.length === 0) return undefined;
       const first = eventArgs[0];
@@ -1516,48 +1360,55 @@ export class Gateway {
 
     const guildId = guildIdOverride || resolveGuildId(args) || process.env.GUILD_ID || 'default_guild';
 
+    // Collect and await all matching handler promises so callers (like InteractionRouter)
+    // can await the full round-trip before Discord's 3-second interaction window closes.
+    const handlerPromises: Promise<void>[] = [];
+
     this.manifests.forEach(m => {
-      const ev = m.events?.find(e => e.name === eventName);
+      const ev = m.events?.find((e: any) => e.name === eventName);
       if (ev) {
-        try {
-          const contextObj = { 
-            guildId,
-            logSyncEvent: (msgOrGuildId: string | undefined, msgOrType?: string, type?: 'info' | 'warn' | 'success') => {
-              if (type !== undefined) {
-                this.logSyncEvent(msgOrGuildId, msgOrType, type);
-              } else {
-                this.logSyncEvent(guildId, msgOrGuildId, msgOrType as any);
-              }
-            },
-            getModulesState: (gId?: string) => this.getModulesState(gId || guildId),
-            getRegistry: () => this.getRegistry(guildId),
-            getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId || guildId),
-            updateModuleConfig: (id: string, config: Record<string, any>) => this.updateModuleConfig(guildId, id, config),
-            triggerEmergencyLock: (gId?: string) => this.triggerEmergencyLock(gId || guildId),
-            client: this.client,
-            registry: {
-              logWhitelistAudit: (gId: string | undefined, audit: any) => {
-                this.logSyncEvent(gId || guildId, `[Audit] ${audit.action || 'whitelist change'}`, 'info');
-              },
-              logWhitelistActivity: (gId: string | undefined, activity: any) => {
-                this.logSyncEvent(gId || guildId, `[Activity] ${activity.action || ''} ${activity.target || ''}`.trim(), 'info');
-              }
+        const contextObj = {
+          guildId,
+          logSyncEvent: (msgOrGuildId: string | undefined, msgOrType?: string, type?: 'info' | 'warn' | 'success') => {
+            if (type !== undefined) {
+              this.logSyncEvent(msgOrGuildId, msgOrType, type);
+            } else {
+              this.logSyncEvent(guildId, msgOrGuildId, msgOrType as any);
             }
-          };
-
-          const handlerArgs = [this.client, ...args];
-          // Fill in any middle parameters if the handler expects more than client + args + context
-          while (handlerArgs.length < ev.handler.length - 1) {
-            handlerArgs.push(undefined);
+          },
+          getModulesState: (gId?: string) => this.getModulesState(gId || guildId),
+          getRegistry: () => this.getRegistry(guildId),
+          getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId || guildId),
+          updateModuleConfig: (id: string, config: Record<string, any>) => this.updateModuleConfig(guildId, id, config),
+          triggerEmergencyLock: (gId?: string) => this.triggerEmergencyLock(gId || guildId),
+          client: this.client,
+          registry: {
+            logWhitelistAudit: (gId: string | undefined, audit: any) => {
+              this.logSyncEvent(gId || guildId, `[Audit] ${audit.action || 'whitelist change'}`, 'info');
+            },
+            logWhitelistActivity: (gId: string | undefined, activity: any) => {
+              this.logSyncEvent(gId || guildId, `[Activity] ${activity.action || ''} ${activity.target || ''}`.trim(), 'info');
+            }
           }
-          handlerArgs.push(contextObj);
+        };
 
-          (ev.handler as any)(...handlerArgs);
-        } catch (err) {
-          console.error(`Error in event listener ${eventName} for module ${m.id}:`, err);
+        const handlerArgs = [this.client, ...args];
+        // Fill in any middle parameters if the handler expects more than client + args + context
+        while (handlerArgs.length < ev.handler.length - 1) {
+          handlerArgs.push(undefined);
         }
+        handlerArgs.push(contextObj);
+
+        const p = Promise.resolve()
+          .then(() => (ev.handler as any)(...handlerArgs))
+          .catch((err: any) => {
+            console.error(`Error in event listener ${eventName} for module ${m.id}:`, err);
+          });
+        handlerPromises.push(p);
       }
     });
+
+    await Promise.allSettled(handlerPromises);
   }
 
   private async checkVoicePresence() {

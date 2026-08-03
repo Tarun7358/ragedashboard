@@ -90,13 +90,14 @@ import { WelcomeV2Manifest } from './modules/welcome-v2/manifest.js';
 import { TicketsV2Manifest } from './modules/tickets-v2/manifest.js';
 import { AnalyticsManifest } from './modules/analytics/manifest.js';
 import { AuditManifest } from './modules/audit/manifest.js';
-import { PaymentManifest } from './modules/payment/manifest.js';
 import { ModerationManifest } from './modules/moderation/manifest.js';
 import { BlacklistManifest } from './modules/blacklist/manifest.js';
 import { CommunityManifest } from './modules/community/manifest.js';
 import { DiscordDashboardManifest } from './modules/discord-dashboard/manifest.js';
 import { VerificationManifest } from './modules/verification/manifest.js';
 import { RageEnterpriseManifest } from './modules/rage-enterprise/manifest.js';
+import { PrebotWhitelistManifest, registerPrebotCommands } from './modules/prebot_whitelist/manifest.js';
+import { BotStatsManifest, registerBotStatsCommands } from './modules/botstats/manifest.js';
 
 import { registerTempRoleCommands, checkExpiredTempRoles } from './modules/security/temprole.js';
 import { registerExtraOwnerCommands } from './modules/security/extraowner.js';
@@ -116,6 +117,8 @@ export const ALL_MANIFESTS = [
   AutomationManifest,
   VoiceManifest,
   MemberWhitelistManifest,
+  PrebotWhitelistManifest,
+  BotStatsManifest,
   ReactionRolesManifest,
   LevelingManifest,
   AutomodManifest,
@@ -134,7 +137,6 @@ export const ALL_MANIFESTS = [
   TicketsV2Manifest,
   AnalyticsManifest,
   AuditManifest,
-  PaymentManifest,
   RageEnterpriseManifest,
 ];
 
@@ -155,11 +157,6 @@ async function bootstrap() {
     for (const manifest of ALL_MANIFESTS) {
       registry.registerModule(manifest);
     }
-
-    // Register Prefix & Slash Control Suites
-    registerTempRoleCommands();
-    registerExtraOwnerCommands();
-    registerConfigCommands();
 
     // Load configurations from SQLite
     await registry.loadAllGuilds();
@@ -191,6 +188,13 @@ async function bootstrap() {
     webServer.getDiscordClient = () => gateway ? gateway.client : null;
 
     gateway.registerModuleManifests(ALL_MANIFESTS);
+
+    // Register Prefix & Slash Control Suites (must be invoked after initialize to avoid map clear)
+    registerTempRoleCommands();
+    registerExtraOwnerCommands();
+    registerConfigCommands();
+    registerPrebotCommands();
+    registerBotStatsCommands();
 
     await gateway.connect();
     console.log(`✅ Rage Optimiser booted with ${ALL_MANIFESTS.length} modules registered.`);

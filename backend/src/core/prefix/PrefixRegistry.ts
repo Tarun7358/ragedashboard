@@ -22,7 +22,7 @@ export interface PrefixCommandMeta {
   examples: string[];
   relatedCommands?: string[];
   moduleOwnerId: string;
-  
+
   // Pipeline-ready attributes
   dangerLevel?: 'Low' | 'Medium' | 'High' | 'Critical';
   supportsAutocomplete?: boolean;
@@ -32,12 +32,16 @@ export interface PrefixCommandMeta {
   experimental?: boolean;
   hidden?: boolean;
   confirmationRequired?: boolean;
+
+  // Executor function — stored inline, no separate executeMap required
+  execute?: Function;
 }
 
 export class PrefixRegistry {
   private static commandsMap = new Map<string, PrefixCommandMeta>();
   private static aliasMap = new Map<string, string>();
   private static manifests: ModuleManifest[] = [];
+  private static _duplicateWarnings = 0;
 
   public static DEFAULT_ALIASES: Record<string, string> = {
     'b': 'ban',
@@ -70,20 +74,50 @@ export class PrefixRegistry {
     'ticket-close': 'close'
   };
 
-  private static executeMap = new Map<string, Function>();
+  // ─────────────────────────────────────────────
+  // Public API
+  // ─────────────────────────────────────────────
 
-  public static get(name: string): (PrefixCommandMeta & { execute?: Function }) | undefined {
+  /**
+   * Retrieve a command by name or alias.
+   * Returns the full PrefixCommandMeta including its executor (if registered).
+   * This is the single lookup path — no secondary executeMap exists.
+   */
+  public static get(name: string): PrefixCommandMeta | undefined {
     const canonical = this.aliasMap.get(name.toLowerCase()) || name.toLowerCase();
-    const meta = this.commandsMap.get(canonical);
-    if (!meta) return undefined;
-    return {
-      ...meta,
-      execute: this.executeMap.get(canonical)
-    };
+    return this.commandsMap.get(canonical);
   }
 
+  /**
+   * Register a command programmatically (e.g. built-in or module-less commands).
+   * Stores the executor directly on the meta object inside commandsMap.
+   * Emits a warning and skips if the name is already registered.
+   */
   public static register(meta: Partial<PrefixCommandMeta> & { name: string; description: string; category: string; execute?: Function }): void {
     const name = meta.name.toLowerCase();
+
+    if (this.commandsMap.has(name)) {
+      const existing = this.commandsMap.get(name)!;
+      if (meta.execute) {
+        existing.execute = meta.execute;
+        if (meta.description) existing.description = meta.description;
+        if (meta.usage) existing.usage = meta.usage;
+        if (meta.category) existing.category = meta.category;
+        if (meta.aliases) {
+          existing.aliases = meta.aliases;
+          for (const alias of meta.aliases) {
+            this.aliasMap.set(alias.toLowerCase(), name);
+          }
+        }
+        if (meta.examples) existing.examples = meta.examples;
+        if (meta.hidden !== undefined) existing.hidden = meta.hidden;
+        return;
+      }
+      this._duplicateWarnings++;
+      console.warn(`[PrefixRegistry] WARN: Duplicate registration attempt for command "${name}" — skipped. (Total duplicates: ${this._duplicateWarnings})`);
+      return;
+    }
+
     const commandMeta: PrefixCommandMeta = {
       name,
       description: meta.description,
@@ -94,13 +128,11 @@ export class PrefixRegistry {
       botPermissions: meta.botPermissions || ['SendMessages', 'EmbedLinks'],
       cooldownSeconds: meta.cooldownSeconds || 3,
       examples: meta.examples || [`r!${name}`],
-      moduleOwnerId: 'core',
-      dangerLevel: meta.dangerLevel || 'Low'
+      moduleOwnerId: meta.moduleOwnerId || 'core',
+      dangerLevel: meta.dangerLevel || 'Low',
+      hidden: meta.hidden ?? false,
+      execute: meta.execute,
     };
-
-    if (meta.execute) {
-      this.executeMap.set(name, meta.execute);
-    }
 
     this.commandsMap.set(name, commandMeta);
     for (const alias of commandMeta.aliases) {
@@ -108,10 +140,19 @@ export class PrefixRegistry {
     }
   }
 
+  /**
+   * Initialize the registry from a set of module manifests.
+   * Clears all existing data first, then:
+   *   1. Populates DEFAULT_ALIASES
+   *   2. Auto-discovers commands from each manifest
+   *   3. Registers built-in commands (help, ping, prefix, music, etc.)
+   *   4. Prints a startup summary
+   */
   public static initialize(manifests: ModuleManifest[]): void {
     this.manifests = manifests;
     this.commandsMap.clear();
     this.aliasMap.clear();
+    this._duplicateWarnings = 0;
 
     // 1. Map registered aliases
     for (const [alias, canonical] of Object.entries(this.DEFAULT_ALIASES)) {
@@ -126,11 +167,18 @@ export class PrefixRegistry {
         for (const cmdOfManifest of manifest.commands) {
           const cmd = cmdOfManifest as any;
           const name = cmd.name.toLowerCase();
+
+          if (this.commandsMap.has(name)) {
+            this._duplicateWarnings++;
+            console.warn(`[PrefixRegistry] WARN: Manifest "${manifest.id}" tried to register already-registered command "${name}" — skipped.`);
+            continue;
+          }
+
           const description = cmd.description || `${cmd.name} command`;
           const usage = this.formatUsage(cmd);
           const aliases: string[] = cmd.aliases || [];
 
-          // Find inverted aliases
+          // Find inverted aliases from DEFAULT_ALIASES
           for (const [alias, target] of this.aliasMap.entries()) {
             if (target === name && !aliases.includes(alias)) {
               aliases.push(alias);
@@ -158,7 +206,8 @@ export class PrefixRegistry {
             subcommands: cmd.subcommands || (cmd.options ? cmd.options.filter((o: any) => o.type === 1).map((o: any) => ({ name: o.name, description: o.description })) : []),
             experimental: cmd.experimental ?? false,
             hidden: cmd.hidden ?? false,
-            confirmationRequired: cmd.confirmationRequired ?? false
+            confirmationRequired: cmd.confirmationRequired ?? false,
+            execute: cmd.execute,
           };
 
           this.commandsMap.set(name, meta);
@@ -166,8 +215,11 @@ export class PrefixRegistry {
       }
     }
 
-    // Add built-in core prefix commands if missing
+    // 3. Register built-in commands (using register() so dedup logic applies)
     this.registerBuiltinCommands();
+
+    // 4. Print startup summary
+    this.printStartupSummary();
   }
 
   public static getCommand(nameOrAlias: string): PrefixCommandMeta | undefined {
@@ -193,6 +245,14 @@ export class PrefixRegistry {
     return Array.from(this.commandsMap.values()).filter(c => c.category.toLowerCase() === catLower);
   }
 
+  public static getDuplicateWarnings(): number {
+    return this._duplicateWarnings;
+  }
+
+  // ─────────────────────────────────────────────
+  // Private helpers
+  // ─────────────────────────────────────────────
+
   private static resolveCategory(moduleId: string, moduleName: string): string {
     const map: Record<string, string> = {
       'security': 'Security',
@@ -205,8 +265,11 @@ export class PrefixRegistry {
       'backups': 'Backups',
       'automation': 'Automations',
       'voice': 'Voice',
-      'voice-protection': 'Voice Protection',
+      'voice-protection': 'Voice',
       'member_whitelist': 'Security',
+      'prebot_whitelist': 'Security',
+      'botstats': 'Diagnostics',
+      'config': 'Configuration',
       'reaction-roles': 'Reaction Roles',
       'leveling': 'Leveling & Economy',
       'automod': 'AutoMod',
@@ -215,7 +278,7 @@ export class PrefixRegistry {
       'giveaway': 'Giveaways',
       'reminders': 'Reminders',
       'announcements': 'Announcements',
-      'joinToCreate': 'Join To Create',
+      'joinToCreate': 'Voice',
       'voice_manager': 'Voice',
       'bulk_ops': 'Bulk Operations',
       'diagnostics': 'Diagnostics',
@@ -223,8 +286,7 @@ export class PrefixRegistry {
       'social-updates': 'Social Updates',
       'analytics': 'Analytics',
       'audit': 'Audit',
-      'rage-enterprise': 'Enterprise',
-      'payment': 'Payment QR'
+      'rage-enterprise': 'Enterprise'
     };
 
     return map[moduleId] || 'System';
@@ -246,7 +308,8 @@ export class PrefixRegistry {
   }
 
   private static registerBuiltinCommands(): void {
-    const builtins: PrefixCommandMeta[] = [
+    // ── Core system commands ─────────────────────────────────────
+    const builtins: Array<Partial<PrefixCommandMeta> & { name: string; description: string; category: string }> = [
       {
         name: 'help',
         description: 'Display interactive help system and module overview',
@@ -284,16 +347,14 @@ export class PrefixRegistry {
     ];
 
     for (const b of builtins) {
-      this.commandsMap.set(b.name, b);
-      for (const a of b.aliases) {
-        this.aliasMap.set(a, b.name);
-      }
+      this.register(b as any);
     }
 
-    // Register enterprise shortcuts with accurate category mappings
+    // ── Enterprise shortcut stubs ─────────────────────────────────
     const shortcutCategoryMap: Record<string, string> = {
       antinuke: 'Security',
       extraowner: 'Security',
+      prebot: 'Security',
       antispam: 'AutoMod',
       antilink: 'AutoMod',
       automod: 'AutoMod',
@@ -333,23 +394,24 @@ export class PrefixRegistry {
     };
 
     for (const [name, cat] of Object.entries(shortcutCategoryMap)) {
-      if (!this.commandsMap.has(name)) {
-        this.commandsMap.set(name, {
-          name,
-          description: `Enterprise ${name} control interface`,
-          category: cat,
-          usage: `r!${name}`,
-          aliases: [],
-          cooldownSeconds: 3,
-          examples: [`r!${name}`],
-          moduleOwnerId: 'rage-enterprise',
-          dangerLevel: ['emergency', 'reload', 'restart'].includes(name) ? 'High' : 'Low'
-        });
-      }
+      this.register({
+        name,
+        description: `Enterprise ${name} control interface`,
+        category: cat,
+        usage: `r!${name}`,
+        aliases: [],
+        cooldownSeconds: 3,
+        examples: [`r!${name}`],
+        moduleOwnerId: 'rage-enterprise',
+        hidden: name === 'prebot' || name === 'prebotwhitelist',
+        dangerLevel: ['emergency', 'reload', 'restart'].includes(name) ? 'High' : 'Low'
+      });
     }
 
-    // Register Music prefix commands (music module uses commands: [] — handlers registered via events)
-    const musicCommands: PrefixCommandMeta[] = [
+    // ── Music commands ────────────────────────────────────────────
+    // Registered here so they enter the standard pipeline (permissions, cooldowns, analytics).
+    // The CommandPipeline dispatches them to the music module's manifest event handlers.
+    const musicCommands: Array<Partial<PrefixCommandMeta> & { name: string; description: string; category: string }> = [
       {
         name: 'play',
         description: 'Play a song from YouTube, Spotify, SoundCloud or a direct URL.',
@@ -485,12 +547,26 @@ export class PrefixRegistry {
     ];
 
     for (const mc of musicCommands) {
-      if (!this.commandsMap.has(mc.name)) {
-        this.commandsMap.set(mc.name, mc);
-        for (const alias of mc.aliases) {
-          this.aliasMap.set(alias, mc.name);
-        }
-      }
+      this.register(mc as any);
     }
+  }
+
+  private static printStartupSummary(): void {
+    const totalCmds = this.commandsMap.size;
+    const totalAliases = this.aliasMap.size;
+    const categories = this.getCategories();
+    const musicCmds = this.getCommandsByCategory('Voice').filter(c => c.moduleOwnerId === 'music').length;
+
+    console.log(`[PrefixRegistry] ═══════════════════════════════════════`);
+    console.log(`[PrefixRegistry] Initialized: ${totalCmds} commands across ${categories.length} categories`);
+    console.log(`[PrefixRegistry] Aliases mapped: ${totalAliases}`);
+    console.log(`[PrefixRegistry] Music commands (pipeline-integrated): ${musicCmds}`);
+    console.log(`[PrefixRegistry] Categories: ${categories.join(', ')}`);
+    if (this._duplicateWarnings > 0) {
+      console.warn(`[PrefixRegistry] ⚠  Duplicate registrations suppressed: ${this._duplicateWarnings}`);
+    } else {
+      console.log(`[PrefixRegistry] Duplicate warnings: 0`);
+    }
+    console.log(`[PrefixRegistry] ═══════════════════════════════════════`);
   }
 }

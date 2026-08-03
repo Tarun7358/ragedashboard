@@ -14,6 +14,7 @@ import play from 'play-dl';
 import ytdl from '@distube/ytdl-core';
 import { spawn, ChildProcess, execFile } from 'child_process';
 import { promisify } from 'util';
+import { request as httpRequest } from 'http';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -295,8 +296,13 @@ export class GuildQueue {
     }
   }
 
-  private async lockQueue() {
+  private async lockQueue(timeoutMs = 5000) {
+    const start = Date.now();
     while (this.queueLock) {
+      if (Date.now() - start > timeoutMs) {
+        console.warn('[Music] Queue lock timeout — forcing unlock to prevent deadlock');
+        break;
+      }
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     this.queueLock = true;
@@ -376,15 +382,14 @@ export class GuildQueue {
   }
 
   public async play(track: Track, voiceChannel: any) {
+    if (!voiceChannel) {
+      throw new Error('You must be in a voice channel to play music.');
+    }
     await this.lockQueue();
     try {
       this.client = voiceChannel.client;
       this.textChannelId = this.textChannelId || voiceChannel.id;
       this.voiceChannel = voiceChannel;
-      
-      if (!voiceChannel) {
-        throw new Error('You must be in a voice channel to play music.');
-      }
 
       this.setupConnection(voiceChannel);
 
@@ -409,15 +414,14 @@ export class GuildQueue {
   }
 
   public async playPlaylist(tracks: Track[], voiceChannel: any) {
+    if (!voiceChannel) {
+      throw new Error('You must be in a voice channel to play music.');
+    }
     await this.lockQueue();
     try {
       this.client = voiceChannel.client;
       this.textChannelId = this.textChannelId || voiceChannel.id;
       this.voiceChannel = voiceChannel;
-
-      if (!voiceChannel) {
-        throw new Error('You must be in a voice channel to play music.');
-      }
 
       this.setupConnection(voiceChannel);
 
@@ -712,7 +716,9 @@ export class GuildQueue {
         afFilters.push(`atempo=${this.speed}`);
       }
 
-      if (this.pitch !== 1.0) {
+      // Nightcore/Vaporwave already bake in their own asetrate — skip custom pitch to avoid conflict (BUG FIX #7)
+      const hasAsetrate = this.activeFilters.includes('nightcore') || this.activeFilters.includes('vaporwave');
+      if (this.pitch !== 1.0 && !hasAsetrate) {
         const rate = Math.round(48000 * this.pitch);
         afFilters.push(`asetrate=${rate}`);
         afFilters.push(`atempo=${(1 / this.pitch).toFixed(4)}`);
@@ -862,7 +868,9 @@ export class GuildQueue {
       this.preloadNextTracks().catch(() => {});
 
     } catch (err) {
-      await this.handleTrackError(nextTrack, err);
+      // Use process.nextTick to release the queue lock BEFORE handleTrackError
+      // re-enters playNext(), preventing a deadlock spin loop (BUG FIX #3)
+      process.nextTick(() => this.handleTrackError(nextTrack, err).catch(console.error));
     }
   }
 
@@ -929,42 +937,11 @@ export class GuildQueue {
   }
 
   public destroy() {
-    this.stop();
+    this.stop(); // stop() already kills all streams, processes and resets state
     if (this.connection) {
-      try {
-        this.connection.destroy();
-      } catch (e) {}
+      try { this.connection.destroy(); } catch (e) {}
     }
     this.connection = null;
-    if (this.playDlStream) {
-      try {
-        this.playDlStream.destroy();
-      } catch (e) {}
-      this.playDlStream = null;
-    }
-    if (this.currentProcess) {
-      try {
-        if (this.currentProcess.stdout) {
-          this.currentProcess.stdout.unpipe();
-          this.currentProcess.stdout.destroy();
-        }
-        this.currentProcess.kill();
-      } catch (e) {}
-      this.currentProcess = null;
-    }
-    if (this.ffmpegProcess) {
-      try {
-        if (this.ffmpegProcess.stdin) {
-          this.ffmpegProcess.stdin.end();
-          this.ffmpegProcess.stdin.destroy();
-        }
-        if (this.ffmpegProcess.stdout) {
-          this.ffmpegProcess.stdout.destroy();
-        }
-        this.ffmpegProcess.kill();
-      } catch (e) {}
-      this.ffmpegProcess = null;
-    }
     if (this.progressInterval) {
       clearInterval(this.progressInterval);
       this.progressInterval = null;
@@ -1029,12 +1006,22 @@ export class GuildQueue {
       }
     };
 
-    const CORE_API = `http://localhost:${process.env.PORT || 5000}`;
-    fetch(`${CORE_API}/api/internal/music/state`, {
+    // Use Node.js http module instead of global fetch for Linux/Node <18 compatibility (BUG FIX #11)
+    const CORE_API_PORT = parseInt(process.env.PORT || '5000', 10);
+    const postData = JSON.stringify(statePayload);
+    const req = httpRequest({
+      hostname: '127.0.0.1',
+      port: CORE_API_PORT,
+      path: '/api/internal/music/state',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(statePayload)
-    }).catch(() => {});
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    }, () => {});
+    req.on('error', () => {});
+    req.write(postData);
+    req.end();
   }
 
   public async updatePanel(client: any) {

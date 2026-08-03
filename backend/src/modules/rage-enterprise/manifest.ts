@@ -4,6 +4,8 @@ import { RageEnterpriseService } from './service.js';
 import { Embeds, Colors, VERIFIED_ICON, WRONG_ICON, buildLimeOverviewCard } from '../../core/UIFactory.js';
 import { getUnifiedWhitelistEntries } from '../../utils/whitelistCheck.js';
 
+import { buildAntiNukeOverview } from '../config/manifest.js';
+
 // TODO:
 // Dashboard currently disabled.
 // Planned for Enterprise Web Panel.
@@ -71,13 +73,8 @@ export const RageEnterpriseManifest: ModuleManifest = {
         await handleEnterpriseAction(subcommand, client, interaction, context);
       }
     },
-    // Prefix command shortcuts event handlers
+    // Enterprise dashboard shortcut event handlers (only for unmapped utility commands)
     ...[
-      'security', 'lockdown', 'quarantine', 'whitelist', 'antinuke', 'antispam', 'antilink', 'verification', 'logs', 'raidmode',
-      'ban', 'tempban', 'kick', 'mute', 'timeout', 'purge', 'warn', 'notes',
-      'welcome', 'autorole', 'goodbye', 'birthday', 'boost', 'milestones',
-      'play', 'queue', 'skip', 'shuffle', 'autoplay', 'filters', 'lyrics', 'volume',
-      'config', 'setup', 'modules', 'permissions', 'premium', 'analytics',
       'status', 'performance', 'telemetry', 'health', 'uptime', 'cache', 'memory',
       'emergency', 'diagnostics', 'developer', 'reload', 'restart', 'sync', 'debug'
     ].map(cmdName => ({
@@ -88,30 +85,6 @@ export const RageEnterpriseManifest: ModuleManifest = {
     })),
 
     // BUTTON HANDLERS
-    {
-      name: 'button_an_toggle_all',
-      handler: async (client: any, interaction: any, context: any) => {
-        const guildId = interaction.guildId;
-        const modules = context.getModulesState(guildId);
-        const secMod = modules.find((m: any) => m.id === 'security') || {};
-        const newStatus = !(secMod.config?.antiNukeEnabled);
-        context.updateModuleConfig('security', { ...(secMod.config || {}), antiNukeEnabled: newStatus });
-        const res = RageEnterpriseService.getSecurityOverview(interaction.guild, context);
-        await interaction.update(res);
-      }
-    },
-    {
-      name: 'button_an_toggle_raid',
-      handler: async (client: any, interaction: any, context: any) => {
-        const guildId = interaction.guildId;
-        const modules = context.getModulesState(guildId);
-        const secMod = modules.find((m: any) => m.id === 'security') || {};
-        const newStatus = !(secMod.config?.raidModeEnabled);
-        context.updateModuleConfig('security', { ...(secMod.config || {}), raidModeEnabled: newStatus });
-        const res = RageEnterpriseService.getSecurityOverview(interaction.guild, context);
-        await interaction.update(res);
-      }
-    },
     {
       name: 'button_an_view_whitelists',
       handler: async (client: any, interaction: any, context: any) => {
@@ -133,8 +106,16 @@ export const RageEnterpriseManifest: ModuleManifest = {
     {
       name: 'select_an_rule_select',
       handler: async (client: any, interaction: any, context: any) => {
-        const res = RageEnterpriseService.getSecurityOverview(interaction.guild, context);
-        await interaction.update(res);
+        const guildId = interaction.guildId;
+        const modules = context.getModulesState ? context.getModulesState(guildId) : [];
+        const secMod = modules.find((m: any) => m.id === 'security') || {};
+        const selectedGroup = interaction.values?.[0];
+        const res = buildAntiNukeOverview(secMod.config || {}, selectedGroup);
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(res).catch(() => {});
+        } else {
+          await interaction.update(res).catch(() => {});
+        }
       }
     },
     {

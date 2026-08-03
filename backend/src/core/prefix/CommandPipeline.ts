@@ -4,7 +4,7 @@ import { PrefixCooldownManager } from './PrefixCooldownManager.js';
 import { PrefixPermissionManager } from './PrefixPermissionManager.js';
 import { PrefixAnalytics } from './PrefixAnalytics.js';
 import { SyntheticInteraction } from './SyntheticInteraction.js';
-import { ParsedCommand } from './PrefixParser.js';
+import { ParsedCommand, PrefixParser } from './PrefixParser.js';
 
 export class CommandContext {
   public message: Message;
@@ -69,7 +69,7 @@ export class CommandPipeline {
       const modState = modules.find((m: any) => m.id === cmdMeta.moduleOwnerId);
       
       const isManagementCmd = ['setup', 'enable', 'config', 'settings', 'profile', 'role', 'branding', 'preset'].includes(parsed.subcommand || '') ||
-        ['payment', 'setup-tickets', 'setup-discord-dashboard', 'security', 'logs', 'backup', 'audit', 'diagnostics', 'automod', 'automation'].includes(cmdMeta.name);
+        ['setup-tickets', 'setup-discord-dashboard', 'security', 'logs', 'backup', 'audit', 'diagnostics', 'automod', 'automation'].includes(cmdMeta.name);
 
       if (cmdMeta.moduleOwnerId !== 'core' && !isManagementCmd && (!modState || modState.status !== 'enabled')) {
         return this.sendError(ctx, `The backing module **\`${cmdMeta.moduleOwnerId}\`** is currently disabled on this server. Run \`r!${cmdMeta.name} enable\` or use setup commands to activate it.`);
@@ -137,21 +137,37 @@ export class CommandPipeline {
         }
       }
 
-      // 8. Execute Business Logic Handler
+      // 8. Enrich parsed.options with semantic named args before constructing SyntheticInteraction.
+      //    This lets getString()/getInteger() etc. resolve by option name instead of positional index.
+      PrefixParser.enrichOptions(ctx.parsed, cmdMeta);
+
+      // 9. Execute Business Logic Handler
       const syntheticInteraction = new SyntheticInteraction(ctx.message, ctx.parsed, cmdMeta);
       let handlerFound = false;
 
-      for (const manifest of manifests) {
-        const eventObj = manifest.events?.find((e: any) => e.name === `command_${cmdMeta.name}`);
+      // Path A: manifest event handler (standard module commands)
+      // Prioritize the manifest that explicitly owns the command or module ID
+      let targetManifest = manifests.find(m => m.id === cmdMeta.moduleOwnerId || m.commands?.some((c: any) => c.name === cmdMeta.name));
+      if (targetManifest) {
+        const eventObj = targetManifest.events?.find((e: any) => e.name === `command_${cmdMeta.name}`);
         if (eventObj) {
           handlerFound = true;
           await eventObj.handler(ctx.message.client, syntheticInteraction, ctx.extra);
-          break;
         }
       }
 
-      // Fallback: commands registered directly via PrefixRegistry.register() with their own execute()
-      // (e.g. extraowner, temprole) don't have a manifest event — call execute() directly.
+      if (!handlerFound) {
+        for (const manifest of manifests) {
+          const eventObj = manifest.events?.find((e: any) => e.name === `command_${cmdMeta.name}`);
+          if (eventObj) {
+            handlerFound = true;
+            await eventObj.handler(ctx.message.client, syntheticInteraction, ctx.extra);
+            break;
+          }
+        }
+      }
+
+      // Path B: execute stored directly on meta (commands registered via PrefixRegistry.register())
       if (!handlerFound && typeof cmdMeta.execute === 'function') {
         handlerFound = true;
         await cmdMeta.execute(ctx.message, ctx.args, ctx.extra);
@@ -160,7 +176,7 @@ export class CommandPipeline {
       this.locks.delete(lockKey);
 
       if (!handlerFound) {
-        return this.sendError(ctx, 'Command registered in registry but no command handler was found.');
+        return this.sendError(ctx, 'Command registered in registry but no active handler was found. Check that the module is loaded and the manifest event is named correctly.');
       }
 
       // 9. Post-Execution Telemetry & Success Logs

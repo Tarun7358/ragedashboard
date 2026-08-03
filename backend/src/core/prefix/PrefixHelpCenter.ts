@@ -42,7 +42,6 @@ export class PrefixHelpCenter {
     'Reaction Roles': { icon: '<:membericons:1532426097428267180>', description: 'Self-Assign Role Panels & Triggers' },
     'Automations': { icon: '<:bot:1532621107746570391>', description: 'Custom Auto-Responders & Event Hooks' },
     'Social Updates': { icon: '<:link:1532620952087826602>', description: 'YouTube & Social Media Stream Alerts' },
-    'Payment QR': { icon: '<:vip:1532620837117759508>', description: 'QR Payment Portals, Invoices & Subscriptions' },
     'System': { icon: '<:bot:1532621107746570391>', description: 'System Diagnostics, Bot Health, Uptime & Latency' },
     'Bulk Operations': { icon: '<:gavel:1532621057318584380>', description: 'Mass Role & Channel Management Utilities' },
     'Diagnostics': { icon: '<:bot:1532621107746570391>', description: 'Deep Cluster Health & Resource Metrics' },

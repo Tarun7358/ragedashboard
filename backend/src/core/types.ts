@@ -66,6 +66,22 @@ export interface DiscordCommand {
   name: string;
   description: string;
   options?: DiscordCommandOption[];
+  execute?: (message: any, args: string[], extra?: any) => Promise<any> | any;
+  aliases?: string[];
+  usage?: string;
+  category?: string;
+  cooldownSeconds?: number;
+  userPermissions?: string[];
+  botPermissions?: string[];
+  examples?: string[];
+  dangerLevel?: string;
+  supportsAutocomplete?: boolean;
+  supportsMentions?: boolean;
+  argumentTypes?: string[];
+  subcommands?: any[];
+  experimental?: boolean;
+  hidden?: boolean;
+  confirmationRequired?: boolean;
 }
 
 export interface ModuleManifest {

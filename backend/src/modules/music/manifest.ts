@@ -774,9 +774,10 @@ export const MusicManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const queue = QueueManager.getQueue(interaction.guild.id);
         if (!checkVoicePermissions(interaction, queue)) return;
-        const prevTrack = queue.playHistory[1];
+        const prevTrack = queue.playHistory[1]; // [0]=current, [1]=previous
         if (prevTrack) {
-          if (queue.currentTrack) queue.queue.unshift(queue.currentTrack);
+          // Insert prev track at front of queue, do NOT re-insert current
+          // (skip() → playNext() will record current into history itself)
           queue.queue.unshift(prevTrack);
           queue.skip();
           const embed = createLimeEmbed({
@@ -1056,6 +1057,7 @@ export const MusicManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const queue = QueueManager.getQueue(interaction.guildId);
         queue.viewMode = 'filters';
+        queue.queuePage = 0; // reset page on view switch (BUG FIX #8)
         await queue.updatePanel(client);
         await interaction.deferUpdate().catch(() => {});
       }
@@ -1065,6 +1067,7 @@ export const MusicManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const queue = QueueManager.getQueue(interaction.guildId);
         queue.viewMode = 'volume';
+        queue.queuePage = 0;
         await queue.updatePanel(client);
         await interaction.deferUpdate().catch(() => {});
       }
@@ -1175,7 +1178,7 @@ export const MusicManifest: ModuleManifest = {
               url: trackInfo.url,
               duration: trackInfo.durationRaw || 'Unknown',
               thumbnail: trackInfo.thumbnails?.[0]?.url || '',
-              requester: interaction.user.tag,
+              requester: interaction.user.username,
               platform: 'YouTube'
             };
             await queue.play(track, interaction.member.voice.channel);
@@ -1544,7 +1547,7 @@ export const MusicManifest: ModuleManifest = {
                 url: `search:${spTrack.name} ${spTrack.artists?.[0]?.name || ''}`,
             duration: formatSpotifyDuration(spTrack),
                 thumbnail: 'https://storage.googleapis.com/pr-newsroom-wp/1/2018/11/Spotify_Logo_CMYK_Green.png',
-                requester: interaction.user.tag,
+                requester: interaction.user.username,
                 platform: 'Spotify'
               };
               await queue.play(track, voiceChannel);
@@ -1565,7 +1568,7 @@ export const MusicManifest: ModuleManifest = {
             url: trackInfo.url,
             duration: trackInfo.durationRaw || 'Unknown',
             thumbnail: trackInfo.thumbnails?.[0]?.url || '',
-            requester: interaction.user.tag,
+            requester: interaction.user.username,
             views: trackInfo.views ? trackInfo.views.toLocaleString() : 'N/A',
             uploadDate: trackInfo.uploadedAt || 'N/A',
             platform: 'YouTube'

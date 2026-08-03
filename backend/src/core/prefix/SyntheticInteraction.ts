@@ -1,5 +1,6 @@
-import { Message, User, GuildMember, Channel, Role, TextChannel, MessageReplyOptions, EmbedBuilder } from 'discord.js';
+import { Message, User, GuildMember, Channel, Role, TextChannel } from 'discord.js';
 import { ParsedCommand } from './PrefixParser.js';
+import { PayloadFormatter } from '../PayloadFormatter.js';
 
 export class SyntheticInteraction {
   public id: string;
@@ -21,6 +22,11 @@ export class SyntheticInteraction {
   private commandDef: any;
   private replyMessage: Message | null = null;
   private ephemeralMessages: Message[] = [];
+
+  // BUG-SUB-001 FIX: tracks whether getSubcommand() has been called.
+  // Kept for backward compatibility — getString() now reads parsed.options first,
+  // so positional offset logic is the fallback path only.
+  private _subcommandConsumed = false;
 
   constructor(message: Message, parsed: ParsedCommand, commandDef?: any) {
     this.message = message;
@@ -46,53 +52,19 @@ export class SyntheticInteraction {
     return this.member?.permissions;
   }
 
-  public isChatInputCommand(): boolean {
-    return true;
-  }
+  public isChatInputCommand(): boolean { return true; }
+  public isRepliable(): boolean { return true; }
+  public isButton(): boolean { return false; }
+  public isSelectMenu(): boolean { return false; }
+  public isAutocomplete(): boolean { return false; }
 
-  public isRepliable(): boolean {
-    return true;
-  }
-
-  public isButton(): boolean {
-    return false;
-  }
-
-  public isSelectMenu(): boolean {
-    return false;
-  }
-
-  public isAutocomplete(): boolean {
-    return false;
-  }
+  // ── Reply API ────────────────────────────────────────────────────────────
 
   public async reply(options: any): Promise<any> {
-    if (this.replied) {
-      return this.followUp(options);
-    }
-    if (this.deferred && this.replyMessage) {
-      return this.editReply(options);
-    }
+    if (this.replied) return this.followUp(options);
+    if (this.deferred && this.replyMessage) return this.editReply(options);
 
-    const payload = this.normalizePayload(options);
-    const isEphemeral = false; // Always display responses publicly in channel for everyone
-
-    if (isEphemeral) {
-      try {
-        const dm = await this.user.send(payload);
-        this.ephemeralMessages.push(dm);
-        this.replied = true;
-        return dm;
-      } catch {
-        // Fallback to channel reply if DM is closed
-        const msg = await (this.channel as TextChannel).send(payload);
-        this.ephemeralMessages.push(msg);
-        this.replied = true;
-        // Auto-delete ephemeral fallback after 10s
-        setTimeout(() => msg.delete().catch(() => {}), 10000);
-        return msg;
-      }
-    }
+    const payload = PayloadFormatter.normalize(options, this.user);
 
     const sent = await this.message.reply(payload);
     this.replyMessage = sent;
@@ -109,7 +81,7 @@ export class SyntheticInteraction {
   }
 
   public async editReply(options: any): Promise<any> {
-    const payload = this.normalizePayload(options);
+    const payload = PayloadFormatter.normalize(options, this.user);
     if (this.replyMessage) {
       return await this.replyMessage.edit(payload as any);
     }
@@ -117,176 +89,22 @@ export class SyntheticInteraction {
   }
 
   public async followUp(options: any): Promise<any> {
-    const payload = this.normalizePayload(options);
-    const isEphemeral = Boolean(options && (options.flags === 64 || options.ephemeral));
-
-    if (isEphemeral) {
-      try {
-        return await this.user.send(payload);
-      } catch {
-        const msg = await (this.channel as TextChannel).send(payload);
-        setTimeout(() => msg.delete().catch(() => {}), 10000);
-        return msg;
-      }
-    }
+    const payload = PayloadFormatter.normalize(options, this.user);
     return await (this.channel as TextChannel).send(payload);
   }
 
-  private normalizePayload(options: any): MessageReplyOptions {
-    if (typeof options === 'string') {
-      options = { content: options };
-    }
-    const copy = { ...options };
-    delete copy.flags;
-    delete copy.ephemeral;
-
-    const verifiedIcon = '<a:approved:1532390590707142956>';
-    const wrongIcon = '<:wrong:1532390628330307634>';
-    const shieldIcon = '<:shield:1532403012751065179>';
-    const timerIcon = '<:timer:1532620491662037123>';
-    const ticketIcon = '<:ticket:1532620631466836021>';
-    const configIcon = '<:config:1532425712844144701>';
-    const memberIcon = '<:member:1532621317487071426>';
-    const botIcon = '<:bot:1532621107746570391>';
-    const infoIcon = '<:information:1532621274092929124>';
-    const statsIcon = '<:stats:1532429110775779459>';
-    const gavelIcon = '<:gavel:1532621057318584380>';
-
-    const sanitizeText = (str: string): string => {
-      if (!str || typeof str !== 'string') return str;
-      return str
-        .replace(/<a:verifiedtwitter:\d+>/g, verifiedIcon)
-        .replace(/• ᴵˢ ɢʟᴏʙᴀʟ/g, '')
-        .replace(/✅/g, verifiedIcon)
-        .replace(/❌/g, wrongIcon)
-        .replace(/🔒/g, shieldIcon)
-        .replace(/🛡️/g, shieldIcon)
-        .replace(/⚠️/g, wrongIcon)
-        .replace(/⏳/g, timerIcon)
-        .replace(/⏱️/g, timerIcon)
-        .replace(/🔨/g, gavelIcon)
-        .replace(/📊/g, statsIcon)
-        .replace(/📈/g, statsIcon)
-        .replace(/⚙️/g, configIcon)
-        .replace(/🔧/g, configIcon)
-        .replace(/👥/g, memberIcon)
-        .replace(/👤/g, memberIcon)
-        .replace(/🤖/g, botIcon)
-        .replace(/ℹ️/g, infoIcon)
-        .replace(/📋/g, infoIcon)
-        .replace(/📝/g, infoIcon)
-        .replace(/🎟️/g, ticketIcon)
-        .replace(/🎫/g, ticketIcon)
-        .replace(/(?:<:wrong:\d+>|<a:approved:\d+>|<:shield:\d+>|<:timer:\d+>|[❌✅🔒⚠️🛡️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|<:shield:\d+>|<:timer:\d+>|[❌✅🔒⚠️🛡️])+/g, (match: string) => {
-          if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️')) {
-            return wrongIcon;
-          }
-          if (match.includes('🔒') || match.includes('🛡️') || match.includes('<:shield:')) {
-            return shieldIcon;
-          }
-          return verifiedIcon;
-        });
-    };
-
-    // Filter out invalid or non-ActionRow components
-    if (Array.isArray(copy.components)) {
-      copy.components = copy.components.filter((c: any) => {
-        if (!c) return false;
-        // Keep valid ActionRowBuilders or objects with type === 1 (ActionRow) or components array
-        return typeof c.addComponents === 'function' || c.type === 1 || (Array.isArray(c.components) && !c.accentColor);
-      });
-      if (copy.components.length === 0) {
-        delete copy.components;
-      }
-    }
-
-    // Case 1: Convert raw string content to standard EmbedBuilder
-    if (copy.content && (typeof copy.content === 'string') && (!copy.embeds || copy.embeds.length === 0)) {
-      const isErr = copy.content.includes('❌') || 
-                    copy.content.includes('🔒') || 
-                    copy.content.toLowerCase().includes('failed') || 
-                    copy.content.toLowerCase().includes('error') || 
-                    copy.content.toLowerCase().includes('denied') ||
-                    copy.content.toLowerCase().includes('invalid');
-
-      const cleanContent = sanitizeText(copy.content.replace(/^[❌✅🔒⚠️🧊🌡️🔓🧹🔨✏️⏱️🔕👁️📋📜📈📝🔗🏓🪙🎲😂☀️💡]+\s*/, '').trim());
-      const icon = isErr ? wrongIcon : verifiedIcon;
-      const color = isErr ? 0xEF4444 : 0x99CC00;
-
-      copy.embeds = [
-        new EmbedBuilder()
-          .setColor(color)
-          .setDescription(`${icon} ${this.user} ${cleanContent}`.trim())
-          .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
-          .setTimestamp()
-      ];
-      delete copy.content;
-    }
-    // Case 2: Embeds array provided -> Sanitize icons, colors, and footer
-    else if (Array.isArray(copy.embeds)) {
-      copy.embeds = copy.embeds.map((emb: any) => {
-        if (!emb) return emb;
-        let json = typeof emb.toJSON === 'function' ? emb.toJSON() : { ...emb };
-
-        // Clean title & description
-        if (json.title) json.title = sanitizeText(json.title);
-        if (json.description) json.description = sanitizeText(json.description);
-
-        // Clean fields
-        if (Array.isArray(json.fields)) {
-          json.fields = json.fields.map((f: any) => ({
-            ...f,
-            name: sanitizeText(f.name),
-            value: sanitizeText(f.value)
-          }));
-        }
-
-        // Clean author name
-        if (json.author && json.author.name) {
-          json.author.name = sanitizeText(json.author.name);
-        }
-
-        // Clean footer
-        if (!json.footer || !json.footer.text) {
-          json.footer = { text: 'Rage Optimiser • Unbypassable Security' };
-        } else {
-          json.footer.text = json.footer.text
-            .replace(/Unbypassable Security \| Menu Expired Rescue it/gi, 'Rage Optimiser • Unbypassable Security')
-            .replace(/Rage Optimiser • Security Engine/gi, 'Rage Optimiser • Unbypassable Security')
-            .replace(/Rage Optimiser • IS GLOBAL/gi, 'Rage Optimiser • Unbypassable Security');
-        }
-
-        // Replace default violet color #7c5cfc / #84cc16 with primary 0x99CC00
-        if (!json.color || json.color === 0x7c5cfc || json.color === 8150268 || json.color === 0x84cc16) {
-          json.color = 0x99CC00;
-        }
-
-        return EmbedBuilder.from(json);
-      });
-    }
-
-    if (!copy.content && (!copy.embeds || copy.embeds.length === 0) && (!copy.components || copy.components.length === 0) && (!copy.files || copy.files.length === 0)) {
-      copy.embeds = [
-        new EmbedBuilder()
-          .setColor(0x99CC00)
-          .setTitle(`${verifiedIcon} Command Executed`)
-          .setDescription(`Command \`${this.commandName}\` completed successfully.`)
-          .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
-          .setTimestamp()
-      ];
-    }
-
-    return copy;
-  }
+  // ── Options API (mirrors discord.js CommandInteractionOptionResolver) ──────
 
   public options = {
+    /**
+     * Resolve a User option.
+     * Checks mention first, then named options map, then positional fallback.
+     */
     getUser: (name: string, required?: boolean): User | null => {
-      // 1. Check direct mention
       const mentionedUser = this.message.mentions.users.first();
       if (mentionedUser) return mentionedUser;
 
-      // 2. Check flags or args for ID or username
-      const val = this.parsed.flags[name.toLowerCase()] || this.parsed.args[0];
+      const val = this.parsed.options[name] ?? this.parsed.flags[name.toLowerCase()];
       if (typeof val === 'string') {
         const idMatch = val.match(/\d{17,19}/);
         if (idMatch) {
@@ -294,143 +112,247 @@ export class SyntheticInteraction {
           if (userObj) return userObj;
         }
       }
+
+      // Positional fallback (BUG-SUB-001 compat)
+      const offset = this._subcommandConsumed ? 1 : 0;
+      const posVal = this.parsed.args[offset];
+      if (typeof posVal === 'string') {
+        const idMatch = posVal.match(/\d{17,19}/);
+        if (idMatch) return this.client.users.cache.get(idMatch[0]) ?? null;
+      }
       return null;
     },
 
+    /**
+     * Resolve a GuildMember option.
+     */
     getMember: (name: string, required?: boolean): GuildMember | null => {
-      // 1. Check direct mention
       const mentionedMember = this.message.mentions.members?.first();
       if (mentionedMember) return mentionedMember;
 
-      // 2. Check guild cache by ID or username
-      const val = this.parsed.flags[name.toLowerCase()] || this.parsed.args[0];
+      const val = this.parsed.options[name] ?? this.parsed.flags[name.toLowerCase()];
       if (typeof val === 'string' && this.guild) {
         const idMatch = val.match(/\d{17,19}/);
-        if (idMatch) {
-          const memberObj = this.guild.members.cache.get(idMatch[0]);
-          if (memberObj) return memberObj;
-        }
+        if (idMatch) return this.guild.members.cache.get(idMatch[0]) ?? null;
+      }
+
+      const offset = this._subcommandConsumed ? 1 : 0;
+      const posVal = this.parsed.args[offset];
+      if (typeof posVal === 'string' && this.guild) {
+        const idMatch = posVal.match(/\d{17,19}/);
+        if (idMatch) return this.guild.members.cache.get(idMatch[0]) ?? null;
       }
       return null;
     },
 
+    /**
+     * Resolve a string option.
+     * Priority: parsed.options[name] (semantic) → flags → positional fallback
+     */
     getString: (name: string, required?: boolean): string | null => {
-      // Check flags first
+      // 1. Semantic named option (populated by PrefixParser.enrichOptions)
+      const semanticVal = this.parsed.options[name];
+      if (semanticVal !== undefined) return semanticVal;
+
+      // 2. Flag with same name
       const flagVal = this.parsed.flags[name.toLowerCase()];
       if (typeof flagVal === 'string') return flagVal;
 
-      // Match option position in command definition if available
+      // 3. Positional fallback (BUG-SUB-001: offset past subcommand token)
+      const offset = this._subcommandConsumed ? 1 : 0;
+      const effectiveArgs = this.parsed.args.slice(offset);
+
       if (this.commandDef && Array.isArray(this.commandDef.options)) {
-        const optIndex = this.commandDef.options.findIndex((o: any) => o.name === name);
-        if (optIndex !== -1 && this.parsed.args[optIndex]) {
-          // If this is the last string option, join remaining args for long reasons/strings
-          if (optIndex === this.commandDef.options.length - 1 && this.parsed.args.length > optIndex) {
-            return this.parsed.args.slice(optIndex).join(' ');
+        const subName = this.parsed.subcommand;
+        const subDef = subName
+          ? this.commandDef.options.find((o: any) => o.name === subName && o.type === 1)
+          : null;
+        const subOptions = subDef?.options || this.commandDef.options;
+
+        const optIndex = subOptions.findIndex((o: any) => o.name === name);
+        if (optIndex !== -1 && effectiveArgs[optIndex]) {
+          if (optIndex === subOptions.length - 1 && effectiveArgs.length > optIndex) {
+            return effectiveArgs.slice(optIndex).join(' ');
           }
-          return this.parsed.args[optIndex];
+          return effectiveArgs[optIndex];
         }
       }
 
-      // Fallback: return first non-mention argument or joined args
-      if (this.parsed.args.length > 0) {
-        const filteredArgs = this.parsed.args.filter(a => !a.startsWith('<@') && !a.startsWith('<#'));
-        if (filteredArgs.length > 0) {
-          return filteredArgs.join(' ');
-        }
-        return this.parsed.args.join(' ');
+      // Final fallback: first non-mention arg
+      if (effectiveArgs.length > 0) {
+        const filteredArgs = effectiveArgs.filter(a => !a.startsWith('<@') && !a.startsWith('<#'));
+        return filteredArgs[0] ?? effectiveArgs[0];
       }
       return null;
     },
 
+    /**
+     * Resolve an integer option.
+     */
     getInteger: (name: string, required?: boolean): number | null => {
+      const semanticVal = this.parsed.options[name];
+      if (semanticVal !== undefined && !isNaN(Number(semanticVal))) {
+        return parseInt(semanticVal, 10);
+      }
+
       const flagVal = this.parsed.flags[name.toLowerCase()];
       if (flagVal !== undefined && !isNaN(Number(flagVal))) {
         return parseInt(String(flagVal), 10);
       }
+
+      const offset = this._subcommandConsumed ? 1 : 0;
+      const effectiveArgs = this.parsed.args.slice(offset);
+
       if (this.commandDef && Array.isArray(this.commandDef.options)) {
-        const optIndex = this.commandDef.options.findIndex((o: any) => o.name === name);
-        if (optIndex !== -1 && this.parsed.args[optIndex]) {
-          const num = parseInt(this.parsed.args[optIndex], 10);
+        const subName = this.parsed.subcommand;
+        const subDef = subName
+          ? this.commandDef.options.find((o: any) => o.name === subName && o.type === 1)
+          : null;
+        const subOptions = subDef?.options || this.commandDef.options;
+        const optIndex = subOptions.findIndex((o: any) => o.name === name);
+        if (optIndex !== -1 && effectiveArgs[optIndex]) {
+          const num = parseInt(effectiveArgs[optIndex], 10);
           if (!isNaN(num)) return num;
         }
       }
-      for (const arg of this.parsed.args) {
+
+      for (const arg of effectiveArgs) {
         const num = parseInt(arg, 10);
         if (!isNaN(num)) return num;
       }
       return null;
     },
 
+    /**
+     * Resolve a number (float) option.
+     */
     getNumber: (name: string, required?: boolean): number | null => {
-      const flagVal = this.parsed.flags[name.toLowerCase()];
-      if (flagVal !== undefined && !isNaN(Number(flagVal))) {
-        return Number(flagVal);
+      const semanticVal = this.parsed.options[name];
+      if (semanticVal !== undefined && !isNaN(Number(semanticVal))) {
+        return Number(semanticVal);
       }
+
+      const flagVal = this.parsed.flags[name.toLowerCase()];
+      if (flagVal !== undefined && !isNaN(Number(flagVal))) return Number(flagVal);
+
+      const offset = this._subcommandConsumed ? 1 : 0;
+      const effectiveArgs = this.parsed.args.slice(offset);
+
       if (this.commandDef && Array.isArray(this.commandDef.options)) {
-        const optIndex = this.commandDef.options.findIndex((o: any) => o.name === name);
-        if (optIndex !== -1 && this.parsed.args[optIndex]) {
-          const num = Number(this.parsed.args[optIndex]);
+        const subName = this.parsed.subcommand;
+        const subDef = subName
+          ? this.commandDef.options.find((o: any) => o.name === subName && o.type === 1)
+          : null;
+        const subOptions = subDef?.options || this.commandDef.options;
+        const optIndex = subOptions.findIndex((o: any) => o.name === name);
+        if (optIndex !== -1 && effectiveArgs[optIndex]) {
+          const num = Number(effectiveArgs[optIndex]);
           if (!isNaN(num)) return num;
         }
       }
-      for (const arg of this.parsed.args) {
+
+      for (const arg of effectiveArgs) {
         const num = Number(arg);
         if (!isNaN(num)) return num;
       }
       return null;
     },
 
+    /**
+     * Resolve a boolean option.
+     */
     getBoolean: (name: string, required?: boolean): boolean | null => {
+      const semanticVal = this.parsed.options[name];
+      if (semanticVal !== undefined) return semanticVal.toLowerCase() === 'true';
+
       const flagVal = this.parsed.flags[name.toLowerCase()];
       if (typeof flagVal === 'boolean') return flagVal;
       if (typeof flagVal === 'string') return flagVal.toLowerCase() === 'true';
       return null;
     },
 
+    /**
+     * Resolve a Role option.
+     */
     getRole: (name: string, required?: boolean): Role | null => {
       const mentionedRole = this.message.mentions.roles.first();
       if (mentionedRole) return mentionedRole;
-      const val = this.parsed.flags[name.toLowerCase()] || this.parsed.args[0];
+
+      const val = this.parsed.options[name] ?? this.parsed.flags[name.toLowerCase()];
       if (typeof val === 'string' && this.guild) {
         const idMatch = val.match(/\d{17,19}/);
-        if (idMatch) {
-          return this.guild.roles.cache.get(idMatch[0]) || null;
-        }
+        if (idMatch) return this.guild.roles.cache.get(idMatch[0]) ?? null;
+      }
+
+      const offset = this._subcommandConsumed ? 1 : 0;
+      const posVal = this.parsed.args[offset];
+      if (typeof posVal === 'string' && this.guild) {
+        const idMatch = posVal.match(/\d{17,19}/);
+        if (idMatch) return this.guild.roles.cache.get(idMatch[0]) ?? null;
       }
       return null;
     },
 
+    /**
+     * Resolve a mentionable (User or Role) option.
+     */
     getMentionable: (name: string, required?: boolean): any => {
       const mentionedUser = this.message.mentions.users.first();
       if (mentionedUser) return mentionedUser;
-      const mentionedRole = this.message.mentions.roles.first();
-      if (mentionedRole) return mentionedRole;
-      return null;
+      return this.message.mentions.roles.first() ?? null;
     },
 
+    /**
+     * Resolve a Channel option.
+     */
     getChannel: (name: string, required?: boolean): Channel | null => {
       const mentionedChannel = this.message.mentions.channels.first();
       if (mentionedChannel) return mentionedChannel;
-      const val = this.parsed.flags[name.toLowerCase()] || this.parsed.args[0];
+
+      const val = this.parsed.options[name] ?? this.parsed.flags[name.toLowerCase()];
       if (typeof val === 'string' && this.guild) {
         const idMatch = val.match(/\d{17,19}/);
-        if (idMatch) {
-          return this.guild.channels.cache.get(idMatch[0]) || null;
-        }
+        if (idMatch) return this.guild.channels.cache.get(idMatch[0]) ?? null;
+
+        // Plain name resolution
+        const byName = this.guild.channels.cache.find(
+          (c: any) => c.name?.toLowerCase() === val.toLowerCase()
+        );
+        if (byName) return byName;
+      }
+
+      const offset = this._subcommandConsumed ? 1 : 0;
+      const posVal = this.parsed.args[offset];
+      if (typeof posVal === 'string' && this.guild) {
+        const idMatch = posVal.match(/\d{17,19}/);
+        if (idMatch) return this.guild.channels.cache.get(idMatch[0]) ?? null;
       }
       return null;
     },
 
     getAttachment: (name: string, required?: boolean): any => {
-      return this.message.attachments.first() || null;
+      return this.message.attachments.first() ?? null;
     },
 
     getSubcommandGroup: (required?: boolean): string | null => {
-      return null;
+      // Reads from the semantic parsed.group field (currently always null at prefix level)
+      return this.parsed.group ?? null;
     },
 
+    /**
+     * Returns the subcommand name.
+     * Reads from the authoritative parsed.subcommand property (set by PrefixParser.parse)
+     * rather than re-indexing args[0], making the intent explicit.
+     */
     getSubcommand: (required?: boolean): string | null => {
+      if (this.parsed.subcommand) {
+        // BUG-SUB-001: mark consumed so positional fallback paths still offset correctly
+        this._subcommandConsumed = true;
+        return this.parsed.subcommand;
+      }
+      // Legacy: check args[0] as a safety net
       if (this.parsed.args.length > 0) {
+        this._subcommandConsumed = true;
         return this.parsed.args[0].toLowerCase();
       }
       return null;
