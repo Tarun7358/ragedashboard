@@ -129,6 +129,153 @@ function checkRateLimit(guildId: string, userId: string, ruleId: string, limit: 
   return tracker.count >= limit;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GUILD SCHEMA SNAPSHOT MANAGER (Zero-Audit-Log Fallback Recovery)
+// ─────────────────────────────────────────────────────────────────────────────
+interface GuildChannelSnapshot {
+  id: string;
+  name: string;
+  type: number;
+  topic?: string;
+  nsfw?: boolean;
+  parentId?: string;
+  position: number;
+  rateLimitPerUser?: number;
+  bitrate?: number;
+  userLimit?: number;
+  permissionOverwrites: { id: string; type: number; allow: string; deny: string }[];
+}
+
+interface GuildRoleSnapshot {
+  id: string;
+  name: string;
+  color: number;
+  hoist: boolean;
+  position: number;
+  permissions: string;
+  managed: boolean;
+  mentionable: boolean;
+}
+
+interface GuildSnapshot {
+  guildId: string;
+  channels: GuildChannelSnapshot[];
+  roles: GuildRoleSnapshot[];
+  timestamp: number;
+}
+
+export class GuildSchemaSnapshotManager {
+  private static ramCache = new Map<string, GuildSnapshot>();
+  private static snapshotInterval: NodeJS.Timeout | null = null;
+
+  public static async takeSnapshot(guild: any): Promise<GuildSnapshot | null> {
+    if (!guild || !guild.id) return null;
+    try {
+      const channels: GuildChannelSnapshot[] = [];
+      if (guild.channels?.cache) {
+        for (const [, ch] of guild.channels.cache) {
+          channels.push({
+            id: ch.id,
+            name: ch.name,
+            type: ch.type,
+            topic: ch.topic || undefined,
+            nsfw: Boolean(ch.nsfw),
+            parentId: ch.parentId || undefined,
+            position: typeof ch.position === 'number' ? ch.position : 0,
+            rateLimitPerUser: ch.rateLimitPerUser || 0,
+            bitrate: ch.bitrate || undefined,
+            userLimit: ch.userLimit || undefined,
+            permissionOverwrites: ch.permissionOverwrites?.cache ? Array.from(ch.permissionOverwrites.cache.values()).map((o: any) => ({
+              id: o.id,
+              type: o.type,
+              allow: o.allow?.bitfield?.toString() ?? String(o.allow || '0'),
+              deny: o.deny?.bitfield?.toString() ?? String(o.deny || '0')
+            })) : []
+          });
+        }
+      }
+
+      const roles: GuildRoleSnapshot[] = [];
+      if (guild.roles?.cache) {
+        for (const [, r] of guild.roles.cache) {
+          roles.push({
+            id: r.id,
+            name: r.name,
+            color: r.color || 0,
+            hoist: Boolean(r.hoist),
+            position: typeof r.position === 'number' ? r.position : 0,
+            permissions: r.permissions?.bitfield?.toString() ?? String(r.permissions || '0'),
+            managed: Boolean(r.managed),
+            mentionable: Boolean(r.mentionable)
+          });
+        }
+      }
+
+      const snapshot: GuildSnapshot = {
+        guildId: guild.id,
+        channels,
+        roles,
+        timestamp: Date.now()
+      };
+
+      this.ramCache.set(guild.id, snapshot);
+
+      const db = Database.getDb();
+      if (db) {
+        await db.run(
+          `INSERT OR REPLACE INTO guild_schema_snapshots (guildId, channelsJson, rolesJson, updatedAt) VALUES (?, ?, ?, ?)`,
+          [guild.id, JSON.stringify(channels), JSON.stringify(roles), snapshot.timestamp]
+        ).catch(() => {});
+      }
+
+      return snapshot;
+    } catch (err) {
+      console.error(`[SnapshotManager] Error capturing snapshot for guild ${guild?.id}:`, err);
+      return null;
+    }
+  }
+
+  public static async getSnapshot(guildId: string): Promise<GuildSnapshot | null> {
+    if (this.ramCache.has(guildId)) {
+      return this.ramCache.get(guildId)!;
+    }
+
+    try {
+      const db = Database.getDb();
+      if (db) {
+        const row = await db.get<any>(`SELECT channelsJson, rolesJson, updatedAt FROM guild_schema_snapshots WHERE guildId = ?`, [guildId]);
+        if (row) {
+          const snapshot: GuildSnapshot = {
+            guildId,
+            channels: JSON.parse(row.channelsJson || '[]'),
+            roles: JSON.parse(row.rolesJson || '[]'),
+            timestamp: Number(row.updatedAt || 0)
+          };
+          this.ramCache.set(guildId, snapshot);
+          return snapshot;
+        }
+      }
+    } catch (err) {
+      console.error(`[SnapshotManager] Error reading snapshot for ${guildId}:`, err);
+    }
+    return null;
+  }
+
+  public static startAutoSnapshots(client: any) {
+    if (this.snapshotInterval) return;
+
+    const runAll = async () => {
+      if (!client?.guilds?.cache) return;
+      for (const [, guild] of client.guilds.cache) {
+        await this.takeSnapshot(guild).catch(() => {});
+      }
+    };
+
+    runAll();
+    this.snapshotInterval = setInterval(runAll, 10 * 60 * 1000);
+  }
+}
+
 function isRecentEntry(entry: any, maxAgeMs = 45000): boolean {
   if (!entry) return false;
   const now = Date.now();
@@ -1644,6 +1791,12 @@ export const SecurityManifest: ModuleManifest = {
         if (sub === 'trust') {
           return interaction.reply({ content: '<:shield:1532403012751065179> **Trusted Roles & Admins**:\nOnly server owner and whitelisted bypass users are trusted.', flags: 64 });
         }
+      }
+    },
+    {
+      name: 'ready',
+      handler: async (client: any, context: any) => {
+        GuildSchemaSnapshotManager.startAutoSnapshots(client);
       }
     },
     {

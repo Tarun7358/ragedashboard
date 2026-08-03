@@ -38,6 +38,107 @@ export const EMOJIS = {
   VIP: '<:vip:1532620837117759508>',
 };
 
+import crypto from 'crypto';
+
+export class AudioStreamCache {
+  private static cacheDir = path.join(process.cwd(), '.cache', 'music');
+  private static maxCacheSizeBytes = 100 * 1024 * 1024; // 100 MB LRU limit
+
+  public static init() {
+    try {
+      if (!fs.existsSync(this.cacheDir)) {
+        fs.mkdirSync(this.cacheDir, { recursive: true });
+      }
+    } catch (e) {}
+  }
+
+  private static getHash(url: string): string {
+    return crypto.createHash('md5').update(url).digest('hex');
+  }
+
+  public static getCachedFilePath(url: string): string | null {
+    this.init();
+    try {
+      const hash = this.getHash(url);
+      const filePath = path.join(this.cacheDir, `${hash}.audio`);
+      if (fs.existsSync(filePath)) {
+        const stat = fs.statSync(filePath);
+        if (stat.size > 100000) {
+          fs.utimesSync(filePath, new Date(), new Date());
+          console.log(`[Music Cache] Cache HIT for: ${url} (${filePath})`);
+          return filePath;
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  public static async cacheStream(url: string, stream: any): Promise<string | null> {
+    this.init();
+    try {
+      const hash = this.getHash(url);
+      const filePath = path.join(this.cacheDir, `${hash}.audio`);
+      const tempPath = path.join(this.cacheDir, `${hash}.tmp`);
+
+      const outStream = fs.createWriteStream(tempPath);
+      stream.pipe(outStream);
+
+      await new Promise<void>((resolve, reject) => {
+        outStream.on('finish', () => resolve());
+        outStream.on('error', reject);
+        stream.on('error', reject);
+      }).catch(() => {});
+
+      if (fs.existsSync(tempPath)) {
+        const stat = fs.statSync(tempPath);
+        if (stat.size > 100000) {
+          fs.renameSync(tempPath, filePath);
+          console.log(`[Music Cache] Successfully cached track: ${url} (${stat.size} bytes)`);
+          this.pruneCache();
+          return filePath;
+        } else {
+          try { fs.unlinkSync(tempPath); } catch (e) {}
+        }
+      }
+    } catch (err) {
+      console.warn(`[Music Cache] Stream cache warning:`, err);
+    }
+    return null;
+  }
+
+  public static pruneCache() {
+    try {
+      if (!fs.existsSync(this.cacheDir)) return;
+      const files = fs.readdirSync(this.cacheDir);
+      let totalSize = 0;
+      const fileStats: { path: string; size: number; mtime: number }[] = [];
+
+      for (const file of files) {
+        if (file.endsWith('.tmp')) {
+          try { fs.unlinkSync(path.join(this.cacheDir, file)); } catch (e) {}
+          continue;
+        }
+        const fullPath = path.join(this.cacheDir, file);
+        const stat = fs.statSync(fullPath);
+        totalSize += stat.size;
+        fileStats.push({ path: fullPath, size: stat.size, mtime: stat.mtimeMs });
+      }
+
+      if (totalSize > this.maxCacheSizeBytes) {
+        fileStats.sort((a, b) => a.mtime - b.mtime);
+        for (const file of fileStats) {
+          if (totalSize <= this.maxCacheSizeBytes) break;
+          try {
+            fs.unlinkSync(file.path);
+            totalSize -= file.size;
+            console.log(`[Music Cache] Pruned LRU file: ${file.path}`);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  }
+}
+
 const execFileAsync = promisify(execFile);
 const currentModuleDir = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
@@ -599,8 +700,16 @@ export class GuildQueue {
       let streamCreated = false;
       let directStreamUrl: string | null = null;
 
+      // Tier 0: Local Disk Cache (0ms instant playback for repeated/popular tracks)
+      const cachedFile = AudioStreamCache.getCachedFilePath(audioUrl);
+      if (cachedFile && seekSeconds === 0) {
+        console.log(`[Music] ⚡ Instant playback from local cache: ${cachedFile}`);
+        directStreamUrl = cachedFile;
+        streamCreated = true;
+      }
+
       // Tier 1: yt-dlp binary stdout process (Preferred for YouTube - avoids googlevideo CDN 403 blocks)
-      if (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be')) {
+      if (!streamCreated && (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be'))) {
         const ytDlpPath = getYtDlpPath();
         try {
           console.log(`[Music] Spawning yt-dlp binary (${ytDlpPath}) stdout stream for: ${audioUrl}`);

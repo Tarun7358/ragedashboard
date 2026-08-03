@@ -203,7 +203,7 @@ export class Database {
       'upm_snapshots', 'guild_warnings', 'guild_verifications',
       'guild_xp', 'guild_economy', 'discord_sessions', 'public_feed',
       'sync_logs', 'schema_migrations', 'tickets', 'ticket_messages',
-      'ticket_panels', 'moderation_cases', 'persistent_music_queues', 'prebot_whitelist', 'prebot_2fa_config'
+      'ticket_panels', 'moderation_cases', 'persistent_music_queues', 'prebot_whitelist'
     ];
 
     const rows = await this.all<{ name: string }>(

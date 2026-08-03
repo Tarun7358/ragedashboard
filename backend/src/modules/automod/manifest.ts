@@ -53,6 +53,69 @@ async function repostSanitizedContent(message: any, cleanText: string) {
   }
 }
 
+import crypto from 'crypto';
+
+interface UserMessageLog {
+  timestamp: number;
+  contentHash: string;
+  channelId: string;
+}
+
+export class SlidingWindowSpamDetector {
+  private static userWindows = new Map<string, UserMessageLog[]>();
+  private static cleanupTimer: NodeJS.Timeout | null = null;
+
+  public static init() {
+    if (this.cleanupTimer) return;
+    this.cleanupTimer = setInterval(() => this.pruneOldLogs(), 5000);
+  }
+
+  private static pruneOldLogs() {
+    const now = Date.now();
+    for (const [key, logs] of this.userWindows.entries()) {
+      const valid = logs.filter(l => now - l.timestamp < 10000);
+      if (valid.length === 0) {
+        this.userWindows.delete(key);
+      } else {
+        this.userWindows.set(key, valid);
+      }
+    }
+  }
+
+  public static checkSpam(guildId: string, userId: string, channelId: string, content: string): { isSpam: boolean; reason: string } {
+    this.init();
+    const key = `${guildId}_${userId}`;
+    const now = Date.now();
+    const hash = crypto.createHash('md5').update(content.trim().toLowerCase()).digest('hex');
+
+    if (!this.userWindows.has(key)) {
+      this.userWindows.set(key, []);
+    }
+
+    const logs = this.userWindows.get(key)!;
+    logs.push({ timestamp: now, contentHash: hash, channelId });
+
+    const recentLogs = logs.filter(l => now - l.timestamp < 5000);
+
+    const burstLogs = recentLogs.filter(l => now - l.timestamp < 3000);
+    if (burstLogs.length >= 5) {
+      return { isSpam: true, reason: `Rapid message burst (${burstLogs.length} msgs / 3s)` };
+    }
+
+    const sameContentLogs = recentLogs.filter(l => l.contentHash === hash);
+    if (sameContentLogs.length >= 3 && content.length > 5) {
+      return { isSpam: true, reason: `Repeated duplicate message (${sameContentLogs.length}x / 5s)` };
+    }
+
+    const distinctChannels = new Set(recentLogs.filter(l => l.contentHash === hash).map(l => l.channelId));
+    if (distinctChannels.size >= 3) {
+      return { isSpam: true, reason: `Cross-channel spam raid (${distinctChannels.size} channels / 5s)` };
+    }
+
+    return { isSpam: false, reason: '' };
+  }
+}
+
 export const AutomodManifest: ModuleManifest = {
   id: 'automod',
   name: 'AI Automod',
@@ -507,6 +570,25 @@ export const AutomodManifest: ModuleManifest = {
           if (emojiCount > config.maxEmojis) {
             deleted = true;
             reason = `Excessive emojis (${emojiCount}/${config.maxEmojis})`;
+          }
+        }
+
+        // 6. Sliding Window Anti-Spam & Cross-Channel Raid Protection
+        if (!deleted && message.guild) {
+          const isOwnerOrAdmin = message.guild.ownerId === message.author.id ||
+            Boolean(message.member?.permissions?.has?.(PermissionFlagsBits.Administrator));
+          
+          if (!isOwnerOrAdmin) {
+            const spamCheck = SlidingWindowSpamDetector.checkSpam(
+              message.guild.id,
+              message.author.id,
+              message.channel.id,
+              message.content
+            );
+            if (spamCheck.isSpam) {
+              deleted = true;
+              reason = spamCheck.reason;
+            }
           }
         }
 
