@@ -26,6 +26,16 @@ class ProcessManager {
 
 
 
+  _resolveCliScript(basePath, subDirName, relativeCliPath) {
+    const subPath = path.resolve(basePath, subDirName, relativeCliPath);
+    if (fs.existsSync(subPath)) return subPath;
+
+    const rootPath = path.resolve(basePath, relativeCliPath);
+    if (fs.existsSync(rootPath)) return rootPath;
+
+    return relativeCliPath;
+  }
+
   // ─── BACKEND ─────────────────────────────────────────────────────────────────
 
   async spawnBackend(basePath) {
@@ -39,7 +49,9 @@ class ProcessManager {
         return reject(new Error(`Backend .env not found at: ${envFile}`));
       }
 
-      const proc = spawn('node', ['node_modules/tsx/dist/cli.mjs', 'src/index.ts'], {
+      const tsxCli = this._resolveCliScript(basePath, this.config.paths.backend, 'node_modules/tsx/dist/cli.mjs');
+
+      const proc = spawn('node', [tsxCli, 'src/index.ts'], {
         cwd: backendPath,
         env: { ...process.env, FORCE_COLOR: '0' },
         shell: false,
@@ -127,7 +139,9 @@ class ProcessManager {
         this.logger.warn(`Rage Music .env not found, it will use fallback/shared config.`);
       }
 
-      const proc = spawn('node', ['node_modules/tsx/dist/cli.mjs', 'src/index.ts'], {
+      const tsxCli = this._resolveCliScript(basePath, 'clutch-music', 'node_modules/tsx/dist/cli.mjs');
+
+      const proc = spawn('node', [tsxCli, 'src/index.ts'], {
         cwd: musicPath,
         env: { ...process.env, FORCE_COLOR: '0' },
         shell: false,
@@ -185,7 +199,9 @@ class ProcessManager {
     this.logger.info(`Starting dashboard (port ${port}) from: ${dashPath}`);
 
     return new Promise((resolve, reject) => {
-      const proc = spawn('node', ['node_modules/vite/bin/vite.js', '--port', String(port), '--host', '0.0.0.0'], {
+      const viteCli = this._resolveCliScript(basePath, this.config.paths.dashboard, 'node_modules/vite/bin/vite.js');
+
+      const proc = spawn('node', [viteCli, '--port', String(port), '--host', '0.0.0.0'], {
         cwd: dashPath,
         env: { ...process.env, FORCE_COLOR: '0' },
         shell: false,
