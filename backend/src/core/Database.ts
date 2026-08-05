@@ -203,7 +203,8 @@ export class Database {
       'upm_snapshots', 'guild_warnings', 'guild_verifications',
       'guild_xp', 'guild_economy', 'discord_sessions', 'public_feed',
       'sync_logs', 'schema_migrations', 'tickets', 'ticket_messages',
-      'ticket_panels', 'moderation_cases', 'persistent_music_queues', 'prebot_whitelist'
+      'ticket_panels', 'moderation_cases', 'persistent_music_queues', 'prebot_whitelist',
+      'guild_custom_embeds'
     ];
 
     const rows = await this.all<{ name: string }>(
@@ -615,6 +616,14 @@ export class Database {
         secret TEXT NOT NULL,
         isEnabled INTEGER DEFAULT 0,
         createdAt INTEGER NOT NULL
+      );`,
+      `CREATE TABLE IF NOT EXISTS guild_custom_embeds (
+        guildId TEXT NOT NULL,
+        name TEXT NOT NULL,
+        embedData TEXT NOT NULL,
+        authorId TEXT NOT NULL,
+        updatedAt INTEGER NOT NULL,
+        PRIMARY KEY (guildId, name)
       );`,
     ];
 

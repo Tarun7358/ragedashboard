@@ -367,6 +367,8 @@ export class PrefixRegistry {
       logging: 'Logging',
       notes: 'Moderation',
       autorole: 'Community',
+      embed: 'Community',
+      customembed: 'Community',
       goodbye: 'Community',
       birthday: 'Community',
       boost: 'Community',
