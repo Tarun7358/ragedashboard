@@ -1346,11 +1346,53 @@ export function registerConfigCommands(): void {
             });
           }
 
-          updateVerifConfig({ verificationRoleId: role.id });
+          updateVerifConfig({ verificationRoleId: role.id, verifiedRoleId: role.id });
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Verified Role Saved',
               description: `${APPROVED_ICON} Assigned verified role **<@&${role.id}>**.`
+            })]
+          });
+        }
+
+        if (action === 'unverifiedrole' || action === 'unverified') {
+          const role = message.mentions.roles.first();
+          if (!role) {
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Unverified Role Syntax',
+                description: `${WRONG_EMOJI} **Syntax**: \`r!config verification unverifiedrole <@unverifiedRole>\`\nExample: \`r!config verification unverifiedrole @Unverified\``
+              })]
+            });
+          }
+
+          updateVerifConfig({ unverifiedRoleId: role.id });
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Unverified Role Saved',
+              description: `${APPROVED_ICON} Assigned unverified role **<@&${role.id}>**.`
+            })]
+          });
+        }
+
+        if (action === 'enable' || action === 'on') {
+          updateVerifConfig({ enabled: true });
+          if (extra?.updateModuleStatus) extra.updateModuleStatus('verification', 'enabled');
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Verification Module Enabled',
+              description: `${APPROVED_ICON} Member verification gate is now **ACTIVE**.`
+            })]
+          });
+        }
+
+        if (action === 'disable' || action === 'off') {
+          updateVerifConfig({ enabled: false });
+          if (extra?.updateModuleStatus) extra.updateModuleStatus('verification', 'disabled');
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Verification Module Disabled',
+              description: `${WRONG_EMOJI} Member verification gate is now **OFFLINE**.`
             })]
           });
         }
