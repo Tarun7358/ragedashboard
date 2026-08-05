@@ -1030,30 +1030,45 @@ export class Gateway {
         guildName: guild.name || guild.id
       });
 
-      // Send emergency DM notification to server owner
+      // Send emergency DM notification to server owner & all designated Extra Owners
       try {
-        if (guild.ownerId) {
-          const owner = await this.client.users.fetch(guild.ownerId).catch(() => null);
-          if (owner) {
-            const embed = new EmbedBuilder()
-              .setColor(0xEF4444)
-              .setAuthor({ name: 'Rage Optimiser • Security Engine' })
-              .setTitle('🚨 URGENT SECURITY ALERT: Bot Removed From Server')
-              .setDescription(
-                `> **Rage Optimiser** was just kicked or removed from your server **${guild.name || guild.id}**.\n\n` +
-                `• **Server ID**: \`${guild.id}\`\n` +
-                `• **Security Protection Status**: \`Suspended until re-invited\`\n\n` +
-                `**🛡️ Automatic Snapshot Protection**\n` +
-                `All server configurations, whitelists, rules, and Anti-Nuke settings remain **100% saved in cloud memory**. ` +
-                `Re-invite the bot immediately to restore unbypassable protection.`
-              )
-              .setFooter({ text: 'Rage Optimiser Enterprise • Unbypassable Security' })
-              .setTimestamp();
-            await owner.send({ embeds: [embed] }).catch(() => { });
+        const recipients = new Set<string>();
+        if (guild.ownerId) recipients.add(guild.ownerId);
+
+        // Fetch Extra Owners for this guild from SQLite
+        const db = Database.getDb();
+        if (db) {
+          const extraRows = await db.all<any>('SELECT userId FROM extra_owners WHERE guildId = ?', [guild.id]).catch(() => []);
+          for (const r of extraRows) {
+            if (r.userId) recipients.add(r.userId);
+          }
+        }
+
+        const alertEmbed = new EmbedBuilder()
+          .setColor(0xEF4444)
+          .setAuthor({ name: 'Rage Optimiser • Security Engine' })
+          .setTitle('🚨 URGENT SECURITY ALERT: Bot Removed From Server')
+          .setDescription(
+            `> **Rage Optimiser** was just kicked or removed from your server **${guild.name || guild.id}**.\n\n` +
+            `• **Server ID**: \`${guild.id}\`\n` +
+            `• **Primary Owner**: <@${guild.ownerId}>\n` +
+            `• **Security Protection Status**: \`Suspended until re-invited\`\n\n` +
+            `**⚠️ POTENTIAL ACCOUNT COMPROMISE / RAID THREAT**\n` +
+            `If the Primary Owner's account was compromised, designated **Extra Owners** must **re-invite Rage Optimiser immediately** to re-activate Anti-Nuke protections.\n\n` +
+            `**🛡️ Automatic Snapshot Vault**\n` +
+            `All server configurations, whitelists, rules, and Anti-Nuke settings remain **100% saved in cloud memory**.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Unbypassable Security' })
+          .setTimestamp();
+
+        for (const userId of recipients) {
+          const u = await this.client.users.fetch(userId).catch(() => null);
+          if (u) {
+            await u.send({ embeds: [alertEmbed] }).catch(() => {});
           }
         }
       } catch (dmErr) {
-        console.warn('[Gateway] Could not dispatch DM alert to owner on guildDelete:', dmErr);
+        console.warn('[Gateway] Could not dispatch DM alert to owner/extra-owners on guildDelete:', dmErr);
       }
 
       // Synchronize SQLite approvals table if record exists
