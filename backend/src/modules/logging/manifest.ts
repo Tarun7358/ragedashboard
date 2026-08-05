@@ -1,5 +1,7 @@
 import { EmbedBuilder, AuditLogEvent } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
+import { buildLimeOverviewCard, createLimeEmbed, Colors, VERIFIED_ICON, WRONG_ICON, CONFIG_ICON, MEMBER_ICON, SHIELD_ICON } from '../../core/UIFactory.js';
 
 export const LoggingManifest: ModuleManifest = {
   id: 'logging',
@@ -876,3 +878,441 @@ export const LoggingManifest: ModuleManifest = {
 
   ]
 };
+
+export const LOG_CATEGORIES = [
+  'security',
+  'moderation',
+  'antiNuke',
+  'botProtection',
+  'webhook',
+  'voice',
+  'audit',
+  'system'
+];
+
+export function registerLoggingCommands(): void {
+  PrefixRegistry.register({
+    name: 'logs',
+    category: 'Logging',
+    description: 'Configure audit log channels, ignored roles, and manager access for all server categories.',
+    usage: 'r!logs <status|channel|ignore-role|roles|enable|disable|test|reset>',
+    aliases: ['logging', 'auditlogs', 'logconfig', 'setlogs'],
+    subcommands: [
+      { name: 'status', description: 'View audit logging matrix and category channel routes.' },
+      { name: 'channel <category|all|everything> <#channel|none>', description: 'Assign log channel for a category or ALL categories at once.' },
+      { name: 'ignore-role <category|all|everything> <add|remove> <@role>', description: 'Configure roles ignored by log audit engine.' },
+      { name: 'roles <add|remove|list> <@role>', description: 'Configure manager roles authorized to manage logs.' },
+      { name: 'enable <category|all|everything>', description: 'Enable log category or all categories.' },
+      { name: 'disable <category|all|everything>', description: 'Disable log category or all categories.' },
+      { name: 'test <category|all>', description: 'Dispatch a test audit log event.' },
+      { name: 'reset <category|all>', description: 'Reset category channel routes to default.' }
+    ],
+    examples: [
+      'r!logs status',
+      'r!logs channel all #logs',
+      'r!logs channel security #security-logs',
+      'r!logs ignore-role all add @Admin',
+      'r!logs roles add @LogManager',
+      'r!logs enable all',
+      'r!logs test security'
+    ],
+    cooldownSeconds: 2,
+    userPermissions: ['Administrator'],
+    execute: async (message: any, args: string[], extra?: any) => {
+      const sub = args[0]?.toLowerCase();
+      const modules = extra?.getModulesState ? extra.getModulesState() : [];
+      const logMod = modules.find((m: any) => m.id === 'logging');
+      const config = logMod?.config || {};
+
+      // Permission Check: Admin or Manager Role
+      const managerRoles: string[] = config.managerRoleIds || [];
+      const hasManagerRole = message.member?.roles?.cache?.some((r: any) => managerRoles.includes(r.id));
+      const isAdmin = message.member?.permissions?.has?.('Administrator') || message.guild?.ownerId === message.author?.id;
+
+      if (!isAdmin && !hasManagerRole) {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Permission Denied',
+            description: `${WRONG_ICON} You need **Administrator** permissions or a configured **Logging Manager Role** to manage logging settings.`
+          })]
+        });
+      }
+
+      const updateConfig = (newCfg: Record<string, any>) => {
+        if (extra?.updateModuleConfig) {
+          extra.updateModuleConfig('logging', { ...config, ...newCfg });
+        }
+        if (extra?.logSyncEvent) {
+          extra.logSyncEvent(message.guild?.id, 'Logging Config: Updated audit log settings via CLI.', 'success');
+        }
+      };
+
+      // 1. Channel Assignment (`r!logs channel <category|all|everything> <#channel|none>`)
+      if (sub === 'channel' || sub === 'set' || sub === 'setchannel') {
+        const catArg = args[1]?.toLowerCase();
+        const targetChannel = message.mentions?.channels?.first();
+        const rawChannelArg = args[2]?.toLowerCase();
+        const isDisable = rawChannelArg === 'none' || rawChannelArg === 'off' || rawChannelArg === 'disable';
+
+        if (!catArg || (!targetChannel && !isDisable)) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Logging Channel Routing Syntax',
+              description: [
+                `${WRONG_ICON} **Syntax**: \`r!logs channel <category|all|everything> <#channel|none>\`\n`,
+                `• **Set ALL channels at once**: \`r!logs channel all #logs-channel\``,
+                `• **Set specific category**: \`r!logs channel security #sec-logs\``,
+                `• **Disable category**: \`r!logs channel voice none\`\n`,
+                `**Valid Categories**: \`${LOG_CATEGORIES.join('`, `')}\`, \`all\`, \`everything\``
+              ].join('\n')
+            })]
+          });
+        }
+
+        const isAll = catArg === 'all' || catArg === 'everything' || catArg === '*';
+        const updatedConfig = { ...config };
+
+        if (isAll) {
+          LOG_CATEGORIES.forEach(cat => {
+            const currentCat = updatedConfig[cat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+            updatedConfig[cat] = {
+              ...currentCat,
+              enabled: !isDisable,
+              channelId: isDisable ? null : targetChannel.id
+            };
+          });
+          updateConfig(updatedConfig);
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: isDisable ? 'All Log Channels Disabled' : 'All Log Channels Configured',
+              description: isDisable
+                ? `${VERIFIED_ICON} Disabled log channels for **ALL (EVERYTHING)** categories.`
+                : `${VERIFIED_ICON} Successfully routed **ALL (EVERYTHING)** 8 log categories to **<#${targetChannel.id}>**!`
+            })]
+          });
+        }
+
+        const matchedCat = LOG_CATEGORIES.find(c => c.toLowerCase() === catArg);
+        if (!matchedCat) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Invalid Log Category',
+              description: `${WRONG_ICON} **\`${catArg}\`** is not a valid log category.\nValid options: \`${LOG_CATEGORIES.join('`, `')}\`, \`all\`, \`everything\``
+            })]
+          });
+        }
+
+        const currentCat = updatedConfig[matchedCat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+        updatedConfig[matchedCat] = {
+          ...currentCat,
+          enabled: !isDisable,
+          channelId: isDisable ? null : targetChannel.id
+        };
+        updateConfig(updatedConfig);
+
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: `Log Channel Saved — ${matchedCat.toUpperCase()}`,
+            description: isDisable
+              ? `${VERIFIED_ICON} Disabled log output for **${matchedCat.toUpperCase()}**.`
+              : `${VERIFIED_ICON} Assigned **<#${targetChannel.id}>** as target log channel for **${matchedCat.toUpperCase()}**.`
+          })]
+        });
+      }
+
+      // 2. Ignore Roles (`r!logs ignore-role <category|all|everything> <add|remove> <@role>`)
+      if (sub === 'ignore-role' || sub === 'ignorerole' || sub === 'ignore') {
+        const catArg = args[1]?.toLowerCase();
+        const action = args[2]?.toLowerCase();
+        const role = message.mentions?.roles?.first();
+
+        if (!catArg || !['add', 'remove', 'list'].includes(action)) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Ignore-Role Configuration Syntax',
+              description: [
+                `${WRONG_ICON} **Syntax**: \`r!logs ignore-role <category|all|everything> <add|remove> <@role>\`\n`,
+                `• **Ignore role across ALL logs**: \`r!logs ignore-role all add @AdminRole\``,
+                `• **Ignore role in security logs**: \`r!logs ignore-role security add @BotRole\``,
+                `• **Remove ignored role**: \`r!logs ignore-role all remove @AdminRole\``
+              ].join('\n')
+            })]
+          });
+        }
+
+        const isAll = catArg === 'all' || catArg === 'everything' || catArg === '*';
+        const updatedConfig = { ...config };
+
+        if (action === 'add' && role) {
+          if (isAll) {
+            LOG_CATEGORIES.forEach(cat => {
+              const currentCat = updatedConfig[cat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+              const currentRoles: string[] = currentCat.ignoreRoles || [];
+              updatedConfig[cat] = {
+                ...currentCat,
+                ignoreRoles: Array.from(new Set([...currentRoles, role.id]))
+              };
+            });
+            updateConfig(updatedConfig);
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Ignored Role Added — ALL Categories',
+                description: `${VERIFIED_ICON} Actions taken by members with **<@&${role.id}>** will now be ignored across **ALL (EVERYTHING)** log categories.`
+              })]
+            });
+          }
+
+          const matchedCat = LOG_CATEGORIES.find(c => c.toLowerCase() === catArg);
+          if (!matchedCat) {
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Invalid Category',
+                description: `${WRONG_ICON} Invalid category \`${catArg}\`. Valid: \`${LOG_CATEGORIES.join('`, `')}\`, \`all\``
+              })]
+            });
+          }
+
+          const currentCat = updatedConfig[matchedCat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+          const currentRoles: string[] = currentCat.ignoreRoles || [];
+          updatedConfig[matchedCat] = {
+            ...currentCat,
+            ignoreRoles: Array.from(new Set([...currentRoles, role.id]))
+          };
+          updateConfig(updatedConfig);
+
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: `Ignored Role Added — ${matchedCat.toUpperCase()}`,
+              description: `${VERIFIED_ICON} Added **<@&${role.id}>** to ignored roles for category **${matchedCat.toUpperCase()}**.`
+            })]
+          });
+        }
+
+        if (action === 'remove' && role) {
+          if (isAll) {
+            LOG_CATEGORIES.forEach(cat => {
+              const currentCat = updatedConfig[cat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+              const currentRoles: string[] = currentCat.ignoreRoles || [];
+              updatedConfig[cat] = {
+                ...currentCat,
+                ignoreRoles: currentRoles.filter(r => r !== role.id)
+              };
+            });
+            updateConfig(updatedConfig);
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Ignored Role Removed — ALL Categories',
+                description: `${VERIFIED_ICON} Removed **<@&${role.id}>** from ignored roles across **ALL (EVERYTHING)** log categories.`
+              })]
+            });
+          }
+
+          const matchedCat = LOG_CATEGORIES.find(c => c.toLowerCase() === catArg);
+          if (matchedCat) {
+            const currentCat = updatedConfig[matchedCat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+            const currentRoles: string[] = currentCat.ignoreRoles || [];
+            updatedConfig[matchedCat] = {
+              ...currentCat,
+              ignoreRoles: currentRoles.filter(r => r !== role.id)
+            };
+            updateConfig(updatedConfig);
+
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: `Ignored Role Removed — ${matchedCat.toUpperCase()}`,
+                description: `${VERIFIED_ICON} Removed **<@&${role.id}>** from ignored roles for category **${matchedCat.toUpperCase()}**.`
+              })]
+            });
+          }
+        }
+      }
+
+      // 3. Manager Roles (`r!logs roles <add|remove|list> <@role>`)
+      if (sub === 'roles' || sub === 'manager' || sub === 'managers') {
+        const action = args[1]?.toLowerCase();
+        const role = message.mentions?.roles?.first();
+        const currentManagers: string[] = config.managerRoleIds || [];
+
+        if (action === 'add' && role) {
+          const merged = Array.from(new Set([...currentManagers, role.id]));
+          updateConfig({ managerRoleIds: merged });
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Logging Manager Role Added',
+              description: `${VERIFIED_ICON} Granted logging management permissions to **<@&${role.id}>**.`
+            })]
+          });
+        }
+
+        if (action === 'remove' && role) {
+          const filtered = currentManagers.filter(r => r !== role.id);
+          updateConfig({ managerRoleIds: filtered });
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Logging Manager Role Removed',
+              description: `${VERIFIED_ICON} Revoked logging management permissions from **<@&${role.id}>**.`
+            })]
+          });
+        }
+
+        const rolesStr = currentManagers.length > 0 ? currentManagers.map(r => `<@&${r}>`).join(', ') : '*None (Administrators Only)*';
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Logging Manager Roles Configuration',
+            description: `${CONFIG_ICON} **Authorized Manager Roles**: ${rolesStr}\n\n**Syntax**: \`r!logs roles <add|remove> <@role>\``
+          })]
+        });
+      }
+
+      // 4. Enable / Disable (`r!logs enable/disable <category|all|everything>`)
+      if (sub === 'enable' || sub === 'disable') {
+        const isEnable = sub === 'enable';
+        const catArg = args[1]?.toLowerCase();
+
+        if (!catArg) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: `Log Category ${isEnable ? 'Enable' : 'Disable'} Syntax`,
+              description: `${WRONG_ICON} **Syntax**: \`r!logs ${sub} <category|all|everything>\`\nExample: \`r!logs ${sub} all\` or \`r!logs ${sub} voice\``
+            })]
+          });
+        }
+
+        const isAll = catArg === 'all' || catArg === 'everything' || catArg === '*';
+        const updatedConfig = { ...config };
+
+        if (isAll) {
+          LOG_CATEGORIES.forEach(cat => {
+            const currentCat = updatedConfig[cat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+            updatedConfig[cat] = { ...currentCat, enabled: isEnable };
+          });
+          updateConfig(updatedConfig);
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: isEnable ? 'All Logging Categories Enabled' : 'All Logging Categories Disabled',
+              description: `${VERIFIED_ICON} Logging engine for **ALL (EVERYTHING)** 8 categories is now **\`${isEnable ? 'ENABLED' : 'DISABLED'}\`**.`
+            })]
+          });
+        }
+
+        const matchedCat = LOG_CATEGORIES.find(c => c.toLowerCase() === catArg);
+        if (!matchedCat) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Invalid Category',
+              description: `${WRONG_ICON} Invalid category \`${catArg}\`. Valid: \`${LOG_CATEGORIES.join('`, `')}\`, \`all\``
+            })]
+          });
+        }
+
+        const currentCat = updatedConfig[matchedCat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+        updatedConfig[matchedCat] = { ...currentCat, enabled: isEnable };
+        updateConfig(updatedConfig);
+
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: `Category Status Updated — ${matchedCat.toUpperCase()}`,
+            description: `${VERIFIED_ICON} Logging for **${matchedCat.toUpperCase()}** is now **\`${isEnable ? 'ENABLED' : 'DISABLED'}\`**.`
+          })]
+        });
+      }
+
+      // 5. Test Event (`r!logs test <category|all>`)
+      if (sub === 'test') {
+        const catArg = args[1]?.toLowerCase() || 'security';
+        const isAll = catArg === 'all' || catArg === 'everything';
+        const targetCats = isAll ? LOG_CATEGORIES : [LOG_CATEGORIES.find(c => c.toLowerCase() === catArg) || 'security'];
+
+        let sentCount = 0;
+        for (const cat of targetCats) {
+          const catCfg = config[cat];
+          if (catCfg && catCfg.channelId) {
+            try {
+              const ch = await message.guild?.channels.fetch(catCfg.channelId).catch(() => null);
+              if (ch && ch.isTextBased()) {
+                const testEmbed = createLimeEmbed({
+                  title: `🧪 Verification Test Log — ${cat.toUpperCase()}`,
+                  description: `${VERIFIED_ICON} Audit logging telemetry active and operational for **\`${cat.toUpperCase()}\`**.\nTriggered by ${message.author}.`
+                });
+                await ch.send({ embeds: [testEmbed] });
+                sentCount++;
+              }
+            } catch (e) {}
+          }
+        }
+
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Audit Log Verification Test Dispatched',
+            description: sentCount > 0
+              ? `${VERIFIED_ICON} Dispatched test audit log messages to **${sentCount}** configured channel route(s).`
+              : `${WRONG_ICON} No configured log channels found. Use \`r!logs channel all #channel\` first.`
+          })]
+        });
+      }
+
+      // 6. Reset (`r!logs reset <category|all>`)
+      if (sub === 'reset') {
+        const catArg = args[1]?.toLowerCase() || 'all';
+        const isAll = catArg === 'all' || catArg === 'everything';
+        const updatedConfig = { ...config };
+
+        if (isAll) {
+          LOG_CATEGORIES.forEach(cat => {
+            updatedConfig[cat] = { enabled: true, channelId: null, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+          });
+          updateConfig(updatedConfig);
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'All Logging Channels Reset',
+              description: `${VERIFIED_ICON} Reset all 8 logging categories back to unconfigured state.`
+            })]
+          });
+        }
+      }
+
+      // 7. Status Matrix Overview (`r!logs` / `r!logs status`)
+      const categoryStatusItems: string[] = LOG_CATEGORIES.map(cat => {
+        const catCfg = config[cat];
+        const isEnabled = catCfg?.enabled !== false && catCfg?.channelId;
+        const channelStr = catCfg?.channelId ? `<#${catCfg.channelId}>` : '`Unconfigured`';
+        const ignoreRolesCount = (catCfg?.ignoreRoles || []).length;
+        const ignoreStr = ignoreRolesCount > 0 ? ` | Ignored Roles: \`${ignoreRolesCount}\`` : '';
+        const statusIcon = isEnabled ? VERIFIED_ICON : WRONG_ICON;
+        return `${statusIcon} **${cat.toUpperCase()}**: ${channelStr}${ignoreStr}`;
+      });
+
+      const managerRolesStr = (config.managerRoleIds || []).map((r: string) => `<@&${r}>`).join(', ') || '`Administrators Only`';
+
+      const overviewCard = buildLimeOverviewCard({
+        title: 'ADVANCED LOGGING CENTER MATRIX',
+        subtitle: 'MULTI-CATEGORY SERVER AUDIT TRACKING & ROLE CONFIGURATION',
+        color: Colors.BRAND,
+        sections: [
+          {
+            title: `${SHIELD_ICON} LOG CATEGORY ROUTING MATRIX`,
+            items: categoryStatusItems
+          },
+          {
+            title: `${CONFIG_ICON} LOG MANAGER ROLES & CONTROLS`,
+            items: [
+              `Authorized Manager Roles: ${managerRolesStr}`,
+              `• \`r!logs channel all <#channel>\` — Route ALL 8 log categories to one channel`,
+              `• \`r!logs channel <category> <#channel>\` — Route specific category channel`,
+              `• \`r!logs ignore-role all <add|remove> <@role>\` — Exclude role from log audit`,
+              `• \`r!logs roles <add|remove> <@role>\` — Authorize manager role for log commands`,
+              `• \`r!logs test all\` — Send test audit log verification cards`
+            ]
+          }
+        ],
+        footerText: 'Rage Optimiser Enterprise • Advanced Audit Suite'
+      });
+
+      return message.reply({ embeds: [overviewCard] });
+    }
+  });
+}
+
+// Auto-register command on module load
+registerLoggingCommands();
+

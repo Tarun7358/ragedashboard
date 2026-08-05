@@ -560,43 +560,10 @@ export function registerConfigCommands(): void {
       }
 
       // Audit & Event Logging Sub-Configuration (`r!config logging ...`)
-      if (moduleName === 'logging') {
-        const action = effectiveArgs[1]?.toLowerCase();
-        const category = effectiveArgs[2]?.toLowerCase();
-
-        if (action === 'set' || action === 'channel') {
-          const targetChannel = message.mentions.channels.first();
-          if (!category || !targetChannel) {
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Logging Channel Route Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config logging set <mod_log|security_log|member_log|message_log|voice_log> <#channel>\`\nExample: \`r!config logging set mod_log #mod-logs\``
-              })]
-            });
-          }
-
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Audit Log Channel Route Saved',
-              description: `${APPROVED_ICON} Assigned audit channel **<#${targetChannel.id}>** for category **\`${category.toUpperCase()}\`**.`
-            })]
-          });
-        }
-
-        if (action === 'status' || action === 'view' || action === 'settings') {
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Audit Event Routing Matrix',
-              description: [
-                `> 📜 **Log Category Channel Routes**\n`,
-                `• **MOD_LOG**: Configured`,
-                `• **SECURITY_LOG**: Configured`,
-                `• **MEMBER_LOG**: Configured`,
-                `• **MESSAGE_LOG**: Configured`,
-                `• **VOICE_LOG**: Configured`
-              ].join('\n')
-            })]
-          });
+      if (moduleName === 'logging' || moduleName === 'logs') {
+        const logsCmd = PrefixRegistry.get('logs');
+        if (logsCmd && logsCmd.execute) {
+          return logsCmd.execute(message, effectiveArgs.slice(1), extra);
         }
       }
 
@@ -839,157 +806,9 @@ export function registerConfigCommands(): void {
 
       // Welcome & Onboarding Sub-Configuration (`r!config welcome ...`)
       if (moduleName === 'welcome') {
-        const action = effectiveArgs[1]?.toLowerCase();
-        const modules = extra?.getModulesState ? extra.getModulesState() : [];
-        const welcModule = modules.find((m: any) => m.id === 'welcome-v2');
-        const welcConfig = welcModule?.config || {};
-
-        const updateWelcConfig = (newCfg: Record<string, any>) => {
-          if (extra?.updateModuleConfig) {
-            extra.updateModuleConfig('welcome-v2', { ...welcConfig, ...newCfg });
-          }
-          if (extra?.logSyncEvent) {
-            extra.logSyncEvent(message.guild?.id, 'Welcome Config: Updated onboarding settings via CLI.', 'success');
-          }
-        };
-
-        if (!action || action === 'status' || action === 'view') {
-          const channelStr = welcConfig.channelId ? `<#${welcConfig.channelId}>` : '`Not Set`';
-          const dmStr = welcConfig.sendDm ? APPROVED_ICON + ' `ENABLED`' : WRONG_EMOJI + ' `DISABLED`';
-          const autorolesStr = (welcConfig.autoroleIds || []).map((r: string) => `<@&${r}>`).join(', ') || '`None`';
-          const leaveStr = welcConfig.sendLeave ? APPROVED_ICON + ` Enabled (<#${welcConfig.leaveChannelId}>)` : WRONG_EMOJI + ' `DISABLED`';
-
-          const overviewCard = buildLimeOverviewCard({
-            title: 'WELCOME & ONBOARDING CONFIGURATION MATRIX',
-            subtitle: 'WELCOME MESSAGES, DM GREETINGS & AUTO-ROLES',
-            color: Colors.BRAND,
-            sections: [
-              {
-                title: '<:member:1532621317487071426> ONBOARDING PARAMETERS',
-                items: [
-                  `Welcome Channel: ${channelStr}`,
-                  `DM Greetings: ${dmStr}`,
-                  `Auto-Roles: ${autorolesStr}`,
-                  `Goodbye / Leave Alert: ${leaveStr}`,
-                  `Welcome Text: \`${(welcConfig.welcomeMessage || 'Welcome {user} to {server}!').slice(0, 60)}\``
-                ]
-              }
-            ],
-            footerText: 'Rage Optimiser Enterprise • Welcome Configuration'
-          });
-
-          return message.reply({ embeds: [overviewCard] });
-        }
-
-        if (action === 'channel') {
-          const channel = message.mentions.channels.first();
-          if (effectiveArgs[2]?.toLowerCase() === 'none' || effectiveArgs[2]?.toLowerCase() === 'disable') {
-            updateWelcConfig({ channelId: null });
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Welcome Channel Disabled',
-                description: `${APPROVED_ICON} Welcome greetings channel has been disabled.`
-              })]
-            });
-          }
-
-          if (!channel) {
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Welcome Channel Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config welcome channel <#channel|none>\`\nExample: \`r!config welcome channel #lounge\``
-              })]
-            });
-          }
-
-          updateWelcConfig({ channelId: channel.id });
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Welcome Channel Saved',
-              description: `${APPROVED_ICON} Welcome greeting channel set to **<#${channel.id}>**.`
-            })]
-          });
-        }
-
-        if (action === 'message' || action === 'text') {
-          const msgText = effectiveArgs.slice(2).join(' ').trim();
-          if (!msgText) {
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Welcome Message Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config welcome message <text>\`\nVariables: \`{user}\`, \`{server}\`, \`{count}\`\nExample: \`r!config welcome message Welcome {user} to {server}!\``
-              })]
-            });
-          }
-
-          updateWelcConfig({ welcomeMessage: msgText });
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Welcome Message Saved',
-              description: `${APPROVED_ICON} Updated welcome greeting text to:\n> ${msgText}`
-            })]
-          });
-        }
-
-        if (action === 'dm') {
-          const toggle = effectiveArgs[2]?.toLowerCase();
-          const dmMsg = effectiveArgs.slice(3).join(' ').trim();
-
-          if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'DM Greeting Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config welcome dm <on|off> [message_text]\`\nExample: \`r!config welcome dm on Welcome to our community!\``
-              })]
-            });
-          }
-
-          const isEnabled = ['on', 'enable'].includes(toggle);
-          const updates: Record<string, any> = { sendDm: isEnabled };
-          if (dmMsg) updates.dmText = dmMsg;
-
-          updateWelcConfig(updates);
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'DM Greeting Settings Saved',
-              description: `${APPROVED_ICON} Onboarding DM greetings are now **\`${isEnabled ? 'ENABLED' : 'DISABLED'}\`**.`
-            })]
-          });
-        }
-
-        if (action === 'autorole') {
-          const subAct = effectiveArgs[2]?.toLowerCase();
-          const role = message.mentions.roles.first();
-          const currentRoles: string[] = welcConfig.autoroleIds || [];
-
-          if (subAct === 'add' && role) {
-            const merged = Array.from(new Set([...currentRoles, role.id]));
-            updateWelcConfig({ autoroleIds: merged });
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Auto-Role Added',
-                description: `${APPROVED_ICON} Added **<@&${role.id}>** to join auto-roles.`
-              })]
-            });
-          }
-
-          if (subAct === 'remove' && role) {
-            const filtered = currentRoles.filter(r => r !== role.id);
-            updateWelcConfig({ autoroleIds: filtered });
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Auto-Role Removed',
-                description: `${APPROVED_ICON} Removed **<@&${role.id}>** from join auto-roles.`
-              })]
-            });
-          }
-
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Auto-Role Configuration',
-              description: `${CONFIG_EMOJI} **Auto-Roles**: ${currentRoles.length > 0 ? currentRoles.map(r => `<@&${r}>`).join(', ') : '*None*'}\n\n**Syntax**: \`r!config welcome autorole <add|remove> <@role>\``
-            })]
-          });
+        const welcomeCmd = PrefixRegistry.get('welcome');
+        if (welcomeCmd && welcomeCmd.execute) {
+          return welcomeCmd.execute(message, effectiveArgs.slice(1), extra);
         }
       }
 

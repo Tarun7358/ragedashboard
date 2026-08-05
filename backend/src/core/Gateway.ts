@@ -19,6 +19,7 @@ import { PrefixHelpCenter } from './prefix/PrefixHelpCenter.js';
 import { CommandPipeline } from './prefix/CommandPipeline.js';
 import { InteractionRouter } from './InteractionRouter.js';
 import { PayloadFormatter } from './PayloadFormatter.js';
+import { BrainEventInterceptor } from '../brain/BrainEventInterceptor.js';
 
 function stripEphemeral(options?: any) {
   if (options && typeof options === 'object') {
@@ -339,6 +340,11 @@ export class Gateway {
     this.client.once(Events.ClientReady, async () => {
       console.log(`Discord client connected as ${this.client.user?.username}`);
       this.logSyncEvent(`Discord gateway connected as ${this.client.user?.username}`, 'success');
+
+      // ── Rage Brain: guaranteed bot user ID available here ──────────────────
+      // Init is idempotent — calling twice is safe (init guards with _initialized flag)
+      BrainEventInterceptor.init(this.client.user?.id ?? 'unknown');
+
       await PrefixResolver.loadAllPrefixes().catch(console.error);
       await this.client.application?.fetch().catch(() => null);
       this.syncRegistry();
@@ -1328,6 +1334,12 @@ export class Gateway {
   }
 
   private async dispatchEvent(eventName: string, ...args: any[]): Promise<void> {
+    // ── Rage Brain silent tap (fire-and-forget — NEVER blocks bot logic) ──
+    BrainEventInterceptor.observe(eventName, args, {
+      getModulesState: (gId?: string) => this.getModulesState(gId),
+      getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId)
+    }).catch(() => {});
+
     return this.dispatchEventForGuild(eventName, undefined, ...args);
   }
 

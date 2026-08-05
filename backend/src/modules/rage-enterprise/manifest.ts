@@ -5,6 +5,7 @@ import { Embeds, Colors, VERIFIED_ICON, WRONG_ICON, buildLimeOverviewCard } from
 import { getUnifiedWhitelistEntries } from '../../utils/whitelistCheck.js';
 
 import { buildAntiNukeOverview } from '../config/manifest.js';
+import { buildLimeWelcomePayload } from '../welcome-v2/manifest.js';
 
 // TODO:
 // Dashboard currently disabled.
@@ -421,29 +422,42 @@ export const RageEnterpriseManifest: ModuleManifest = {
     {
       name: 'button_welc_setup_wizard',
       handler: async (client: any, interaction: any, context: any) => {
-        const embed = new EmbedBuilder()
-          .setTitle('<:config:1532425712844144701> Welcome & Onboarding Wizard')
-          .setDescription([
-            `### Step 1: Welcome Channel Configuration`,
-            `Configure where new member greeting cards are dispatched!`,
-            ``,
-            `• Use \`/config welcome channel:#welcome\` to set the destination channel.`,
-            `• Use \`/config welcome autorole:@Role\` to set auto-assigned join roles.`
-          ].join('\n'))
-          .setColor(0x84cc16);
+        const embed = buildLimeOverviewCard({
+          title: 'WELCOME & ONBOARDING WIZARD',
+          subtitle: 'LIME.GG ONBOARDING ENGINE CONFIGURATION',
+          sections: [
+            {
+              title: '<:config:1532425712844144701> SETUP COMMANDS',
+              items: [
+                `• \`r!welcome channel #welcome\` — Set destination channel`,
+                `• \`r!welcome rules #rules\` — Link server rules channel`,
+                `• \`r!welcome roles #self-roles\` — Link server roles channel`,
+                `• \`r!welcome chat #general\` — Link general chat channel`,
+                `• \`r!welcome autorole @Role\` — Set auto-assigned join role`,
+                `• \`r!welcome test\` — Dispatch live welcome card preview`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser • Onboarding Suite'
+        });
         await interaction.reply({ embeds: [embed], flags: 64 });
       }
     },
     {
       name: 'button_welc_test_welcome',
       handler: async (client: any, interaction: any, context: any) => {
-        const testEmbed = new EmbedBuilder()
-          .setTitle('<:member:1532621317487071426> Welcome to the Server!')
-          .setDescription(`Hey ${interaction.user}! Welcome to **${interaction.guild.name}**. We are thrilled to have you here! 🎉`)
-          .setThumbnail(interaction.user.displayAvatarURL({ size: 256 }))
-          .setColor(0x84cc16)
-          .setFooter({ text: 'Rage Optimiser • Welcome Preview' });
-        await interaction.reply({ content: `${VERIFIED_ICON} **Test Welcome Greeting Dispatched:**`, embeds: [testEmbed], flags: 64 });
+        const guildId = interaction.guildId;
+        const modules = context.getModulesState ? context.getModulesState(guildId) : [];
+        const welcMod = modules.find((m: any) => m.id === 'welcome-v2') || {};
+        const config = welcMod.config || {};
+        const member = interaction.member || { user: interaction.user, guild: interaction.guild };
+        const payload = buildLimeWelcomePayload(config, member);
+        if (payload.content) {
+          payload.content = `${VERIFIED_ICON} **Test Welcome Greeting Dispatched:**\n${payload.content}`;
+        } else {
+          payload.content = `${VERIFIED_ICON} **Test Welcome Greeting Dispatched:**`;
+        }
+        await interaction.reply({ ...payload, flags: 64 });
       }
     },
     {

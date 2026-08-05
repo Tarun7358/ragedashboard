@@ -5,16 +5,14 @@
 const isLocal = typeof window !== 'undefined' && (
   window.location.hostname === 'localhost' || 
   window.location.hostname === '127.0.0.1' ||
-  window.location.hostname.startsWith('192.168.')
+  window.location.hostname.startsWith('192.168.') ||
+  window.location.protocol === 'file:' ||
+  !window.location.hostname
 );
 
-export const API_BASE = (import.meta.env.VITE_API_URL as string) || (isLocal ? 'http://localhost:5000' : '');
+export const API_BASE = (import.meta.env.VITE_API_URL as string) || 'http://localhost:5000';
 export const BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL as string) || (import.meta.env.VITE_API_URL as string) || API_BASE;
-export const WS_BASE = (import.meta.env.VITE_WS_URL as string) || (
-  isLocal 
-    ? 'ws://localhost:5001' 
-    : (typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}` : '')
-);
+export const WS_BASE = (import.meta.env.VITE_WS_URL as string) || 'ws://localhost:5000';
 export const DISCORD_CLIENT_ID = (import.meta.env.VITE_DISCORD_CLIENT_ID as string) || '1519626369594818560';
 export const APP_NAME = (import.meta.env.VITE_APP_NAME as string) || 'Rage Optimiser Enterprise';
 export const ENVIRONMENT = (import.meta.env.VITE_ENVIRONMENT as string) || 'production';

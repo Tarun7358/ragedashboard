@@ -90,10 +90,16 @@ async function renderWhitelistConfigUI(
   target: any,
   notesInput?: string
 ) {
+  if (!target) {
+    const embedErr = new EmbedBuilder()
+      .setColor(0xEF4444)
+      .setDescription(`❌ ${interaction.user} Target entity not specified or not found.`);
+    return interaction.editReply({ embeds: [embedErr] }).catch(() => {});
+  }
   const targetId = target.id;
   const isRole = target instanceof Role || (target && (target.constructor?.name === 'Role' || (typeof target === 'object' && 'name' in target && !('user' in target) && !('username' in target))));
   const userOrRole = isRole ? target : (target.user || target);
-  const type: 'member' | 'bot' | 'role' = isRole ? 'role' : (userOrRole.bot ? 'bot' : 'member');
+  const type: 'member' | 'bot' | 'role' = isRole ? 'role' : (userOrRole?.bot ? 'bot' : 'member');
   const tagOrName = isRole ? resolveRoleName(target) : resolveUserTag(userOrRole);
 
   const modules = context.getModulesState ? context.getModulesState() : [];
@@ -656,6 +662,12 @@ export const MemberWhitelistManifest: ModuleManifest = {
 
         if (sub === 'remove') {
           const target = interaction.options.getMentionable('target', true);
+          if (!target) {
+            const embedErr = new EmbedBuilder()
+              .setColor(0xEF4444)
+              .setDescription(`❌ ${interaction.user} Please specify a valid target user, role, or ID.`);
+            return interaction.editReply({ embeds: [embedErr] }).catch(() => {});
+          }
 
           const mwModule = modules.find((m: any) => m && m.id === 'member_whitelist');
           let members = [...(mwModule?.config?.members || [])].filter(Boolean);
@@ -674,20 +686,21 @@ export const MemberWhitelistManifest: ModuleManifest = {
             }
           } else {
             const user = target.user || target;
+            const targetId = target.id || user.id;
             tagOrName = resolveUserTag(user);
-            const userRecord = members.find((e: any) => e && user.id && e.type !== 'role' && (e.userId === user.id || e.id === user.id));
+            const userRecord = members.find((e: any) => e && targetId && e.type !== 'role' && (e.userId === targetId || e.id === targetId));
             if (userRecord) {
               found = true;
-              members = members.filter((e: any) => e && !(user.id && e.type !== 'role' && (e.userId === user.id || e.id === user.id)));
+              members = members.filter((e: any) => e && !(targetId && e.type !== 'role' && (e.userId === targetId || e.id === targetId)));
 
-              if (userRecord.type !== 'bot' && !user.bot) {
+              if (userRecord.type !== 'bot' && !user?.bot) {
                 // Downward Sync: remove from security whitelist
                 const secModule = modules.find((m: any) => m && m.id === 'security');
                 if (secModule) {
                   const secWhitelist = (secModule.config?.whitelist || []).filter(Boolean).filter((w: any) => {
                     if (!w) return false;
                     const id = typeof w === 'string' ? w : w.targetId;
-                    return id !== user.id;
+                    return id !== targetId;
                   });
                   context.updateModuleConfig('security', { ...secModule.config, whitelist: secWhitelist });
                 }

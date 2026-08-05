@@ -127,12 +127,12 @@ async function deploy() {
     console.log('✅ Slash commands successfully registered globally on Discord API. Every server can now use all commands!');
 
     if (guildStr) {
-      console.log(`🧹 Clearing legacy single-guild commands for guild ${guildStr} to prevent duplicates in Discord UI...`);
+      console.log(`⚡ Instantly updating single-guild commands for dev guild ${guildStr}...`);
       await rest.put(
         Routes.applicationGuildCommands(clientStr, guildStr),
-        { body: [] }
+        { body: commands }
       ).catch(() => {});
-      console.log('✅ Legacy single-guild commands cleared.');
+      console.log('✅ Dev guild commands updated instantly!');
     }
   } catch (error) {
     console.error('❌ Failed to deploy slash commands:', error);

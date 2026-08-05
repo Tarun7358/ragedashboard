@@ -370,95 +370,74 @@ export function registerPrebotCommands(): void {
         }
 
         const action = args[1]?.toLowerCase() || 'status';
-        const codeArg = args[2] || args.find(a => /^\d{6}$/.test(a.trim()));
 
-        if (action === 'setup' || action === 'on') {
-          const { secret, qrBuffer } = await TwoFactorManager.generateSecret(message.author.username, guild.name);
-          await TwoFactorManager.savePrebot2FAConfig(guild.id, message.author.id, secret, false);
-
-          const attachment = new AttachmentBuilder(qrBuffer, { name: '2fa-qrcode.png' });
-          const setupEmbed = new EmbedBuilder()
-            .setTitle(`${SHIELD_ICON} PreBot Whitelist 2FA Setup`)
-            .setColor(Colors.BRAND)
-            .setThumbnail('attachment://2fa-qrcode.png')
-            .setDescription([
-              `**Server**: \`${guild.name}\``,
-              `\n**Step 1**: Scan the QR Code below using **Google Authenticator**, **Authy**, or **Microsoft Authenticator**.`,
-              `\n**Step 2**: Run the confirmation command with your live 6-digit code to activate 2FA:`,
-              `> \`r!prebot 2fa confirm <code>\` or \`/prebot 2fa action:confirm code:<code>\``,
-              `\n**Secret Key (Manual Entry)**: \`${secret}\``
-            ].join('\n'))
-            .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
-            .setTimestamp();
-
-          try {
-            await message.author.send({ embeds: [setupEmbed], files: [attachment] });
-            return message.reply({
-              embeds: [new EmbedBuilder()
-                .setTitle(`${VERIFIED_ICON} 2FA Setup Instructions Sent`)
-                .setColor(Colors.SUCCESS)
-                .setDescription(`Check your Direct Messages (<@${message.author.id}>) for your secret 2FA QR Code and setup instructions.\n\n*After scanning, confirm with:* \`r!prebot 2fa confirm <code>\``)
-                .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
-                .setTimestamp()]
-            });
-          } catch (dmErr) {
-            return message.reply({
-              content: '⚠️ Failed to send DM. Sending confidential setup payload here:',
-              embeds: [setupEmbed],
-              files: [attachment]
-            });
-          }
-        }
-
-        if (action === 'confirm' || action === 'verify') {
-          if (!codeArg) {
-            return message.reply(`${WRONG_ICON} Please provide your 6-digit Google Authenticator code. Example: \`r!prebot 2fa confirm 123456\``);
+        if (['set', 'setup', 'on', 'create'].includes(action)) {
+          const pinArg = args[2] || args.find(a => /^\d{6}$/.test(a.trim()));
+          if (!pinArg || !/^\d{6}$/.test(pinArg.trim())) {
+            return message.reply(`${WRONG_ICON} Please specify a valid 6-digit passcode. Example: \`r!prebot 2fa set 123456\``);
           }
 
-          const cfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
-          if (!cfg || !cfg.secret) {
-            return message.reply(`${WRONG_ICON} No pending 2FA setup found. Please run \`r!prebot 2fa setup\` first.`);
-          }
-
-          const isValid = TwoFactorManager.verifyToken(cfg.secret, codeArg);
-          if (!isValid) {
-            return message.reply({
-              embeds: [new EmbedBuilder()
-                .setTitle(`${WRONG_ICON} 2FA Verification Failed`)
-                .setColor(Colors.DANGER)
-                .setDescription(`The 6-digit 2FA code provided is **invalid or expired**. Please check your Google Authenticator app and try again.`)
-                .setTimestamp()]
-            });
-          }
-
-          await TwoFactorManager.setPrebot2FAEnabled(guild.id, true);
+          await TwoFactorManager.savePrebot2FAConfig(guild.id, message.author.id, pinArg.trim(), true);
           return message.reply({
             embeds: [new EmbedBuilder()
-              .setTitle(`${VERIFIED_ICON} PreBot Whitelist 2FA Protection Activated!`)
+              .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Set & Activated!`)
               .setColor(Colors.SUCCESS)
-              .setDescription(`Google Authenticator 2FA protection is now **ENABLED** for this server.\n\nAll future PreBot additions (\`r!prebot add\`, \`r!prebot quickadd\`) will require a live 6-digit Google Authenticator code.`)
+              .setDescription([
+                `**Server**: \`${guild.name}\``,
+                `**Passcode**: \`${pinArg.trim()}\``,
+                `**Security Status**: 🟢 **ENABLED (Active)**`,
+                `\nAll future PreBot additions (\`r!prebot add\`, \`r!prebot quickadd\`) will now require this 6-digit passcode.`
+              ].join('\n'))
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
               .setTimestamp()]
           });
         }
 
-        if (action === 'off' || action === 'disable') {
+        if (['change', 'update', 'edit'].includes(action)) {
+          const cfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
+          if (!cfg || !cfg.pin) {
+            return message.reply(`${WRONG_ICON} No passcode is currently set. Use \`r!prebot 2fa set <6-digit-pin>\` to set one.`);
+          }
+
+          const oldPin = args[2];
+          const newPin = args[3];
+
+          if (!oldPin || !newPin || !/^\d{6}$/.test(oldPin.trim()) || !/^\d{6}$/.test(newPin.trim())) {
+            return message.reply(`${WRONG_ICON} Please specify both your current passcode and your new 6-digit passcode. Example: \`r!prebot 2fa change <old-pin> <new-pin>\``);
+          }
+
+          if (!TwoFactorManager.verifyPin(cfg.pin, oldPin)) {
+            return message.reply(`${WRONG_ICON} Existing passcode verification failed. Incorrect current passcode.`);
+          }
+
+          await TwoFactorManager.savePrebot2FAConfig(guild.id, message.author.id, newPin.trim(), true);
+          return message.reply({
+            embeds: [new EmbedBuilder()
+              .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Updated!`)
+              .setColor(Colors.SUCCESS)
+              .setDescription(`Your 6-digit PreBot 2FA passcode has been successfully updated to \`${newPin.trim()}\`.`)
+              .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
+              .setTimestamp()]
+          });
+        }
+
+        if (['off', 'disable'].includes(action)) {
           const cfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
           if (!cfg || !cfg.isEnabled) {
             return message.reply(`${WRONG_ICON} PreBot Whitelist 2FA protection is not currently enabled for this server.`);
           }
 
-          if (!codeArg) {
-            return message.reply(`${WRONG_ICON} Please provide your 6-digit Google Authenticator code to disable 2FA. Example: \`r!prebot 2fa off 123456\``);
+          const pinArg = args[2] || args.find(a => /^\d{6}$/.test(a.trim()));
+          if (!pinArg) {
+            return message.reply(`${WRONG_ICON} Please provide your 6-digit passcode to disable 2FA. Example: \`r!prebot 2fa off 123456\``);
           }
 
-          const isValid = TwoFactorManager.verifyToken(cfg.secret, codeArg);
-          if (!isValid) {
+          if (!TwoFactorManager.verifyPin(cfg.pin, pinArg)) {
             return message.reply({
               embeds: [new EmbedBuilder()
                 .setTitle(`${WRONG_ICON} 2FA Verification Failed`)
                 .setColor(Colors.DANGER)
-                .setDescription(`Invalid 6-digit code. Unable to disable 2FA protection.`)
+                .setDescription(`Invalid 6-digit passcode. Unable to disable 2FA protection.`)
                 .setTimestamp()]
             });
           }
@@ -477,18 +456,21 @@ export function registerPrebotCommands(): void {
         // Default: status
         const cfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
         const isEnabled = cfg ? cfg.isEnabled : false;
+        const hasPin = cfg ? Boolean(cfg.pin) : false;
+
         return message.reply({
           embeds: [new EmbedBuilder()
-            .setTitle(`${SHIELD_ICON} PreBot Whitelist 2FA Status`)
+            .setTitle(`${SHIELD_ICON} PreBot Whitelist 2FA Security Status`)
             .setColor(isEnabled ? Colors.SUCCESS : Colors.INFO)
             .setDescription([
-              `**Status**: ${isEnabled ? '🟢 **ENABLED (Active)**' : '🔴 **DISABLED (Inactive)**'}`,
+              `**Server**: \`${guild.name}\``,
+              `**Security Status**: ${isEnabled ? '🟢 **ENABLED (Active)**' : '🔴 **DISABLED (Inactive)**'}`,
+              `**Passcode Configured**: ${hasPin ? '✅ **Passcode Set**' : '❌ **No Passcode Set**'}`,
               `**Managed By**: Server Owner (<@${guild.ownerId}>)`,
-              `\n${isEnabled ? 'All bot additions require a live 6-digit Google Authenticator code.' : 'Bot additions do not require 2FA authentication.'}`,
               `\n**Management Commands**:`,
-              `> \`r!prebot 2fa setup\` — Setup QR Code for Google Authenticator`,
-              `> \`r!prebot 2fa confirm <code>\` — Confirm and enable 2FA`,
-              `> \`r!prebot 2fa off <code>\` — Disable 2FA enforcement`
+              `> \`r!prebot 2fa set <6-digit-pin>\` — Set your custom 6-digit passcode & enable 2FA`,
+              `> \`r!prebot 2fa change <old-pin> <new-pin>\` — Change your existing 6-digit passcode`,
+              `> \`r!prebot 2fa off <6-digit-pin>\` — Disable 2FA enforcement`
             ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp()]
@@ -504,27 +486,27 @@ export function registerPrebotCommands(): void {
             const targetMention = args[1] || '@BotName';
             return message.reply({
               embeds: [new EmbedBuilder()
-                .setTitle(`${SHIELD_ICON} 2FA Authentication Required`)
+                .setTitle(`${SHIELD_ICON} 2FA Passcode Required`)
                 .setColor(Colors.WARN)
                 .setDescription([
                   `**RAGE OPTIMISER** • **Zero-Trust Security Gate**`,
                   `\nPreBot Whitelist 2FA protection is **ENABLED** for **${guild.name}**.`,
-                  `\nPlease supply your live 6-digit Google Authenticator code to authorize this bot addition:\n`,
-                  `> \`r!prebot quickadd ${targetMention} 123456\``,
-                  `> \`r!prebot add ${targetMention} 123456\``
+                  `\nPlease supply your 6-digit passcode to authorize this bot addition:\n`,
+                  `> \`r!prebot quickadd ${targetMention} <6-digit-pin>\``,
+                  `> \`r!prebot add ${targetMention} <6-digit-pin>\``
                 ].join('\n'))
                 .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
                 .setTimestamp()]
             });
           }
 
-          const isValid = TwoFactorManager.verifyToken(tfaCfg.secret, codeArg);
+          const isValid = TwoFactorManager.verifyPin(tfaCfg.pin, codeArg);
           if (!isValid) {
             return message.reply({
               embeds: [new EmbedBuilder()
-                .setTitle(`${WRONG_ICON} 2FA Verification Failed`)
+                .setTitle(`${WRONG_ICON} 2FA Passcode Verification Failed`)
                 .setColor(Colors.DANGER)
-                .setDescription(`The 6-digit 2FA code provided is **invalid or expired**. Access Denied.`)
+                .setDescription(`The 6-digit passcode provided is **invalid**. Access Denied.`)
                 .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
                 .setTimestamp()]
             });
@@ -731,7 +713,7 @@ export const PrebotWhitelistManifest: ModuleManifest = {
           return interaction.editReply({ embeds: [embed] }).catch(() => {});
         }
 
-        const is2FAAction = ['2fa', 'confirm', 'setup'].includes(sub);
+        const is2FAAction = ['2fa', 'confirm', 'setup', 'change', 'set'].includes(sub);
 
         if (is2FAAction) {
           if (interaction.user.id !== guild.ownerId) {
@@ -744,84 +726,94 @@ export const PrebotWhitelistManifest: ModuleManifest = {
             return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });
           }
 
-          let action = interaction.options.getString('action', false)?.toLowerCase();
-          let codeInput = interaction.options.getString('code', false) || '';
+          const posArgs: string[] = interaction.parsed?.args || [];
 
-          if (sub === 'setup') action = 'setup';
-          if (sub === 'confirm') action = 'confirm';
+          let action = interaction.options.getString('action', false)?.toLowerCase() || '';
+          if (!action || action === '2fa') {
+            const pos1 = posArgs[1]?.toLowerCase();
+            if (pos1 && ['set', 'setup', 'on', 'create', 'change', 'update', 'edit', 'off', 'disable', 'status'].includes(pos1)) {
+              action = pos1;
+            }
+          }
+          if (sub === 'setup' || sub === 'set') action = 'set';
+          if (sub === 'change') action = 'change';
           if (sub === 'disable') action = 'disable';
+          if (!action || action === '2fa') action = sub !== '2fa' ? sub : 'status';
 
-          if (!action) {
-            const pos1 = interaction.parsed?.args?.[1]?.toLowerCase();
-            action = pos1 || (sub !== '2fa' ? sub : 'status');
-          }
-
+          // Extract strict 6-digit passcode candidate
+          const rawCode = interaction.options.getString('code', false);
+          let codeInput = (rawCode && /^\d{6}$/.test(rawCode.trim())) ? rawCode.trim() : '';
           if (!codeInput) {
-            const posArgs: string[] = interaction.parsed?.args || [];
-            const codeCandidate = posArgs.find((a: string) => /^\d{6}$/.test(a));
-            if (codeCandidate) codeInput = codeCandidate;
+            const codeCandidate = posArgs.find((a: string) => /^\d{6}$/.test(a.trim()));
+            if (codeCandidate) codeInput = codeCandidate.trim();
           }
 
-          if (action === 'setup' || action === 'on') {
-            const { secret, qrBuffer } = await TwoFactorManager.generateSecret(interaction.user.username, guild.name);
-            await TwoFactorManager.savePrebot2FAConfig(guild.id, interaction.user.id, secret, false);
+          if (['set', 'setup', 'on', 'create'].includes(action)) {
+            if (!codeInput || !/^\d{6}$/.test(codeInput.trim())) {
+              const errEmbed = new EmbedBuilder()
+                .setTitle(`${WRONG_ICON} Missing 6-Digit Passcode`)
+                .setColor(Colors.DANGER)
+                .setDescription('Please specify a valid 6-digit passcode: `r!prebot 2fa set 123456`');
+              return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });
+            }
 
-            const attachment = new AttachmentBuilder(qrBuffer, { name: '2fa-qrcode.png' });
-            const setupEmbed = new EmbedBuilder()
-              .setTitle(`${SHIELD_ICON} PreBot Whitelist 2FA Setup`)
-              .setColor(Colors.BRAND)
-              .setThumbnail('attachment://2fa-qrcode.png')
+            await TwoFactorManager.savePrebot2FAConfig(guild.id, interaction.user.id, codeInput.trim(), true);
+            const successEmbed = new EmbedBuilder()
+              .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Set & Activated!`)
+              .setColor(Colors.SUCCESS)
               .setDescription([
                 `**Server**: \`${guild.name}\``,
-                `\n**Step 1**: Scan the QR Code below using **Google Authenticator**, **Authy**, or **Microsoft Authenticator**.`,
-                `\n**Step 2**: Run the confirmation command with your live 6-digit code to activate 2FA:`,
-                `> \`r!prebot 2fa confirm <code>\``,
-                `\n**Secret Key (Manual Entry)**: \`${secret}\``
+                `**Passcode**: \`${codeInput.trim()}\``,
+                `**Security Status**: 🟢 **ENABLED (Active)**`,
+                `\nAll future PreBot additions will now require this 6-digit passcode.`
               ].join('\n'))
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
               .setTimestamp();
 
-            return interaction.editReply({ embeds: [setupEmbed], files: [attachment] }).catch(() => { });
+            return interaction.editReply({ embeds: [successEmbed] }).catch(() => { });
           }
 
-          if (action === 'confirm' || action === 'verify') {
-            if (!codeInput) {
-              const errEmbed = new EmbedBuilder()
-                .setTitle(`${WRONG_ICON} Missing Code`)
-                .setColor(Colors.DANGER)
-                .setDescription('Please provide your 6-digit Google Authenticator code: `r!prebot 2fa confirm 123456`');
-              return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });
-            }
-
+          if (['change', 'update', 'edit'].includes(action)) {
             const cfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
-            if (!cfg || !cfg.secret) {
+            if (!cfg || !cfg.pin) {
               const errEmbed = new EmbedBuilder()
-                .setTitle(`${WRONG_ICON} Setup Required`)
+                .setTitle(`${WRONG_ICON} Passcode Not Set`)
                 .setColor(Colors.DANGER)
-                .setDescription('No pending 2FA setup found. Please run `r!prebot 2fa setup` first.');
+                .setDescription('No passcode is currently set. Use `r!prebot 2fa set <6-digit-pin>` to set one.');
               return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });
             }
 
-            const isValid = TwoFactorManager.verifyToken(cfg.secret, codeInput);
-            if (!isValid) {
+            const sixDigitMatches = posArgs.filter((a: string) => /^\d{6}$/.test(a.trim()));
+            const oldPin = sixDigitMatches[0];
+            const newPin = sixDigitMatches[1] || codeInput;
+
+            if (!oldPin || !newPin) {
               const errEmbed = new EmbedBuilder()
-                .setTitle(`${WRONG_ICON} 2FA Verification Failed`)
+                .setTitle(`${WRONG_ICON} Missing Parameters`)
                 .setColor(Colors.DANGER)
-                .setDescription('The 6-digit 2FA code provided is **invalid or expired**. Please check your Google Authenticator app and try again.');
+                .setDescription('Please specify both your current passcode and your new 6-digit passcode: `r!prebot 2fa change <old-pin> <new-pin>`');
               return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });
             }
 
-            await TwoFactorManager.setPrebot2FAEnabled(guild.id, true);
+            if (!TwoFactorManager.verifyPin(cfg.pin, oldPin)) {
+              const errEmbed = new EmbedBuilder()
+                .setTitle(`${WRONG_ICON} Verification Failed`)
+                .setColor(Colors.DANGER)
+                .setDescription('Existing passcode verification failed. Incorrect current passcode.');
+              return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });
+            }
+
+            await TwoFactorManager.savePrebot2FAConfig(guild.id, interaction.user.id, newPin.trim(), true);
             const successEmbed = new EmbedBuilder()
-              .setTitle(`${VERIFIED_ICON} PreBot Whitelist 2FA Protection Activated!`)
+              .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Updated!`)
               .setColor(Colors.SUCCESS)
-              .setDescription(`Google Authenticator 2FA protection is now **ENABLED** for this server.\n\nAll future PreBot additions will require a live 6-digit Google Authenticator code.`)
+              .setDescription(`Your 6-digit PreBot 2FA passcode has been successfully updated to \`${newPin.trim()}\`.`)
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
               .setTimestamp();
             return interaction.editReply({ embeds: [successEmbed] }).catch(() => { });
           }
 
-          if (action === 'off' || action === 'disable') {
+          if (['off', 'disable'].includes(action)) {
             const cfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
             if (!cfg || !cfg.isEnabled) {
               const errEmbed = new EmbedBuilder()
@@ -833,18 +825,17 @@ export const PrebotWhitelistManifest: ModuleManifest = {
 
             if (!codeInput) {
               const errEmbed = new EmbedBuilder()
-                .setTitle(`${WRONG_ICON} Missing Code`)
+                .setTitle(`${WRONG_ICON} Missing Passcode`)
                 .setColor(Colors.DANGER)
-                .setDescription('Please provide your 6-digit Google Authenticator code to disable 2FA: `r!prebot 2fa disable 123456`');
+                .setDescription('Please provide your 6-digit passcode to disable 2FA: `r!prebot 2fa disable 123456`');
               return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });
             }
 
-            const isValid = TwoFactorManager.verifyToken(cfg.secret, codeInput);
-            if (!isValid) {
+            if (!TwoFactorManager.verifyPin(cfg.pin, codeInput)) {
               const errEmbed = new EmbedBuilder()
                 .setTitle(`${WRONG_ICON} 2FA Verification Failed`)
                 .setColor(Colors.DANGER)
-                .setDescription('Invalid 6-digit code. Unable to disable 2FA protection.');
+                .setDescription('Invalid 6-digit passcode. Unable to disable 2FA protection.');
               return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });
             }
 
@@ -861,17 +852,20 @@ export const PrebotWhitelistManifest: ModuleManifest = {
           // Default: status
           const cfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
           const isEnabled = cfg ? cfg.isEnabled : false;
+          const hasPin = cfg ? Boolean(cfg.pin) : false;
+
           const statusEmbed = new EmbedBuilder()
-            .setTitle(`${SHIELD_ICON} PreBot Whitelist 2FA Status`)
+            .setTitle(`${SHIELD_ICON} PreBot Whitelist 2FA Security Status`)
             .setColor(isEnabled ? Colors.SUCCESS : Colors.INFO)
             .setDescription([
-              `**Status**: ${isEnabled ? '🟢 **ENABLED (Active)**' : '🔴 **DISABLED (Inactive)**'}`,
+              `**Server**: \`${guild.name}\``,
+              `**Security Status**: ${isEnabled ? '🟢 **ENABLED (Active)**' : '🔴 **DISABLED (Inactive)**'}`,
+              `**Passcode Configured**: ${hasPin ? '✅ **Passcode Set**' : '❌ **No Passcode Set**'}`,
               `**Managed By**: Server Owner (<@${guild.ownerId}>)`,
-              `\n${isEnabled ? 'All bot additions require a live 6-digit Google Authenticator code.' : 'Bot additions do not require 2FA authentication.'}`,
               `\n**Management Commands**:`,
-              `> \`r!prebot 2fa setup\` — Setup QR Code for Google Authenticator`,
-              `> \`r!prebot 2fa confirm <code>\` — Confirm and enable 2FA`,
-              `> \`r!prebot 2fa disable <code>\` — Disable 2FA enforcement`
+              `> \`r!prebot 2fa set <6-digit-pin>\` — Set your custom 6-digit passcode & enable 2FA`,
+              `> \`r!prebot 2fa change <old-pin> <new-pin>\` — Change your existing 6-digit passcode`,
+              `> \`r!prebot 2fa off <6-digit-pin>\` — Disable 2FA enforcement`
             ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp();
@@ -882,29 +876,35 @@ export const PrebotWhitelistManifest: ModuleManifest = {
         if (sub === 'add' || sub === 'edit' || sub === 'quickadd' || sub === 'quick') {
           const tfaCfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
           if (tfaCfg && tfaCfg.isEnabled) {
-            const codeInput = interaction.options.getString('code', false);
+            const posArgs: string[] = interaction.parsed?.args || [];
+            const rawCode = interaction.options.getString('code', false);
+            let codeInput = (rawCode && /^\d{6}$/.test(rawCode.trim())) ? rawCode.trim() : '';
+            if (!codeInput) {
+              const codeCandidate = posArgs.find((a: string) => /^\d{6}$/.test(a.trim()));
+              if (codeCandidate) codeInput = codeCandidate.trim();
+            }
+
             if (!codeInput) {
               const reqEmbed = new EmbedBuilder()
-                .setTitle(`${SHIELD_ICON} 2FA Authentication Required`)
+                .setTitle(`${SHIELD_ICON} 2FA Passcode Required`)
                 .setColor(Colors.WARN)
                 .setDescription([
                   `**RAGE OPTIMISER** • **Zero-Trust Security Gate**`,
                   `\nPreBot Whitelist 2FA protection is **ENABLED** for **${guild.name}**.`,
-                  `\nPlease supply your live 6-digit Google Authenticator code to authorize this bot addition:\n`,
-                  `> \`/prebot quickadd bot:@Bot code:123456\``,
-                  `> \`/prebot add bot:@Bot code:123456\``
+                  `\nPlease supply your 6-digit passcode to authorize this bot addition:\n`,
+                  `> \`r!prebot quickadd @Bot <6-digit-pin>\``,
+                  `> \`r!prebot add @Bot <6-digit-pin>\``
                 ].join('\n'))
                 .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
                 .setTimestamp();
               return interaction.editReply({ embeds: [reqEmbed] }).catch(() => { });
             }
 
-            const isValid = TwoFactorManager.verifyToken(tfaCfg.secret, codeInput);
-            if (!isValid) {
+            if (!TwoFactorManager.verifyPin(tfaCfg.pin, codeInput)) {
               const errEmbed = new EmbedBuilder()
                 .setTitle(`${WRONG_ICON} 2FA Verification Failed`)
                 .setColor(Colors.DANGER)
-                .setDescription('The 6-digit 2FA code provided is **invalid or expired**. Access Denied.')
+                .setDescription('The 6-digit passcode provided is **invalid**. Access Denied.')
                 .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
                 .setTimestamp();
               return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });

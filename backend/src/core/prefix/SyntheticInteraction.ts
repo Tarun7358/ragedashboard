@@ -299,7 +299,27 @@ export class SyntheticInteraction {
     getMentionable: (name: string, required?: boolean): any => {
       const mentionedUser = this.message.mentions.users.first();
       if (mentionedUser) return mentionedUser;
-      return this.message.mentions.roles.first() ?? null;
+      const mentionedRole = this.message.mentions.roles.first();
+      if (mentionedRole) return mentionedRole;
+
+      const val = this.parsed.options[name] ?? this.parsed.flags[name.toLowerCase()];
+      const offset = this._subcommandConsumed ? 1 : 0;
+      const posVal = typeof val === 'string' ? val : this.parsed.args[offset];
+
+      if (typeof posVal === 'string') {
+        const idMatch = posVal.match(/\d{17,19}/);
+        if (idMatch) {
+          const targetId = idMatch[0];
+          const cachedUser = this.client.users.cache.get(targetId);
+          if (cachedUser) return cachedUser;
+          const cachedRole = this.guild?.roles.cache.get(targetId);
+          if (cachedRole) return cachedRole;
+
+          return { id: targetId, username: `User-${targetId}`, tag: `User-${targetId}` };
+        }
+      }
+
+      return null;
     },
 
     /**

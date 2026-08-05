@@ -1,14 +1,16 @@
-import { EmbedBuilder, Role } from 'discord.js';
+import { EmbedBuilder, Role, ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
+import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
+import { buildLimeOverviewCard, createLimeEmbed, Colors, VERIFIED_ICON, WRONG_ICON, CONFIG_ICON, MEMBER_ICON } from '../../core/UIFactory.js';
 
 // Safe user tag helper
 function userTag(user: any): string {
   return user?.globalName ?? user?.username ?? user?.tag ?? user?.id ?? 'Unknown';
 }
 
-// Variable parser engine supporting all requested Koya tokens
-function parseWelcomeVariables(str: string, member: any, countOverride?: number): string {
+// Variable parser engine supporting all requested Lime/Koya tokens and dynamic channel links
+function parseWelcomeVariables(str: string, member: any, countOverride?: number, config?: any): string {
   if (!str) return '';
   const dateStr = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -16,21 +18,137 @@ function parseWelcomeVariables(str: string, member: any, countOverride?: number)
     month: 'long',
     day: 'numeric'
   });
-  
-  const memberCount = countOverride ?? member.guild.memberCount;
+
+  const memberCount = countOverride ?? (member.guild ? member.guild.memberCount : 1);
   const targetUser = member.user || member;
+  const serverName = member.guild ? member.guild.name : 'Server';
+
+  const rulesRef = config?.rulesChannelId ? `<#${config.rulesChannelId}>` : '**#rules**';
+  const rolesRef = config?.rolesChannelId ? `<#${config.rolesChannelId}>` : '**#roles**';
+  const chatRef = config?.chatChannelId ? `<#${config.chatChannelId}>` : '**#chat**';
 
   return str
     .replace(/{user}/g, targetUser.toString())
-    .replace(/{username}/g, targetUser.username)
+    .replace(/{username}/g, targetUser.username || targetUser.displayName || 'User')
     .replace(/{userTag}/g, userTag(targetUser))
     .replace(/{user\.tag}/g, userTag(targetUser))
-    .replace(/{userId}/g, targetUser.id)
-    .replace(/{server}/g, member.guild.name)
+    .replace(/{userId}/g, targetUser.id || '0')
+    .replace(/{server}/g, serverName)
     .replace(/{memberCount}/g, memberCount.toString())
     .replace(/{date}/g, dateStr)
-    .replace(/{boosts}/g, (member.guild.premiumSubscriptionCount || 0).toString())
-    .replace(/{boostTier}/g, (member.guild.premiumTier || 0).toString());
+    .replace(/{boosts}/g, (member.guild?.premiumSubscriptionCount || 0).toString())
+    .replace(/{boostTier}/g, (member.guild?.premiumTier || 0).toString())
+    .replace(/{rules}/g, rulesRef)
+    .replace(/{roles}/g, rolesRef)
+    .replace(/{chat}/g, chatRef);
+}
+
+export const DEFAULT_LIME_HEADER = '.<:member:1532621317487071426> ~ <a:approved:1532390590707142956> ~ Welcome {user} to **{server}** !!!';
+export const DEFAULT_LIME_DESCRIPTION = [
+  '.                 • Welcome to **{server}** <:member:1532621317487071426>',
+  '<:shield:1532403012751065179> • Please make sure to read and follow {rules} !',
+  '.           • Unleash Maximum Performance & Dominate with Rage Optimiser <a:boost:1531667085807583262>',
+  '<:config:1532425712844144701> . {roles} . <:information:1532621274092929124> . {chat} . <:link:1532620952087826602> . {server} .'
+].join('\n');
+export const DEFAULT_LIME_COLOR = '#CBF528';
+export const DEFAULT_LIME_FOOTER = '{server} • Member #{memberCount}';
+
+// Build Lime GG aesthetic welcome payload
+export function buildLimeWelcomePayload(config: any, member: any, countOverride?: number) {
+  const cfg = config || {};
+  const embedCfg = cfg.welcomeEmbed || {};
+  const style = cfg.style || 'lime';
+
+  const rawContent = cfg.welcomeMessage ?? cfg.content ?? DEFAULT_LIME_HEADER;
+  const content = parseWelcomeVariables(rawContent, member, countOverride, cfg);
+
+  if (style === 'classic') {
+    return { content };
+  }
+
+  const colorHex = embedCfg.color || cfg.color || DEFAULT_LIME_COLOR;
+  const rawDesc = embedCfg.description ?? cfg.description ?? DEFAULT_LIME_DESCRIPTION;
+  const description = parseWelcomeVariables(rawDesc, member, countOverride, cfg);
+
+  const embed = new EmbedBuilder().setColor(colorHex as any);
+
+  if (description) {
+    embed.setDescription(description);
+  }
+
+  if (embedCfg.title || cfg.title) {
+    embed.setTitle(parseWelcomeVariables(embedCfg.title || cfg.title, member, countOverride, cfg));
+  }
+
+  if (embedCfg.showAvatar !== false && cfg.showAvatar !== false) {
+    const avatarUrl = member.user?.displayAvatarURL
+      ? member.user.displayAvatarURL({ forceStatic: false })
+      : (member.displayAvatarURL ? member.displayAvatarURL({ forceStatic: false }) : null);
+    if (avatarUrl) embed.setThumbnail(avatarUrl);
+  }
+
+  const imgUrl = embedCfg.imageUrl || cfg.imageUrl || cfg.bannerUrl;
+  if (imgUrl && imgUrl !== 'none') {
+    embed.setImage(imgUrl);
+  }
+
+  const rawFooter = embedCfg.footer ?? cfg.footer ?? DEFAULT_LIME_FOOTER;
+  if (rawFooter && rawFooter !== 'none') {
+    embed.setFooter({ text: parseWelcomeVariables(rawFooter, member, countOverride, cfg) });
+  }
+
+  return { content, embeds: [embed] };
+}
+
+// Build standard embed wrapper fallback
+function buildWelcomeEmbed(config: any, member: any, countOverride?: number): EmbedBuilder | null {
+  if (!config) return null;
+  const embed = new EmbedBuilder().setColor((config.color || '#4f8cff') as any);
+  let hasContent = false;
+
+  if (config.title) {
+    embed.setTitle(parseWelcomeVariables(config.title, member, countOverride));
+    hasContent = true;
+  }
+  if (config.description) {
+    embed.setDescription(parseWelcomeVariables(config.description, member, countOverride));
+    hasContent = true;
+  }
+  if (config.author) {
+    embed.setAuthor({ name: parseWelcomeVariables(config.author, member, countOverride) });
+    hasContent = true;
+  }
+  if (config.showAvatar) {
+    const avatarUrl = member.user?.displayAvatarURL
+      ? member.user.displayAvatarURL({ forceStatic: false })
+      : (member.displayAvatarURL ? member.displayAvatarURL({ forceStatic: false }) : null);
+    if (avatarUrl) embed.setThumbnail(avatarUrl);
+    hasContent = true;
+  }
+  if (config.imageUrl) {
+    embed.setImage(config.imageUrl);
+    hasContent = true;
+  }
+  if (config.footer) {
+    embed.setFooter({ text: parseWelcomeVariables(config.footer, member, countOverride) });
+    hasContent = true;
+  }
+  if (config.timestamp) {
+    embed.setTimestamp();
+    hasContent = true;
+  }
+  if (config.fields && Array.isArray(config.fields)) {
+    config.fields.forEach((f: any) => {
+      embed.addFields({
+        name: parseWelcomeVariables(f.name, member, countOverride),
+        value: parseWelcomeVariables(f.value, member, countOverride),
+        inline: !!f.inline
+      });
+    });
+    hasContent = true;
+  }
+
+  return hasContent ? embed : null;
 }
 
 // Check member birthdays for the current day
@@ -39,8 +157,7 @@ async function checkBirthdays(client: any, context: any) {
     const guildId = context.guildId;
     const modules = context.getModulesState ? context.getModulesState() : [];
     const welcomeMod = modules.find((m: any) => m.id === 'welcome-v2');
-    
-    // Check if module is enabled and birthdays are configured
+
     if (!welcomeMod || welcomeMod.status !== 'enabled') return;
     const config = welcomeMod.config || {};
     if (!config.birthdaysEnabled || !config.birthdaysChannelId) return;
@@ -48,11 +165,10 @@ async function checkBirthdays(client: any, context: any) {
     const db = Database.getDb();
     if (!db) return;
 
-    // Get MM-DD representation of today (e.g. 07-17)
     const today = new Date();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
-    const todayStr = `${mm}-${dd}`; // Search for MM-DD birthday suffix
+    const todayStr = `${mm}-${dd}`;
 
     const birthdayRows = await db.all<any>(
       `SELECT userId FROM member_birthdays WHERE guildId = ? AND birthday LIKE ?`,
@@ -98,8 +214,8 @@ async function checkBirthdays(client: any, context: any) {
           embed.setTimestamp();
         }
 
-        const content = config.birthdaysMessage 
-          ? parseWelcomeVariables(config.birthdaysMessage, member) 
+        const content = config.birthdaysMessage
+          ? parseWelcomeVariables(config.birthdaysMessage, member)
           : `<:information:1532621274092929124> Happy Birthday ${member}!`;
 
         await channel.send({ content, embeds: [embed] });
@@ -113,59 +229,418 @@ async function checkBirthdays(client: any, context: any) {
   }
 }
 
-// Build standard embed wrapper
-function buildWelcomeEmbed(config: any, member: any, countOverride?: number): EmbedBuilder | null {
-  if (!config) return null;
-  const embed = new EmbedBuilder().setColor((config.color || '#4f8cff') as any);
-  let hasContent = false;
+// Register dynamic CLI command r!welcome into PrefixRegistry
+export function registerWelcomeCommands(): void {
+  PrefixRegistry.register({
+    name: 'welcome',
+    category: 'Welcome',
+    description: 'Configure and test the customizable Lime GG style welcome greeting message.',
+    usage: 'r!welcome <status|test|channel|header|text|title|color|banner|footer|style|reset>',
+    aliases: ['welc', 'setwelcome', 'welcomemsg'],
+    subcommands: [
+      { name: 'status', description: 'View current welcome configuration matrix and live preview.' },
+      { name: 'test', description: 'Send a live Lime GG welcome greeting test card in the current channel.' },
+      { name: 'channel <#channel|none>', description: 'Set or disable the welcome message destination channel.' },
+      { name: 'header <text>', description: 'Set outer ping/header content text above the embed.' },
+      { name: 'text <text>', description: 'Set description body text inside the welcome embed.' },
+      { name: 'title <text|none>', description: 'Set title text for the welcome embed.' },
+      { name: 'color <#hex_code>', description: 'Set border accent color (default: #CBF528 lime green).' },
+      { name: 'banner <image_url|none>', description: 'Set bottom banner image URL for the card.' },
+      { name: 'footer <text|none>', description: 'Set footer text at the bottom of the embed.' },
+      { name: 'style <lime|minimal|embed|classic>', description: 'Select welcome aesthetic preset.' },
+      { name: 'autorole <add|remove> <@role>', description: 'Configure auto-assigned join roles.' },
+      { name: 'reset', description: 'Reset welcome settings back to default Lime GG layout.' }
+    ],
+    examples: [
+      'r!welcome status',
+      'r!welcome test',
+      'r!welcome channel #welcome',
+      'r!welcome header .           • 🖤 ~ 📖 ~ {user} !!!',
+      'r!welcome color #CBF528',
+      'r!welcome banner https://i.imgur.com/example.png',
+      'r!welcome reset'
+    ],
+    cooldownSeconds: 2,
+    userPermissions: ['Administrator'],
+    execute: async (message: any, args: string[], extra?: any) => {
+      const sub = args[0]?.toLowerCase();
+      const modules = extra?.getModulesState ? extra.getModulesState() : [];
+      const welcomeMod = modules.find((m: any) => m.id === 'welcome-v2');
+      const config = welcomeMod?.config || {};
 
-  if (config.title) {
-    embed.setTitle(parseWelcomeVariables(config.title, member, countOverride));
-    hasContent = true;
-  }
-  if (config.description) {
-    embed.setDescription(parseWelcomeVariables(config.description, member, countOverride));
-    hasContent = true;
-  }
-  if (config.author) {
-    embed.setAuthor({ name: parseWelcomeVariables(config.author, member, countOverride) });
-    hasContent = true;
-  }
-  if (config.showAvatar) {
-    embed.setThumbnail(member.user.displayAvatarURL({ forceStatic: false }));
-    hasContent = true;
-  }
-  if (config.imageUrl) {
-    embed.setImage(config.imageUrl);
-    hasContent = true;
-  }
-  if (config.footer) {
-    embed.setFooter({ text: parseWelcomeVariables(config.footer, member, countOverride) });
-    hasContent = true;
-  }
-  if (config.timestamp) {
-    embed.setTimestamp();
-    hasContent = true;
-  }
-  if (config.fields && Array.isArray(config.fields)) {
-    config.fields.forEach((f: any) => {
-      embed.addFields({
-        name: parseWelcomeVariables(f.name, member, countOverride),
-        value: parseWelcomeVariables(f.value, member, countOverride),
-        inline: !!f.inline
+      const updateConfig = (newCfg: Record<string, any>) => {
+        if (extra?.updateModuleConfig) {
+          extra.updateModuleConfig('welcome-v2', { ...config, ...newCfg });
+        }
+        if (extra?.logSyncEvent) {
+          extra.logSyncEvent(message.guild?.id, 'Welcome Config: Updated welcome settings via CLI.', 'success');
+        }
+      };
+
+      // 1. Live Test Command (`r!welcome test`)
+      if (sub === 'test' || sub === 'testwelcome') {
+        const payload = buildLimeWelcomePayload(config, message.member || message.author);
+        await message.reply(payload);
+        return message.channel.send({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Card Test Dispatched',
+            description: `${VERIFIED_ICON} Live test message printed above. Destination channel: **<#${config.welcomeChannelId || message.channel.id}>**.`
+          })]
+        });
+      }
+
+      // 2. Set Channel (`r!welcome channel <#channel|none>`)
+      if (sub === 'channel') {
+        const targetChannel = message.mentions?.channels?.first();
+        const option = args[1]?.toLowerCase();
+
+        if (option === 'none' || option === 'off' || option === 'disable') {
+          updateConfig({ welcomeEnabled: false, welcomeChannelId: null, channelId: null });
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Welcome Greetings Disabled',
+              description: `${VERIFIED_ICON} Welcome greetings channel disabled.`
+            })]
+          });
+        }
+
+        if (!targetChannel) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Welcome Channel Syntax',
+              description: `${WRONG_ICON} **Syntax**: \`r!welcome channel <#channel|none>\`\nExample: \`r!welcome channel #lounge\``
+            })]
+          });
+        }
+
+        updateConfig({ welcomeEnabled: true, welcomeChannelId: targetChannel.id, channelId: targetChannel.id });
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Channel Saved',
+            description: `${VERIFIED_ICON} Welcome greetings route set to **<#${targetChannel.id}>**.`
+          })]
+        });
+      }
+
+      // 3. Header / Content (`r!welcome header <text...>` or `r!welcome content <text...>`)
+      if (sub === 'header' || sub === 'content' || sub === 'message') {
+        const textInput = args.slice(1).join(' ').trim();
+        if (!textInput) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Welcome Header Syntax',
+              description: `${WRONG_ICON} **Syntax**: \`r!welcome header <text>\`\nAvailable variables: \`{user}\`, \`{username}\`, \`{server}\`, \`{memberCount}\`, \`{date}\`\nDefault: \`${DEFAULT_LIME_HEADER}\``
+            })]
+          });
+        }
+
+        updateConfig({ welcomeMessage: textInput, content: textInput });
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Header Text Saved',
+            description: `${VERIFIED_ICON} Header content text updated to:\n> ${textInput}`
+          })]
+        });
+      }
+
+      // 4. Description Body (`r!welcome text <text...>` or `r!welcome description <text...>`)
+      if (sub === 'text' || sub === 'description' || sub === 'desc') {
+        const textInput = args.slice(1).join(' ').trim();
+        if (!textInput) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Welcome Embed Description Syntax',
+              description: `${WRONG_ICON} **Syntax**: \`r!welcome text <text>\`\nVariables: \`{user}\`, \`{server}\`, \`{memberCount}\`, \`{date}\``
+            })]
+          });
+        }
+
+        const updatedEmbed = { ...(config.welcomeEmbed || {}), description: textInput };
+        updateConfig({ welcomeEmbed: updatedEmbed, description: textInput });
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Description Text Saved',
+            description: `${VERIFIED_ICON} Embed description updated to:\n\`\`\`${textInput}\`\`\``
+          })]
+        });
+      }
+
+      // 5. Embed Title (`r!welcome title <text...>`)
+      if (sub === 'title') {
+        const titleInput = args.slice(1).join(' ').trim();
+        const newTitle = (titleInput.toLowerCase() === 'none' || !titleInput) ? null : titleInput;
+        const updatedEmbed = { ...(config.welcomeEmbed || {}), title: newTitle };
+        updateConfig({ welcomeEmbed: updatedEmbed, title: newTitle });
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Embed Title Updated',
+            description: `${VERIFIED_ICON} Title set to: **${newTitle || '*None (Blank)*'}**`
+          })]
+        });
+      }
+
+      // 6. Accent Color (`r!welcome color <#hex>`)
+      if (sub === 'color' || sub === 'hex') {
+        let hex = args[1]?.trim();
+        if (!hex || !/^#?[0-9A-Fa-f]{6}$/.test(hex)) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Welcome Color Syntax',
+              description: `${WRONG_ICON} **Syntax**: \`r!welcome color <#hex_code>\`\nExample: \`r!welcome color #CBF528\` (Lime Green)`
+            })]
+          });
+        }
+        if (!hex.startsWith('#')) hex = '#' + hex;
+
+        const updatedEmbed = { ...(config.welcomeEmbed || {}), color: hex };
+        updateConfig({ welcomeEmbed: updatedEmbed, color: hex });
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Accent Color Saved',
+            description: `${VERIFIED_ICON} Embed accent color set to **\`${hex}\`**.`
+          })]
+        });
+      }
+
+      // 7. Banner Image (`r!welcome banner <url|none>`)
+      if (sub === 'banner' || sub === 'image') {
+        const urlInput = args[1]?.trim();
+        const bannerUrl = (urlInput?.toLowerCase() === 'none' || !urlInput) ? null : urlInput;
+        const updatedEmbed = { ...(config.welcomeEmbed || {}), imageUrl: bannerUrl };
+        updateConfig({ welcomeEmbed: updatedEmbed, bannerUrl, imageUrl: bannerUrl });
+
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Banner Image Updated',
+            description: `${VERIFIED_ICON} Banner image set to: ${bannerUrl ? `\`${bannerUrl}\`` : '**None**'}`
+          })]
+        });
+      }
+
+      // 8. Footer (`r!welcome footer <text...>`)
+      if (sub === 'footer') {
+        const footerInput = args.slice(1).join(' ').trim();
+        const newFooter = (footerInput.toLowerCase() === 'none' || !footerInput) ? null : footerInput;
+        const updatedEmbed = { ...(config.welcomeEmbed || {}), footer: newFooter };
+        updateConfig({ welcomeEmbed: updatedEmbed, footer: newFooter });
+
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Footer Text Saved',
+            description: `${VERIFIED_ICON} Footer text updated to: **${newFooter || '*None*'}**`
+          })]
+        });
+      }
+
+      // 9. Style Presets (`r!welcome style <lime|minimal|embed|classic>`)
+      if (sub === 'style' || sub === 'preset') {
+        const styleInput = args[1]?.toLowerCase();
+        if (!['lime', 'minimal', 'embed', 'classic'].includes(styleInput)) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Welcome Style Presets Syntax',
+              description: `${WRONG_ICON} **Syntax**: \`r!welcome style <lime|minimal|embed|classic>\`\n\n• **lime**: Signature Lime GG aesthetic with neon border and hearts/books formatting\n• **minimal**: Clean text embed with avatar\n• **embed**: Standard box embed card\n• **classic**: Plain text message without embed`
+            })]
+          });
+        }
+
+        let newSettings: Record<string, any> = { style: styleInput };
+        if (styleInput === 'lime') {
+          newSettings = {
+            style: 'lime',
+            color: DEFAULT_LIME_COLOR,
+            welcomeMessage: DEFAULT_LIME_HEADER,
+            welcomeEmbed: {
+              color: DEFAULT_LIME_COLOR,
+              description: DEFAULT_LIME_DESCRIPTION,
+              showAvatar: true,
+              footer: DEFAULT_LIME_FOOTER
+            }
+          };
+        }
+
+        updateConfig(newSettings);
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Style Preset Applied',
+            description: `${VERIFIED_ICON} Applied **\`${styleInput.toUpperCase()}\`** welcome preset. Use \`r!welcome test\` to preview!`
+          })]
+        });
+      }
+
+      // 10. Auto-role subcommands (`r!welcome autorole add/remove <@role>`)
+      if (sub === 'autorole') {
+        const subAct = args[1]?.toLowerCase();
+        const role = message.mentions?.roles?.first();
+        const currentRoles: string[] = config.autoroleRoleIds || config.autoroleIds || [];
+
+        if (subAct === 'add' && role) {
+          const merged = Array.from(new Set([...currentRoles, role.id]));
+          updateConfig({ autoroleEnabled: true, autoroleRoleIds: merged, autoroleIds: merged });
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Welcome Auto-Role Added',
+              description: `${VERIFIED_ICON} Added **<@&${role.id}>** to join auto-roles.`
+            })]
+          });
+        }
+
+        if (subAct === 'remove' && role) {
+          const filtered = currentRoles.filter(r => r !== role.id);
+          updateConfig({ autoroleRoleIds: filtered, autoroleIds: filtered });
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Welcome Auto-Role Removed',
+              description: `${VERIFIED_ICON} Removed **<@&${role.id}>** from join auto-roles.`
+            })]
+          });
+        }
+
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Auto-Role Configuration',
+            description: `${CONFIG_ICON} **Auto-Roles**: ${currentRoles.length > 0 ? currentRoles.map(r => `<@&${r}>`).join(', ') : '*None*'}\n\n**Syntax**: \`r!welcome autorole <add|remove> <@role>\``
+          })]
+        });
+      }
+
+      // 10b. Channel link tokens (`r!welcome rules/roles/chat <#channel>`)
+      if (sub === 'rules') {
+        const channel = message.mentions?.channels?.first();
+        if (!channel) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Rules Channel Link Syntax',
+              description: `${WRONG_ICON} **Syntax**: \`r!welcome rules <#channel>\`\nExample: \`r!welcome rules #rules\`\nUse \`{rules}\` inside description text to dynamically link this channel.`
+            })]
+          });
+        }
+        updateConfig({ rulesChannelId: channel.id });
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Rules Channel Linked',
+            description: `${VERIFIED_ICON} Linked rules channel to **<#${channel.id}>**. Placeholder \`{rules}\` updated.`
+          })]
+        });
+      }
+
+      if (sub === 'roles') {
+        const channel = message.mentions?.channels?.first();
+        if (!channel) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Roles Channel Link Syntax',
+              description: `${WRONG_ICON} **Syntax**: \`r!welcome roles <#channel>\`\nExample: \`r!welcome roles #self-roles\`\nUse \`{roles}\` inside description text to dynamically link this channel.`
+            })]
+          });
+        }
+        updateConfig({ rolesChannelId: channel.id });
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Roles Channel Linked',
+            description: `${VERIFIED_ICON} Linked roles channel to **<#${channel.id}>**. Placeholder \`{roles}\` updated.`
+          })]
+        });
+      }
+
+      if (sub === 'chat') {
+        const channel = message.mentions?.channels?.first();
+        if (!channel) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'General Chat Channel Link Syntax',
+              description: `${WRONG_ICON} **Syntax**: \`r!welcome chat <#channel>\`\nExample: \`r!welcome chat #general\`\nUse \`{chat}\` inside description text to dynamically link this channel.`
+            })]
+          });
+        }
+        updateConfig({ chatChannelId: channel.id });
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'General Chat Channel Linked',
+            description: `${VERIFIED_ICON} Linked general chat channel to **<#${channel.id}>**. Placeholder \`{chat}\` updated.`
+          })]
+        });
+      }
+
+      // 11. Reset Configuration (`r!welcome reset`)
+      if (sub === 'reset') {
+        updateConfig({
+          style: 'lime',
+          welcomeEnabled: true,
+          color: DEFAULT_LIME_COLOR,
+          welcomeMessage: DEFAULT_LIME_HEADER,
+          welcomeEmbed: {
+            color: DEFAULT_LIME_COLOR,
+            description: DEFAULT_LIME_DESCRIPTION,
+            showAvatar: true,
+            footer: DEFAULT_LIME_FOOTER
+          }
+        });
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Welcome Configuration Reset',
+            description: `${VERIFIED_ICON} Restored default Lime GG welcome card layout and color settings.`
+          })]
+        });
+      }
+
+      // 12. Default Overview Status Matrix (`r!welcome` / `r!welcome status`)
+      const welcomeChannelId = config.welcomeChannelId || config.channelId;
+      const channelStr = welcomeChannelId ? `<#${welcomeChannelId}>` : '`Not Set`';
+      const isEnabledStr = (config.welcomeEnabled !== false && welcomeChannelId) ? VERIFIED_ICON + ' `ACTIVE`' : WRONG_ICON + ' `INACTIVE`';
+      const colorStr = config.welcomeEmbed?.color || config.color || DEFAULT_LIME_COLOR;
+      const headerStr = (config.welcomeMessage || DEFAULT_LIME_HEADER).slice(0, 50);
+      const autorolesStr = (config.autoroleRoleIds || config.autoroleIds || []).map((r: string) => `<@&${r}>`).join(', ') || '`None`';
+
+      const overviewCard = buildLimeOverviewCard({
+        title: 'LIME GG WELCOME CONFIGURATION MATRIX',
+        subtitle: 'CUSTOMIZABLE ONBOARDING CARD & AUTO-ROLES',
+        color: Colors.BRAND,
+        sections: [
+          {
+            title: `${MEMBER_ICON} WELCOME PARAMETERS`,
+            items: [
+              `Status: ${isEnabledStr}`,
+              `Destination Channel: ${channelStr}`,
+              `Preset Style: \`${(config.style || 'lime').toUpperCase()}\``,
+              `Border Accent Color: \`${colorStr}\``,
+              `Header Content: \`${headerStr}\``,
+              `Auto-Assigned Join Roles: ${autorolesStr}`
+            ]
+          },
+          {
+            title: `${CONFIG_ICON} QUICK MANAGEMENT COMMANDS`,
+            items: [
+              `• \`r!welcome channel <#channel>\` — Set greeting channel`,
+              `• \`r!welcome test\` — Send live test welcome card`,
+              `• \`r!welcome header <text>\` — Set outer ping text`,
+              `• \`r!welcome text <text>\` — Set embed description body`,
+              `• \`r!welcome color <#hex>\` — Set border accent color`,
+              `• \`r!welcome banner <url>\` — Set bottom image banner`,
+              `• \`r!welcome reset\` — Reset to default Lime GG layout`
+            ]
+          }
+        ],
+        footerText: 'Rage Optimiser Enterprise • Welcome Suite'
       });
-    });
-    hasContent = true;
-  }
 
-  return hasContent ? embed : null;
+      const btnTest = new ButtonBuilder().setCustomId('welc_test_cmd').setLabel('Test Greeting Card').setStyle(ButtonStyle.Primary).setEmoji('🧪');
+      const btnReset = new ButtonBuilder().setCustomId('welc_reset_cmd').setLabel('Reset to Lime GG').setStyle(ButtonStyle.Secondary).setEmoji('⚙️');
+      const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(btnTest, btnReset);
+
+      return message.reply({ embeds: [overviewCard], components: [rowButtons] });
+    }
+  });
 }
+
+// Auto-register commands on module load
+registerWelcomeCommands();
 
 export const WelcomeV2Manifest: ModuleManifest = {
   id: 'welcome-v2',
   name: 'Welcome System vNext',
   version: '2.0.0',
-  description: 'Premium Welcome suite including graphic cards, auto-roles, boosting triggers, milestone trackers, and birthdays.',
+  description: 'Lime GG style customizable welcome suite including graphic cards, auto-roles, boosting triggers, milestone trackers, and birthdays.',
   configSchema: {
     requiredFields: [],
     validate: (config: Record<string, any>, registry: DiscordResourceRegistry) => {
@@ -210,10 +685,60 @@ export const WelcomeV2Manifest: ModuleManifest = {
       }
     },
     {
+      name: 'interactionCreate',
+      handler: async (client: any, interaction: any, context: any) => {
+        if (!interaction.isButton()) return;
+        const customId = interaction.customId;
+
+        if (customId === 'welc_test_cmd' || customId === 'welc_test_welcome') {
+          const modules = context.getModulesState ? context.getModulesState() : [];
+          const welcomeMod = modules.find((m: any) => m.id === 'welcome-v2');
+          const config = welcomeMod?.config || {};
+          const member = interaction.member || interaction.user;
+
+          const payload = buildLimeWelcomePayload(config, member);
+          await interaction.reply({
+            content: `🧪 **Lime GG Welcome Test Card Preview:**`,
+            flags: 64
+          });
+          return interaction.followUp(payload);
+        }
+
+        if (customId === 'welc_reset_cmd') {
+          const modules = context.getModulesState ? context.getModulesState() : [];
+          const welcomeMod = modules.find((m: any) => m.id === 'welcome-v2');
+          const config = welcomeMod?.config || {};
+
+          const newConfig = {
+            ...config,
+            style: 'lime',
+            welcomeEnabled: true,
+            color: DEFAULT_LIME_COLOR,
+            welcomeMessage: DEFAULT_LIME_HEADER,
+            welcomeEmbed: {
+              color: DEFAULT_LIME_COLOR,
+              description: DEFAULT_LIME_DESCRIPTION,
+              showAvatar: true,
+              footer: DEFAULT_LIME_FOOTER
+            }
+          };
+
+          if (context.updateModuleConfig) {
+            context.updateModuleConfig('welcome-v2', newConfig);
+          }
+
+          return interaction.reply({
+            content: `${VERIFIED_ICON} Restored default Lime GG welcome card layout!`,
+            flags: 64
+          });
+        }
+      }
+    },
+    {
       name: 'guildMemberAdd',
       handler: async (client: any, member: any, context: any) => {
         const globalSettings = context.getGlobalSettings ? context.getGlobalSettings() : {};
-        if (!globalSettings.useV2Welcome) return;
+        if (globalSettings.useV2Welcome === false) return;
 
         const modules = context.getModulesState ? context.getModulesState() : [];
         const welcomeMod = modules.find((m: any) => m.id === 'welcome-v2');
@@ -256,34 +781,15 @@ export const WelcomeV2Manifest: ModuleManifest = {
           }
         }
 
-        // 3. Welcome channel message & image card
-        if (config.welcomeEnabled && config.welcomeChannelId) {
+        // 3. Welcome channel message & Lime GG aesthetic card
+        const welcomeChannelId = config.welcomeChannelId || config.channelId;
+        if ((config.welcomeEnabled !== false) && welcomeChannelId) {
           try {
-            const channel = await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
+            const channel = await member.guild.channels.fetch(welcomeChannelId).catch(() => null);
             if (channel && channel.isTextBased()) {
-              const payload: any = {};
-              
-              if (config.welcomeMessage) {
-                payload.content = parseWelcomeVariables(config.welcomeMessage, member);
-              }
-
-              const welcomeEmbed = buildWelcomeEmbed(config.welcomeEmbed, member);
-              if (welcomeEmbed) {
-                payload.embeds = [welcomeEmbed];
-              }
-
-              // Dynamic welcome image attachment disabled (Puppeteer removed)
-              if (config.welcomeImageEnabled) {
-                context.logSyncEvent(
-                  "Welcome image generation disabled (Puppeteer removed).",
-                  "info"
-                );
-              }
-
-              if (payload.content || (payload.embeds && payload.embeds.length > 0) || (payload.files && payload.files.length > 0)) {
-                await channel.send(payload);
-                context.logSyncEvent(`Welcome vNext: Dispatched welcome greetings for "${userTag(member.user)}"`, 'success');
-              }
+              const payload = buildLimeWelcomePayload(config, member);
+              await channel.send(payload);
+              context.logSyncEvent(`Welcome vNext: Dispatched Lime GG welcome greetings for "${userTag(member.user)}"`, 'success');
             }
           } catch (err) {
             console.error('[WelcomeV2] Failed to send welcome channel message:', err);
@@ -305,7 +811,7 @@ export const WelcomeV2Manifest: ModuleManifest = {
                 };
                 const embedConfig = config.milestonesEmbed || defaultMileEmbed;
                 const embed = buildWelcomeEmbed(embedConfig, member);
-                
+
                 const content = config.milestonesMessage
                   ? parseWelcomeVariables(config.milestonesMessage, member)
                   : `<:information:1532621274092929124> Server Milestone Reached!`;
@@ -327,7 +833,7 @@ export const WelcomeV2Manifest: ModuleManifest = {
       name: 'guildMemberRemove',
       handler: async (client: any, member: any, context: any) => {
         const globalSettings = context.getGlobalSettings ? context.getGlobalSettings() : {};
-        if (!globalSettings.useV2Welcome) return;
+        if (globalSettings.useV2Welcome === false) return;
 
         const modules = context.getModulesState ? context.getModulesState() : [];
         const welcomeMod = modules.find((m: any) => m.id === 'welcome-v2');
@@ -340,7 +846,7 @@ export const WelcomeV2Manifest: ModuleManifest = {
             const channel = await member.guild.channels.fetch(config.goodbyeChannelId).catch(() => null);
             if (channel && channel.isTextBased()) {
               const payload: any = {};
-              
+
               if (config.goodbyeMessage) {
                 payload.content = parseWelcomeVariables(config.goodbyeMessage, member);
               }
@@ -365,7 +871,7 @@ export const WelcomeV2Manifest: ModuleManifest = {
       name: 'guildMemberUpdate',
       handler: async (client: any, oldMember: any, newMember: any, context: any) => {
         const globalSettings = context.getGlobalSettings ? context.getGlobalSettings() : {};
-        if (!globalSettings.useV2Welcome) return;
+        if (globalSettings.useV2Welcome === false) return;
 
         const modules = context.getModulesState ? context.getModulesState() : [];
         const welcomeMod = modules.find((m: any) => m.id === 'welcome-v2');
@@ -440,3 +946,6 @@ export const WelcomeV2Manifest: ModuleManifest = {
     }
   ]
 };
+
+registerWelcomeCommands();
+

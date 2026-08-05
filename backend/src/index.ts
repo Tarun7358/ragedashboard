@@ -65,7 +65,7 @@ import { Database } from './core/Database.js';
 
 // ---- Feature Module Manifests ----
 import { SecurityManifest } from './modules/security/manifest.js';
-import { LoggingManifest } from './modules/logging/manifest.js';
+import { LoggingManifest, registerLoggingCommands } from './modules/logging/manifest.js';
 import { BackupsManifest } from './modules/backups/manifest.js';
 import { AutomationManifest } from './modules/automation/manifest.js';
 import { VoiceManifest } from './modules/voice/manifest.js';
@@ -86,7 +86,7 @@ import { DiagnosticsManifest } from './modules/diagnostics/manifest.js';
 import { VoiceProtectionManifest } from './modules/voice-protection/index.js';
 import { JoinRoleAssignmentGuardManifest } from './modules/join-role-guard/manifest.js';
 import { SocialUpdatesManifest } from './modules/social-updates/manifest.js';
-import { WelcomeV2Manifest } from './modules/welcome-v2/manifest.js';
+import { WelcomeV2Manifest, registerWelcomeCommands } from './modules/welcome-v2/manifest.js';
 import { TicketsV2Manifest } from './modules/tickets-v2/manifest.js';
 import { AnalyticsManifest } from './modules/analytics/manifest.js';
 import { AuditManifest } from './modules/audit/manifest.js';
@@ -102,6 +102,9 @@ import { BotStatsManifest, registerBotStatsCommands } from './modules/botstats/m
 import { registerTempRoleCommands, checkExpiredTempRoles } from './modules/security/temprole.js';
 import { registerExtraOwnerCommands } from './modules/security/extraowner.js';
 import { registerConfigCommands, ConfigManifest } from './modules/config/manifest.js';
+import { BrainManifest, registerBrainCommands } from './brain/BrainManifest.js';
+import { BrainStore } from './brain/BrainStore.js';
+import { BrainEventInterceptor } from './brain/BrainEventInterceptor.js';
 
 // All manifests in one place
 export const ALL_MANIFESTS = [
@@ -138,6 +141,7 @@ export const ALL_MANIFESTS = [
   AnalyticsManifest,
   AuditManifest,
   RageEnterpriseManifest,
+  BrainManifest,
 ];
 
 let registry: ModuleRegistry;
@@ -150,7 +154,9 @@ async function bootstrap() {
     await Database.connect();
 
     // 1. Initialize Module Registry
-    registry = new ModuleRegistry(() => {});
+    registry = new ModuleRegistry((msg) => {
+      if (webServer) webServer.broadcast(msg);
+    });
     QueueManager.registry = registry;
 
     // 2. Register Feature Modules
@@ -164,8 +170,8 @@ async function bootstrap() {
     // Run initial evaluation across all registered configurations
     registry.reevaluateAllModules();
 
-    // 3. Initialize Minimal Express Web Server for Uptime Monitors (/health & /metrics)
-    webServer = new WebServer();
+    // 3. Initialize Express Web Server & API Router
+    webServer = new WebServer(registry);
 
     const PORT = Number(process.env.PORT || 5000);
     webServer.listen(PORT);
@@ -186,8 +192,14 @@ async function bootstrap() {
 
     webServer.getBotMetrics = () => gateway ? gateway.getMetrics() : { latency: 0, uptime: '0s' };
     webServer.getDiscordClient = () => gateway ? gateway.client : null;
+    webServer.deployCommandsCallback = async () => {
+      if (gateway && (gateway as any).deployCommands) {
+        await (gateway as any).deployCommands();
+      }
+    };
 
     gateway.registerModuleManifests(ALL_MANIFESTS);
+    webServer.registerModuleManifests(ALL_MANIFESTS);
 
     // Register Prefix & Slash Control Suites (must be invoked after initialize to avoid map clear)
     registerTempRoleCommands();
@@ -195,9 +207,16 @@ async function bootstrap() {
     registerConfigCommands();
     registerPrebotCommands();
     registerBotStatsCommands();
+    registerWelcomeCommands();
+    registerLoggingCommands();
+    registerBrainCommands();
 
     await gateway.connect();
     console.log(`✅ Rage Optimiser booted with ${ALL_MANIFESTS.length} modules registered.`);
+
+    // 5-a. Initialize Rage Brain (schemas + interceptor — always after gateway.connect)
+    await BrainStore.initSchemas().catch(console.error);
+    BrainEventInterceptor.init(gateway.client.user?.id ?? 'unknown');
 
     // 5. Start 30-Second Temporary Role Auto-Revocation Ticker
     setInterval(async () => {

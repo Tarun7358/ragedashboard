@@ -5,7 +5,7 @@ import { isUrlCommandBypass } from '../../utils/antiLinkBypass.js';
 import { Database } from '../../core/Database.js';
 import { getPrebotEntry, PREBOT_PERMISSIONS } from '../prebot_whitelist/manifest.js';
 import { checkRoleAssignment } from '../join-role-guard/manifest.js';
-import { Embeds, Colors, createLimeEmbed, buildLimeOverviewCard, VERIFIED_ICON, WRONG_ICON } from '../../core/UIFactory.js';
+import { Embeds, Colors, createLimeEmbed, buildLimeOverviewCard, VERIFIED_ICON, WRONG_ICON, MEMBER_ICON, VIP_ICON, INFO_ICON, TIMER_ICON, SHIELD_ICON } from '../../core/UIFactory.js';
 import { normalizeRuleName, DEFAULT_SECURITY_RULES, getEffectiveRule } from '../config/manifest.js';
 
 
@@ -869,10 +869,14 @@ export const SecurityManifest: ModuleManifest = {
     },
     {
       name: 'addrole',
-      description: 'Assign a role to a member with custom reason, duration, and premium UI controls.',
+      description: 'Assign single or multiple roles to a member with custom reason and duration.',
       options: [
-        { name: 'user', type: 6, description: 'Target member to assign the role', required: true },
-        { name: 'role', type: 8, description: 'Role to assign to the target member', required: true },
+        { name: 'user', type: 6, description: 'Target member to assign the role(s)', required: true },
+        { name: 'role', type: 8, description: 'Primary role to assign', required: true },
+        { name: 'role2', type: 8, description: 'Second role to assign (optional)', required: false },
+        { name: 'role3', type: 8, description: 'Third role to assign (optional)', required: false },
+        { name: 'role4', type: 8, description: 'Fourth role to assign (optional)', required: false },
+        { name: 'role5', type: 8, description: 'Fifth role to assign (optional)', required: false },
         { name: 'reason', type: 3, description: 'Audit log reason for role assignment', required: false },
         { name: 'duration', type: 3, description: 'Optional temporary duration (e.g. 10m, 1h, 1d)', required: false }
       ]
@@ -909,61 +913,72 @@ export const SecurityManifest: ModuleManifest = {
 
         const targetUser = interaction.options.getUser('user');
         const targetMember = interaction.options.getMember('user') || (targetUser ? await guild.members.fetch(targetUser.id).catch(() => null) : null);
-        const role = interaction.options.getRole('role');
-        const reason = interaction.options.getString('reason') || 'No reason provided';
+        const reason = interaction.options.getString('reason');
         const durationStr = interaction.options.getString('duration');
 
         if (!targetMember) {
-          const errEmbed = Embeds.error('👤 Member Not Found', 'Could not locate the specified target member in this server.', { module: 'security' });
+          const errEmbed = Embeds.error(`${MEMBER_ICON} Member Not Found`, 'Could not locate the specified target member in this server.', { module: 'security' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
 
-        if (!role) {
-          const errEmbed = Embeds.error('Role Not Found', 'Could not locate the specified role.', { module: 'security' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
+        const roleOpts = ['role', 'role2', 'role3', 'role4', 'role5'];
+        const rolesToProcess: any[] = [];
+        const seenRoleIds = new Set<string>();
+
+        for (const optName of roleOpts) {
+          const r = interaction.options.getRole(optName);
+          if (r && !seenRoleIds.has(r.id)) {
+            seenRoleIds.add(r.id);
+            rolesToProcess.push(r);
+          }
         }
 
-        if (role.managed) {
-          const errEmbed = Embeds.error(
-            'Managed Role Error',
-            `The role **${role.name}** is automatically managed by an integration or bot and cannot be manually assigned.`,
-            { module: 'security' }
-          );
+        if (rolesToProcess.length === 0) {
+          const errEmbed = Embeds.error('Role Not Found', 'Could not locate any specified roles to assign.', { module: 'security' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
 
         const botMember = guild.members.me;
-        if (botMember && role.position >= botMember.roles.highest.position) {
-          const errEmbed = Embeds.error(
-            'Hierarchy Violation',
-            `I cannot grant the role **${role.name}** because its position (\`#${role.position}\`) is higher than or equal to my highest role (\`${botMember.roles.highest.name}\` - \`#${botMember.roles.highest.position}\`).`,
-            { module: 'security' }
-          );
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
+        const assignedRoles: any[] = [];
+        const skippedRoles: { role: any; reason: string }[] = [];
 
-        if (guild.ownerId !== interaction.user.id && executorMember) {
-          if (role.position >= executorMember.roles.highest.position) {
-            const errEmbed = Embeds.error(
-              'Hierarchy Restriction',
-              `You cannot grant the role **${role.name}** because its position (\`#${role.position}\`) is higher than or equal to your highest role (\`${executorMember.roles.highest.name}\` - \`#${executorMember.roles.highest.position}\`).`,
-              { module: 'security' }
-            );
-            return interaction.reply({ embeds: [errEmbed], flags: 64 });
+        for (const role of rolesToProcess) {
+          if (role.managed) {
+            skippedRoles.push({ role, reason: 'Managed role (cannot be manually assigned)' });
+            continue;
           }
+
+          if (botMember && role.position >= botMember.roles.highest.position) {
+            skippedRoles.push({ role, reason: `Position (#${role.position}) higher/equal to bot highest role (#${botMember.roles.highest.position})` });
+            continue;
+          }
+
+          if (guild.ownerId !== interaction.user.id && executorMember) {
+            if (role.position >= executorMember.roles.highest.position) {
+              skippedRoles.push({ role, reason: `Position (#${role.position}) higher/equal to your highest role (#${executorMember.roles.highest.position})` });
+              continue;
+            }
+          }
+
+          if (targetMember.roles.cache.has(role.id)) {
+            skippedRoles.push({ role, reason: 'Member already possesses this role' });
+            continue;
+          }
+
+          assignedRoles.push(role);
         }
 
-        if (targetMember.roles.cache.has(role.id)) {
+        if (assignedRoles.length === 0) {
           const warnEmbed = Embeds.warn(
-            'Role Already Assigned',
-            `Member ${targetMember} (\`${targetMember.user.tag}\`) already possesses the **${role.name}** role.`,
+            'No Roles Assigned',
+            `Could not assign specified role(s) to ${targetMember} (\`${targetMember.user.tag}\`).`,
             {
               module: 'security',
-              thumbnail: targetMember.user.displayAvatarURL({ size: 256 }),
-              fields: [
-                { name: '👤 Member', value: `${targetMember} (\`${targetMember.id}\`)`, inline: true },
-                { name: 'Role', value: `${role} (\`${role.id}\`)`, inline: true }
-              ]
+              fields: skippedRoles.map(s => ({
+                name: `${VIP_ICON} ${s.role.name}`,
+                value: s.reason,
+                inline: false
+              }))
             }
           );
           return interaction.reply({ embeds: [warnEmbed], flags: 64 });
@@ -987,71 +1002,78 @@ export const SecurityManifest: ModuleManifest = {
           expiresTimestamp = Math.floor((Date.now() + durationMs) / 1000);
         }
 
-        try {
-          await targetMember.roles.add(role.id, `Role added by ${interaction.user.tag}: ${reason}`);
-          context.logSyncEvent(`Role Manager: Assigned role "${role.name}" (${role.id}) to "${targetMember.user.tag}" by "${interaction.user.tag}". Reason: ${reason}`, 'success');
+        const logReason = reason || 'No reason provided';
+        const successfullyAdded: any[] = [];
 
-          let caseId: number | null = null;
-          const db = Database.getDb();
-          if (db) {
-            try {
-              const lastRow: any = await Database.get('SELECT MAX(caseId) as maxId FROM moderation_cases WHERE guildId = ?', [guild.id]);
-              caseId = (lastRow?.maxId || 0) + 1;
-              await Database.run(
-                'INSERT INTO moderation_cases (guildId, caseId, targetId, targetTag, moderatorId, moderatorTag, action, reason, duration, expiresAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [
-                  guild.id,
-                  caseId,
-                  targetMember.id,
-                  targetMember.user.tag,
-                  interaction.user.id,
-                  interaction.user.tag,
-                  durationMs ? 'TEMPROLE' : 'ADDROLE',
-                  `${role.name}: ${reason}`,
-                  durationMs || 0,
-                  expiresTimestamp ? expiresTimestamp * 1000 : 0,
-                  Date.now()
-                ]
-              );
-            } catch (e) {}
+        for (const role of assignedRoles) {
+          try {
+            await targetMember.roles.add(role.id, `Role added by ${interaction.user.tag}: ${logReason}`);
+            context.logSyncEvent(`Role Manager: Assigned role "${role.name}" (${role.id}) to "${targetMember.user.tag}" by "${interaction.user.tag}". Reason: ${logReason}`, 'success');
+
+            const db = Database.getDb();
+            if (db) {
+              try {
+                const lastRow: any = await Database.get('SELECT MAX(caseId) as maxId FROM moderation_cases WHERE guildId = ?', [guild.id]);
+                const caseId = (lastRow?.maxId || 0) + 1;
+                await Database.run(
+                  'INSERT INTO moderation_cases (guildId, caseId, targetId, targetTag, moderatorId, moderatorTag, action, reason, duration, expiresAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                  [
+                    guild.id,
+                    caseId,
+                    targetMember.id,
+                    targetMember.user.tag,
+                    interaction.user.id,
+                    interaction.user.tag,
+                    durationMs ? 'TEMPROLE' : 'ADDROLE',
+                    `${role.name}: ${logReason}`,
+                    durationMs || 0,
+                    expiresTimestamp ? expiresTimestamp * 1000 : 0,
+                    Date.now()
+                  ]
+                );
+              } catch (e) {}
+            }
+
+            if (durationMs) {
+              setTimeout(async () => {
+                await targetMember.roles.remove(role.id, 'Temporary role duration expired').catch(() => {});
+                context.logSyncEvent(`Role Manager: Temporary role "${role.name}" expired for "${targetMember.user.tag}".`, 'info');
+              }, durationMs);
+            }
+
+            successfullyAdded.push(role);
+          } catch (err: any) {
+            skippedRoles.push({ role, reason: err.message });
           }
+        }
 
-          if (durationMs) {
-            setTimeout(async () => {
-              await targetMember.roles.remove(role.id, 'Temporary role duration expired').catch(() => {});
-              context.logSyncEvent(`Role Manager: Temporary role "${role.name}" expired for "${targetMember.user.tag}".`, 'info');
-            }, durationMs);
-          }
-
-          const embedColor = role.color && role.color !== 0 ? role.color : '#7C5CFC';
-
-          const embed = createLimeEmbed({
-            author: 'Rage Optimiser • Security & Role Engine',
-            title: 'Role Granted Successfully',
-            description: `${VERIFIED_ICON} ${interaction.user} **has assigned** ${role} **to** ${targetMember}`,
-            fields: [
-              { name: '👤 Target Member', value: `${targetMember} (\`${targetMember.user.tag}\`)`, inline: true },
-              { name: '🎭 Role Assigned', value: `${role} (\`${role.name}\`)`, inline: true },
-              { name: '📝 Reason', value: `\`${reason}\``, inline: false },
-              ...(durationMs ? [{ name: '<:timer:1532620491662037123> Temporary Duration', value: `\`${durationStr}\` (Expires <t:${expiresTimestamp}:R>)`, inline: true }] : [])
-            ],
-            color: embedColor,
-            client
-          });
-
-          return interaction.reply({ embeds: [embed] });
-
-        } catch (err: any) {
-          context.logSyncEvent(`Role Manager: Failed to assign role "${role.name}" to "${targetMember.user.tag}": ${err.message}`, 'warn');
+        if (successfullyAdded.length === 0) {
           const errEmbed = createLimeEmbed({
             author: 'Rage Optimiser • Security & Role Engine',
             title: 'Role Assignment Failed',
-            description: `${WRONG_ICON} Could not assign role to ${targetMember}: **${err.message}**`,
-            color: '#EF4444',
+            description: `${WRONG_ICON} Could not assign role(s) to ${targetMember}.`,
+            color: 0xEF4444,
             client
           });
-          return interaction.reply({ embeds: [errEmbed] });
+          return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
+
+        const embedColor = 0x99CC00;
+        const roleSummaryStr = successfullyAdded.length === 1 ? `${successfullyAdded[0]}` : successfullyAdded.map(r => `${r}`).join(', ');
+
+        let descText = `> ${VERIFIED_ICON} ${interaction.user} **Has Given** ${roleSummaryStr} **to** ${targetMember}`;
+        if (durationStr && durationMs) {
+          descText += ` *(Expires <t:${expiresTimestamp}:R>)*`;
+        }
+        if (reason) {
+          descText += `\n> ${INFO_ICON} **Reason:** \`${reason}\``;
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor(embedColor)
+          .setDescription(descText);
+
+        return interaction.reply({ embeds: [embed] });
       }
     },
     {
@@ -1076,10 +1098,10 @@ export const SecurityManifest: ModuleManifest = {
         const targetUser = interaction.options.getUser('user');
         const targetMember = interaction.options.getMember('user') || (targetUser ? await guild.members.fetch(targetUser.id).catch(() => null) : null);
         const role = interaction.options.getRole('role');
-        const reason = interaction.options.getString('reason') || 'No reason provided';
+        const reason = interaction.options.getString('reason');
 
         if (!targetMember) {
-          const errEmbed = Embeds.error('👤 Member Not Found', 'Could not locate the specified target member in this server.', { module: 'security' });
+          const errEmbed = Embeds.error(`${MEMBER_ICON} Member Not Found`, 'Could not locate the specified target member in this server.', { module: 'security' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
 
@@ -1108,23 +1130,18 @@ export const SecurityManifest: ModuleManifest = {
         }
 
         try {
-          await targetMember.roles.remove(role.id, `Role removed by ${interaction.user.tag}: ${reason}`);
-          context.logSyncEvent(`Role Manager: Removed role "${role.name}" (${role.id}) from "${targetMember.user.tag}" by "${interaction.user.tag}". Reason: ${reason}`, 'success');
+          const logReason = reason || 'No reason provided';
+          await targetMember.roles.remove(role.id, `Role removed by ${interaction.user.tag}: ${logReason}`);
+          context.logSyncEvent(`Role Manager: Removed role "${role.name}" (${role.id}) from "${targetMember.user.tag}" by "${interaction.user.tag}". Reason: ${logReason}`, 'success');
 
-          const embedColor = role.color && role.color !== 0 ? role.color : '#EF4444';
+          let descText = `> ${WRONG_ICON} ${interaction.user} **Has Removed** ${role} **from** ${targetMember}`;
+          if (reason) {
+            descText += `\n> ${INFO_ICON} **Reason:** \`${reason}\``;
+          }
 
-          const embed = createLimeEmbed({
-            author: 'Rage Optimiser • Security & Role Engine',
-            title: 'Role Removed Successfully',
-            description: `${WRONG_ICON} ${interaction.user} **has removed** ${role} **from** ${targetMember}`,
-            fields: [
-              { name: '👤 Target Member', value: `${targetMember} (\`${targetMember.user.tag}\`)`, inline: true },
-              { name: '🎭 Role Removed', value: `${role} (\`${role.name}\`)`, inline: true },
-              { name: '📝 Reason', value: `\`${reason}\``, inline: false }
-            ],
-            color: embedColor,
-            client
-          });
+          const embed = new EmbedBuilder()
+            .setColor(0x99CC00)
+            .setDescription(descText);
 
           return interaction.reply({ embeds: [embed] });
         } catch (err: any) {
@@ -1147,7 +1164,7 @@ export const SecurityManifest: ModuleManifest = {
 
         if (customId.startsWith('addrole_undo_')) {
           if (!canManage) {
-            return interaction.reply({ content: '<:shield:1532403012751065179> You require the Manage Roles permission to undo role assignments.', flags: 64 });
+            return interaction.reply({ content: `${SHIELD_ICON} You require the Manage Roles permission to undo role assignments.`, flags: 64 });
           }
           const parts = customId.split('_');
           const userId = parts[2];
@@ -1156,21 +1173,21 @@ export const SecurityManifest: ModuleManifest = {
           const role = guild.roles.cache.get(roleId);
 
           if (!targetMember || !role) {
-            return interaction.reply({ content: '<:wrong:1532390628330307634> Target member or role no longer exists.', flags: 64 });
+            return interaction.reply({ content: `${WRONG_ICON} Target member or role no longer exists.`, flags: 64 });
           }
 
           try {
             await targetMember.roles.remove(role.id, `Role assignment undone by ${interaction.user.tag}`);
             context.logSyncEvent(`Role Manager: ${interaction.user.tag} undid assignment of role "${role.name}" from "${targetMember.user.tag}".`, 'info');
 
-            const embedColor = role.color && role.color !== 0 ? role.color : '#EF4444';
+            const embedColor = role.color && role.color !== 0 ? role.color : 0x99CC00;
             const successEmbed = createLimeEmbed({
               author: 'Rage Optimiser • Security & Role Engine',
               title: 'Role Assignment Undone',
               description: `${WRONG_ICON} ${interaction.user} **has revoked** ${role} **from** ${targetMember}`,
               fields: [
-                { name: '👤 Target Member', value: `${targetMember} (\`${targetMember.user.tag}\`)`, inline: true },
-                { name: '🎭 Revoked Role', value: `${role} (\`${role.name}\`)`, inline: true }
+                { name: `${MEMBER_ICON} Target Member`, value: `${targetMember} (\`${targetMember.user.tag}\`)`, inline: true },
+                { name: `${VIP_ICON} Revoked Role`, value: `${role} (\`${role.name}\`)`, inline: true }
               ],
               color: embedColor,
               client

@@ -42,15 +42,45 @@ export const SocialUpdatesManifest: ModuleManifest = {
         {
           name: 'action',
           type: 3,
-          description: 'Action: status, list, forcecheck, validate, statistics',
+          description: 'Action: status, list, add, remove, forcecheck, validate, statistics',
           required: true,
           choices: [
             { name: 'status', value: 'status' },
             { name: 'list', value: 'list' },
+            { name: 'add', value: 'add' },
+            { name: 'remove', value: 'remove' },
             { name: 'forcecheck', value: 'forcecheck' },
             { name: 'validate', value: 'validate' },
             { name: 'statistics', value: 'statistics' }
           ]
+        },
+        {
+          name: 'provider',
+          type: 3,
+          description: 'Provider: youtube or instagram (for add)',
+          required: false,
+          choices: [
+            { name: 'youtube', value: 'youtube' },
+            { name: 'instagram', value: 'instagram' }
+          ]
+        },
+        {
+          name: 'source',
+          type: 3,
+          description: 'Channel ID, handle, or username (for add)',
+          required: false
+        },
+        {
+          name: 'channel',
+          type: 7,
+          description: 'Target Discord channel (for add)',
+          required: false
+        },
+        {
+          name: 'id',
+          type: 3,
+          description: 'Subscription ID (for remove)',
+          required: false
         }
       ]
     }
@@ -80,7 +110,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           if (subs.length === 0) {
             const embed = new EmbedBuilder()
               .setTitle('<:information:1532621274092929124> Social Updates Subscriptions')
-              .setDescription('No active subscriptions configured. Use the Web Dashboard to add YouTube channels or Instagram accounts.')
+              .setDescription('No active subscriptions configured. Use `r!social-updates add <youtube|instagram> <handle/channel_id> <#channel>` or the Web Dashboard to add YouTube channels or Instagram accounts.')
               .setColor(0x99CC00)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
