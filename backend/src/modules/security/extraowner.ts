@@ -5,6 +5,8 @@ import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 
 import { updateExtraOwnerInCache, removeExtraOwnerFromCache, loadExtraOwnersCache } from '../../utils/whitelistCheck.js';
 
+import { TwoFactorManager } from '../../core/security/TwoFactorManager.js';
+
 const VIP_EMOJI = '<:vip:1532620837117759508>';
 const SHIELD_EMOJI = '<:shield:1532403012751065179>';
 const APPROVED_ICON = '<a:approved:1532390590707142956>';
@@ -12,6 +14,65 @@ const WRONG_EMOJI = '<:wrong:1532390628330307634>';
 const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
 
 export function registerExtraOwnerCommands(): void {
+  PrefixRegistry.register({
+    name: 'botleave',
+    category: 'Security',
+    description: 'Safely remove the bot from the server requiring 2FA PIN authorization from the Server Owner.',
+    usage: 'r!botleave [6-digit-pin]',
+    aliases: ['leavebot', 'leave-server'],
+    cooldownSeconds: 5,
+    dangerLevel: 'High',
+    execute: async (message: Message, args: string[]) => {
+      const guild = message.guild;
+      if (!guild) return message.reply('This command can only be executed in a server.');
+
+      if (message.author.id !== guild.ownerId) {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Owner Authority Required',
+            description: `${WRONG_EMOJI} **Access Denied**: Only the primary Discord Server Owner (<@${guild.ownerId}>) can authorize bot departure.`
+          })]
+        });
+      }
+
+      const tfaCfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
+      if (tfaCfg && tfaCfg.isEnabled) {
+        const pinArg = args.find(a => /^\d{6}$/.test(a.trim()));
+        if (!pinArg) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: '2FA Passcode Required',
+              description: `${SHIELD_EMOJI} Server departure is protected by **6-Digit 2FA**.\n\nPlease supply your 6-digit passcode to authorize bot removal:\n> \`r!botleave <6-digit-pin>\``,
+              color: 0xF59E0B
+            })]
+          });
+        }
+
+        const isValid = TwoFactorManager.verifyPin(tfaCfg.pin, pinArg);
+        if (!isValid) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: '2FA Verification Failed',
+              description: `${WRONG_EMOJI} Invalid 6-digit passcode. Bot departure **REJECTED**.`,
+              color: 0xEF4444
+            })]
+          });
+        }
+      }
+
+      await message.reply({
+        embeds: [createLimeEmbed({
+          title: 'Bot Departure Authorized',
+          description: `${APPROVED_ICON} 2FA PIN Verified. Rage Optimiser is now departing **${guild.name}**. All server snapshots and configuration data remain securely saved in cloud memory.`,
+          color: 0x10B981
+        })]
+      });
+
+      setTimeout(() => {
+        guild.leave().catch(err => console.error('[BotLeave] Failed to leave guild:', err));
+      }, 1500);
+    }
+  });
   PrefixRegistry.register({
     name: 'extraowner',
     category: 'Security',
