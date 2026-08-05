@@ -69,9 +69,7 @@ export class PrefixRegistry {
     'stat': 'stats',
     'ver': 'version',
     'sec': 'security',
-    'log': 'logs',
-    'ticket-create': 'create',
-    'ticket-close': 'close'
+    'log': 'logs'
   };
 
   // ─────────────────────────────────────────────
@@ -367,13 +365,12 @@ export class PrefixRegistry {
       jtc: 'Voice',
       voiceprotection: 'Voice',
       logging: 'Logging',
-      tickets: 'Tickets',
       notes: 'Moderation',
-      autorole: 'Welcome',
-      goodbye: 'Welcome',
-      birthday: 'Welcome',
-      boost: 'Welcome',
-      milestones: 'Welcome',
+      autorole: 'Community',
+      goodbye: 'Community',
+      birthday: 'Community',
+      boost: 'Community',
+      milestones: 'Community',
       config: 'Configuration',
       setup: 'Configuration',
       modules: 'System',
