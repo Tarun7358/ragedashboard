@@ -2348,6 +2348,20 @@ export const SecurityManifest: ModuleManifest = {
           // 1. Role Grant Checks
           const addedRoles = newRoles.filter((r: any) => !oldRoles.has(r.id));
           if (addedRoles.size > 0) {
+            // ── New Member Auto-Role Bypass ───────────────────────────────────────
+            // If the target member joined within the last 30 seconds AND none of the
+            // granted roles contain Administrator permission, this is almost certainly
+            // a Discord auto-role or bot-assigned join role — not an attack.
+            // Skip the anti-nuke check entirely to prevent false positives.
+            const memberJoinedAt = newMember.joinedTimestamp ?? 0;
+            const isNewMember = memberJoinedAt > 0 && (Date.now() - memberJoinedAt) < 30_000;
+            const hasAdminInGrant = addedRoles.some((r: any) => r.permissions?.has?.(PermissionFlagsBits.Administrator));
+
+            if (isNewMember && !hasAdminInGrant) {
+              console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Bypassing role grant check for ${newMember.user.username} — new member auto-role (joined ${Math.round((Date.now() - memberJoinedAt) / 1000)}s ago, no admin perms in granted roles: ${addedRoles.map((r: any) => r.name).join(', ')}).`);
+              // Skip to role-remove and timeout checks below
+            } else {
+
             // Join Guard Pre-Validation Interceptor
             const guardResult = await checkRoleAssignment(client, newMember, addedRoles, context).catch(err => {
               console.error('[Anti-Nuke Debug] Error running Join Role Guard:', err);
@@ -2405,13 +2419,13 @@ export const SecurityManifest: ModuleManifest = {
                       }
                     }
                   }
-                }
               } else {
                 console.log(`[Anti-Nuke Debug] [guildMemberUpdate] No recent MemberRoleUpdate audit log entry found for target user ${newMember.id}`);
               }
             }
           }
-
+        } // end else (not new-member auto-role bypass)
+      }
           // 2. Role Remove Checks
           const removedRoles = oldRoles.filter((r: any) => !newRoles.has(r.id));
           if (removedRoles.size > 0) {
