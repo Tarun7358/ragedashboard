@@ -18,7 +18,8 @@ export class RageEnterpriseService {
     const secMod = modules.find((m: any) => m.id === 'security') || {};
     const config = secMod.config || {};
 
-    const antiNukeStatus = config.antiNukeEnabled ? '<a:approved:1532390590707142956> `Active (Protected)`' : '<:wrong:1532390628330307634> `Inactive (Disabled)`';
+    const isAntiNukeActive = config.antiNukeEnabled !== false;
+    const antiNukeStatus = isAntiNukeActive ? '<a:approved:1532390590707142956> `Active (Protected)`' : '<:wrong:1532390628330307634> `Inactive (Disabled)`';
     const raidModeStatus = config.raidModeEnabled ? '<:shield:1532403012751065179> `RAID MODE ENABLED`' : '<:shield:1532403012751065179> `Normal Protection`';
     const { userSet, roleSet } = getUnifiedWhitelistEntries(modules);
     const whitelistCount = userSet.size + roleSet.size;
@@ -54,7 +55,7 @@ export class RageEnterpriseService {
     });
 
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('sec_toggle_antinuke').setLabel('Toggle Anti-Nuke').setStyle(config.antiNukeEnabled ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<:shield:1532403012751065179>'),
+      new ButtonBuilder().setCustomId('sec_toggle_antinuke').setLabel('Toggle Anti-Nuke').setStyle(isAntiNukeActive ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<:shield:1532403012751065179>'),
       new ButtonBuilder().setCustomId('sec_toggle_raidmode').setLabel('Toggle Raid Mode').setStyle(config.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji('<:shield:1532403012751065179>'),
       new ButtonBuilder().setCustomId('sec_view_whitelist').setLabel('View Whitelist').setStyle(ButtonStyle.Secondary).setEmoji('<:member:1532621317487071426>'),
       new ButtonBuilder().setCustomId('sec_view_quarantine').setLabel('Quarantine Queue').setStyle(ButtonStyle.Secondary).setEmoji('<:gavel:1532621057318584380>')

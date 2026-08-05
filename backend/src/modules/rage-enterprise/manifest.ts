@@ -125,7 +125,8 @@ export const RageEnterpriseManifest: ModuleManifest = {
         const guildId = interaction.guildId;
         const modules = context.getModulesState(guildId);
         const secMod = modules.find((m: any) => m.id === 'security') || {};
-        const newStatus = !(secMod.config?.antiNukeEnabled);
+        const currentStatus = secMod.config?.antiNukeEnabled !== false;
+        const newStatus = !currentStatus;
         context.updateModuleConfig('security', { ...(secMod.config || {}), antiNukeEnabled: newStatus });
         const res = RageEnterpriseService.getSecurityOverview(interaction.guild, context);
         await interaction.update(res);

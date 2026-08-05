@@ -828,7 +828,9 @@ export const MusicManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const queue = QueueManager.getQueue(interaction.guild.id);
         if (!checkVoicePermissions(interaction, queue)) return;
+        queue.client = client;
         queue.stop();
+        await queue.updatePanel(client).catch(() => {});
         const embed = createLimeEmbed({
           title: '🛑 Playback Terminated & Queue Cleared',
           description: 'Successfully released voice connection resources and flushed the session queue.',
@@ -1001,7 +1003,9 @@ export const MusicManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const queue = QueueManager.getQueue(interaction.guildId);
         if (!checkVoicePermissions(interaction, queue)) return;
+        queue.client = client;
         queue.stop();
+        await queue.updatePanel(client).catch(() => {});
         await interaction.deferUpdate().catch(() => {});
       }
     },

@@ -341,6 +341,7 @@ export class GuildQueue {
 
   public voiceChannel: any = null;
   public resource: any = null;
+  public isStopping = false;
   private queueLock = false;
   private retryCount = 0;
   private retryInProgress = false;
@@ -360,6 +361,7 @@ export class GuildQueue {
     });
     
     this.player.on(AudioPlayerStatus.Idle, () => {
+      if (this.isStopping) return;
       this.playNext();
     });
 
@@ -368,6 +370,7 @@ export class GuildQueue {
     });
 
     this.player.on('error', async (error) => {
+      if (this.isStopping) return;
       console.error(`Error playing audio in ${this.guildId}:`, error);
       if (this.currentTrack) {
         await this.handleTrackError(this.currentTrack, error);
@@ -731,15 +734,18 @@ export class GuildQueue {
 
           this.currentProcess = proc;
           this.currentProcess.on('error', (err) => {
+            if (this.isStopping) return;
             console.error('[Music Debug] yt-dlp process error:', err);
           });
           if (this.currentProcess.stdout) {
             this.currentProcess.stdout.on('error', (err) => {
+              if (this.isStopping) return;
               console.warn('[Music Debug] yt-dlp stdout error (ok during skip):', err.message);
             });
           }
           if (this.currentProcess.stderr) {
             this.currentProcess.stderr.on('data', (data) => {
+              if (this.isStopping) return;
               const msg = data.toString().trim();
               if (msg && !msg.startsWith('[download]') && !msg.startsWith('[youtube]') && !msg.includes('WARNING:')) {
                 console.warn(`[Music yt-dlp stderr] ${msg}`);
@@ -891,9 +897,11 @@ export class GuildQueue {
       this.ffmpegProcess = spawn(actualFfmpeg, ffmpegArgs);
 
       this.ffmpegProcess.on('error', (err) => {
+        if (this.isStopping) return;
         console.error('[Music FFmpeg Error] process error:', err);
       });
       this.ffmpegProcess.on('exit', (code, signal) => {
+        if (this.isStopping) return;
         // Code 255 = ECONNRESET (Discord closed pipe on disconnect/skip) — normal
         if (code !== 0 && code !== null && code !== 255) {
           console.warn(`[Music FFmpeg Exit] process exited with code ${code}, signal ${signal}`);
@@ -901,6 +909,7 @@ export class GuildQueue {
       });
       if (this.ffmpegProcess.stderr) {
         this.ffmpegProcess.stderr.on('data', (data: Buffer) => {
+          if (this.isStopping) return;
           const msg = data.toString().trim();
           if (msg && !msg.startsWith('frame=') && !msg.startsWith('size=')
               && !msg.includes('Connection reset by peer')
@@ -916,18 +925,22 @@ export class GuildQueue {
 
         if (inputStream && this.ffmpegProcess && this.ffmpegProcess.stdin) {
           inputStream.on('error', (err: any) => {
+            if (this.isStopping) return;
             console.warn('[Music Debug] Input stream error (ok during skip):', err.message);
           });
           if (this.currentProcess) {
             this.currentProcess.on('error', (err: any) => {
+              if (this.isStopping) return;
               console.warn('[Music Debug] currentProcess error (ok during skip):', err.message);
             });
           }
           this.ffmpegProcess.stdin.on('error', (err: any) => {
+            if (this.isStopping) return;
             console.warn('[Music Debug] ffmpeg stdin stream error (ok during skip):', err.message);
           });
           if (this.ffmpegProcess.stdout) {
             this.ffmpegProcess.stdout.on('error', (err: any) => {
+              if (this.isStopping) return;
               console.warn('[Music Debug] ffmpeg stdout stream error (ok during skip):', err.message);
             });
           }
@@ -988,6 +1001,7 @@ export class GuildQueue {
   }
 
   public stop() {
+    this.isStopping = true;
     this.queue = [];
     this.currentTrack = null;
     this.loopMode = 'off';
@@ -998,10 +1012,10 @@ export class GuildQueue {
       clearInterval(this.progressInterval);
       this.progressInterval = null;
     }
-    this.player.stop();
+    this.player.stop(true);
     if (this.playDlStream) {
       try {
-        this.playDlStream.destroy();
+        if (!this.playDlStream.destroyed) this.playDlStream.destroy();
       } catch (e) {}
       this.playDlStream = null;
     }
@@ -1011,7 +1025,7 @@ export class GuildQueue {
           this.currentProcess.stdout.unpipe();
           this.currentProcess.stdout.destroy();
         }
-        this.currentProcess.kill();
+        this.currentProcess.kill('SIGKILL');
       } catch (e) {}
       this.currentProcess = null;
     }
@@ -1024,10 +1038,18 @@ export class GuildQueue {
         if (this.ffmpegProcess.stdout) {
           this.ffmpegProcess.stdout.destroy();
         }
-        this.ffmpegProcess.kill();
+        this.ffmpegProcess.kill('SIGKILL');
       } catch (e) {}
       this.ffmpegProcess = null;
     }
+
+    if (this.client) {
+      this.updatePanel(this.client).catch(() => {});
+    }
+
+    setTimeout(() => {
+      this.isStopping = false;
+    }, 500);
   }
 
   public pause() {

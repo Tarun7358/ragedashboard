@@ -193,7 +193,7 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
     buttonList.push(new ButtonBuilder().setCustomId('an_view_full').setLabel('Overview Matrix').setStyle(ButtonStyle.Primary).setEmoji('<:config:1532425712844144701>'));
   }
   buttonList.push(
-    new ButtonBuilder().setCustomId('an_toggle_all').setLabel('Toggle Anti-Nuke').setStyle(secConfig.antiNukeEnabled ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<:shield:1532403012751065179>'),
+    new ButtonBuilder().setCustomId('an_toggle_all').setLabel('Toggle Anti-Nuke').setStyle(isMasterEnabled ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<:shield:1532403012751065179>'),
     new ButtonBuilder().setCustomId('an_toggle_raid').setLabel('Toggle Raid Mode').setStyle(secConfig.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji('<:shield:1532403012751065179>'),
     new ButtonBuilder().setCustomId('an_emergency_lock').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger).setEmoji('<:shield:1532403012751065179>')
   );
@@ -555,7 +555,8 @@ export function registerConfigCommands(): void {
           const eventInput = effectiveArgs[2];
           if (!eventInput) {
             // Master Anti-Nuke Toggle
-            const isEnabled = action === 'on' || action === 'enable' || (action === 'toggle' && !secConfig.antiNukeEnabled);
+            const isCurrentlyActive = secConfig.antiNukeEnabled !== false;
+            const isEnabled = action === 'on' || action === 'enable' || (action === 'toggle' && !isCurrentlyActive);
             if (extra?.updateModuleConfig) {
               extra.updateModuleConfig('security', { ...secConfig, antiNukeEnabled: isEnabled });
             }
@@ -2102,7 +2103,8 @@ export const ConfigManifest: ModuleManifest = {
         const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         const secConfig = secModule?.config || {};
-        const newStatus = !secConfig.antiNukeEnabled;
+        const currentStatus = secConfig.antiNukeEnabled !== false;
+        const newStatus = !currentStatus;
 
         if (extra?.updateModuleConfig) {
           extra.updateModuleConfig('security', { ...secConfig, antiNukeEnabled: newStatus });
