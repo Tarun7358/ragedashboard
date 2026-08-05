@@ -1061,104 +1061,6 @@ export function registerConfigCommands(): void {
         }
       }
 
-      // Tickets Sub-Configuration (`r!config tickets ...`)
-      if (moduleName === 'tickets') {
-        const action = effectiveArgs[1]?.toLowerCase();
-        const modules = extra?.getModulesState ? extra.getModulesState() : [];
-        const tktModule = modules.find((m: any) => m.id === 'tickets-v2' || m.id === 'tickets');
-        const tktConfig = tktModule?.config || {};
-
-        const updateTktConfig = (newCfg: Record<string, any>) => {
-          if (extra?.updateModuleConfig) {
-            extra.updateModuleConfig(tktModule?.id || 'tickets-v2', { ...tktConfig, ...newCfg });
-          }
-          if (extra?.logSyncEvent) {
-            extra.logSyncEvent(message.guild?.id, 'Tickets Config: Updated support panel settings via CLI.', 'success');
-          }
-        };
-
-        if (!action || action === 'status' || action === 'view') {
-          const catStr = tktConfig.categoryId ? `<#${tktConfig.categoryId}>` : '`Not Set`';
-          const logStr = tktConfig.logChannelId ? `<#${tktConfig.logChannelId}>` : '`Not Set`';
-          const staffStr = (tktConfig.supportRoleIds || []).map((r: string) => `<@&${r}>`).join(', ') || '`None`';
-
-          const overviewCard = buildLimeOverviewCard({
-            title: 'TICKET SYSTEM MODULE CONFIGURATION MATRIX',
-            subtitle: 'SUPPORT PANELS, CATEGORIES & STAFF ROLES',
-            color: Colors.BRAND,
-            sections: [
-              {
-                title: '<:ticket:1532620631466836021> TICKET PANEL PARAMETERS',
-                items: [
-                  `Parent Category: ${catStr}`,
-                  `Log Channel: ${logStr}`,
-                  `Support Staff Roles: ${staffStr}`,
-                  `Max Tickets Per User: \`${tktConfig.maxTickets || 3}\``
-                ]
-              }
-            ],
-            footerText: 'Rage Optimiser Enterprise • Ticket System Configuration'
-          });
-
-          return message.reply({ embeds: [overviewCard] });
-        }
-
-        if (action === 'category') {
-          const channel = message.mentions.channels.first();
-          if (!channel) {
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Ticket Category Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config tickets category <#category>\`\nExample: \`r!config tickets category #TICKETS\``
-              })]
-            });
-          }
-
-          updateTktConfig({ categoryId: channel.id });
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Ticket Category Saved',
-              description: `${APPROVED_ICON} Ticket category set to **<#${channel.id}>**.`
-            })]
-          });
-        }
-
-        if (action === 'staff') {
-          const subAct = effectiveArgs[2]?.toLowerCase();
-          const role = message.mentions.roles.first();
-          const currentStaff: string[] = tktConfig.supportRoleIds || [];
-
-          if (subAct === 'add' && role) {
-            const merged = Array.from(new Set([...currentStaff, role.id]));
-            updateTktConfig({ supportRoleIds: merged });
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Support Staff Role Added',
-                description: `${APPROVED_ICON} Added **<@&${role.id}>** to ticket support staff.`
-              })]
-            });
-          }
-
-          if (subAct === 'remove' && role) {
-            const filtered = currentStaff.filter(r => r !== role.id);
-            updateTktConfig({ supportRoleIds: filtered });
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Support Staff Role Removed',
-                description: `${APPROVED_ICON} Removed **<@&${role.id}>** from ticket support staff.`
-              })]
-            });
-          }
-
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Support Staff Configuration',
-              description: `${CONFIG_EMOJI} **Staff Roles**: ${currentStaff.length > 0 ? currentStaff.map(r => `<@&${r}>`).join(', ') : '*None*'}\n\n**Syntax**: \`r!config tickets staff <add|remove> <@role>\``
-            })]
-          });
-        }
-      }
-
       // PreBot Whitelist Sub-Configuration (`r!config prebot ...`)
       if (moduleName === 'prebot' || moduleName === 'prebotwhitelist') {
         const prebotCmd = PrefixRegistry.getCommand('prebot');
@@ -1973,15 +1875,6 @@ export const ConfigManifest: ModuleManifest = {
           description: 'Configure onboarding greetings and auto-join roles',
           options: [
             { type: 3, name: 'action', description: 'Action (status, channel, autorole)' },
-            { type: 3, name: 'value', description: 'Setting value' }
-          ]
-        },
-        {
-          type: 1,
-          name: 'tickets',
-          description: 'Configure support ticket panels & staff roles',
-          options: [
-            { type: 3, name: 'action', description: 'Action (status, category, staff)' },
             { type: 3, name: 'value', description: 'Setting value' }
           ]
         },

@@ -8,6 +8,98 @@ function userTag(user: any): string {
   return user?.globalName ?? user?.username ?? user?.tag ?? user?.id ?? 'Unknown';
 }
 
+// Lime GG aesthetic default constants
+export const DEFAULT_LIME_HEADER = '.<:member:1532621317487071426> ~ <a:approved:1532390590707142956> ~ Welcome {user} to **{server}** !!!';
+export const DEFAULT_LIME_DESCRIPTION = [
+  '.                 • Welcome to **{server}** <:member:1532621317487071426>',
+  '<:shield:1532403012751065179> • Please make sure to read and follow {rules} !',
+  '.           • Unleash Maximum Performance & Dominate with Rage Optimiser <a:boost:1531667085807583262>',
+  '<:config:1532425712844144701> . {roles} . <:information:1532621274092929124> . {chat} . <:link:1532620952087826602> . {server} .'
+].join('\n');
+export const DEFAULT_LIME_COLOR = '#CBF528';
+export const DEFAULT_LIME_FOOTER = '{server} • Member #{memberCount}';
+
+export function parseWelcomeVariables(str: string, member: any, countOverride?: number, config?: any): string {
+  if (!str) return '';
+  const dateStr = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  const memberCount = countOverride ?? (member.guild ? member.guild.memberCount : 1);
+  const targetUser = member.user || member;
+  const serverName = member.guild ? member.guild.name : 'Server';
+
+  const rulesRef = config?.rulesChannelId ? `<#${config.rulesChannelId}>` : '**#rules**';
+  const rolesRef = config?.rolesChannelId ? `<#${config.rolesChannelId}>` : '**#roles**';
+  const chatRef = config?.chatChannelId ? `<#${config.chatChannelId}>` : '**#chat**';
+
+  return str
+    .replace(/{user}/g, targetUser.toString())
+    .replace(/{username}/g, targetUser.username || targetUser.displayName || 'User')
+    .replace(/{userTag}/g, userTag(targetUser))
+    .replace(/{user\.tag}/g, userTag(targetUser))
+    .replace(/{userId}/g, targetUser.id || '0')
+    .replace(/{server}/g, serverName)
+    .replace(/{memberCount}/g, memberCount.toString())
+    .replace(/{date}/g, dateStr)
+    .replace(/{boosts}/g, (member.guild?.premiumSubscriptionCount || 0).toString())
+    .replace(/{boostTier}/g, (member.guild?.premiumTier || 0).toString())
+    .replace(/{rules}/g, rulesRef)
+    .replace(/{roles}/g, rolesRef)
+    .replace(/{chat}/g, chatRef);
+}
+
+export function buildLimeWelcomePayload(config: any, member: any, countOverride?: number) {
+  const cfg = config || {};
+  const embedCfg = cfg.welcomeEmbed || {};
+  const style = cfg.style || 'lime';
+
+  const rawContent = cfg.welcomeMessage ?? cfg.content ?? DEFAULT_LIME_HEADER;
+  const content = parseWelcomeVariables(rawContent, member, countOverride, cfg);
+
+  if (style === 'classic') {
+    return { content };
+  }
+
+  const colorHex = embedCfg.color || cfg.color || DEFAULT_LIME_COLOR;
+  const rawDesc = embedCfg.description ?? cfg.description ?? DEFAULT_LIME_DESCRIPTION;
+  const description = parseWelcomeVariables(rawDesc, member, countOverride, cfg);
+
+  const embed = new EmbedBuilder().setColor(colorHex as any);
+
+  if (description) {
+    embed.setDescription(description);
+  }
+
+  if (embedCfg.title || cfg.title) {
+    embed.setTitle(parseWelcomeVariables(embedCfg.title || cfg.title, member, countOverride, cfg));
+  }
+
+  if (embedCfg.showAvatar !== false && cfg.showAvatar !== false) {
+    const avatarUrl = member.user?.displayAvatarURL
+      ? member.user.displayAvatarURL({ forceStatic: false })
+      : (member.displayAvatarURL ? member.displayAvatarURL({ forceStatic: false }) : null);
+    if (avatarUrl) embed.setThumbnail(avatarUrl);
+  }
+
+  const imgUrl = embedCfg.imageUrl || cfg.imageUrl || cfg.bannerUrl;
+  if (imgUrl && imgUrl !== 'none') {
+    embed.setImage(imgUrl);
+  }
+
+  const rawFooter = embedCfg.footer ?? cfg.footer ?? DEFAULT_LIME_FOOTER;
+  if (rawFooter && rawFooter !== 'none') {
+    embed.setFooter({ text: parseWelcomeVariables(rawFooter, member, countOverride, cfg) });
+  }
+
+  return { content, embeds: [embed] };
+}
+
+export function registerWelcomeCommands(): void {}
+
 async function getUserAFK(guildId: string, userId: string): Promise<{ reason: string, timestamp: number } | null> {
   try {
     const db = Database.getDb();

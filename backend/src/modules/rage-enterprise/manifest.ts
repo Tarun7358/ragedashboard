@@ -5,7 +5,7 @@ import { Embeds, Colors, VERIFIED_ICON, WRONG_ICON, buildLimeOverviewCard } from
 import { getUnifiedWhitelistEntries } from '../../utils/whitelistCheck.js';
 
 import { buildAntiNukeOverview } from '../config/manifest.js';
-import { buildLimeWelcomePayload } from '../welcome-v2/manifest.js';
+import { buildLimeWelcomePayload } from '../community/manifest.js';
 
 // TODO:
 // Dashboard currently disabled.
@@ -449,7 +449,7 @@ export const RageEnterpriseManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const guildId = interaction.guildId;
         const modules = context.getModulesState ? context.getModulesState(guildId) : [];
-        const welcMod = modules.find((m: any) => m.id === 'welcome-v2') || {};
+        const welcMod = modules.find((m: any) => m.id === 'community' || m.id === 'welcome-v2') || {};
         const config = welcMod.config || {};
         const member = interaction.member || { user: interaction.user, guild: interaction.guild };
         const payload = buildLimeWelcomePayload(config, member);
@@ -466,9 +466,9 @@ export const RageEnterpriseManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const guildId = interaction.guildId;
         const modules = context.getModulesState(guildId);
-        const welcMod = modules.find((m: any) => m.id === 'welcome-v2') || {};
+        const welcMod = modules.find((m: any) => m.id === 'community' || m.id === 'welcome-v2') || {};
         const newStatus = welcMod.status === 'enabled' ? 'disabled' : 'enabled';
-        context.updateModuleConfig('welcome-v2', { ...(welcMod.config || {}), status: newStatus });
+        context.updateModuleConfig('community', { ...(welcMod.config || {}), status: newStatus });
         const res = RageEnterpriseService.getWelcomeOverview(interaction.guild, context);
         await interaction.update(res);
       }

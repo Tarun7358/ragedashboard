@@ -257,10 +257,9 @@ export class PrefixRegistry {
     const map: Record<string, string> = {
       'security': 'Security',
       'moderation': 'Security',
-      'tickets': 'Tickets',
-      'tickets-v2': 'Tickets',
       'verification': 'System',
-      'welcome-v2': 'Welcome',
+      'community': 'Community',
+      'welcome-v2': 'Community',
       'logging': 'Logging',
       'backups': 'Backups',
       'automation': 'Automations',

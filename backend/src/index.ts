@@ -86,8 +86,7 @@ import { DiagnosticsManifest } from './modules/diagnostics/manifest.js';
 import { VoiceProtectionManifest } from './modules/voice-protection/index.js';
 import { JoinRoleAssignmentGuardManifest } from './modules/join-role-guard/manifest.js';
 import { SocialUpdatesManifest } from './modules/social-updates/manifest.js';
-import { WelcomeV2Manifest, registerWelcomeCommands } from './modules/welcome-v2/manifest.js';
-import { TicketsV2Manifest } from './modules/tickets-v2/manifest.js';
+import { registerWelcomeCommands } from './modules/community/manifest.js';
 import { AnalyticsManifest } from './modules/analytics/manifest.js';
 import { AuditManifest } from './modules/audit/manifest.js';
 import { ModerationManifest } from './modules/moderation/manifest.js';
@@ -136,8 +135,6 @@ export const ALL_MANIFESTS = [
   VoiceProtectionManifest,
   JoinRoleAssignmentGuardManifest,
   SocialUpdatesManifest,
-  WelcomeV2Manifest,
-  TicketsV2Manifest,
   AnalyticsManifest,
   AuditManifest,
   RageEnterpriseManifest,

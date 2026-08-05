@@ -108,7 +108,7 @@ export class RageEnterpriseService {
   public static getWelcomeOverview(guild: any, context: any) {
     const guildId = guild.id;
     const modules = context.getModulesState ? context.getModulesState(guildId) : [];
-    const welcMod = modules.find((m: any) => m.id === 'welcome-v2') || {};
+    const welcMod = modules.find((m: any) => m.id === 'community' || m.id === 'welcome-v2') || {};
     const config = welcMod.config || {};
 
     const status = welcMod.status === 'enabled' ? '<a:approved:1532390590707142956> `Active`' : '<:wrong:1532390628330307634> `Disabled`';

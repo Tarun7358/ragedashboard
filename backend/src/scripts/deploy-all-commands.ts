@@ -22,8 +22,7 @@ import { VoiceManagerManifest } from '../modules/voice_manager/manifest.js';
 import { BulkOpsManifest } from '../modules/bulk_ops/manifest.js';
 import { DiagnosticsManifest } from '../modules/diagnostics/manifest.js';
 import { VoiceProtectionManifest } from '../modules/voice-protection/index.js';
-import { WelcomeV2Manifest } from '../modules/welcome-v2/manifest.js';
-import { TicketsV2Manifest } from '../modules/tickets-v2/manifest.js';
+import { CommunityManifest } from '../modules/community/manifest.js';
 import { JoinRoleAssignmentGuardManifest } from '../modules/join-role-guard/manifest.js';
 import { SocialUpdatesManifest } from '../modules/social-updates/manifest.js';
 import { AnalyticsManifest } from '../modules/analytics/manifest.js';
@@ -68,8 +67,7 @@ const manifests = [
   VoiceProtectionManifest,
   JoinRoleAssignmentGuardManifest,
   SocialUpdatesManifest,
-  WelcomeV2Manifest,
-  TicketsV2Manifest,
+  CommunityManifest,
   AnalyticsManifest,
   AuditManifest,
   BotStatsManifest,
