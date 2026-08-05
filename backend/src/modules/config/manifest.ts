@@ -290,7 +290,7 @@ export function registerConfigCommands(): void {
     execute: async (message: Message, args: string[], extra?: any) => {
       // Alias argument normalizer (e.g. r!antinuke threshold anti_role_grant 11)
       let effectiveArgs = [...args];
-      const antinukeSubActions = ['status', 'threshold', 'punishment', 'reversion', 'recovery', 'rollback', 'enable', 'disable', 'toggle', 'module', 'set', 'matrix', 'list'];
+      const antinukeSubActions = ['status', 'threshold', 'punishment', 'reversion', 'recovery', 'rollback', 'enable', 'disable', 'toggle', 'module', 'set', 'matrix', 'list', 'setall', 'all'];
       if (effectiveArgs.length > 0 && antinukeSubActions.includes(effectiveArgs[0]?.toLowerCase())) {
         effectiveArgs.unshift('antinuke');
       }
@@ -348,6 +348,30 @@ export function registerConfigCommands(): void {
         });
       }
 
+      // Helper rule group mapper
+      const getRuleKeysForGroup = (groupOrKey: string): string[] => {
+        const keyLower = groupOrKey.toLowerCase();
+        if (keyLower === 'all' || keyLower === 'everything' || keyLower === '*') {
+          return Object.keys(DEFAULT_SECURITY_RULES);
+        }
+        const ruleGroupMap: Record<string, string[]> = {
+          roles: ['anti_role_grant', 'anti_role_remove', 'anti_role_update', 'anti_role_create', 'anti_role_delete'],
+          role: ['anti_role_grant', 'anti_role_remove', 'anti_role_update', 'anti_role_create', 'anti_role_delete'],
+          channels: ['anti_channel_create', 'anti_channel_delete', 'anti_channel_update'],
+          channel: ['anti_channel_create', 'anti_channel_delete', 'anti_channel_update'],
+          members: ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune'],
+          member: ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune'],
+          moderation: ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune'],
+          webhooks: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update'],
+          webhook: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update'],
+          server: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update'],
+          emojis: ['anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update', 'anti_sticker_create', 'anti_sticker_delete', 'anti_sticker_update'],
+          emoji: ['anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update', 'anti_sticker_create', 'anti_sticker_delete', 'anti_sticker_update']
+        };
+        if (ruleGroupMap[keyLower]) return ruleGroupMap[keyLower];
+        return [normalizeRuleName(groupOrKey)];
+      };
+
       // Anti-Nuke Sub-Configuration Suite (`r!config antinuke ...`)
       if (moduleName === 'antinuke') {
         const action = effectiveArgs[1]?.toLowerCase();
@@ -373,7 +397,60 @@ export function registerConfigCommands(): void {
           return message.reply(payload);
         }
 
-        // Configure Punishment (`r!config antinuke punishment <event> <action>`)
+        // Master Bulk SetAll Command (`r!config antinuke setall [category|all] <limit> <window> [punishment] [reversion]`)
+        if (action === 'setall' || action === 'all') {
+          let categoryOrAll = effectiveArgs[2]?.toLowerCase();
+          let limitIdx = 3;
+
+          if (categoryOrAll && !isNaN(parseInt(categoryOrAll, 10))) {
+            categoryOrAll = 'all';
+            limitIdx = 2;
+          }
+
+          if (!categoryOrAll) categoryOrAll = 'all';
+
+          const limit = parseInt(effectiveArgs[limitIdx], 10);
+          const windowRate = parseInt(effectiveArgs[limitIdx + 1], 10);
+          const punishment = effectiveArgs[limitIdx + 2]?.toLowerCase() || 'quarantine';
+          const reversionInput = effectiveArgs[limitIdx + 3]?.toLowerCase();
+
+          if (isNaN(limit) || limit < 1 || isNaN(windowRate) || windowRate < 1) {
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Anti-Nuke Bulk SetAll Syntax',
+                description: [
+                  `${WRONG_EMOJI} **Syntax**: \`r!antinuke setall [category|all] <limit> <window_sec> [quarantine|ban|kick|strip_roles|warn] [on|off]\`\n`,
+                  `• **Bulk update ALL 24 sub-modules**: \`r!antinuke setall 3 10 quarantine on\``,
+                  `• **Strict protection for ALL sub-modules**: \`r!antinuke setall 1 10 ban on\``,
+                  `• **Update Role Protection sub-modules**: \`r!antinuke setall roles 2 10 quarantine on\``,
+                  `• **Update Channel Protection sub-modules**: \`r!antinuke setall channels 1 10 ban on\``,
+                  `• **Update Webhook sub-modules**: \`r!antinuke setall webhooks 2 10 quarantine on\``,
+                  `\n**Categories**: \`all\`, \`roles\`, \`channels\`, \`members\`, \`webhooks\`, \`emojis\``
+                ].join('\n')
+              })]
+            });
+          }
+
+          const isReversionOn = reversionInput ? ['on', 'true', 'enable'].includes(reversionInput) : true;
+          const targetKeys = getRuleKeysForGroup(categoryOrAll);
+          const updatedRules = { ...rules };
+
+          targetKeys.forEach(k => {
+            const cur = getEffectiveRule(rules, k);
+            updatedRules[k] = { ...cur, enabled: true, limit, window: windowRate, action: punishment, recovery: isReversionOn };
+          });
+
+          updateSecRules(updatedRules);
+
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: `Bulk Update Applied — ${categoryOrAll.toUpperCase()} Sub-Modules`,
+              description: `${APPROVED_ICON} Successfully updated **${targetKeys.length} sub-modules** at once:\n> • Sensitivity Limit: \`${limit} per ${windowRate} seconds\`\n> • Punishment Action: \`${punishment.toUpperCase()}\`\n> • Auto-Reversion: \`${isReversionOn ? 'ENABLED (ON)' : 'DISABLED (OFF)'}\``
+            })]
+          });
+        }
+
+        // Configure Punishment (`r!config antinuke punishment <event|all> <action>`)
         if (action === 'punishment') {
           const eventInput = effectiveArgs[2];
           const punishment = effectiveArgs[3]?.toLowerCase();
@@ -383,27 +460,30 @@ export function registerConfigCommands(): void {
             return message.reply({
               embeds: [createLimeEmbed({
                 title: 'Anti-Nuke Punishment Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke punishment <event> <quarantine|ban|kick|strip_roles|warn>\`\nExample: \`r!config antinuke punishment role_grant ban\``
+                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke punishment <event|all|roles|channels> <quarantine|ban|kick|strip_roles|warn>\`\nExample: \`r!config antinuke punishment all ban\``
               })]
             });
           }
 
-          const targetRuleKey = normalizeRuleName(eventInput);
-          const currentRule = getEffectiveRule(rules, targetRuleKey);
-          const updatedRule = { ...currentRule, action: punishment };
-          const updatedRules = { ...rules, [targetRuleKey]: updatedRule };
+          const targetKeys = getRuleKeysForGroup(eventInput);
+          const updatedRules = { ...rules };
+
+          targetKeys.forEach(k => {
+            const currentRule = getEffectiveRule(rules, k);
+            updatedRules[k] = { ...currentRule, action: punishment };
+          });
 
           updateSecRules(updatedRules);
 
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Anti-Nuke Punishment Action Saved',
-              description: `${APPROVED_ICON} Updated punishment for module **\`${targetRuleKey}\`** to **\`${punishment.toUpperCase()}\`**.`
+              description: `${APPROVED_ICON} Updated punishment for **${targetKeys.length} sub-module(s)** to **\`${punishment.toUpperCase()}\`**.`
             })]
           });
         }
 
-        // Configure Threshold (`r!config antinuke threshold <event> <limit> [window_seconds]`)
+        // Configure Threshold (`r!config antinuke threshold <event|all> <limit> [window_seconds]`)
         if (action === 'threshold') {
           const eventInput = effectiveArgs[2];
           const limit = parseInt(effectiveArgs[3], 10);
@@ -413,28 +493,31 @@ export function registerConfigCommands(): void {
             return message.reply({
               embeds: [createLimeEmbed({
                 title: 'Anti-Nuke Threshold Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke threshold <event> <limit_count> [window_seconds]\`\nExample: \`r!config antinuke threshold channel_delete 2 10\``
+                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke threshold <event|all|roles|channels> <limit_count> [window_seconds]\`\nExample: \`r!config antinuke threshold all 2 10\``
               })]
             });
           }
 
-          const targetRuleKey = normalizeRuleName(eventInput);
-          const currentRule = getEffectiveRule(rules, targetRuleKey);
-          const windowRate = !isNaN(parsedWindow) && parsedWindow > 0 ? parsedWindow : (currentRule.window || 10);
-          const updatedRule = { ...currentRule, limit, window: windowRate };
-          const updatedRules = { ...rules, [targetRuleKey]: updatedRule };
+          const targetKeys = getRuleKeysForGroup(eventInput);
+          const updatedRules = { ...rules };
+
+          targetKeys.forEach(k => {
+            const currentRule = getEffectiveRule(rules, k);
+            const windowRate = !isNaN(parsedWindow) && parsedWindow > 0 ? parsedWindow : (currentRule.window || 10);
+            updatedRules[k] = { ...currentRule, limit, window: windowRate };
+          });
 
           updateSecRules(updatedRules);
 
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Anti-Nuke Sensitivity Threshold Saved',
-              description: `${APPROVED_ICON} Updated **\`${targetRuleKey}\`** threshold: **${limit} actions per ${windowRate} seconds**.`
+              description: `${APPROVED_ICON} Updated **${targetKeys.length} sub-module(s)** threshold: **${limit} actions per ${parsedWindow || 10} seconds**.`
             })]
           });
         }
 
-        // Configure Reversion / Auto-Rollback (`r!config antinuke reversion <event> <on|off|true|false>`)
+        // Configure Reversion / Auto-Rollback (`r!config antinuke reversion <event|all> <on|off|true|false>`)
         if (action === 'reversion' || action === 'recovery' || action === 'rollback') {
           const eventInput = effectiveArgs[2];
           const toggleInput = effectiveArgs[3]?.toLowerCase();
@@ -443,28 +526,31 @@ export function registerConfigCommands(): void {
             return message.reply({
               embeds: [createLimeEmbed({
                 title: 'Anti-Nuke Reversion Toggle Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke reversion <event> <on|off>\`\nExample: \`r!config antinuke reversion role_grant on\``
+                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke reversion <event|all|roles|channels> <on|off>\`\nExample: \`r!config antinuke reversion all on\``
               })]
             });
           }
 
           const isEnabled = ['on', 'true', 'enable'].includes(toggleInput);
-          const targetRuleKey = normalizeRuleName(eventInput);
-          const currentRule = getEffectiveRule(rules, targetRuleKey);
-          const updatedRule = { ...currentRule, recovery: isEnabled };
-          const updatedRules = { ...rules, [targetRuleKey]: updatedRule };
+          const targetKeys = getRuleKeysForGroup(eventInput);
+          const updatedRules = { ...rules };
+
+          targetKeys.forEach(k => {
+            const currentRule = getEffectiveRule(rules, k);
+            updatedRules[k] = { ...currentRule, recovery: isEnabled };
+          });
 
           updateSecRules(updatedRules);
 
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Anti-Nuke Auto-Reversion Policy Updated',
-              description: `${APPROVED_ICON} Automatic reversion for **\`${targetRuleKey}\`** is now **\`${isEnabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}\`**.`
+              description: `${APPROVED_ICON} Automatic reversion for **${targetKeys.length} sub-module(s)** is now **\`${isEnabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}\`**.`
             })]
           });
         }
 
-        // Enable or Disable Individual Module or Master Anti-Nuke (`r!config antinuke on/off` or `enable <event>`)
+        // Enable or Disable Individual Module, Category or Master Anti-Nuke (`r!config antinuke on/off` or `enable <event|all>`)
         if (action === 'enable' || action === 'disable' || action === 'toggle' || action === 'on' || action === 'off') {
           const eventInput = effectiveArgs[2];
           if (!eventInput) {
@@ -482,22 +568,25 @@ export function registerConfigCommands(): void {
           }
 
           const isEnabled = action === 'enable' || action === 'on' || (action === 'toggle' && effectiveArgs[3]?.toLowerCase() === 'on');
-          const targetRuleKey = normalizeRuleName(eventInput);
-          const currentRule = getEffectiveRule(rules, targetRuleKey);
-          const updatedRule = { ...currentRule, enabled: isEnabled };
-          const updatedRules = { ...rules, [targetRuleKey]: updatedRule };
+          const targetKeys = getRuleKeysForGroup(eventInput);
+          const updatedRules = { ...rules };
+
+          targetKeys.forEach(k => {
+            const currentRule = getEffectiveRule(rules, k);
+            updatedRules[k] = { ...currentRule, enabled: isEnabled };
+          });
 
           updateSecRules(updatedRules);
 
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Anti-Nuke Protection State Saved',
-              description: `${APPROVED_ICON} Protection module **\`${targetRuleKey}\`** has been **\`${isEnabled ? 'ENABLED' : 'DISABLED'}\`**.`
+              description: `${APPROVED_ICON} Protection state for **${targetKeys.length} sub-module(s)** has been **\`${isEnabled ? 'ENABLED' : 'DISABLED'}\`**.`
             })]
           });
         }
 
-        // Single Bulk Module Command (`r!config antinuke module <event> <limit> <window> <punishment> <reversion>`)
+        // Single Bulk Module Command (`r!config antinuke module <event|all> <limit> <window> <punishment> <reversion>`)
         if (action === 'module' || action === 'set') {
           const eventInput = effectiveArgs[2];
           const limit = parseInt(effectiveArgs[3], 10);
@@ -509,22 +598,25 @@ export function registerConfigCommands(): void {
             return message.reply({
               embeds: [createLimeEmbed({
                 title: 'Anti-Nuke Module Setting Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke module <event> <limit> <window_sec> <quarantine|ban|kick> [reversion_on_off]\`\nExample: \`r!config antinuke module role_grant 3 10 quarantine on\``
+                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke module <event|all|roles|channels> <limit> <window_sec> <quarantine|ban|kick> [reversion_on_off]\`\nExample: \`r!config antinuke module all 3 10 quarantine on\``
               })]
             });
           }
 
-          const targetRuleKey = normalizeRuleName(eventInput);
           const isReversionOn = reversionInput ? ['on', 'true', 'enable'].includes(reversionInput) : true;
-          const updatedRule = { enabled: true, limit, window: windowRate, action: punishment, recovery: isReversionOn };
-          const updatedRules = { ...rules, [targetRuleKey]: updatedRule };
+          const targetKeys = getRuleKeysForGroup(eventInput);
+          const updatedRules = { ...rules };
+
+          targetKeys.forEach(k => {
+            updatedRules[k] = { enabled: true, limit, window: windowRate, action: punishment, recovery: isReversionOn };
+          });
 
           updateSecRules(updatedRules);
 
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Anti-Nuke Module Configuration Applied',
-              description: `${APPROVED_ICON} Configured **\`${targetRuleKey}\`**:\n> • Limit: \`${limit} per ${windowRate}s\`\n> • Punishment: \`${punishment.toUpperCase()}\`\n> • Auto-Revert: \`${isReversionOn ? 'ENABLED' : 'DISABLED'}\``
+              description: `${APPROVED_ICON} Configured **${targetKeys.length} sub-module(s)**:\n> • Limit: \`${limit} per ${windowRate}s\`\n> • Punishment: \`${punishment.toUpperCase()}\`\n> • Auto-Revert: \`${isReversionOn ? 'ENABLED' : 'DISABLED'}\``
             })]
           });
         }
