@@ -53,7 +53,7 @@ export function wrapInteraction(interaction: any) {
   const originalUpdate = interaction.update ? interaction.update.bind(interaction) : null;
 
   if (originalDeferReply) {
-    interaction.deferReply = async function(options?: any) {
+    interaction.deferReply = async function (options?: any) {
       if (interaction.deferred || interaction.replied) return;
       try {
         return await originalDeferReply(stripEphemeral(options));
@@ -65,7 +65,7 @@ export function wrapInteraction(interaction: any) {
   }
 
   if (originalReply) {
-    interaction.reply = async function(options?: any) {
+    interaction.reply = async function (options?: any) {
       options = transformContentToLimeCard(options, interaction.user);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] reply skipped: interaction is dead (deferReply failed previously)');
@@ -108,7 +108,7 @@ export function wrapInteraction(interaction: any) {
   }
 
   if (originalEditReply) {
-    interaction.editReply = async function(options?: any) {
+    interaction.editReply = async function (options?: any) {
       options = stripEphemeral(options);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] editReply skipped: interaction is dead (deferReply failed previously)');
@@ -139,7 +139,7 @@ export function wrapInteraction(interaction: any) {
   }
 
   if (originalFollowUp) {
-    interaction.followUp = async function(options?: any) {
+    interaction.followUp = async function (options?: any) {
       options = stripEphemeral(options);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] followUp skipped: interaction is dead (deferReply failed previously)');
@@ -154,7 +154,7 @@ export function wrapInteraction(interaction: any) {
   }
 
   if (originalUpdate) {
-    interaction.update = async function(options?: any) {
+    interaction.update = async function (options?: any) {
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] update skipped: interaction is dead (deferReply failed previously)');
         return;
@@ -348,7 +348,7 @@ export class Gateway {
       await PrefixResolver.loadAllPrefixes().catch(console.error);
       await this.client.application?.fetch().catch(() => null);
       this.syncRegistry();
-      
+
       // Deploy commands globally across all servers on startup.
       await this.forceDeployCommands().catch((err) => {
         console.error('[Gateway] Global startup deploy failed:', err);
@@ -394,7 +394,7 @@ export class Gateway {
         if (db) {
           await db.run('UPDATE approvals set status = ? WHERE guildId = ?', ['Approved', guild.id]);
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // Send welcome message to server owner (DM) and guild channel
       try {
@@ -459,7 +459,7 @@ export class Gateway {
         // 1. Direct Message to Server Owner
         const owner = await guild.fetchOwner().catch(() => null);
         if (owner) {
-          await owner.user.send({ embeds: [welcomeEmbed], components: [actionRow] }).catch(() => {});
+          await owner.user.send({ embeds: [welcomeEmbed], components: [actionRow] }).catch(() => { });
         }
 
         // 2. Channel Message to Guild System Channel or first sendable text channel
@@ -497,7 +497,7 @@ export class Gateway {
             footerText: 'Rage Optimiser Enterprise • System Initialized'
           });
 
-          await (systemChan as any).send({ embeds: [channelEmbed], components: [actionRow] }).catch(() => {});
+          await (systemChan as any).send({ embeds: [channelEmbed], components: [actionRow] }).catch(() => { });
         }
       } catch (e) {
         console.error('[Gateway] Error handling guildCreate welcome onboarding:', e);
@@ -582,7 +582,7 @@ export class Gateway {
       this.syncRegistry(guildId);
       this.dispatchEvent('guildMemberAdd', member);
       this.publicFeed?.addEvent('Members', `**${member.user.username}** joined the server`);
-      AnalyticsService.incrementMetric(guildId, 'joins').catch(() => {});
+      AnalyticsService.incrementMetric(guildId, 'joins').catch(() => { });
     });
 
     this.client.on('guildMemberRemove', (member) => {
@@ -591,7 +591,7 @@ export class Gateway {
       this.syncRegistry(guildId);
       this.dispatchEvent('guildMemberRemove', member);
       this.publicFeed?.addEvent('Members', `**${member.user.username}** left the server`);
-      AnalyticsService.incrementMetric(guildId, 'leaves').catch(() => {});
+      AnalyticsService.incrementMetric(guildId, 'leaves').catch(() => { });
     });
 
     this.client.on('messageDelete', (message) => {
@@ -630,8 +630,8 @@ export class Gateway {
       this.dispatchEvent('messageCreate', message);
 
       if (message.guildId) {
-        AnalyticsService.incrementMetric(message.guildId, 'messages').catch(() => {});
-        
+        AnalyticsService.incrementMetric(message.guildId, 'messages').catch(() => { });
+
         // DM notify users who were tagged/mentioned directly
         if (message.mentions.users.size > 0 && message.guild) {
           const verifiedIcon = '<a:approved:1532390590707142956>';
@@ -643,7 +643,7 @@ export class Gateway {
               const msgContext = message.content
                 ? (message.content.length > 500 ? message.content.substring(0, 500) + '…' : message.content)
                 : '*(No text content)*';
-              
+
               const dmEmbed = new EmbedBuilder()
                 .setColor(0x84cc16)
                 .setThumbnail(guildIcon || message.author.displayAvatarURL({ size: 256 }) || null)
@@ -665,8 +665,8 @@ export class Gateway {
                 new ButtonBuilder().setLabel('Jump to Message').setURL(message.url).setStyle(ButtonStyle.Link)
               );
 
-              await user.send({ embeds: [dmEmbed], components: [jumpRow] }).catch(() => {});
-            } catch (err) {}
+              await user.send({ embeds: [dmEmbed], components: [jumpRow] }).catch(() => { });
+            } catch (err) { }
           });
         }
       }
@@ -700,7 +700,7 @@ export class Gateway {
         const btnSupport = new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/rageoptimiser');
         const greetRow = new ActionRowBuilder<ButtonBuilder>().addComponents(btnDashboard, btnInvite, btnSupport);
 
-        await message.reply({ embeds: [greetingEmbed], components: [greetRow] }).catch(() => {});
+        await message.reply({ embeds: [greetingEmbed], components: [greetRow] }).catch(() => { });
 
         // Send detailed DM documentation message to message.author
         try {
@@ -740,8 +740,8 @@ export class Gateway {
             new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/rageoptimiser')
           );
 
-          await message.author.send({ embeds: [dmDetailEmbed], components: [rowDm] }).catch(() => {});
-        } catch (e) {}
+          await message.author.send({ embeds: [dmDetailEmbed], components: [rowDm] }).catch(() => { });
+        } catch (e) { }
 
         return;
       }
@@ -763,7 +763,7 @@ export class Gateway {
             'The server is currently in **lockdown mode**. All public bot commands are temporarily disabled.\n\nPlease check back shortly.',
             { module: 'system', footer: 'Rage Optimiser Enterprise  •  System Maintenance' }
           );
-          await message.reply({ embeds: [mainEmbed] }).catch(() => {});
+          await message.reply({ embeds: [mainEmbed] }).catch(() => { });
           return;
         }
       }
@@ -869,9 +869,9 @@ export class Gateway {
         });
 
         if (sentMsg) {
-          return sentMsg.edit({ content: null, embeds: [embed] }).catch(() => {});
+          return sentMsg.edit({ content: null, embeds: [embed] }).catch(() => { });
         } else {
-          return message.reply({ embeds: [embed] }).catch(() => {});
+          return message.reply({ embeds: [embed] }).catch(() => { });
         }
       }
 
@@ -891,7 +891,7 @@ export class Gateway {
           ? `Command \`${parsed.commandName}\` was not found.\n\n> <:information:1532621274092929124> Did you mean **\`${curPfx}${suggested}\`**?`
           : `Unknown command \`${curPfx}${parsed.commandName}\`.\n\nType **\`${curPfx}help\`** or **\`/help\`** to view all commands.`;
         const unknownEmbed = Embeds.error('Command Not Found', unknownDesc, { module: 'system' });
-        await message.reply({ embeds: [unknownEmbed] }).catch(() => {});
+        await message.reply({ embeds: [unknownEmbed] }).catch(() => { });
         return;
       }
 
@@ -943,7 +943,7 @@ export class Gateway {
         const start = this.voiceSessions.get(sessionKey);
         if (start && newState.guild?.id) {
           const diffMin = Math.max(1, Math.floor((Date.now() - start) / 60000));
-          AnalyticsService.incrementMetric(newState.guild.id, 'voiceMinutes', diffMin).catch(() => {});
+          AnalyticsService.incrementMetric(newState.guild.id, 'voiceMinutes', diffMin).catch(() => { });
         }
         this.voiceSessions.delete(sessionKey);
       } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
@@ -951,7 +951,7 @@ export class Gateway {
         const start = this.voiceSessions.get(sessionKey);
         if (start && newState.guild?.id) {
           const diffMin = Math.max(1, Math.floor((Date.now() - start) / 60000));
-          AnalyticsService.incrementMetric(newState.guild.id, 'voiceMinutes', diffMin).catch(() => {});
+          AnalyticsService.incrementMetric(newState.guild.id, 'voiceMinutes', diffMin).catch(() => { });
         }
         this.voiceSessions.set(sessionKey, Date.now());
       }
@@ -1049,7 +1049,7 @@ export class Gateway {
               )
               .setFooter({ text: 'Rage Optimiser Enterprise • Unbypassable Security' })
               .setTimestamp();
-            await owner.send({ embeds: [embed] }).catch(() => {});
+            await owner.send({ embeds: [embed] }).catch(() => { });
           }
         }
       } catch (dmErr) {
@@ -1161,7 +1161,7 @@ export class Gateway {
     this.client.on('raw', (packet: any) => {
       if (packet && packet.t) {
         if (
-          packet.t.includes('SOUNDBOARD') || 
+          packet.t.includes('SOUNDBOARD') ||
           packet.t.includes('EFFECT') ||
           packet.t === 'VOICE_CHANNEL_EFFECT_SEND' ||
           packet.t === 'GUILD_SOUNDBOARD_SOUND_PLAY'
@@ -1351,7 +1351,7 @@ export class Gateway {
         await rest.put(
           Routes.applicationGuildCommands(clientId, g.id),
           { body: [] }
-        ).catch(() => {});
+        ).catch(() => { });
       }
       console.log(`✅ Cleared per-guild command overrides across ${cachedGuilds.length} servers to eliminate duplicate commands.`);
     } catch (error: any) {
@@ -1364,7 +1364,7 @@ export class Gateway {
     BrainEventInterceptor.observe(eventName, args, {
       getModulesState: (gId?: string) => this.getModulesState(gId),
       getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId)
-    }).catch(() => {});
+    }).catch(() => { });
 
     return this.dispatchEventForGuild(eventName, undefined, ...args);
   }
@@ -1468,7 +1468,7 @@ export class Gateway {
         this.logSyncEvent(guildId, 'Voice Presence: Disconnecting from voice channel (Module disabled).', 'info');
         try {
           currentConnection.destroy();
-        } catch (e) {}
+        } catch (e) { }
         const vsD = this.getVoiceState(guildId);
         vsD.connection = null;
         vsD.connectTime = null;
@@ -1510,7 +1510,7 @@ export class Gateway {
       this.logSyncEvent(guildId, `Voice Presence: Target channel changed to #${channel.name}. Reconnecting...`, 'info');
       try {
         currentConnection.destroy();
-      } catch (e) {}
+      } catch (e) { }
       const vs = this.getVoiceState(guildId);
       vs.connection = null;
       vs.connectTime = null;
@@ -1594,7 +1594,7 @@ export class Gateway {
       if ((connection as any)._presenceListener) {
         try {
           connection.removeListener('stateChange', (connection as any)._presenceListener);
-        } catch (e) {}
+        } catch (e) { }
       }
       const listener = (oldState: any, newState: any) => {
         if (newState.status === VoiceConnectionStatus.Disconnected) {
@@ -1629,7 +1629,7 @@ export class Gateway {
     if (vs.connection) {
       try {
         vs.connection.destroy();
-      } catch (e) {}
+      } catch (e) { }
       vs.connection = null;
       vs.connectTime = null;
     }
@@ -1668,12 +1668,12 @@ export class Gateway {
     const hrs = Math.floor(upMs / 3600000);
     const mins = Math.floor((upMs % 3600000) / 60000);
     const secs = Math.floor((upMs % 60000) / 1000);
-    
+
     let uptimeStr = '';
     if (hrs > 0) uptimeStr += `${hrs}h `;
     if (mins > 0 || hrs > 0) uptimeStr += `${mins}m `;
     uptimeStr += `${secs}s`;
-    
+
     return {
       latency: ping >= 0 ? ping : 0,
       uptime: uptimeStr || '0s'
