@@ -307,7 +307,7 @@ async function fetchAuditLogWithRetry(
     } catch (err) {}
 
     if (attempt < 3) {
-      await new Promise(r => setTimeout(r, attempt === 1 ? 600 : 1000));
+      await new Promise(r => setTimeout(r, attempt === 1 ? 80 : 200));
     }
   }
 
