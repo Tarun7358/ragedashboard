@@ -1030,6 +1030,32 @@ export class Gateway {
         guildName: guild.name || guild.id
       });
 
+      // Send emergency DM notification to server owner
+      try {
+        if (guild.ownerId) {
+          const owner = await this.client.users.fetch(guild.ownerId).catch(() => null);
+          if (owner) {
+            const embed = new EmbedBuilder()
+              .setColor(0xEF4444)
+              .setAuthor({ name: 'Rage Optimiser • Security Engine' })
+              .setTitle('🚨 URGENT SECURITY ALERT: Bot Removed From Server')
+              .setDescription(
+                `> **Rage Optimiser** was just kicked or removed from your server **${guild.name || guild.id}**.\n\n` +
+                `• **Server ID**: \`${guild.id}\`\n` +
+                `• **Security Protection Status**: \`Suspended until re-invited\`\n\n` +
+                `**🛡️ Automatic Snapshot Protection**\n` +
+                `All server configurations, whitelists, rules, and Anti-Nuke settings remain **100% saved in cloud memory**. ` +
+                `Re-invite the bot immediately to restore unbypassable protection.`
+              )
+              .setFooter({ text: 'Rage Optimiser Enterprise • Unbypassable Security' })
+              .setTimestamp();
+            await owner.send({ embeds: [embed] }).catch(() => {});
+          }
+        }
+      } catch (dmErr) {
+        console.warn('[Gateway] Could not dispatch DM alert to owner on guildDelete:', dmErr);
+      }
+
       // Synchronize SQLite approvals table if record exists
       try {
         const db = Database.getDb();
