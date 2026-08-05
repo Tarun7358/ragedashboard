@@ -221,7 +221,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '⏱️ RUNTIME DURATION',
+                title: '<:timer:1532620491662037123> RUNTIME DURATION',
                 items: [
                   `Running Duration: <t:${startSec}:R>`,
                   `Initial Launch Time: <t:${startSec}:F>`
@@ -236,7 +236,7 @@ export const DiagnosticsManifest: ModuleManifest = {
         // ─── MODULES ─────────────────────────────────────────────
         if (sub === 'modules') {
           const modules = context.getModulesState ? context.getModulesState() : [];
-          const statusIcon = (s: string) => s === 'enabled' ? VERIFIED_ICON : s === 'ready' ? INFO_ICON : s === 'error' ? WRONG_ICON : '⚪';
+          const statusIcon = (s: string) => s === 'enabled' ? VERIFIED_ICON : s === 'ready' ? INFO_ICON : s === 'error' ? WRONG_ICON : '<:information:1532621274092929124>';
           const lines = modules.map((m: any) => `${statusIcon(m.status)} **${m.name}** — \`${m.status.toUpperCase()}\` (${m.progress}%)`);
           const embed = buildLimeOverviewCard({
             title: 'MODULE ENGINE STATUS',
@@ -244,7 +244,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '🧩 REGISTERED MODULES',
+                title: '<:config:1532425712844144701> REGISTERED MODULES',
                 items: lines
               }
             ],
@@ -264,7 +264,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: ping < 150 ? Colors.BRAND : ping < 300 ? Colors.WARN : Colors.DANGER,
             sections: [
               {
-                title: '📡 GATEWAY METRICS',
+                title: '<:link:1532620952087826602> GATEWAY METRICS',
                 items: [
                   `WebSocket Ping: \`${ping}ms\` — ${statusStr}`,
                   `Connection Status Code: \`${wsStatus}\``,
@@ -287,7 +287,7 @@ export const DiagnosticsManifest: ModuleManifest = {
               color: db ? Colors.BRAND : Colors.DANGER,
               sections: [
                 {
-                  title: '🗄️ PERSISTENCE STATE',
+                  title: '<:shield:1532403012751065179> PERSISTENCE STATE',
                   items: [
                     `Database Connection: ${status}`,
                     `Engine Type: \`SQLite 3 (Hardened WAL Mode)\``
@@ -309,7 +309,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '🧩 ACTIVE SHARDS',
+                title: '<:config:1532425712844144701> ACTIVE SHARDS',
                 items: [
                   `Shard #0: ${VERIFIED_ICON} ONLINE — Gateway Connected`
                 ]
@@ -328,7 +328,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '💻 HOST INFRASTRUCTURE',
+                title: '<:bot:1532621107746570391> HOST INFRASTRUCTURE',
                 items: [
                   `Node.js Platform: \`${process.version}\``,
                   `Resident Set Size (RSS): \`${(memory.rss / 1024 / 1024).toFixed(2)} MB\``,
@@ -348,7 +348,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '🌐 REST API METRICS',
+                title: '<:link:1532620952087826602> REST API METRICS',
                 items: [
                   `API Status: ${VERIFIED_ICON} OPERATIONAL — HTTPS 200`,
                   `Estimated Latency: \`~85ms\``
@@ -367,7 +367,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '⚡ LATENCY & METRICS',
+                title: '<:stats:1532429110775779459> LATENCY & METRICS',
                 items: [
                   `Query Response Time: \`0.12ms\``,
                   `Active Pool Connections: \`1 Active\``,
@@ -390,7 +390,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '📦 CACHED OBJECTS',
+                title: '<:information:1532621274092929124> CACHED OBJECTS',
                 items: [
                   `Cached Guilds: \`${fmt(guilds)}\``,
                   `Cached Channels: \`${fmt(channels)}\``,
@@ -410,7 +410,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '📡 DISPATCH RATE',
+                title: '<:stats:1532429110775779459> DISPATCH RATE',
                 items: [
                   `Events Processed (Last Minute): \`12\``,
                   `Current Dispatch Queue Size: \`0\``
