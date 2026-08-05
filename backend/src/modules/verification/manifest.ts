@@ -1,6 +1,8 @@
-import { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
+import { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, Message } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
+import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
+import { createLimeEmbed, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON } from '../../core/UIFactory.js';
 
 // Safe display name helper
 function userTag(user: any): string {
@@ -31,6 +33,84 @@ async function markUserVerified(guildId: string, userId: string): Promise<void> 
     console.error('Failed to mark user as verified:', err);
   }
 }
+
+// Register Prefix Commands for Verification Module
+PrefixRegistry.register({
+  name: 'setup-verify',
+  category: 'Verification',
+  description: 'Post the interactive verification entry card button to the channel.',
+  usage: 'r!setup-verify',
+  aliases: ['verify-setup', 'setupverify'],
+  cooldownSeconds: 5,
+  userPermissions: ['ManageGuild'],
+  botPermissions: ['ManageRoles'],
+  execute: async (message: Message) => {
+    try {
+      const embed = new EmbedBuilder()
+        .setTitle(`${SHIELD_ICON} Member Verification Required`)
+        .setDescription('To gain access to the channels and features of this server, please click the verification button below.')
+        .setColor(0x99CC00)
+        .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+        .setTimestamp();
+
+      const btn = new ButtonBuilder()
+        .setCustomId('verify_btn_click')
+        .setLabel('Verify Me')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji(VERIFIED_ICON);
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btn);
+      return message.reply({ embeds: [embed], components: [row] });
+    } catch (err: any) {
+      return message.reply({
+        embeds: [createLimeEmbed({
+          title: 'Verification Setup Failed',
+          description: `${WRONG_ICON} Error: ${err.message}`
+        })]
+      });
+    }
+  }
+});
+
+PrefixRegistry.register({
+  name: 'verify',
+  category: 'Verification',
+  description: 'Verify your membership in the server to claim access roles.',
+  usage: 'r!verify',
+  cooldownSeconds: 3,
+  execute: async (message: Message) => {
+    const member = message.member;
+    const guild = message.guild;
+    if (!member || !guild) return;
+
+    try {
+      const isVerifiedInDb = await isUserVerified(guild.id, member.user.id);
+      if (isVerifiedInDb) {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Already Verified',
+            description: `${VERIFIED_ICON} You have already completed the verification process.`
+          })]
+        });
+      }
+
+      await markUserVerified(guild.id, member.user.id);
+      return message.reply({
+        embeds: [createLimeEmbed({
+          title: 'Verification Succeeded',
+          description: `${VERIFIED_ICON} **Verification Complete!** Welcome to **${guild.name}**.`
+        })]
+      });
+    } catch (err: any) {
+      return message.reply({
+        embeds: [createLimeEmbed({
+          title: 'Verification Failed',
+          description: `${WRONG_ICON} Unable to complete verification: ${err.message}`
+        })]
+      });
+    }
+  }
+});
 
 export const VerificationManifest: ModuleManifest = {
   id: 'verification',
