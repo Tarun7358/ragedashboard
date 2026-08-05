@@ -281,10 +281,11 @@ export const LoggingManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else {
           const category = interaction.options.getString('category')?.toLowerCase();
+          const isAllCategory = category === 'all' || category === 'everything' || category === '*';
+          let actualCategory = isAllCategory ? 'all' : validCategories.find(c => c.toLowerCase() === category);
           
-          let actualCategory = validCategories.find(c => c.toLowerCase() === category);
           if (!actualCategory) {
-             return interaction.reply({ content: `<:wrong:1532390628330307634> Invalid category. Valid options: ${validCategories.join(', ')}`, flags: 64 });
+             return interaction.reply({ content: `<:wrong:1532390628330307634> Invalid category. Valid options: ${validCategories.join(', ')}, all`, flags: 64 });
           }
 
           if (subcommand === 'channel') {
@@ -292,32 +293,49 @@ export const LoggingManifest: ModuleManifest = {
             if (!ch) return interaction.reply({ content: '<:wrong:1532390628330307634> Please specify a channel.', flags: 64 });
             
             const newConfig = { ...config };
-            if (!newConfig[actualCategory]) newConfig[actualCategory] = { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
-            newConfig[actualCategory].channelId = ch.id;
+            if (isAllCategory) {
+              validCategories.forEach(cat => {
+                if (!newConfig[cat]) newConfig[cat] = { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+                newConfig[cat].channelId = ch.id;
+              });
+            } else {
+              if (!newConfig[actualCategory]) newConfig[actualCategory] = { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+              newConfig[actualCategory].channelId = ch.id;
+            }
             
-            context.logSyncEvent(`Logging Center: ${actualCategory} log channel updated to #${ch.name} via slash command.`, 'success');
+            context.logSyncEvent(`Logging Center: ${isAllCategory ? 'ALL' : actualCategory} log channel updated to #${ch.name} via slash command.`, 'success');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`<a:approved:1532390590707142956> Logging Channel Updated — ${actualCategory.toUpperCase()}`)
-              .setDescription(`> ### Target Channel Assigned\n> **Category**: \`${actualCategory.toUpperCase()}\` → Target: ${ch} (\`${ch.id}\`)`)
+              .setTitle(`<a:approved:1532390590707142956> Logging Channel Updated — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
+              .setDescription(`> ### Target Channel Assigned\n> **Category**: \`${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}\` → Target: ${ch} (\`${ch.id}\`)`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await interaction.reply({ embeds: [embed], flags: 64 });
           } else if (subcommand === 'enable' || subcommand === 'disable') {
             const enabled = subcommand === 'enable';
-            context.logSyncEvent(`Logging Center: ${actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
+            const newConfig = { ...config };
+            if (isAllCategory) {
+              validCategories.forEach(cat => {
+                if (!newConfig[cat]) newConfig[cat] = { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+                newConfig[cat].enabled = enabled;
+              });
+            } else {
+              if (!newConfig[actualCategory]) newConfig[actualCategory] = { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+              newConfig[actualCategory].enabled = enabled;
+            }
+            context.logSyncEvent(`Logging Center: ${isAllCategory ? 'ALL' : actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`${enabled ? '<a:approved:1532390590707142956>' : '<:wrong:1532390628330307634>'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${actualCategory.toUpperCase()}`)
-              .setDescription(`> ### Telemetry Pipeline Status\n> Category **${actualCategory.toUpperCase()}** logging is now **${enabled ? 'ENABLED' : 'DISABLED'}**.`)
+              .setTitle(`${enabled ? '<a:approved:1532390590707142956>' : '<:wrong:1532390628330307634>'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
+              .setDescription(`> ### Telemetry Pipeline Status\n> Category **${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}** logging is now **${enabled ? 'ENABLED' : 'DISABLED'}**.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await interaction.reply({ embeds: [embed], flags: 64 });
           } else if (subcommand === 'reset') {
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`<a:approved:1532390590707142956> Category Reset — ${actualCategory.toUpperCase()}`)
-              .setDescription(`> ### Configuration Restored\n> Category **${actualCategory.toUpperCase()}** configuration has been reset to defaults.`)
+              .setTitle(`<a:approved:1532390590707142956> Category Reset — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
+              .setDescription(`> ### Configuration Restored\n> Category **${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}** configuration has been reset to defaults.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
             await interaction.reply({ embeds: [embed], flags: 64 });
@@ -947,20 +965,25 @@ export function registerLoggingCommands(): void {
         }
       };
 
-      // 1. Channel Assignment (`r!logs channel <category|all|everything> <#channel|none>`)
+      // 1. Channel Assignment (`r!logs channel <category|all|everything> <#channel|ID|none>`)
       if (sub === 'channel' || sub === 'set' || sub === 'setchannel') {
         const catArg = args[1]?.toLowerCase();
-        const targetChannel = message.mentions?.channels?.first();
-        const rawChannelArg = args[2]?.toLowerCase();
-        const isDisable = rawChannelArg === 'none' || rawChannelArg === 'off' || rawChannelArg === 'disable';
+        const rawChannelArg = args[2] || args[1];
+        const isDisable = rawChannelArg?.toLowerCase() === 'none' || rawChannelArg?.toLowerCase() === 'off' || rawChannelArg?.toLowerCase() === 'disable';
+
+        let targetChannel = message.mentions?.channels?.first();
+        if (!targetChannel && rawChannelArg && message.guild) {
+          const cleanId = rawChannelArg.replace(/[<#@&>]/g, '');
+          targetChannel = message.guild.channels.cache.get(cleanId);
+        }
 
         if (!catArg || (!targetChannel && !isDisable)) {
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Logging Channel Routing Syntax',
               description: [
-                `${WRONG_ICON} **Syntax**: \`r!logs channel <category|all|everything> <#channel|none>\`\n`,
-                `• **Set ALL channels at once**: \`r!logs channel all #logs-channel\``,
+                `${WRONG_ICON} **Syntax**: \`r!logs channel <category|all|everything> <#channel|ID|none>\`\n`,
+                `• **Set ALL channels at once**: \`r!logs channel all #logs-channel\` or \`r!logs channel all 1534458323632652288\``,
                 `• **Set specific category**: \`r!logs channel security #sec-logs\``,
                 `• **Disable category**: \`r!logs channel voice none\`\n`,
                 `**Valid Categories**: \`${LOG_CATEGORIES.join('`, `')}\`, \`all\`, \`everything\``
