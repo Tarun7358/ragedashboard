@@ -7,6 +7,7 @@ import { getPrebotEntry, PREBOT_PERMISSIONS } from '../prebot_whitelist/manifest
 import { checkRoleAssignment } from '../join-role-guard/manifest.js';
 import { Embeds, Colors, createLimeEmbed, buildLimeOverviewCard, VERIFIED_ICON, WRONG_ICON, MEMBER_ICON, VIP_ICON, INFO_ICON, TIMER_ICON, SHIELD_ICON } from '../../core/UIFactory.js';
 import { normalizeRuleName, DEFAULT_SECURITY_RULES, getEffectiveRule } from '../config/manifest.js';
+import { TwoFactorManager } from '../../core/security/TwoFactorManager.js';
 
 
 // UPM Live Snapshots, Active Quarantines & Threat Scoring tracking
@@ -892,6 +893,73 @@ export const SecurityManifest: ModuleManifest = {
     }
   ],
   events: [
+    {
+      name: 'command_botleave',
+      handler: async (client: any, interaction: any, context: any) => {
+        const guild = interaction.guild;
+        if (!guild) {
+          return interaction.reply({ content: `${WRONG_ICON} This command can only be executed in a server.`, flags: 64 });
+        }
+
+        if (interaction.user.id !== guild.ownerId) {
+          return interaction.reply({
+            embeds: [createLimeEmbed({
+              title: 'Owner Authority Required',
+              description: `${WRONG_ICON} **Access Denied**: Only the primary Discord Server Owner (<@${guild.ownerId}>) can authorize bot departure.`
+            })],
+            flags: 64
+          });
+        }
+
+        const tfaCfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
+        if (!tfaCfg || !tfaCfg.pin) {
+          return interaction.reply({
+            embeds: [createLimeEmbed({
+              title: '2FA Setup Required For Departure',
+              description: `${SHIELD_ICON} **Mandatory 2FA Departure Gate**: No 2FA passcode is set for **${guild.name}**.\n\nTo prevent unauthorized bot kicks, the Server Owner (<@${guild.ownerId}>) MUST set a 6-digit 2FA passcode first before authorizing bot departure:\n\n> 1. \`r!prebot 2fa set <6-digit-pin>\`\n> 2. \`r!botleave <6-digit-pin>\``,
+              color: 0xF59E0B
+            })],
+            flags: 64
+          });
+        }
+
+        const pinArg = interaction.options?.getString?.('pin', false) || interaction.parsed?.args?.find((a: string) => /^\d{6}$/.test(a.trim()));
+        if (!pinArg) {
+          return interaction.reply({
+            embeds: [createLimeEmbed({
+              title: '2FA Passcode Required',
+              description: `${SHIELD_ICON} **Mandatory 2FA Gate**: Server departure requires your 6-digit Owner 2FA Passcode.\n\nPlease supply your 6-digit passcode to authorize bot removal:\n> \`r!botleave <6-digit-pin>\``,
+              color: 0xF59E0B
+            })],
+            flags: 64
+          });
+        }
+
+        const isValid = TwoFactorManager.verifyPin(tfaCfg.pin, pinArg);
+        if (!isValid) {
+          return interaction.reply({
+            embeds: [createLimeEmbed({
+              title: '2FA Verification Failed',
+              description: `${WRONG_ICON} Invalid 6-digit passcode. Bot departure **REJECTED**.`,
+              color: 0xEF4444
+            })],
+            flags: 64
+          });
+        }
+
+        await interaction.reply({
+          embeds: [createLimeEmbed({
+            title: 'Bot Departure Authorized',
+            description: `${VERIFIED_ICON} 2FA PIN Verified. Rage Optimiser is now departing **${guild.name}**. All server snapshots and configuration data remain securely saved in cloud memory.`,
+            color: 0x10B981
+          })]
+        });
+
+        setTimeout(() => {
+          guild.leave().catch((err: any) => console.error('[BotLeave] Failed to leave guild:', err));
+        }, 1500);
+      }
+    },
     {
       name: 'command_addrole',
       handler: async (client: any, interaction: any, context: any) => {

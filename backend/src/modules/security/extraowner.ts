@@ -36,28 +36,37 @@ export function registerExtraOwnerCommands(): void {
       }
 
       const tfaCfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
-      if (tfaCfg && tfaCfg.isEnabled) {
-        const pinArg = args.find(a => /^\d{6}$/.test(a.trim()));
-        if (!pinArg) {
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: '2FA Passcode Required',
-              description: `${SHIELD_EMOJI} Server departure is protected by **6-Digit 2FA**.\n\nPlease supply your 6-digit passcode to authorize bot removal:\n> \`r!botleave <6-digit-pin>\``,
-              color: 0xF59E0B
-            })]
-          });
-        }
 
-        const isValid = TwoFactorManager.verifyPin(tfaCfg.pin, pinArg);
-        if (!isValid) {
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: '2FA Verification Failed',
-              description: `${WRONG_EMOJI} Invalid 6-digit passcode. Bot departure **REJECTED**.`,
-              color: 0xEF4444
-            })]
-          });
-        }
+      if (!tfaCfg || !tfaCfg.pin) {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: '2FA Setup Required For Departure',
+            description: `${SHIELD_EMOJI} **Mandatory 2FA Departure Gate**: No 2FA passcode is set for **${guild.name}**.\n\nTo prevent unauthorized bot kicks, the Server Owner (<@${guild.ownerId}>) MUST set a 6-digit 2FA passcode first before authorizing bot departure:\n\n> 1. \`r!prebot 2fa set <6-digit-pin>\`\n> 2. \`r!botleave <6-digit-pin>\``,
+            color: 0xF59E0B
+          })]
+        });
+      }
+
+      const pinArg = args.find(a => /^\d{6}$/.test(a.trim()));
+      if (!pinArg) {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: '2FA Passcode Required',
+            description: `${SHIELD_EMOJI} **Mandatory 2FA Gate**: Server departure requires your 6-digit Owner 2FA Passcode.\n\nPlease supply your 6-digit passcode to authorize bot removal:\n> \`r!botleave <6-digit-pin>\``,
+            color: 0xF59E0B
+          })]
+        });
+      }
+
+      const isValid = TwoFactorManager.verifyPin(tfaCfg.pin, pinArg);
+      if (!isValid) {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: '2FA Verification Failed',
+            description: `${WRONG_EMOJI} Invalid 6-digit passcode. Bot departure **REJECTED**.`,
+            color: 0xEF4444
+          })]
+        });
       }
 
       await message.reply({
