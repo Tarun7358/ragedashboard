@@ -1615,6 +1615,245 @@ export function registerConfigCommands(): void {
       return message.reply({ embeds: [embed], components: [row] });
     }
   });
+
+  // 3. Register Shorthand Module Category Commands (antirole, antichannel, antimod, antiwebhook, antiemoji)
+  const secCategories = [
+    {
+      name: 'antirole',
+      aliases: ['anti-role', 'antiroles'],
+      groupKey: 'roles',
+      description: 'Bulk configure or inspect all 5 Role Protection sub-modules (grant, remove, update, create, delete).',
+      usage: 'r!antirole [limit] [window] [punishment] [reversion] OR r!antirole <status|on|off|threshold|punishment|reversion>',
+      examples: [
+        'r!antirole 2 10 quarantine on',
+        'r!antirole threshold 3 10',
+        'r!antirole punishment ban',
+        'r!antirole reversion on',
+        'r!antirole status'
+      ]
+    },
+    {
+      name: 'antichannel',
+      aliases: ['anti-channel', 'antichannels'],
+      groupKey: 'channels',
+      description: 'Bulk configure or inspect all 3 Channel Protection sub-modules (create, delete, update).',
+      usage: 'r!antichannel [limit] [window] [punishment] [reversion] OR r!antichannel <status|on|off|threshold|punishment|reversion>',
+      examples: [
+        'r!antichannel 1 10 ban on',
+        'r!antichannel threshold 2 10',
+        'r!antichannel punishment quarantine',
+        'r!antichannel status'
+      ]
+    },
+    {
+      name: 'antimod',
+      aliases: ['anti-mod', 'antimember', 'anti-member'],
+      groupKey: 'members',
+      description: 'Bulk configure or inspect all 6 Member & Moderation Protection sub-modules (ban, kick, timeout, bot_add, bot_remove, prune).',
+      usage: 'r!antimod [limit] [window] [punishment] [reversion] OR r!antimod <status|on|off|threshold|punishment|reversion>',
+      examples: [
+        'r!antimod 3 10 quarantine on',
+        'r!antimod threshold 2 10',
+        'r!antimod punishment ban',
+        'r!antimod status'
+      ]
+    },
+    {
+      name: 'antiwebhook',
+      aliases: ['anti-webhook', 'antiwebhooks', 'antiserver', 'anti-server'],
+      groupKey: 'webhooks',
+      description: 'Bulk configure or inspect all 4 Server & Webhook Protection sub-modules (webhook create/delete/update, guild_update).',
+      usage: 'r!antiwebhook [limit] [window] [punishment] [reversion] OR r!antiwebhook <status|on|off|threshold|punishment|reversion>',
+      examples: [
+        'r!antiwebhook 2 10 quarantine on',
+        'r!antiwebhook threshold 2 10',
+        'r!antiwebhook status'
+      ]
+    },
+    {
+      name: 'antiemoji',
+      aliases: ['anti-emoji', 'antiemojis', 'antisticker', 'anti-sticker'],
+      groupKey: 'emojis',
+      description: 'Bulk configure or inspect all 6 Emoji & Sticker Protection sub-modules (emoji/sticker create, delete, update).',
+      usage: 'r!antiemoji [limit] [window] [punishment] [reversion] OR r!antiemoji <status|on|off|threshold|punishment|reversion>',
+      examples: [
+        'r!antiemoji 3 10 warn off',
+        'r!antiemoji status'
+      ]
+    }
+  ];
+
+  secCategories.forEach(cat => {
+    PrefixRegistry.register({
+      name: cat.name,
+      category: 'Security',
+      description: cat.description,
+      usage: cat.usage,
+      aliases: cat.aliases,
+      cooldownSeconds: 3,
+      userPermissions: ['Administrator'],
+      examples: cat.examples,
+      execute: async (message: Message, args: string[], extra?: any) => {
+        const configCmd = PrefixRegistry.get('config');
+        if (!configCmd || !configCmd.execute) return;
+
+        const sub = args[0]?.toLowerCase();
+        if (!sub || sub === 'status' || sub === 'view' || sub === 'matrix') {
+          return configCmd.execute(message, ['antinuke', 'status', cat.groupKey], extra);
+        }
+
+        if (!isNaN(parseInt(sub, 10))) {
+          return configCmd.execute(message, ['antinuke', 'setall', cat.groupKey, ...args], extra);
+        }
+
+        if (['setall', 'all', 'threshold', 'punishment', 'reversion', 'recovery', 'rollback', 'enable', 'disable', 'on', 'off'].includes(sub)) {
+          if (sub === 'setall' || sub === 'all') {
+            return configCmd.execute(message, ['antinuke', 'setall', cat.groupKey, ...args.slice(1)], extra);
+          }
+          return configCmd.execute(message, ['antinuke', sub, cat.groupKey, ...args.slice(1)], extra);
+        }
+
+        return configCmd.execute(message, ['antinuke', 'setall', cat.groupKey, ...args], extra);
+      }
+    });
+  });
+
+  // 4. Standalone Clear / Purge Command (Text VC & Chat VC Support)
+  PrefixRegistry.register({
+    name: 'clear',
+    category: 'Moderation',
+    description: 'Purge messages in text channels or Voice Channel (VC) text chats with options for user, bot, or link filtering.',
+    usage: 'r!clear [amount|all|vc|user|bots|links|files] [options]',
+    aliases: ['purge', 'clean', 'cls'],
+    cooldownSeconds: 2,
+    userPermissions: ['ManageMessages'],
+    botPermissions: ['ManageMessages', 'ReadMessageHistory'],
+    examples: [
+      'r!clear 50',
+      'r!clear all',
+      'r!clear vc 100',
+      'r!clear bots 30',
+      'r!clear user @Member 20'
+    ],
+    execute: async (message: Message, args: string[], extra?: any) => {
+      const member = message.member;
+      if (!member?.permissions.has('ManageMessages') && !member?.permissions.has('Administrator')) {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Access Denied',
+            description: `${WRONG_EMOJI} You require \`ManageMessages\` permissions to execute message purge.`
+          })]
+        });
+      }
+
+      let targetChannel: any = message.channel;
+      let argOffset = 0;
+
+      if (args[0]?.toLowerCase() === 'vc' || args[0]?.toLowerCase() === 'voice') {
+        argOffset = 1;
+        const voiceChannel = member?.voice?.channel;
+        if (!voiceChannel) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Voice Channel Error',
+              description: `${WRONG_EMOJI} You are not currently connected to a Voice Channel. Connect to a VC or run \`r!clear\` in the target channel.`
+            })]
+          });
+        }
+        targetChannel = voiceChannel;
+      }
+
+      if (!targetChannel || typeof targetChannel.bulkDelete !== 'function') {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Channel Purge Unsupported',
+            description: `${WRONG_EMOJI} The target channel does not support message deletion.`
+          })]
+        });
+      }
+
+      const mode = args[argOffset]?.toLowerCase();
+      let limit = 50;
+      let filterType: 'all' | 'bots' | 'user' | 'links' | 'files' = 'all';
+      let targetUserId: string | null = null;
+
+      if (!mode || mode === 'all') {
+        limit = parseInt(args[argOffset + 1] || '100', 10);
+        if (isNaN(limit)) limit = 100;
+      } else if (!isNaN(parseInt(mode, 10))) {
+        limit = parseInt(mode, 10);
+      } else if (mode === 'bots' || mode === 'bot') {
+        filterType = 'bots';
+        limit = parseInt(args[argOffset + 1] || '50', 10);
+      } else if (mode === 'user' || mode === 'member') {
+        filterType = 'user';
+        const userMention = message.mentions.users.first();
+        targetUserId = userMention?.id || args[argOffset + 1];
+        limit = parseInt(args[argOffset + 2] || '50', 10);
+      } else if (mode === 'links' || mode === 'link' || mode === 'url') {
+        filterType = 'links';
+        limit = parseInt(args[argOffset + 1] || '50', 10);
+      } else if (mode === 'files' || mode === 'attachments' || mode === 'images') {
+        filterType = 'files';
+        limit = parseInt(args[argOffset + 1] || '50', 10);
+      }
+
+      if (isNaN(limit) || limit < 1) limit = 50;
+      if (limit > 100) limit = 100;
+
+      try {
+        let deletedCount = 0;
+
+        if (filterType === 'all') {
+          const deleted = await targetChannel.bulkDelete(limit, true);
+          deletedCount = deleted.size;
+        } else {
+          const fetched = await targetChannel.messages.fetch({ limit: 100 });
+          let filtered = fetched;
+
+          if (filterType === 'bots') {
+            filtered = fetched.filter((m: any) => m.author?.bot);
+          } else if (filterType === 'user' && targetUserId) {
+            filtered = fetched.filter((m: any) => m.author?.id === targetUserId);
+          } else if (filterType === 'links') {
+            filtered = fetched.filter((m: any) => /(https?:\/\/[^\s]+)/gi.test(m.content));
+          } else if (filterType === 'files') {
+            filtered = fetched.filter((m: any) => m.attachments.size > 0);
+          }
+
+          const toDelete = Array.from(filtered.values()).slice(0, limit);
+          if (toDelete.length > 0) {
+            const deleted = await targetChannel.bulkDelete(toDelete, true);
+            deletedCount = deleted.size;
+          }
+        }
+
+        const isVoice = targetChannel.isVoiceBased?.() || targetChannel.type === 2 || targetChannel.type === 13;
+        const channelName = isVoice ? `🔊 VC <#${targetChannel.id}> (${targetChannel.name})` : `<#${targetChannel.id}>`;
+
+        const replyMsg = await (message.channel as any).send({
+          embeds: [createLimeEmbed({
+            title: `Chat Purge Complete — ${isVoice ? 'Voice Channel' : 'Text Channel'}`,
+            description: `${APPROVED_ICON} Successfully purged **${deletedCount} message(s)** in ${channelName}.\n> • Filter Mode: \`${filterType.toUpperCase()}\`\n> • Executed By: ${message.author}`
+          })]
+        });
+
+        setTimeout(() => replyMsg.delete().catch(() => {}), 4000);
+        if (message.deletable) message.delete().catch(() => {});
+
+        if (extra?.logSyncEvent) {
+          extra.logSyncEvent(message.guild?.id, `Moderation: ${message.author.tag} purged ${deletedCount} msgs in ${targetChannel.name}.`, 'info');
+        }
+      } catch (e: any) {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Message Purge Failed',
+            description: `${WRONG_EMOJI} Could not delete messages: \`${e?.message || 'Unknown error'}\`\n*Note: Messages older than 14 days cannot be bulk deleted due to Discord API limitations.*`
+          })]
+        });
+      }
+    }
+  });
 }
 
 export const ConfigManifest: ModuleManifest = {
