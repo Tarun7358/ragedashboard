@@ -18,6 +18,7 @@ export const DEFAULT_LIME_DESCRIPTION = [
 ].join('\n');
 export const DEFAULT_LIME_COLOR = '#CBF528';
 export const DEFAULT_LIME_FOOTER = '{server} • Member #{memberCount}';
+export const DEFAULT_WELCOME_IMAGE_URL = 'https://cdn.discordapp.com/attachments/1318247749904367699/1534527238605766796/ChatGPT_Image_Aug_5_2026_05_12_06_PM.png?ex=6a74735b&is=6a7321db&hm=bb368c1cc0b13ff79594997272d7b0a1d70e24d16ad7d8e86b185bc8acbd7f16';
 
 export function parseWelcomeVariables(str: string, member: any, countOverride?: number, config?: any): string {
   if (!str) return '';
@@ -85,8 +86,8 @@ export function buildLimeWelcomePayload(config: any, member: any, countOverride?
     if (avatarUrl) embed.setThumbnail(avatarUrl);
   }
 
-  const imgUrl = embedCfg.imageUrl || cfg.imageUrl || cfg.bannerUrl;
-  if (imgUrl && imgUrl !== 'none') {
+  const imgUrl = embedCfg.imageUrl || cfg.imageUrl || cfg.bannerUrl || DEFAULT_WELCOME_IMAGE_URL;
+  if (imgUrl && imgUrl !== 'none' && imgUrl !== 'off') {
     embed.setImage(imgUrl);
   }
 
@@ -98,7 +99,118 @@ export function buildLimeWelcomePayload(config: any, member: any, countOverride?
   return { content, embeds: [embed] };
 }
 
-export function registerWelcomeCommands(): void {}
+export function registerWelcomeCommands(): void {
+  import('../../core/prefix/PrefixRegistry.js').then(({ PrefixRegistry }) => {
+    PrefixRegistry.register({
+      name: 'welcome',
+      category: 'Community',
+      description: 'Configure or test the Community Welcomer banner image, channel, and cards.',
+      usage: 'r!welcome <image|channel|test|status> [url|channel|reset]',
+      aliases: ['welcomer', 'welcomesetup'],
+      cooldownSeconds: 3,
+      examples: [
+        'r!welcome test',
+        'r!welcome image https://cdn.discordapp.com/attachments/.../banner.png',
+        'r!welcome image reset',
+        'r!welcome channel #welcome'
+      ],
+      moduleOwnerId: 'community',
+      dangerLevel: 'Low',
+      hidden: false,
+      execute: async (message: any, args: string[], extra?: any) => {
+        const isOwner = message.guild?.ownerId === message.author?.id ||
+                        message.member?.permissions?.has?.('Administrator');
+        if (!isOwner) {
+          return message.reply({ content: `${WRONG_ICON} **Access Denied**: Welcome configuration requires Administrator permissions.` });
+        }
+
+        const action = args[0]?.toLowerCase() || 'status';
+        const modules = extra?.getModulesState ? extra.getModulesState() : [];
+        const commModule = modules.find((m: any) => m.id === 'community');
+        const commConfig = commModule?.config || {};
+
+        const updateCommConfig = (newCfg: Record<string, any>) => {
+          if (extra?.updateModuleConfig) {
+            extra.updateModuleConfig('community', { ...commConfig, ...newCfg });
+          }
+          if (extra?.logSyncEvent) {
+            extra.logSyncEvent(message.guild?.id, 'Community Welcomer Config: Updated parameters via CLI.', 'success');
+          }
+        };
+
+        if (action === 'status' || action === 'view') {
+          const ch = commConfig.welcomeChannelId ? `<#${commConfig.welcomeChannelId}>` : '`Not Configured`';
+          const img = commConfig.welcomeEmbed?.imageUrl || commConfig.imageUrl || DEFAULT_WELCOME_IMAGE_URL;
+
+          const overviewCard = buildLimeOverviewCard({
+            title: 'COMMUNITY WELCOMER MODULE CONFIGURATION MATRIX',
+            subtitle: 'NEW MEMBER GREETING CARDS & BANNER INFRASTRUCTURE',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '<:member:1532621317487071426> WELCOME SYSTEM PARAMETERS',
+                items: [
+                  `Welcome Channel: ${ch}`,
+                  `Banner Image URL: \`${img.slice(0, 75)}...\``
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Welcome Configuration'
+          });
+
+          return message.reply({ embeds: [overviewCard] });
+        }
+
+        if (action === 'image' || action === 'banner') {
+          const urlArg = args[1];
+          if (!urlArg) {
+            return message.reply({
+              content: `${WRONG_ICON} **Syntax**: \`r!welcome image <image_url | reset | none>\`\nExample: \`r!welcome image https://cdn.discordapp.com/attachments/.../image.png\``
+            });
+          }
+
+          let newUrl = urlArg;
+          if (urlArg.toLowerCase() === 'reset' || urlArg.toLowerCase() === 'default') {
+            newUrl = DEFAULT_WELCOME_IMAGE_URL;
+          }
+
+          const welcomeEmbed = { ...(commConfig.welcomeEmbed || {}), imageUrl: newUrl };
+          updateCommConfig({ welcomeEmbed, imageUrl: newUrl });
+
+          return message.reply({
+            content: `${VERIFIED_ICON} Welcome embed banner image saved! Updated URL:\n\`${newUrl}\``
+          });
+        }
+
+        if (action === 'channel') {
+          const channel = message.mentions.channels.first();
+          if (!channel) {
+            return message.reply({
+              content: `${WRONG_ICON} **Syntax**: \`r!welcome channel <#channel>\`\nExample: \`r!welcome channel #welcome\``
+            });
+          }
+
+          updateCommConfig({ welcomeChannelId: channel.id });
+          return message.reply({
+            content: `${VERIFIED_ICON} Welcome channel updated to **<#${channel.id}>**.`
+          });
+        }
+
+        if (action === 'test') {
+          const channelId = commConfig.welcomeChannelId || message.channel.id;
+          const targetChannel = message.guild?.channels.cache.get(channelId) || message.channel;
+
+          const payload = buildLimeWelcomePayload(commConfig, message.member || message.author);
+          await (targetChannel as any).send(payload);
+
+          return message.reply({
+            content: `${VERIFIED_ICON} Dispatched test welcome greeting card to ${targetChannel}.`
+          });
+        }
+      }
+    });
+  });
+}
 
 async function getUserAFK(guildId: string, userId: string): Promise<{ reason: string, timestamp: number } | null> {
   try {
@@ -159,9 +271,21 @@ export const CommunityManifest: ModuleManifest = {
   commands: [
     {
       name: 'welcome',
-      description: 'Manage or test the Community Welcomer module.',
+      description: 'Manage, set banner image, or test the Community Welcomer module.',
       options: [
-        { name: 'action', type: 3, description: 'Action: test, leave-test, status', required: true }
+        {
+          name: 'action',
+          type: 3,
+          description: 'Action to perform',
+          required: true,
+          choices: [
+            { name: '🧪 Test Welcome Card', value: 'test' },
+            { name: '📊 View Status & Image URL', value: 'status' },
+            { name: '🖼️ Set Custom Banner Image URL', value: 'set-image' },
+            { name: '🔄 Reset Banner Image to Default', value: 'reset-image' }
+          ]
+        },
+        { name: 'image_url', type: 3, description: 'Image URL (for set-image action)', required: false }
       ]
     },
     { name: 'avatar', description: 'Get a user\'s avatar', options: [{ name: 'user', type: 6, description: 'User to check', required: false }] },
@@ -219,57 +343,71 @@ export const CommunityManifest: ModuleManifest = {
     {
       name: 'command_welcome',
       handler: async (client: any, interaction: any, context: any) => {
-        const globalSettings = context.getGlobalSettings ? context.getGlobalSettings() : {};
-        if (globalSettings.useV2Welcome) {
-          return interaction.reply({ content: '⚙️ Welcome V2 is active. The legacy /welcome command is disabled.', flags: 64 });
-        }
         const action = interaction.options.getString('action');
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
-        if (!isOwner) return interaction.reply({ content: '🔒 Requires Administrator.', flags: 64 });
-        const modules = context.getModulesState();
+        if (!isOwner) return interaction.reply({ content: `${WRONG_ICON} Requires Administrator permissions.`, flags: 64 });
+
+        const modules = context.getModulesState ? context.getModulesState() : [];
         const commMod = modules.find((m: any) => m.id === 'community');
+        const commConfig = commMod?.config || {};
+
         if (action === 'status') {
-          const ch = commMod?.config?.welcomeChannelId;
-          await interaction.reply({ content: `👥 **Community Welcomer**\n- **Status**: \`${commMod?.status || 'unknown'}\`\n- **Welcome Channel**: ${ch ? `<#${ch}>` : 'Not configured'}`, flags: 64 });
-        } else if (action === 'test' || action === 'leave-test') {
-          const isWelcome = action === 'test';
-          const defaultEmbed = isWelcome 
-            ? { title: '👋 Welcome to {server}!', description: 'Welcome {user}!', color: '#4f8cff', showAvatar: true, footer: 'User ID: {userId}' }
-            : { title: '😢 Goodbye {user}!', description: '**{userTag}** has left.', color: '#ff4444', showAvatar: true, footer: 'User ID: {userId}' };
-            
-          const embedConfig = (isWelcome ? commMod?.config?.welcomeEmbed : commMod?.config?.leaveEmbed) || defaultEmbed;
-          const channelId = isWelcome ? commMod?.config?.welcomeChannelId : (embedConfig.channelId || commMod?.config?.welcomeChannelId);
-          
-          if (!channelId) return interaction.reply({ content: `❌ No channel configured for ${action}.`, flags: 64 });
-          
-          const { EmbedBuilder } = await import('discord.js');
+          const ch = commConfig.welcomeChannelId ? `<#${commConfig.welcomeChannelId}>` : '`Not Configured`';
+          const img = commConfig.welcomeEmbed?.imageUrl || commConfig.imageUrl || DEFAULT_WELCOME_IMAGE_URL;
+
+          const overviewCard = buildLimeOverviewCard({
+            title: 'COMMUNITY WELCOMER MODULE CONFIGURATION MATRIX',
+            subtitle: 'NEW MEMBER GREETING CARDS & BANNER INFRASTRUCTURE',
+            color: Colors.BRAND,
+            sections: [
+              {
+                title: '<:member:1532621317487071426> WELCOME SYSTEM PARAMETERS',
+                items: [
+                  `Welcome Channel: ${ch}`,
+                  `Banner Image URL: \`${img.slice(0, 75)}...\``
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Welcome Configuration'
+          });
+
+          return interaction.reply({ embeds: [overviewCard], flags: 64 });
+        }
+
+        if (action === 'set-image') {
+          const imageUrl = interaction.options.getString('image_url');
+          if (!imageUrl) {
+            return interaction.reply({ content: `${WRONG_ICON} Please provide an image URL in the \`image_url\` parameter.`, flags: 64 });
+          }
+
+          const welcomeEmbed = { ...(commConfig.welcomeEmbed || {}), imageUrl };
+          if (context.updateModuleConfig) {
+            context.updateModuleConfig('community', { ...commConfig, welcomeEmbed, imageUrl });
+          }
+
+          return interaction.reply({ content: `${VERIFIED_ICON} Welcome embed banner image updated:\n\`${imageUrl}\``, flags: 64 });
+        }
+
+        if (action === 'reset-image') {
+          const welcomeEmbed = { ...(commConfig.welcomeEmbed || {}), imageUrl: DEFAULT_WELCOME_IMAGE_URL };
+          if (context.updateModuleConfig) {
+            context.updateModuleConfig('community', { ...commConfig, welcomeEmbed, imageUrl: DEFAULT_WELCOME_IMAGE_URL });
+          }
+
+          return interaction.reply({ content: `${VERIFIED_ICON} Welcome embed banner image reset to default RAGE OPTIMISER banner.`, flags: 64 });
+        }
+
+        if (action === 'test') {
+          const channelId = commConfig.welcomeChannelId || interaction.channelId;
           const channel = interaction.guild?.channels.cache.get(channelId);
-          
+
           if (channel && channel.isTextBased()) {
-            const parseStr = (str: string) => (str || '')
-              .replace(/{user}/g, interaction.user.toString())
-              .replace(/{userTag}/g, userTag(interaction.user))
-              .replace(/{server}/g, interaction.guild.name)
-              .replace(/{memberCount}/g, interaction.guild.memberCount.toString())
-              .replace(/{userId}/g, interaction.user.id);
-
-            const embed = new EmbedBuilder()
-              .setTitle(parseStr(embedConfig.title))
-              .setDescription(parseStr(embedConfig.description))
-              .setColor(embedConfig.color as any);
-              
-            if (embedConfig.showAvatar) {
-              embed.setThumbnail(interaction.user.displayAvatarURL({ forceStatic: false }));
-            }
-            if (embedConfig.footer) {
-              embed.setFooter({ text: parseStr(embedConfig.footer) });
-            }
-
-            await channel.send({ content: isWelcome ? `Hey ${interaction.user}, welcome! (TEST)` : `Goodbye (TEST)`, embeds: [embed] });
-            await interaction.reply({ content: `✅ Test ${action} sent to ${channel}.`, flags: 64 });
+            const payload = buildLimeWelcomePayload(commConfig, interaction.member || interaction.user);
+            await channel.send(payload);
+            return interaction.reply({ content: `${VERIFIED_ICON} Dispatched test welcome greeting card to ${channel}.`, flags: 64 });
           } else {
-            await interaction.reply({ content: '❌ Target channel not found or not a text channel.', flags: 64 });
+            return interaction.reply({ content: `${WRONG_ICON} Target welcome channel not found or not a text channel.`, flags: 64 });
           }
         }
       }
@@ -670,8 +808,9 @@ export const CommunityManifest: ModuleManifest = {
             if (embedConfig.author) {
               embed.setAuthor({ name: parseStr(embedConfig.author) });
             }
-            if (embedConfig.imageUrl) {
-              embed.setImage(embedConfig.imageUrl);
+            const imgUrl = embedConfig.imageUrl || config.imageUrl || config.bannerUrl || DEFAULT_WELCOME_IMAGE_URL;
+            if (imgUrl && imgUrl !== 'none' && imgUrl !== 'off') {
+              embed.setImage(imgUrl);
             }
             if (embedConfig.showAvatar) {
               embed.setThumbnail(member.user.displayAvatarURL({ forceStatic: false }));
