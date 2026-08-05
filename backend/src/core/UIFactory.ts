@@ -40,6 +40,9 @@ export const TICKET_ICON = '<:ticket:1532620631466836021>';
 export const TIMER_ICON = '<:timer:1532620491662037123>';
 export const VIP_ICON = '<:vip:1532620837117759508>';
 export const LINK_ICON = '<:link:1532620952087826602>';
+export const VOICE_ICON = '<:voicechannelgreen:1532425750278438962>';
+export const STATS_ICON = '<:stats:1532429110775779459>';
+export const CART_ICON = '<:cart:1532621146208473115>';
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS (Matching Lime.gg visual design with Rage Optimiser branding)
@@ -112,15 +115,15 @@ export function createLimeEmbed(options: {
 // ─────────────────────────────────────────────
 export const ModuleMeta = {
   leveling: { icon: VIP_ICON, name: 'Leveling & Economy', color: Colors.GOLD },
-  giveaway: { icon: '<:cart:1532621146208473115>', name: 'Giveaway Manager', color: Colors.GOLD },
+  giveaway: { icon: CART_ICON, name: 'Giveaway Manager', color: Colors.GOLD },
   tickets: { icon: TICKET_ICON, name: 'Ticket System', color: Colors.TICKET },
   announcements: { icon: INFO_ICON, name: 'Announcements', color: Colors.INFO },
   welcome: { icon: MEMBER_ICON, name: 'Welcome System', color: Colors.BRAND },
-  voice: { icon: '<:voicechannelgreen:1532425750278438962>', name: 'Voice Manager', color: Colors.VOICE },
+  voice: { icon: VOICE_ICON, name: 'Voice Manager', color: Colors.VOICE },
   automod: { icon: GAVEL_ICON, name: 'AutoMod', color: Colors.WARN },
   security: { icon: SHIELD_ICON, name: 'Security', color: Colors.DANGER },
-  analytics: { icon: '<:stats:1532429110775779459>', name: 'Analytics', color: Colors.BRAND },
-  music: { icon: '<:voicechannelgreen:1532425750278438962>', name: 'Music', color: Colors.MUSIC },
+  analytics: { icon: STATS_ICON, name: 'Analytics', color: Colors.BRAND },
+  music: { icon: VOICE_ICON, name: 'Music', color: Colors.MUSIC },
   help: { icon: CONFIG_ICON, name: 'Command Hub', color: Colors.BRAND },
   prebot_whitelist: { icon: BOT_ICON, name: 'PreBot Whitelist', color: Colors.INFO },
   system: { icon: BOT_ICON, name: 'System', color: Colors.MUTED },

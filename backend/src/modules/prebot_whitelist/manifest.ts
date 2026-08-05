@@ -465,7 +465,7 @@ export function registerPrebotCommands(): void {
             .setDescription([
               `**Server**: \`${guild.name}\``,
               `**Security Status**: ${isEnabled ? '🟢 **ENABLED (Active)**' : '🔴 **DISABLED (Inactive)**'}`,
-              `**Passcode Configured**: ${hasPin ? '✅ **Passcode Set**' : '❌ **No Passcode Set**'}`,
+              `**Passcode Configured**: ${hasPin ? `${VERIFIED_ICON} **Passcode Set**` : `${WRONG_ICON} **No Passcode Set**`}`,
               `**Managed By**: Server Owner (<@${guild.ownerId}>)`,
               `\n**Management Commands**:`,
               `> \`r!prebot 2fa set <6-digit-pin>\` — Set your custom 6-digit passcode & enable 2FA`,
@@ -860,7 +860,7 @@ export const PrebotWhitelistManifest: ModuleManifest = {
             .setDescription([
               `**Server**: \`${guild.name}\``,
               `**Security Status**: ${isEnabled ? '🟢 **ENABLED (Active)**' : '🔴 **DISABLED (Inactive)**'}`,
-              `**Passcode Configured**: ${hasPin ? '✅ **Passcode Set**' : '❌ **No Passcode Set**'}`,
+              `**Passcode Configured**: ${hasPin ? `${VERIFIED_ICON} **Passcode Set**` : `${WRONG_ICON} **No Passcode Set**`}`,
               `**Managed By**: Server Owner (<@${guild.ownerId}>)`,
               `\n**Management Commands**:`,
               `> \`r!prebot 2fa set <6-digit-pin>\` — Set your custom 6-digit passcode & enable 2FA`,
