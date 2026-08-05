@@ -191,7 +191,7 @@ export class PrefixHelpCenter {
     const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
     const btnInvite = new ButtonBuilder().setLabel('Invite Bot').setStyle(ButtonStyle.Link).setURL(`https://discord.com/api/oauth2/authorize?client_id=${botUser?.id}&permissions=8&scope=bot%20applications.commands`);
-    const btnSupport = new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/rageoptimiser');
+    const btnSupport = new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/mK8HVJGzYt');
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnInvite, btnSupport);
 

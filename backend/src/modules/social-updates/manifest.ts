@@ -180,19 +180,47 @@ export const SocialUpdatesManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (action === 'add' || action === 'subscribe') {
           const rawArgs = context?.parsed?.args || [];
-          const provider = interaction.options?.getString?.('provider')?.toLowerCase() || rawArgs[1]?.toLowerCase();
-          const sourceId = interaction.options?.getString?.('source') || rawArgs[2];
-          const channelArg = rawArgs[3];
+          let provider: string | undefined = interaction.options?.getString?.('provider')?.toLowerCase();
+          if (!provider || !['youtube', 'instagram', 'yt', 'ig'].includes(provider)) {
+            const pToken = rawArgs.find((a: string) => ['youtube', 'instagram', 'yt', 'ig'].includes(a.toLowerCase()));
+            if (pToken) provider = pToken.toLowerCase();
+          }
+          if (provider === 'yt') provider = 'youtube';
+          if (provider === 'ig') provider = 'instagram';
+
           let channel = interaction.options?.getChannel?.('channel') || interaction.message?.mentions?.channels?.first();
-          if (!channel && channelArg && interaction.guild) {
-            const cleanId = channelArg.replace(/[<#>]/g, '');
-            channel = interaction.guild.channels.cache.get(cleanId);
-            if (!channel && /^\d{17,20}$/.test(cleanId)) {
-              channel = await interaction.guild.channels.fetch(cleanId).catch(() => null);
+          if (!channel && interaction.guild) {
+            for (const arg of rawArgs) {
+              if (!arg) continue;
+              const cleanId = arg.replace(/[<#>]/g, '');
+              if (/^\d{17,20}$/.test(cleanId)) {
+                channel = interaction.guild.channels.cache.get(cleanId);
+                if (!channel) {
+                  channel = await interaction.guild.channels.fetch(cleanId).catch(() => null);
+                }
+                if (channel) break;
+              }
+              const cleanName = arg.toLowerCase().replace(/^#/, '');
+              const foundByName = interaction.guild.channels.cache.find((c: any) => c.name?.toLowerCase() === cleanName);
+              if (foundByName) {
+                channel = foundByName;
+                break;
+              }
             }
-            if (!channel) {
-              const cleanName = channelArg.toLowerCase().replace(/^#/, '');
-              channel = interaction.guild.channels.cache.find((c: any) => c.name.toLowerCase() === cleanName);
+          }
+
+          let sourceId = interaction.options?.getString?.('source');
+          if (!sourceId) {
+            const candidateArgs = rawArgs.filter((a: string) => {
+              if (!a) return false;
+              const lower = a.toLowerCase();
+              if (lower === 'add' || lower === 'subscribe') return false;
+              if (['youtube', 'instagram', 'yt', 'ig'].includes(lower)) return false;
+              if (channel && (a.includes(channel.id) || lower.replace(/^#/, '') === channel.name?.toLowerCase())) return false;
+              return true;
+            });
+            if (candidateArgs.length > 0) {
+              sourceId = candidateArgs[0];
             }
           }
 
@@ -200,8 +228,9 @@ export const SocialUpdatesManifest: ModuleManifest = {
             const embed = new EmbedBuilder()
               .setTitle('<:wrong:1532390628330307634> Invalid Add Syntax')
               .setDescription([
-                `> **Syntax**: \`r!social-updates add <youtube|instagram> <sourceId_or_handle> <#discordChannel>\``,
-                `> **Example YouTube**: \`r!social-updates add youtube UC_x5XG1OV2P6uZZ5FSM9Ttw #announcements\``,
+                `> **Syntax**: \`r!social-updates add <youtube|instagram> <handle_or_channel> <#discordChannel>\``,
+                `> **Example YouTube (Handle)**: \`r!social-updates add youtube clasherliveop #announcements\``,
+                `> **Example YouTube (Channel ID)**: \`r!social-updates add youtube UC_x5XG1OV2P6uZZ5FSM9Ttw #announcements\``,
                 `> **Example Instagram**: \`r!social-updates add instagram nature #social-feed\``
               ].join('\n'))
               .setColor(0xEF4444)

@@ -410,7 +410,7 @@ export class Gateway {
           new ButtonBuilder()
             .setLabel('Support Server')
             .setStyle(ButtonStyle.Link)
-            .setURL('https://discord.gg/rageoptimiser')
+            .setURL('https://discord.gg/mK8HVJGzYt')
         );
 
         const welcomeEmbed = buildLimeOverviewCard({
@@ -697,7 +697,7 @@ export class Gateway {
 
         const btnDashboard = new ButtonBuilder().setLabel('Dashboard').setStyle(ButtonStyle.Link).setURL('https://rageoptimiser.com/dashboard');
         const btnInvite = new ButtonBuilder().setLabel('Invite Bot').setStyle(ButtonStyle.Link).setURL(`https://discord.com/api/oauth2/authorize?client_id=${this.client.user?.id}&permissions=8&scope=bot%20applications.commands`);
-        const btnSupport = new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/rageoptimiser');
+        const btnSupport = new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/mK8HVJGzYt');
         const greetRow = new ActionRowBuilder<ButtonBuilder>().addComponents(btnDashboard, btnInvite, btnSupport);
 
         await message.reply({ embeds: [greetingEmbed], components: [greetRow] }).catch(() => { });
@@ -737,7 +737,7 @@ export class Gateway {
           const rowDm = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder().setLabel('Web Dashboard').setStyle(ButtonStyle.Link).setURL('https://rageoptimiser.com/dashboard'),
             new ButtonBuilder().setLabel('Invite Bot').setStyle(ButtonStyle.Link).setURL(`https://discord.com/api/oauth2/authorize?client_id=${botUser?.id}&permissions=8&scope=bot%20applications.commands`),
-            new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/rageoptimiser')
+            new ButtonBuilder().setLabel('Support Server').setStyle(ButtonStyle.Link).setURL('https://discord.gg/mK8HVJGzYt')
           );
 
           await message.author.send({ embeds: [dmDetailEmbed], components: [rowDm] }).catch(() => { });

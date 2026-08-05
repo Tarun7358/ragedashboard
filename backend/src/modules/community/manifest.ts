@@ -9,16 +9,18 @@ function userTag(user: any): string {
 }
 
 // Lime GG aesthetic default constants
-export const DEFAULT_LIME_HEADER = '.<:member:1532621317487071426> ~ <a:approved:1532390590707142956> ~ Welcome {user} to **{server}** !!!';
+export const DEFAULT_LIME_HEADER = '<:foxydealz:1511379877180215296>  **Welcome, {user}! To {server}**';
 export const DEFAULT_LIME_DESCRIPTION = [
-  '.                 • Welcome to **{server}** <:member:1532621317487071426>',
-  '<:shield:1532403012751065179> • Please make sure to read and follow {rules} !',
-  '.           • Unleash Maximum Performance & Dominate with Rage Optimiser <a:boost:1531667085807583262>',
-  '<:config:1532425712844144701> . {roles} . <:information:1532621274092929124> . {chat} . <:link:1532620952087826602> . {server} .'
+  '> **{user}! You Are the {membercount} Member**',
+  '> **<:verifiedblue:1518869383219253328>  Thanks for being part of our community. **',
+  '> **We hope you have an amazing experience! <:drmomoscandy:1511379935237902517> **',
+  '> **Join Our Voice Channel to Connect! <:voicechannelgreen:1532425750278438962>**',
+  '',
+  '  **------- Enhanced Community! <:hunter:1511379940002631790>  -------- **'
 ].join('\n');
 export const DEFAULT_LIME_COLOR = '#CBF528';
 export const DEFAULT_LIME_FOOTER = '{server} • Member #{memberCount}';
-export const DEFAULT_WELCOME_IMAGE_URL = 'https://cdn.discordapp.com/attachments/1318247749904367699/1534527238605766796/ChatGPT_Image_Aug_5_2026_05_12_06_PM.png?ex=6a74735b&is=6a7321db&hm=bb368c1cc0b13ff79594997272d7b0a1d70e24d16ad7d8e86b185bc8acbd7f16';
+export const DEFAULT_WELCOME_IMAGE_URL = 'https://cdn.discordapp.com/attachments/1318247749904367699/1534546572698976418/ChatGPT_Image_Aug_5_2026_06_00_23_PM.png?ex=6a74855d&is=6a7333dd&hm=cc81e1454fadaba8c9db182ebbb5b87fc6c7274da67ddd393f4f242587a4f6aa';
 
 export function parseWelcomeVariables(str: string, member: any, countOverride?: number, config?: any): string {
   if (!str) return '';
@@ -44,7 +46,7 @@ export function parseWelcomeVariables(str: string, member: any, countOverride?: 
     .replace(/{user\.tag}/g, userTag(targetUser))
     .replace(/{userId}/g, targetUser.id || '0')
     .replace(/{server}/g, serverName)
-    .replace(/{memberCount}/g, memberCount.toString())
+    .replace(/{memberCount}/gi, memberCount.toString())
     .replace(/{date}/g, dateStr)
     .replace(/{boosts}/g, (member.guild?.premiumSubscriptionCount || 0).toString())
     .replace(/{boostTier}/g, (member.guild?.premiumTier || 0).toString())
@@ -183,16 +185,89 @@ export function registerWelcomeCommands(): void {
         }
 
         if (action === 'channel') {
-          const channel = message.mentions.channels.first();
+          const channelArg = args[1];
+          let channel: any = message.mentions.channels.first();
+          if (!channel && channelArg && message.guild) {
+            const cleanId = channelArg.replace(/[<#>]/g, '');
+            channel = message.guild.channels.cache.get(cleanId);
+            if (!channel && /^\d{17,20}$/.test(cleanId)) {
+              channel = await message.guild.channels.fetch(cleanId).catch(() => null);
+            }
+            if (!channel) {
+              const cleanName = channelArg.toLowerCase().replace(/^#/, '');
+              channel = message.guild.channels.cache.find((c: any) => c.name.toLowerCase() === cleanName);
+            }
+          }
+
           if (!channel) {
             return message.reply({
-              content: `${WRONG_ICON} **Syntax**: \`r!welcome channel <#channel>\`\nExample: \`r!welcome channel #welcome\``
+              content: `${WRONG_ICON} **Syntax**: \`r!welcome channel <#channel | channel_id | channel_name>\`\nExample: \`r!welcome channel #welcome\` or \`r!welcome channel 123456789012345678\``
             });
           }
 
           updateCommConfig({ welcomeChannelId: channel.id });
           return message.reply({
-            content: `${VERIFIED_ICON} Welcome channel updated to **<#${channel.id}>**.`
+            content: `${VERIFIED_ICON} Welcome channel updated to **<#${channel.id}>** (\`${channel.id}\`).`
+          });
+        }
+
+        if (action === 'rules' || action === 'roles' || action === 'chat') {
+          const channelArg = args[1];
+          let channel: any = message.mentions.channels.first();
+          if (!channel && channelArg && message.guild) {
+            const cleanId = channelArg.replace(/[<#>]/g, '');
+            channel = message.guild.channels.cache.get(cleanId);
+            if (!channel && /^\d{17,20}$/.test(cleanId)) {
+              channel = await message.guild.channels.fetch(cleanId).catch(() => null);
+            }
+            if (!channel) {
+              const cleanName = channelArg.toLowerCase().replace(/^#/, '');
+              channel = message.guild.channels.cache.find((c: any) => c.name.toLowerCase() === cleanName);
+            }
+          }
+
+          if (!channel) {
+            return message.reply({
+              content: `${WRONG_ICON} **Syntax**: \`r!welcome ${action} <#channel | channel_id | channel_name>\`\nExample: \`r!welcome ${action} #${action}\``
+            });
+          }
+
+          const fieldMap: Record<string, string> = {
+            rules: 'rulesChannelId',
+            roles: 'rolesChannelId',
+            chat: 'chatChannelId'
+          };
+
+          updateCommConfig({ [fieldMap[action]]: channel.id });
+          return message.reply({
+            content: `${VERIFIED_ICON} Welcome card **{${action}}** link updated to **<#${channel.id}>** (\`${channel.id}\`).`
+          });
+        }
+
+        if (action === 'autorole' || action === 'role') {
+          const roleArg = args[1] || args[2];
+          let role = message.mentions.roles.first();
+          if (!role && roleArg && message.guild) {
+            const cleanId = roleArg.replace(/[<@&>]/g, '');
+            role = message.guild.roles.cache.get(cleanId);
+            if (!role && /^\d{17,20}$/.test(cleanId)) {
+              role = await message.guild.roles.fetch(cleanId).catch(() => null);
+            }
+            if (!role) {
+              const cleanName = roleArg.toLowerCase();
+              role = message.guild.roles.cache.find((r: any) => r.name.toLowerCase() === cleanName);
+            }
+          }
+
+          if (!role) {
+            return message.reply({
+              content: `${WRONG_ICON} **Syntax**: \`r!welcome autorole <@role | role_id | role_name>\`\nExample: \`r!welcome autorole @Member\``
+            });
+          }
+
+          updateCommConfig({ autoRoleId: role.id });
+          return message.reply({
+            content: `${VERIFIED_ICON} Onboarding auto-assigned join role set to **<@&${role.id}>**.`
           });
         }
 
@@ -207,6 +282,21 @@ export function registerWelcomeCommands(): void {
             content: `${VERIFIED_ICON} Dispatched test welcome greeting card to ${targetChannel}.`
           });
         }
+
+        // Fallback Command Help Syntax
+        return message.reply({
+          content: [
+            `${CONFIG_ICON} **Community Welcomer Command Matrix**`,
+            `• \`r!welcome channel <#channel | ID | name>\` — Set main welcome channel`,
+            `• \`r!welcome rules <#channel | ID | name>\` — Link server rules channel`,
+            `• \`r!welcome roles <#channel | ID | name>\` — Link self-roles channel`,
+            `• \`r!welcome chat <#channel | ID | name>\` — Link general chat channel`,
+            `• \`r!welcome image <URL | reset>\` — Set greeting card banner image`,
+            `• \`r!welcome autorole <@role | ID | name>\` — Set auto-assigned join role`,
+            `• \`r!welcome status\` — View active welcome matrix parameters`,
+            `• \`r!welcome test\` — Dispatch live greeting preview card`
+          ].join('\n')
+        });
       }
     });
   });
@@ -343,6 +433,16 @@ export const CommunityManifest: ModuleManifest = {
     {
       name: 'command_welcome',
       handler: async (client: any, interaction: any, context: any) => {
+        // If prefix command (SyntheticInteraction), delegate to PrefixRegistry execute handler
+        if (interaction.message || interaction.isSynthetic) {
+          const { PrefixRegistry } = await import('../../core/prefix/PrefixRegistry.js');
+          const welcomeCmd = PrefixRegistry.get('welcome');
+          if (welcomeCmd?.execute) {
+            const args = interaction.parsed?.args || [];
+            return welcomeCmd.execute(interaction.message || interaction, args, context);
+          }
+        }
+
         const action = interaction.options.getString('action');
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
@@ -373,6 +473,29 @@ export const CommunityManifest: ModuleManifest = {
           });
 
           return interaction.reply({ embeds: [overviewCard], flags: 64 });
+        }
+
+        if (action === 'channel') {
+          const channelOpt = interaction.options.getChannel('channel');
+          const channelArg = channelOpt?.id || interaction.options.getString('image_url');
+          let channel: any = channelOpt;
+          if (!channel && channelArg && interaction.guild) {
+            const cleanId = channelArg.replace(/[<#>]/g, '');
+            channel = interaction.guild.channels.cache.get(cleanId);
+            if (!channel && /^\d{17,20}$/.test(cleanId)) {
+              channel = await interaction.guild.channels.fetch(cleanId).catch(() => null);
+            }
+          }
+
+          if (!channel) {
+            return interaction.reply({ content: `${WRONG_ICON} Please select or specify a valid text channel.`, flags: 64 });
+          }
+
+          if (context.updateModuleConfig) {
+            context.updateModuleConfig('community', { ...commConfig, welcomeChannelId: channel.id });
+          }
+
+          return interaction.reply({ content: `${VERIFIED_ICON} Welcome channel updated to **<#${channel.id}>** (\`${channel.id}\`).`, flags: 64 });
         }
 
         if (action === 'set-image') {
@@ -787,55 +910,7 @@ export const CommunityManifest: ModuleManifest = {
             channel = await member.guild.channels.fetch(channelId).catch(() => null);
           }
           if (channel && channel.isTextBased()) {
-            const parseStr = (str: string) => (str || '')
-              .replace(/{user}/g, member.toString())
-              .replace(/{userTag}/g, userTag(member.user))
-              .replace(/{user\.tag}/g, userTag(member.user))
-              .replace(/{server}/g, member.guild.name)
-              .replace(/{memberCount}/g, member.guild.memberCount.toString())
-              .replace(/{userId}/g, member.user.id)
-              .replace(/{date}/g, new Date().toLocaleDateString());
-
-            const embed = new EmbedBuilder()
-              .setColor(embedConfig.color as any);
-              
-            if (embedConfig.description) {
-              embed.setDescription(parseStr(embedConfig.description));
-            }
-            if (embedConfig.title) {
-              embed.setTitle(parseStr(embedConfig.title));
-            }
-            if (embedConfig.author) {
-              embed.setAuthor({ name: parseStr(embedConfig.author) });
-            }
-            const imgUrl = embedConfig.imageUrl || config.imageUrl || config.bannerUrl || DEFAULT_WELCOME_IMAGE_URL;
-            if (imgUrl && imgUrl !== 'none' && imgUrl !== 'off') {
-              embed.setImage(imgUrl);
-            }
-            if (embedConfig.showAvatar) {
-              embed.setThumbnail(member.user.displayAvatarURL({ forceStatic: false }));
-            }
-            if (embedConfig.footer) {
-              embed.setFooter({ text: parseStr(embedConfig.footer) });
-            }
-            if (embedConfig.timestamp) {
-              embed.setTimestamp();
-            }
-            if (embedConfig.fields && Array.isArray(embedConfig.fields)) {
-              embed.addFields(embedConfig.fields.map((f: any) => ({
-                name: parseStr(f.name),
-                value: parseStr(f.value),
-                inline: !!f.inline
-              })));
-            }
-
-            const messageContent = embedConfig.content !== undefined ? parseStr(embedConfig.content) : `Hey ${member}, welcome!`;
-            
-            const payload: any = { content: messageContent };
-            if (embedConfig.title || embedConfig.description || (embedConfig.fields && embedConfig.fields.length > 0)) {
-              payload.embeds = [embed];
-            }
-            
+            const payload = buildLimeWelcomePayload(config, member);
             await channel.send(payload);
             context.logSyncEvent(`Community Welcomer: Dispatched welcome embed for "${userTag(member.user)}".`, 'success');
           }

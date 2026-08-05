@@ -1,5 +1,6 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import path from 'path';
 import { createServer, Server } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import helmet from 'helmet';
@@ -38,6 +39,7 @@ export class WebServer {
       credentials: true
     }));
     this.app.use(express.json());
+    this.app.use('/assets', express.static(path.join(process.cwd(), 'public/assets')));
 
     // Rate limiting for API calls
     const limiter = rateLimit({

@@ -181,14 +181,27 @@ async function extractDirectUrlWithYtDlp(audioUrl: string): Promise<string | nul
   };
 
   try {
-    const url = await tryExtract(['-g', '-f', 'bestaudio', '--no-playlist', audioUrl]);
+    const url = await tryExtract([
+      '--no-warnings',
+      '--no-playlist',
+      '--js-runtimes', 'node',
+      '--extractor-args', 'youtube:player_client=android_vr,tv,web',
+      '-g', '-f', 'bestaudio',
+      audioUrl
+    ]);
     if (url) return url;
   } catch (err: any) {
     console.warn(`[Music Warning] yt-dlp direct URL extraction primary attempt failed:`, err?.message || err);
   }
 
   try {
-    const url = await tryExtract(['-g', '-f', 'bestaudio', '--no-playlist', '--js-runtimes', 'node', audioUrl]);
+    const url = await tryExtract([
+      '--no-warnings',
+      '--no-playlist',
+      '--extractor-args', 'youtube:player_client=android_vr,tv,web',
+      '-g', '-f', 'bestaudio',
+      audioUrl
+    ]);
     if (url) return url;
   } catch (err: any) {
     console.warn(`[Music Warning] yt-dlp direct URL extraction fallback attempt failed:`, err?.message || err);
@@ -219,8 +232,11 @@ async function searchWithYtDlp(query: string): Promise<{ url: string; title: str
 
   try {
     const res = await runSearch([
-      '-f', 'bestaudio',
+      '--no-warnings',
       '--no-playlist',
+      '--js-runtimes', 'node',
+      '--extractor-args', 'youtube:player_client=android_vr,tv,web',
+      '-f', 'bestaudio',
       '--print', 'webpage_url',
       '--print', 'title',
       '--print', 'duration_string',
@@ -230,7 +246,25 @@ async function searchWithYtDlp(query: string): Promise<{ url: string; title: str
     ]);
     if (res) return res;
   } catch (err: any) {
-    console.warn(`[Music Warning] yt-dlp search failed:`, err?.message || err);
+    console.warn(`[Music Warning] yt-dlp primary search attempt failed, trying fallback:`, err?.message || err);
+  }
+
+  try {
+    const res = await runSearch([
+      '--no-warnings',
+      '--no-playlist',
+      '--extractor-args', 'youtube:player_client=android_vr,tv,web',
+      '-f', 'bestaudio',
+      '--print', 'webpage_url',
+      '--print', 'title',
+      '--print', 'duration_string',
+      '--print', 'thumbnail',
+      '--print', 'uploader',
+      `ytsearch1:${query}`
+    ]);
+    if (res) return res;
+  } catch (err: any) {
+    console.warn(`[Music Warning] yt-dlp fallback search failed:`, err?.message || err);
   }
 
   return null;
@@ -670,33 +704,34 @@ export class GuildQueue {
         const query = nextTrack.url.replace('search:', '');
         let foundTrack = false;
 
-        const results = await play.search(query, { limit: 1 }).catch(() => []);
-        if (results && results.length > 0) {
-          audioUrl = results[0].url;
+        // Try yt-dlp search first for fast and reliable YouTube resolution
+        const ytResult = await searchWithYtDlp(query);
+        if (ytResult && ytResult.url) {
+          audioUrl = ytResult.url;
           nextTrack.url = audioUrl;
-          if (results[0].title) nextTrack.title = results[0].title;
-          if (results[0].durationRaw) nextTrack.duration = results[0].durationRaw;
-          if (results[0].thumbnails?.[0]?.url) nextTrack.thumbnail = results[0].thumbnails[0].url;
-          if (results[0].channel?.name) nextTrack.artist = results[0].channel.name;
+          if (ytResult.title) nextTrack.title = ytResult.title;
+          if (ytResult.duration) nextTrack.duration = ytResult.duration;
+          if (ytResult.thumbnail) nextTrack.thumbnail = ytResult.thumbnail;
+          if (ytResult.artist) nextTrack.artist = ytResult.artist;
           foundTrack = true;
         }
 
         if (!foundTrack) {
-          console.log(`[Music] play-dl search empty for "${query}", falling back to yt-dlp search...`);
-          const ytResult = await searchWithYtDlp(query);
-          if (ytResult && ytResult.url) {
-            audioUrl = ytResult.url;
+          console.log(`[Music] yt-dlp search empty for "${query}", trying play-dl fallback...`);
+          const results = await play.search(query, { limit: 1 }).catch(() => []);
+          if (results && results.length > 0) {
+            audioUrl = results[0].url;
             nextTrack.url = audioUrl;
-            if (ytResult.title) nextTrack.title = ytResult.title;
-            if (ytResult.duration) nextTrack.duration = ytResult.duration;
-            if (ytResult.thumbnail) nextTrack.thumbnail = ytResult.thumbnail;
-            if (ytResult.artist) nextTrack.artist = ytResult.artist;
+            if (results[0].title) nextTrack.title = results[0].title;
+            if (results[0].durationRaw) nextTrack.duration = results[0].durationRaw;
+            if (results[0].thumbnails?.[0]?.url) nextTrack.thumbnail = results[0].thumbnails[0].url;
+            if (results[0].channel?.name) nextTrack.artist = results[0].channel.name;
             foundTrack = true;
           }
         }
 
         if (!foundTrack) {
-          throw new Error(`Track "${query}" not found via play-dl or yt-dlp search.`);
+          throw new Error(`Track "${query}" not found via yt-dlp or play-dl search.`);
         }
       }
 
@@ -711,7 +746,20 @@ export class GuildQueue {
         streamCreated = true;
       }
 
-      // Tier 1: yt-dlp binary stdout process (Preferred for YouTube - avoids googlevideo CDN 403 blocks)
+      // Tier 1: yt-dlp Direct URL Extraction (Preferred - FFmpeg native HTTPS stream with auto-reconnect)
+      if (!streamCreated && (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be'))) {
+        console.log(`[Music] Attempting direct URL extraction via yt-dlp for: ${audioUrl}`);
+        const directUrl = await extractDirectUrlWithYtDlp(audioUrl);
+        if (directUrl) {
+          directStreamUrl = directUrl;
+          streamCreated = true;
+          console.log(`[Music] Successfully extracted direct media URL via yt-dlp`);
+        } else {
+          console.warn(`[Music Warning] yt-dlp direct URL extraction returned null, trying stdout stream fallback...`);
+        }
+      }
+
+      // Tier 2: yt-dlp binary stdout process fallback
       if (!streamCreated && (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be'))) {
         const ytDlpPath = getYtDlpPath();
         try {
@@ -721,6 +769,9 @@ export class GuildQueue {
             '-f', 'bestaudio',
             '--no-playlist',
             '--quiet',
+            '--no-warnings',
+            '--js-runtimes', 'node',
+            '--extractor-args', 'youtube:player_client=android_vr,tv,web',
             audioUrl
           ]);
 
@@ -755,20 +806,7 @@ export class GuildQueue {
           streamCreated = true;
           console.log(`[Music] Successfully created yt-dlp binary stdout stream`);
         } catch (ytDlpErr: any) {
-          console.warn(`[Music Warning] yt-dlp binary stdout failed, trying direct URL fallback:`, ytDlpErr.message || ytDlpErr);
-        }
-      }
-
-      // Tier 2: yt-dlp Direct URL Extraction fallback
-      if (!streamCreated && (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be'))) {
-        console.log(`[Music] Attempting direct URL extraction via yt-dlp for: ${audioUrl}`);
-        const directUrl = await extractDirectUrlWithYtDlp(audioUrl);
-        if (directUrl) {
-          directStreamUrl = directUrl;
-          streamCreated = true;
-          console.log(`[Music] Successfully extracted direct media URL via yt-dlp`);
-        } else {
-          console.warn(`[Music Warning] yt-dlp direct URL extraction returned null, trying play-dl fallback...`);
+          console.warn(`[Music Warning] yt-dlp binary stdout failed, trying play-dl fallback:`, ytDlpErr.message || ytDlpErr);
         }
       }
 
