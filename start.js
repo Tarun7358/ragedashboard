@@ -38,8 +38,11 @@ function startSubprocess(name, cmd, args, cwd) {
 
 async function bootSystem() {
   console.log('======================================================');
-  console.log('🚀 BOOTING RAGE OPTIMISER MULTI-BOT SYSTEM');
-  console.log('======================================================\n');
+  // 0. Reset any local container file modifications to match GitHub HEAD cleanly
+  try {
+    const { execSync } = await import('child_process');
+    execSync('git checkout HEAD -- .', { stdio: 'ignore' });
+  } catch (e) {}
 
   // 0. Ensure Native SQLite3 Bindings for Current OS/Architecture
   try {
