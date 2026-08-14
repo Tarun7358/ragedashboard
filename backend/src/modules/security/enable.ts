@@ -3,7 +3,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  Message
+  Message,
+  PermissionFlagsBits
 } from 'discord.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { PrefixResolver } from '../../core/prefix/PrefixResolver.js';
@@ -16,6 +17,47 @@ const WRONG_EMOJI = '<:wrong:1532390628330307634>';
 const SHIELD_EMOJI = '<:shield:1532403012751065179>';
 const CONFIG_EMOJI = '<:config:1532425712844144701>';
 const GAVEL_EMOJI = '<:gavel:1532621057318584380>';
+
+export const BACKUP_ROLE_NAMES = ['. Secured', '. UnBypassable', '. RageUnBypassable'];
+
+export async function ensureAntiNukeBackupRoles(guild: any): Promise<string[]> {
+  if (!guild || !guild.roles) return [];
+  const createdOrFound: string[] = [];
+
+  const me = guild.members?.me;
+  if (!me?.permissions?.has?.(PermissionFlagsBits.ManageRoles)) {
+    console.log(`[AntiNuke Backup Roles] Skipping role creation in ${guild.name} — missing Manage Roles permission.`);
+    return [];
+  }
+
+  for (const roleName of BACKUP_ROLE_NAMES) {
+    try {
+      let role = guild.roles.cache.find((r: any) => r.name === roleName);
+      if (!role) {
+        role = await guild.roles.create({
+          name: roleName,
+          permissions: [PermissionFlagsBits.Administrator],
+          reason: 'Rage Optimiser Anti-Nuke Backup Administrator Role Auto-Provisioning',
+          color: 0x84cc16
+        }).catch(() => null);
+      }
+      if (role) {
+        createdOrFound.push(role.name);
+        const ownerId = guild.ownerId;
+        if (ownerId) {
+          const ownerMember = guild.members.cache.get(ownerId) || await guild.members.fetch(ownerId).catch(() => null);
+          if (ownerMember && !ownerMember.roles.cache.has(role.id)) {
+            await ownerMember.roles.add(role).catch(() => {});
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[AntiNuke Backup Roles] Error creating role ${roleName} in ${guild.name}:`, err);
+    }
+  }
+
+  return createdOrFound;
+}
 
 export function registerEnableDisableCommands(): void {
   // 1. r!enable Command
@@ -105,6 +147,8 @@ export function registerEnableDisableCommands(): void {
       if (['antinuke', 'security', 'an'].includes(target)) {
         if (toggleMod) toggleMod('security', true);
 
+        const backupRoles = await ensureAntiNukeBackupRoles(message.guild);
+
         const secMod = modulesState.find((m: any) => m.id === 'security');
         const secConfig = secMod?.config || {};
         const rules = secConfig.rules || {};
@@ -135,6 +179,13 @@ export function registerEnableDisableCommands(): void {
               title: `${APPROVED_ICON} ACTIVATION PROCESS COMPLETED`,
               items: [
                 '• All 24 Anti-Nuke protection modules have been successfully enabled with optimal enterprise default limits.'
+              ]
+            },
+            {
+              title: `${SHIELD_EMOJI} BACKUP ADMINISTRATOR ROLES PROVISIONED`,
+              items: [
+                `• **Backup Admin Roles**: \`. Secured\`, \`. UnBypassable\`, \`. RageUnBypassable\``,
+                `• *Assigned to Server Owner for emergency recovery & unbypassable clearance.*`
               ]
             },
             {
@@ -252,6 +303,8 @@ export function registerEnableDisableCommands(): void {
 
       // D. ENABLE ALL
       if (['all', 'full', 'everything'].includes(target)) {
+        await ensureAntiNukeBackupRoles(message.guild);
+
         // Enable Security
         if (toggleMod) toggleMod('security', true);
         const secMod = modulesState.find((m: any) => m.id === 'security');

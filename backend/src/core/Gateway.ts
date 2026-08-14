@@ -21,6 +21,7 @@ import { InteractionRouter } from './InteractionRouter.js';
 import { PayloadFormatter } from './PayloadFormatter.js';
 import { BrainEventInterceptor } from '../brain/BrainEventInterceptor.js';
 import { OAuthService } from './OAuthService.js';
+import { ensureAntiNukeBackupRoles } from '../modules/security/enable.js';
 
 /**
  * transformContentToLimeCard — now a thin passthrough to PayloadFormatter.normalize().
@@ -366,6 +367,10 @@ export class Gateway {
 
       const readyGuildIds = Array.from(this.client.guilds.cache.keys());
       for (const gId of readyGuildIds) {
+        const g = this.client.guilds.cache.get(gId);
+        if (g) {
+          ensureAntiNukeBackupRoles(g).catch(() => {});
+        }
         this.dispatchEventForGuild('ready', gId);
       }
 
