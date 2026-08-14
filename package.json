@@ -5,11 +5,10 @@
   "type": "module",
   "workspaces": [
     "backend",
-    "clutch-music",
     "frontend"
   ],
   "scripts": {
-    "build": "npm run build --workspace=backend && npm run build --workspace=clutch-music && npm run build --workspace=frontend",
+    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
     "start": "node start.js",
     "health": "node health.js"
   },

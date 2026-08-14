@@ -48,15 +48,6 @@
           "!node_modules/**"
         ]
       },
-
-      {
-        "from": "../clutch-music",
-        "to": "clutch-music",
-        "filter": [
-          "**/*",
-          "!node_modules/**"
-        ]
-      },
       {
         "from": "../frontend/dist",
         "to": "dashboard",

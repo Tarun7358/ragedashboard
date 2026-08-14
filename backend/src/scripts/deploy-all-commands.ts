@@ -12,7 +12,6 @@ import { ReactionRolesManifest } from '../modules/reaction-roles/manifest.js';
 import { LevelingManifest } from '../modules/leveling/manifest.js';
 import { AutomodManifest } from '../modules/automod/manifest.js';
 import { DiscordDashboardManifest } from '../modules/discord-dashboard/manifest.js';
-import { MusicManifest } from '../modules/music/manifest.js';
 
 import { GiveawayManifest } from '../modules/giveaway/manifest.js';
 import { RemindersManifest } from '../modules/reminders/manifest.js';
@@ -56,7 +55,6 @@ const manifests = [
   LevelingManifest,
   AutomodManifest,
   DiscordDashboardManifest,
-  MusicManifest,
   GiveawayManifest,
   RemindersManifest,
   AnnouncementsManifest,

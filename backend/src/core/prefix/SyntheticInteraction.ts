@@ -280,15 +280,37 @@ export class SyntheticInteraction {
 
       const val = this.parsed.options[name] ?? this.parsed.flags[name.toLowerCase()];
       if (typeof val === 'string' && this.guild) {
-        const idMatch = val.match(/\d{17,19}/);
-        if (idMatch) return this.guild.roles.cache.get(idMatch[0]) ?? null;
+        const idMatch = val.match(/\d{17,20}/);
+        if (idMatch) {
+          const cached = this.guild.roles.cache.get(idMatch[0]);
+          if (cached) return cached;
+        }
+
+        const cleanVal = val.toLowerCase().replace(/^[<@&>]*|[>]*$/g, '').trim();
+        const byName = this.guild.roles.cache.find(
+          (r: any) => {
+            if (!r.name) return false;
+            const rn = r.name.toLowerCase();
+            return rn === cleanVal || rn.replace(/[^a-z0-9]/g, '') === cleanVal.replace(/[^a-z0-9]/g, '');
+          }
+        );
+        if (byName) return byName;
       }
 
-      const offset = this._subcommandConsumed ? 1 : 0;
-      const posVal = this.parsed.args[offset];
-      if (typeof posVal === 'string' && this.guild) {
-        const idMatch = posVal.match(/\d{17,19}/);
-        if (idMatch) return this.guild.roles.cache.get(idMatch[0]) ?? null;
+      if (this.guild && this.parsed.args.length > 0) {
+        for (const arg of this.parsed.args) {
+          if (!arg) continue;
+          const idMatch = arg.match(/\d{17,20}/);
+          if (idMatch) {
+            const cached = this.guild.roles.cache.get(idMatch[0]);
+            if (cached) return cached;
+          }
+          const cleanName = arg.toLowerCase().replace(/^[<@&>]*|[>]*$/g, '').trim();
+          if (cleanName && cleanName.length > 1) {
+            const byName = this.guild.roles.cache.find((r: any) => r.name?.toLowerCase() === cleanName);
+            if (byName) return byName;
+          }
+        }
       }
       return null;
     },
@@ -307,7 +329,7 @@ export class SyntheticInteraction {
       const posVal = typeof val === 'string' ? val : this.parsed.args[offset];
 
       if (typeof posVal === 'string') {
-        const idMatch = posVal.match(/\d{17,19}/);
+        const idMatch = posVal.match(/\d{17,20}/);
         if (idMatch) {
           const targetId = idMatch[0];
           const cachedUser = this.client.users.cache.get(targetId);
@@ -331,21 +353,41 @@ export class SyntheticInteraction {
 
       const val = this.parsed.options[name] ?? this.parsed.flags[name.toLowerCase()];
       if (typeof val === 'string' && this.guild) {
-        const idMatch = val.match(/\d{17,19}/);
-        if (idMatch) return this.guild.channels.cache.get(idMatch[0]) ?? null;
+        const idMatch = val.match(/\d{17,20}/);
+        if (idMatch) {
+          const cached = this.guild.channels.cache.get(idMatch[0]);
+          if (cached) return cached;
+        }
 
-        // Plain name resolution
+        // Clean name resolution (strip leading # and mention symbols, normalize special characters)
+        const cleanVal = val.toLowerCase().replace(/^[<#>]*|[>]*$/g, '').trim();
         const byName = this.guild.channels.cache.find(
-          (c: any) => c.name?.toLowerCase() === val.toLowerCase()
+          (c: any) => {
+            if (!c.name) return false;
+            const cn = c.name.toLowerCase();
+            if (cn === cleanVal) return true;
+            const cnNorm = cn.replace(/[^a-z0-9]/g, '');
+            const cleanNorm = cleanVal.replace(/[^a-z0-9]/g, '');
+            return cnNorm.length > 0 && cleanNorm.length > 0 && cnNorm === cleanNorm;
+          }
         );
         if (byName) return byName;
       }
 
-      const offset = this._subcommandConsumed ? 1 : 0;
-      const posVal = this.parsed.args[offset];
-      if (typeof posVal === 'string' && this.guild) {
-        const idMatch = posVal.match(/\d{17,19}/);
-        if (idMatch) return this.guild.channels.cache.get(idMatch[0]) ?? null;
+      if (this.guild && this.parsed.args.length > 0) {
+        for (const arg of this.parsed.args) {
+          if (!arg) continue;
+          const idMatch = arg.match(/\d{17,20}/);
+          if (idMatch) {
+            const cached = this.guild.channels.cache.get(idMatch[0]);
+            if (cached) return cached;
+          }
+          const cleanName = arg.toLowerCase().replace(/^[<#>]*/, '').replace(/>$/, '').trim();
+          if (cleanName && cleanName.length > 1) {
+            const byName = this.guild.channels.cache.find((c: any) => c.name?.toLowerCase() === cleanName);
+            if (byName) return byName;
+          }
+        }
       }
       return null;
     },

@@ -302,13 +302,39 @@ export const AutomodManifest: ModuleManifest = {
         // IGNORE CHANNEL
         if (sub === 'ignore-channel' || interaction.parsed?.args?.[0] === 'ignore-channel') {
           const action = actionArg || interaction.parsed?.args?.[1]?.toLowerCase();
-          const targetChannel = interaction.options.getChannel('channel');
+          let targetChannel: any = interaction.options.getChannel('channel') || interaction.message?.mentions?.channels?.first();
+
+          if (!targetChannel && guild) {
+            const rawArgs = interaction.parsed?.args || [];
+            for (const arg of rawArgs) {
+              if (!arg) continue;
+              const cleanId = arg.replace(/[<#>]/g, '').trim();
+              if (/^\d{17,20}$/.test(cleanId)) {
+                targetChannel = guild.channels.cache.get(cleanId);
+                if (!targetChannel) {
+                  targetChannel = await guild.channels.fetch(cleanId).catch(() => null);
+                }
+                if (!targetChannel && interaction.client) {
+                  targetChannel = await interaction.client.channels.fetch(cleanId).catch(() => null);
+                }
+                if (targetChannel) break;
+              }
+              const cleanName = arg.toLowerCase().replace(/^[#<>]*/, '').replace(/>$/, '').trim();
+              if (cleanName && cleanName !== 'ignore-channel' && cleanName !== 'add' && cleanName !== 'remove' && cleanName !== 'list') {
+                const foundByName = guild.channels.cache.find((c: any) => c.name?.toLowerCase() === cleanName);
+                if (foundByName) {
+                  targetChannel = foundByName;
+                  break;
+                }
+              }
+            }
+          }
 
           let ignoredChannels: string[] = config.ignoredChannels || [];
 
           if (action === 'add') {
             if (!targetChannel) {
-              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target channel to ignore.', flags: 64 });
+              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target channel (or Channel ID) to ignore.', flags: 64 });
             }
             if (!ignoredChannels.includes(targetChannel.id)) {
               ignoredChannels.push(targetChannel.id);
@@ -320,7 +346,7 @@ export const AutomodManifest: ModuleManifest = {
 
           if (action === 'remove') {
             if (!targetChannel) {
-              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target channel to remove.', flags: 64 });
+              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target channel (or Channel ID) to remove.', flags: 64 });
             }
             ignoredChannels = ignoredChannels.filter((id: string) => id !== targetChannel.id);
             context.updateModuleConfig('automod', { ...config, ignoredChannels });
@@ -339,13 +365,36 @@ export const AutomodManifest: ModuleManifest = {
         // IGNORE ROLE
         if (sub === 'ignore-role' || interaction.parsed?.args?.[0] === 'ignore-role') {
           const action = actionArg || interaction.parsed?.args?.[1]?.toLowerCase();
-          const targetRole = interaction.options.getRole('role');
+          let targetRole: any = interaction.options.getRole('role') || interaction.message?.mentions?.roles?.first();
+
+          if (!targetRole && guild) {
+            const rawArgs = interaction.parsed?.args || [];
+            for (const arg of rawArgs) {
+              if (!arg) continue;
+              const cleanId = arg.replace(/[<@&>]/g, '').trim();
+              if (/^\d{17,20}$/.test(cleanId)) {
+                targetRole = guild.roles.cache.get(cleanId);
+                if (!targetRole) {
+                  targetRole = await guild.roles.fetch(cleanId).catch(() => null);
+                }
+                if (targetRole) break;
+              }
+              const cleanName = arg.toLowerCase().replace(/^[<@&>]*|[>]*$/g, '').trim();
+              if (cleanName && cleanName !== 'ignore-role' && cleanName !== 'add' && cleanName !== 'remove' && cleanName !== 'list') {
+                const foundByName = guild.roles.cache.find((r: any) => r.name?.toLowerCase() === cleanName);
+                if (foundByName) {
+                  targetRole = foundByName;
+                  break;
+                }
+              }
+            }
+          }
 
           let ignoredRoles: string[] = config.ignoredRoles || [];
 
           if (action === 'add') {
             if (!targetRole) {
-              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target role to ignore.', flags: 64 });
+              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target role (or Role ID) to ignore.', flags: 64 });
             }
             if (!ignoredRoles.includes(targetRole.id)) {
               ignoredRoles.push(targetRole.id);
@@ -357,7 +406,7 @@ export const AutomodManifest: ModuleManifest = {
 
           if (action === 'remove') {
             if (!targetRole) {
-              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target role to remove.', flags: 64 });
+              return interaction.reply({ content: '<:wrong:1532390628330307634> Please mention or specify a target role (or Role ID) to remove.', flags: 64 });
             }
             ignoredRoles = ignoredRoles.filter((id: string) => id !== targetRole.id);
             context.updateModuleConfig('automod', { ...config, ignoredRoles });

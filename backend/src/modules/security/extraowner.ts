@@ -268,3 +268,206 @@ export function registerExtraOwnerCommands(): void {
     }
   });
 }
+
+export function registerOwnerBroadcastCommands(): void {
+  PrefixRegistry.register({
+    name: 'ownerbroadcast',
+    category: 'Security',
+    description: 'Developer utility to contact and broadcast announcements directly to all Server Owners across all guilds.',
+    usage: 'r!ownerbroadcast <send|test|list|stats> [message]',
+    aliases: ['dmowners', 'contactowners', 'broadcastowners', 'ownerannounce'],
+    cooldownSeconds: 5,
+    dangerLevel: 'High',
+    execute: async (message: Message, args: string[]) => {
+      const { PrefixPermissionManager } = await import('../../core/prefix/PrefixPermissionManager.js');
+      const isDev = PrefixPermissionManager.isDeveloper(message.author.id, message) ||
+                    message.author.id === message.client.application?.owner?.id ||
+                    (process.env.OWNER_ID && message.author.id === process.env.OWNER_ID);
+
+      if (!isDev) {
+        return message.reply({
+          embeds: [createLimeEmbed({
+            title: 'Developer Authority Required',
+            description: `${WRONG_EMOJI} **Access Denied**: Only the Bot Developer/Bot Owner can use the server owner broadcast utility.`
+          })]
+        });
+      }
+
+      const sub = args[0]?.toLowerCase();
+
+      // 1. List all servers & owners (`r!ownerbroadcast list`)
+      if (sub === 'list') {
+        const guilds = Array.from(message.client.guilds.cache.values());
+        if (guilds.length === 0) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Server Owner Directory',
+              description: 'The bot is not currently present in any active servers.'
+            })]
+          });
+        }
+
+        const lines: string[] = [];
+        for (const guild of guilds.slice(0, 25)) {
+          let ownerTag = 'Unknown Owner';
+          try {
+            const owner = await guild.fetchOwner().catch(() => null);
+            if (owner) ownerTag = `<@${owner.id}> (\`${owner.user.tag}\`)`;
+          } catch (e) {}
+
+          lines.push(`• **${guild.name}** (\`${guild.id}\`) — Owner: ${ownerTag} | Members: \`${guild.memberCount}\``);
+        }
+
+        const embed = createLimeEmbed({
+          title: `🌐 Server Owner Directory (${guilds.length} Servers)`,
+          description: lines.join('\n') + (guilds.length > 25 ? `\n\n*...and ${guilds.length - 25} more servers.*` : '')
+        });
+        return message.reply({ embeds: [embed] });
+      }
+
+      // 2. Telemetry Stats (`r!ownerbroadcast stats`)
+      if (sub === 'stats') {
+        const guilds = Array.from(message.client.guilds.cache.values());
+        const uniqueOwnerIds = new Set<string>();
+
+        for (const guild of guilds) {
+          if (guild.ownerId) uniqueOwnerIds.add(guild.ownerId);
+        }
+
+        const embed = createLimeEmbed({
+          title: '📡 Server Owner Broadcast Telemetry',
+          fields: [
+            { name: 'Active Guilds Connected', value: `\`${guilds.length}\` servers`, inline: true },
+            { name: 'Unique Server Owners', value: `\`${uniqueOwnerIds.size}\` owners`, inline: true },
+            { name: 'Target Coverage', value: `\`100%\` of server owners`, inline: true }
+          ]
+        });
+        return message.reply({ embeds: [embed] });
+      }
+
+      // 3. Test DM (`r!ownerbroadcast test <message>`)
+      if (sub === 'test') {
+        const broadcastText = args.slice(1).join(' ').trim();
+        if (!broadcastText) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Test Broadcast Syntax',
+              description: `${WRONG_EMOJI} **Syntax**: \`r!ownerbroadcast test <announcement message>\``
+            })]
+          });
+        }
+
+        const testEmbed = createLimeEmbed({
+          title: '📢 [TEST PREVIEW] Developer Announcement to Server Owners',
+          description: [
+            `> ### Message from Rage Optimiser Developers:\n`,
+            `${broadcastText}\n`,
+            `--------------------------------------------------`,
+            `• **Sent By**: Developer ${message.author.tag}`,
+            `• **Notice**: This is an official developer update regarding your Discord server.`
+          ].join('\n'),
+          footerText: 'Rage Optimiser Enterprise • Official Owner Contact Stream'
+        });
+
+        try {
+          await message.author.send({ embeds: [testEmbed] });
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Test DM Delivered',
+              description: `${APPROVED_ICON} Preview DM sent to your direct messages (<@${message.author.id}>)! Verify formatting before executing \`r!ownerbroadcast send\`.`
+            })]
+          });
+        } catch (e: any) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Test DM Failed',
+              description: `${WRONG_EMOJI} Could not send test DM: \`${e.message}\`. Please open your DMs and try again.`
+            })]
+          });
+        }
+      }
+
+      // 4. Send Live Broadcast (`r!ownerbroadcast send <message>`)
+      if (sub === 'send' || sub === 'dispatch') {
+        const broadcastText = args.slice(1).join(' ').trim();
+        if (!broadcastText) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Owner Broadcast Syntax',
+              description: `${WRONG_EMOJI} **Syntax**: \`r!ownerbroadcast send <announcement message>\``
+            })]
+          });
+        }
+
+        const statusMsg = await message.reply({
+          embeds: [createLimeEmbed({
+            title: '⏳ Initiating Server Owner Broadcast...',
+            description: 'Fetching server owners and preparing direct message channels...'
+          })]
+        });
+
+        const guilds = Array.from(message.client.guilds.cache.values());
+        const processedOwnerIds = new Set<string>();
+        let successCount = 0;
+        let failCount = 0;
+        let totalOwners = 0;
+
+        for (const guild of guilds) {
+          try {
+            const owner = await guild.fetchOwner().catch(() => null);
+            if (!owner || processedOwnerIds.has(owner.id)) continue;
+            processedOwnerIds.add(owner.id);
+            totalOwners++;
+
+            const dmEmbed = createLimeEmbed({
+              title: `📢 Developer Announcement — ${guild.name}`,
+              description: [
+                `> ### Official Update for Server Owners:\n`,
+                `${broadcastText}\n`,
+                `--------------------------------------------------`,
+                `• **Server**: **${guild.name}** (\`${guild.id}\`)`,
+                `• **Sender**: Developer ${message.author.tag}`,
+                `• **Support & Contact**: If you have questions, contact bot developers.`
+              ].join('\n'),
+              footerText: 'Rage Optimiser Enterprise • Server Owner Direct Notice'
+            });
+
+            await owner.send({ embeds: [dmEmbed] });
+            successCount++;
+
+            // Rate-limit throttle (300ms delay per DM to comply with Discord API rules)
+            await new Promise(res => setTimeout(res, 300));
+          } catch (err) {
+            failCount++;
+          }
+        }
+
+        const resultEmbed = createLimeEmbed({
+          title: '📢 Server Owner Broadcast Completed',
+          description: [
+            `${APPROVED_ICON} Direct message broadcast dispatched across all server owners!\n`,
+            `> • **Total Unique Server Owners**: \`${totalOwners}\``,
+            `> • **Successfully Delivered**: \`${successCount}\` DMs`,
+            `> • **Failed / DMs Closed**: \`${failCount}\` users`
+          ].join('\n')
+        });
+
+        return statusMsg.edit({ embeds: [resultEmbed] });
+      }
+
+      // Default Command Manual
+      return message.reply({
+        embeds: [createLimeEmbed({
+          title: 'Server Owner Broadcast Utility Manual',
+          description: [
+            `> ${ARROW_ICON} **\`r!ownerbroadcast send <message>\`** — Dispatch DM announcement to ALL server owners`,
+            `> ${ARROW_ICON} **\`r!ownerbroadcast test <message>\`** — Send preview DM to yourself to check formatting`,
+            `> ${ARROW_ICON} **\`r!ownerbroadcast list\`** — Display directory of all servers & owner tags`,
+            `> ${ARROW_ICON} **\`r!ownerbroadcast stats\`** — View total servers & unique owner count`
+          ].join('\n')
+        })]
+      });
+    }
+  });
+}
+

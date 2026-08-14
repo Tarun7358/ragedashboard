@@ -8,7 +8,6 @@ import { ReactionRolesManifest } from './src/modules/reaction-roles/manifest.js'
 import { LevelingManifest } from './src/modules/leveling/manifest.js';
 import { AutomodManifest } from './src/modules/automod/manifest.js';
 import { DiscordDashboardManifest } from './src/modules/discord-dashboard/manifest.js';
-import { MusicManifest } from './src/modules/music/manifest.js';
 import { GiveawayManifest } from './src/modules/giveaway/manifest.js';
 import { RemindersManifest } from './src/modules/reminders/manifest.js';
 import { AnnouncementsManifest } from './src/modules/announcements/manifest.js';
@@ -17,23 +16,20 @@ import { VoiceManagerManifest } from './src/modules/voice_manager/manifest.js';
 import { BulkOpsManifest } from './src/modules/bulk_ops/manifest.js';
 import { DiagnosticsManifest } from './src/modules/diagnostics/manifest.js';
 import { VoiceProtectionManifest } from './src/modules/voice-protection/index.js';
-import { WelcomeV2Manifest } from './src/modules/welcome-v2/manifest.js';
-import { TicketsV2Manifest } from './src/modules/tickets-v2/manifest.js';
 import { JoinRoleAssignmentGuardManifest } from './src/modules/join-role-guard/manifest.js';
 import { SocialUpdatesManifest } from './src/modules/social-updates/manifest.js';
 import { AnalyticsManifest } from './src/modules/analytics/manifest.js';
 import { AuditManifest } from './src/modules/audit/manifest.js';
-import { PaymentManifest } from './src/modules/payment/manifest.js';
 import { RageEnterpriseManifest } from './src/modules/rage-enterprise/manifest.js';
 
 const allManifests = [
   SecurityManifest, LoggingManifest, BackupsManifest, AutomationManifest, VoiceManifest,
   MemberWhitelistManifest, ReactionRolesManifest, LevelingManifest, AutomodManifest,
-  DiscordDashboardManifest, MusicManifest, GiveawayManifest, RemindersManifest,
+  DiscordDashboardManifest, GiveawayManifest, RemindersManifest,
   AnnouncementsManifest, JoinToCreateManifest, VoiceManagerManifest, BulkOpsManifest,
   DiagnosticsManifest, VoiceProtectionManifest, JoinRoleAssignmentGuardManifest,
-  SocialUpdatesManifest, WelcomeV2Manifest, TicketsV2Manifest, AnalyticsManifest,
-  AuditManifest, PaymentManifest, RageEnterpriseManifest
+  SocialUpdatesManifest, AnalyticsManifest,
+  AuditManifest, RageEnterpriseManifest
 ];
 
 let errors: string[] = [];

@@ -73,8 +73,6 @@ import { MemberWhitelistManifest } from './modules/member_whitelist/manifest.js'
 import { ReactionRolesManifest } from './modules/reaction-roles/manifest.js';
 import { LevelingManifest } from './modules/leveling/manifest.js';
 import { AutomodManifest } from './modules/automod/manifest.js';
-import { MusicManifest } from './modules/music/manifest.js';
-import { QueueManager } from './modules/music/QueueManager.js';
 
 import { GiveawayManifest } from './modules/giveaway/manifest.js';
 import { RemindersManifest } from './modules/reminders/manifest.js';
@@ -99,7 +97,7 @@ import { PrebotWhitelistManifest, registerPrebotCommands } from './modules/prebo
 import { BotStatsManifest, registerBotStatsCommands } from './modules/botstats/manifest.js';
 
 import { registerTempRoleCommands, checkExpiredTempRoles } from './modules/security/temprole.js';
-import { registerExtraOwnerCommands } from './modules/security/extraowner.js';
+import { registerExtraOwnerCommands, registerOwnerBroadcastCommands } from './modules/security/extraowner.js';
 import { registerConfigCommands, ConfigManifest } from './modules/config/manifest.js';
 import { BrainManifest, registerBrainCommands } from './brain/BrainManifest.js';
 import { BrainStore } from './brain/BrainStore.js';
@@ -127,7 +125,6 @@ export const ALL_MANIFESTS = [
   ReactionRolesManifest,
   LevelingManifest,
   AutomodManifest,
-  MusicManifest,
   GiveawayManifest,
   RemindersManifest,
   AnnouncementsManifest,
@@ -157,7 +154,6 @@ async function bootstrap() {
     registry = new ModuleRegistry((msg) => {
       if (webServer) webServer.broadcast(msg);
     });
-    QueueManager.registry = registry;
 
     // 2. Register Feature Modules
     for (const manifest of ALL_MANIFESTS) {
@@ -204,6 +200,7 @@ async function bootstrap() {
     // Register Prefix & Slash Control Suites (must be invoked after initialize to avoid map clear)
     registerTempRoleCommands();
     registerExtraOwnerCommands();
+    registerOwnerBroadcastCommands();
     registerConfigCommands();
     registerPrebotCommands();
     registerBotStatsCommands();

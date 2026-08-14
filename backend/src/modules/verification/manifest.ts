@@ -76,16 +76,33 @@ PrefixRegistry.register({
   name: 'verify',
   category: 'Verification',
   description: 'Verify your membership in the server to claim access roles.',
-  usage: 'r!verify',
+  usage: 'r!verify [setup]',
+  aliases: ['verification', 'v', 'chkverify', 'verify-me'],
   cooldownSeconds: 3,
-  execute: async (message: Message) => {
+  execute: async (message: Message, args?: string[], extra?: any) => {
     const member = message.member;
     const guild = message.guild;
     if (!member || !guild) return;
 
+    const sub = args?.[0]?.toLowerCase();
+    if (sub === 'setup' || sub === 'card' || sub === 'panel') {
+      const setupCmd = PrefixRegistry.get('setup-verify');
+      if (setupCmd && setupCmd.execute) {
+        return setupCmd.execute(message, (args || []).slice(1), extra);
+      }
+    }
+
     try {
+      const modules = extra?.getModulesState ? extra.getModulesState() : [];
+      const verModule = modules.find((m: any) => m.id === 'verification');
+      const config = verModule?.config || {};
+      const verifiedRoleId = config.verifiedRoleId;
+      const unverifiedRoleId = config.unverifiedRoleId;
+
       const isVerifiedInDb = await isUserVerified(guild.id, member.user.id);
-      if (isVerifiedInDb) {
+      const hasVerifiedRole = verifiedRoleId ? member.roles.cache.has(verifiedRoleId) : false;
+
+      if (isVerifiedInDb && (hasVerifiedRole || !verifiedRoleId)) {
         return message.reply({
           embeds: [createLimeEmbed({
             title: 'Already Verified',
@@ -94,7 +111,23 @@ PrefixRegistry.register({
         });
       }
 
+      // Apply roles if configured
+      if (verifiedRoleId) {
+        const verifiedRole = guild.roles.cache.get(verifiedRoleId);
+        if (verifiedRole) await member.roles.add(verifiedRole).catch(() => {});
+      }
+      if (unverifiedRoleId) {
+        const unverifiedRole = guild.roles.cache.get(unverifiedRoleId);
+        if (unverifiedRole && member.roles.cache.has(unverifiedRoleId)) {
+          await member.roles.remove(unverifiedRole).catch(() => {});
+        }
+      }
+
       await markUserVerified(guild.id, member.user.id);
+      if (extra?.logSyncEvent) {
+        extra.logSyncEvent(`Verification Service: Verified member "${userTag(member.user)}" via command.`, 'success');
+      }
+
       return message.reply({
         embeds: [createLimeEmbed({
           title: 'Verification Succeeded',
@@ -111,6 +144,61 @@ PrefixRegistry.register({
     }
   }
 });
+
+async function handleVerifyCommandInteraction(client: any, interaction: any, context: any) {
+  const member = interaction.member;
+  const guild = interaction.guild;
+  if (!member || !guild) return;
+
+  try {
+    const modules = context.getModulesState ? context.getModulesState() : [];
+    const verModule = modules.find((m: any) => m.id === 'verification');
+    const config = verModule?.config || {};
+    const verifiedRoleId = config.verifiedRoleId;
+    const unverifiedRoleId = config.unverifiedRoleId;
+
+    const isVerifiedInDb = await isUserVerified(guild.id, member.user.id);
+    const hasVerifiedRole = verifiedRoleId ? member.roles.cache.has(verifiedRoleId) : false;
+
+    if (isVerifiedInDb && (hasVerifiedRole || !verifiedRoleId)) {
+      return interaction.reply({
+        embeds: [createLimeEmbed({
+          title: 'Already Verified',
+          description: `${VERIFIED_ICON} You have already completed the verification process.`
+        })],
+        flags: 64
+      });
+    }
+
+    if (verifiedRoleId) {
+      const verifiedRole = guild.roles.cache.get(verifiedRoleId);
+      if (verifiedRole) await member.roles.add(verifiedRole).catch(() => {});
+    }
+    if (unverifiedRoleId && member.roles.cache.has(unverifiedRoleId)) {
+      const unverifiedRole = guild.roles.cache.get(unverifiedRoleId);
+      if (unverifiedRole) await member.roles.remove(unverifiedRole).catch(() => {});
+    }
+
+    await markUserVerified(guild.id, member.user.id);
+    context.logSyncEvent(`Verification Service: Verified member "${userTag(member.user)}" via interaction.`, 'success');
+
+    return interaction.reply({
+      embeds: [createLimeEmbed({
+        title: 'Verification Succeeded',
+        description: `${VERIFIED_ICON} **Verification Complete!** Welcome to **${guild.name}**.`
+      })],
+      flags: 64
+    });
+  } catch (err: any) {
+    return interaction.reply({
+      embeds: [createLimeEmbed({
+        title: 'Verification Failed',
+        description: `${WRONG_ICON} Unable to complete verification: ${err.message}`
+      })],
+      flags: 64
+    });
+  }
+}
 
 export const VerificationManifest: ModuleManifest = {
   id: 'verification',
@@ -141,6 +229,14 @@ export const VerificationManifest: ModuleManifest = {
     {
       name: 'setup-verify',
       description: 'Post the verification entry card button to the channel.'
+    },
+    {
+      name: 'verify',
+      description: 'Verify your membership in the server to claim access roles.'
+    },
+    {
+      name: 'verification',
+      description: 'Verify your membership in the server or manage verification settings.'
     }
   ],
   events: [
@@ -198,6 +294,14 @@ export const VerificationManifest: ModuleManifest = {
           await interaction.reply({ content: '<:wrong:1532390628330307634> Failed to post verification card.', flags: 64 });
         }
       }
+    },
+    {
+      name: 'command_verify',
+      handler: handleVerifyCommandInteraction
+    },
+    {
+      name: 'command_verification',
+      handler: handleVerifyCommandInteraction
     },
     {
       name: 'button_verify_btn_click',

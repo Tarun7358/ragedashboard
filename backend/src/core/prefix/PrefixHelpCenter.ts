@@ -72,13 +72,50 @@ export class PrefixHelpCenter {
       return this.sendModuleHelp(message, matchedCategory, currentPrefix, 1);
     }
 
-    // 2. Check if query matches a command name or alias directly
+    // 2. Check for multi-word command + subcommand queries (e.g. "logs channel", "config antinuke", "clear vc")
+    const parts = cleanQuery.split(/\s+/);
+    if (parts.length > 1) {
+      const mainCmdName = parts[0];
+      const subCmdQuery = parts.slice(1).join(' ');
+      const mainCmd = PrefixRegistry.getCommand(mainCmdName);
+
+      if (mainCmd && mainCmd.subcommands && mainCmd.subcommands.length > 0) {
+        const subCmd = mainCmd.subcommands.find(s => {
+          const sName = s.name.toLowerCase();
+          const targetSub = subCmdQuery.toLowerCase();
+          return sName === targetSub ||
+                 sName.startsWith(targetSub) ||
+                 sName.split(/\s+/)[0] === targetSub ||
+                 sName.includes(targetSub);
+        });
+
+        if (subCmd) {
+          return this.sendSubcommandHelp(message, mainCmd, subCmd, currentPrefix);
+        }
+      }
+    }
+
+    // 3. Check if query matches a command name or alias directly
     const command = PrefixRegistry.getCommand(cleanQuery);
     if (command) {
       return this.sendCommandHelp(message, command, currentPrefix);
     }
 
-    // 3. Dynamic Multi-Word Fuzzy Search
+    // 4. Check if cleanQuery matches any subcommand across all registered commands
+    const allCmds = PrefixRegistry.getAllCommands();
+    for (const mainCmd of allCmds) {
+      if (mainCmd.subcommands && mainCmd.subcommands.length > 0) {
+        const subMatch = mainCmd.subcommands.find(s => {
+          const sName = s.name.toLowerCase();
+          return sName === cleanQuery || sName.split(/\s+/)[0] === cleanQuery;
+        });
+        if (subMatch) {
+          return this.sendSubcommandHelp(message, mainCmd, subMatch, currentPrefix);
+        }
+      }
+    }
+
+    // 5. Dynamic Multi-Word Fuzzy Search
     const searchResults = this.searchCommands(cleanQuery);
     if (searchResults.length === 1) {
       return this.sendCommandHelp(message, searchResults[0], currentPrefix);
@@ -201,6 +238,21 @@ export class PrefixHelpCenter {
     return message.reply({ embeds: [embed], components: [row1, row2] }).catch(() => {});
   }
 
+  private static formatUsage(usage: string, commandName: string, prefix: string): string {
+    if (!usage) return `${prefix}${commandName}`;
+    const clean = usage.replace(/^(r!|r\?|r\.|!|\/)/i, '').trim();
+    if (clean.toLowerCase().startsWith(commandName.toLowerCase())) {
+      return `${prefix}${clean}`;
+    }
+    return `${prefix}${commandName} ${clean}`;
+  }
+
+  private static formatExample(example: string, prefix: string): string {
+    if (!example) return '';
+    const clean = example.replace(/^(r!|r\?|r\.|!|\/)/i, '').trim();
+    return `${prefix}${clean}`;
+  }
+
   public static async sendModuleHelp(message: Message, category: string, prefix: string, page = 1, updateInteraction?: any): Promise<any> {
     const allCategoryCmds = PrefixRegistry.getCommandsByCategory(category);
     const executorId = updateInteraction?.user?.id || message.author?.id || '';
@@ -215,8 +267,8 @@ export class PrefixHelpCenter {
 
     const cmdEntries = pageCmds.map(c => {
       const aliasStr = c.aliases.length > 0 ? ` *(${c.aliases.map(a => prefix + a).join(', ')})*` : '';
-      const usageStr = c.usage ? `\n> └ **Syntax**: \`${c.usage.startsWith(prefix) || c.usage.startsWith('r!') ? c.usage : prefix + c.name + ' ' + c.usage}\`` : '';
-      const subStr = c.subcommands && c.subcommands.length > 0 ? `\n> └ **Subcommands**: ${c.subcommands.map(s => `\`${s.name}\``).join(', ')}` : '';
+      const usageStr = c.usage ? `\n> └ **Syntax**: \`${this.formatUsage(c.usage, c.name, prefix)}\`` : '';
+      const subStr = c.subcommands && c.subcommands.length > 0 ? `\n> └ **Subcommands (${c.subcommands.length})**: ${c.subcommands.map(s => `\`${s.name.split(' ')[0]}\``).slice(0, 6).join(', ')}${c.subcommands.length > 6 ? ', ...' : ''}` : '';
       return `> ${APPROVED_ICON} **\`${prefix}${c.name}\`**${aliasStr} — ${c.description}${usageStr}${subStr}`;
     });
 
@@ -225,7 +277,7 @@ export class PrefixHelpCenter {
       `### ${meta.icon} ${category} Command Suite (Page ${currentPage}/${totalPages})`,
       `*${meta.description}*\n`,
       ...(cmdEntries.length > 0 ? cmdEntries : [`> ${APPROVED_ICON} __**No Commands Registered**__`]),
-      `\n*Type \`${prefix}help <command_name>\` for detailed subcommand breakdown and options.*`
+      `\n*Type \`${prefix}help <command_name>\` or \`${prefix}help <command> <subcommand>\` for detailed manual.*`
     ].join('\n');
 
     const embed = new EmbedBuilder()
@@ -302,9 +354,11 @@ export class PrefixHelpCenter {
     const hasPermission = message.member ? PrefixPermissionManager.checkPermissions(message, cmd).allowed : true;
     const executorId = updateInteraction?.user?.id || message.author?.id || '';
 
+    const displayUsage = this.formatUsage(cmd.usage, cmd.name, prefix);
+
     const embed = new EmbedBuilder()
       .setColor(hasPermission ? 0x99CC00 : 0xEF4444)
-      .setAuthor({ name: 'Rage Optimiser' })
+      .setAuthor({ name: 'Rage Optimiser • Command Manual' })
       .setTitle(`${hasPermission ? SHIELD_EMOJI : WRONG_EMOJI} Command Manual: ${prefix}${cmd.name}`)
       .setDescription([
         `> **Description**: ${cmd.description}`,
@@ -314,26 +368,110 @@ export class PrefixHelpCenter {
         { name: 'Command Name', value: `\`${cmd.name}\``, inline: true },
         { name: 'Category', value: `\`${cmd.category}\``, inline: true },
         { name: 'Cooldown', value: `\`${cmd.cooldownSeconds || 3}s\``, inline: true },
-        { name: 'Syntax & Usage', value: `\`\`\`bash\n${cmd.usage.startsWith('r!') ? prefix + cmd.usage.slice(2) : cmd.usage}\n\`\`\``, inline: false },
+        { name: 'Syntax & Master Usage', value: `\`\`\`bash\n${displayUsage}\n\`\`\``, inline: false },
         { name: 'Aliases', value: cmd.aliases.length > 0 ? cmd.aliases.map(a => `\`${prefix}${a}\``).join(', ') : '`None`', inline: true },
         { name: 'User Permission', value: cmd.userPermissions && cmd.userPermissions.length > 0 ? cmd.userPermissions.map(p => `\`${p}\``).join(', ') : '`Everyone`', inline: true },
         { name: 'Bot Permission', value: cmd.botPermissions && cmd.botPermissions.length > 0 ? cmd.botPermissions.map(p => `\`${p}\``).join(', ') : '`SendMessages`', inline: true }
       )
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
-      .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+      .setFooter({ text: `Rage Optimiser • Tip: Use ${prefix}help ${cmd.name} <subcommand> for targeted manual` })
       .setTimestamp();
 
     if (cmd.subcommands && cmd.subcommands.length > 0) {
-      const subLines = cmd.subcommands.map(s => `• \`${prefix}${cmd.name} ${s.name}\` — ${s.description}`).join('\n');
-      embed.addFields({ name: 'Subcommands & Modes', value: subLines.length > 1024 ? subLines.substring(0, 1020) + '...' : subLines, inline: false });
+      const subLines: string[] = [];
+      cmd.subcommands.forEach(s => {
+        const subNameClean = s.name.startsWith(cmd.name) ? s.name : `${cmd.name} ${s.name}`;
+        subLines.push(`• **\`${prefix}${subNameClean}\`**\n> └ ${s.description}`);
+      });
+
+      const fullSubText = subLines.join('\n');
+      if (fullSubText.length <= 1020) {
+        embed.addFields({ name: `<:config:1532425712844144701> Subcommands & Execution Modes (${cmd.subcommands.length})`, value: fullSubText, inline: false });
+      } else {
+        const chunks: string[] = [];
+        let currentChunk = '';
+        subLines.forEach(line => {
+          if ((currentChunk + '\n' + line).length > 1000) {
+            chunks.push(currentChunk);
+            currentChunk = line;
+          } else {
+            currentChunk += (currentChunk ? '\n' : '') + line;
+          }
+        });
+        if (currentChunk) chunks.push(currentChunk);
+
+        chunks.forEach((chunk, idx) => {
+          embed.addFields({
+            name: idx === 0 ? `<:config:1532425712844144701> Subcommands & Execution Modes (${cmd.subcommands!.length})` : `Subcommands (Part ${idx + 1})`,
+            value: chunk,
+            inline: false
+          });
+        });
+      }
     }
 
     if (cmd.examples && cmd.examples.length > 0) {
-      embed.addFields({ name: 'Practical Usage Examples', value: cmd.examples.map(e => `\`${e.startsWith('r!') ? prefix + e.slice(2) : e}\``).join('\n'), inline: false });
+      embed.addFields({
+        name: '<:information:1532621274092929124> Practical Usage Examples',
+        value: cmd.examples.map(e => `\`${this.formatExample(e, prefix)}\``).join('\n'),
+        inline: false
+      });
     }
 
-
     const components = this.buildComponents(cmd.category, 1, 1, executorId);
+
+    if (updateInteraction) {
+      return updateInteraction.update({ embeds: [embed], components }).catch(() => {});
+    }
+    return message.reply({ embeds: [embed], components }).catch(() => {});
+  }
+
+  public static async sendSubcommandHelp(message: Message, mainCmd: PrefixCommandMeta, subCmd: any, prefix: string, updateInteraction?: any): Promise<any> {
+    const hasPermission = message.member ? PrefixPermissionManager.checkPermissions(message, mainCmd).allowed : true;
+    const executorId = updateInteraction?.user?.id || message.author?.id || '';
+
+    const displayUsage = this.formatUsage(subCmd.name, mainCmd.name, prefix);
+
+    const embed = new EmbedBuilder()
+      .setColor(hasPermission ? 0x99CC00 : 0xEF4444)
+      .setAuthor({ name: 'Rage Optimiser • Targeted Subcommand Manual' })
+      .setTitle(`${hasPermission ? SHIELD_EMOJI : WRONG_EMOJI} Subcommand Manual: ${displayUsage}`)
+      .setDescription([
+        `> **Description**: ${subCmd.description || 'Subcommand execution mode for ' + mainCmd.name}`,
+        `> **Parent Module**: \`${mainCmd.category}\` (Command: \`${prefix}${mainCmd.name}\`)`,
+        !hasPermission ? `> ${WRONG_EMOJI} **Permission Warning**: You lack the required server permissions to run this command.` : ''
+      ].filter(Boolean).join('\n'))
+      .addFields(
+        { name: 'Parent Command', value: `\`${prefix}${mainCmd.name}\``, inline: true },
+        { name: 'Subcommand Key', value: `\`${subCmd.name}\``, inline: true },
+        { name: 'Cooldown', value: `\`${mainCmd.cooldownSeconds || 3}s\``, inline: true },
+        { name: 'Full Command Syntax', value: `\`\`\`bash\n${displayUsage}\n\`\`\``, inline: false },
+        { name: 'User Permission', value: mainCmd.userPermissions && mainCmd.userPermissions.length > 0 ? mainCmd.userPermissions.map(p => `\`${p}\``).join(', ') : '`Everyone`', inline: true },
+        { name: 'Bot Permission', value: mainCmd.botPermissions && mainCmd.botPermissions.length > 0 ? mainCmd.botPermissions.map(p => `\`${p}\``).join(', ') : '`SendMessages`', inline: true }
+      )
+      .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
+      .setFooter({ text: `Rage Optimiser • Back to parent manual: ${prefix}help ${mainCmd.name}` })
+      .setTimestamp();
+
+    if (subCmd.examples && subCmd.examples.length > 0) {
+      embed.addFields({
+        name: '<:information:1532621274092929124> Subcommand Usage Examples',
+        value: subCmd.examples.map((e: string) => `\`${this.formatExample(e, prefix)}\``).join('\n'),
+        inline: false
+      });
+    } else if (mainCmd.examples && mainCmd.examples.length > 0) {
+      const subKey = subCmd.name.split(' ')[0];
+      const matchingEx = mainCmd.examples.filter(e => e.includes(subKey));
+      if (matchingEx.length > 0) {
+        embed.addFields({
+          name: '<:information:1532621274092929124> Practical Subcommand Examples',
+          value: matchingEx.map(e => `\`${this.formatExample(e, prefix)}\``).join('\n'),
+          inline: false
+        });
+      }
+    }
+
+    const components = this.buildComponents(mainCmd.category, 1, 1, executorId);
 
     if (updateInteraction) {
       return updateInteraction.update({ embeds: [embed], components }).catch(() => {});

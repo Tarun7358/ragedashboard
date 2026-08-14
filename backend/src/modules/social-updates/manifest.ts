@@ -92,7 +92,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const action = interaction.options.getString('action');
         const isAdmin = interaction.member?.permissions?.has?.('ManageGuild') ||
-                        interaction.guild?.ownerId === interaction.user?.id;
+          interaction.guild?.ownerId === interaction.user?.id;
         if (!isAdmin) {
           const embed = new EmbedBuilder()
             .setTitle('<:shield:1532403012751065179> Access Denied')
@@ -103,7 +103,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
         }
 
         const guildId = interaction.guildId;
-        await SocialSubscriptionRepository.ensureTable().catch(() => {});
+        await SocialSubscriptionRepository.ensureTable().catch(() => { });
 
         if (action === 'list') {
           const subs = await SocialSubscriptionRepository.findAll(guildId);
@@ -190,18 +190,35 @@ export const SocialUpdatesManifest: ModuleManifest = {
 
           let channel = interaction.options?.getChannel?.('channel') || interaction.message?.mentions?.channels?.first();
           if (!channel && interaction.guild) {
+            const fetchedChannels = await interaction.guild.channels.fetch().catch(() => null);
             for (const arg of rawArgs) {
               if (!arg) continue;
-              const cleanId = arg.replace(/[<#>]/g, '');
+              const cleanId = arg.replace(/[<#>]/g, '').trim();
               if (/^\d{17,20}$/.test(cleanId)) {
-                channel = interaction.guild.channels.cache.get(cleanId);
+                channel = interaction.guild.channels.cache.get(cleanId) ||
+                  (fetchedChannels && typeof (fetchedChannels as any).get === 'function' ? (fetchedChannels as any).get(cleanId) : null);
                 if (!channel) {
                   channel = await interaction.guild.channels.fetch(cleanId).catch(() => null);
                 }
+                if (!channel && interaction.client) {
+                  channel = await interaction.client.channels.fetch(cleanId).catch(() => null);
+                }
                 if (channel) break;
               }
-              const cleanName = arg.toLowerCase().replace(/^#/, '');
-              const foundByName = interaction.guild.channels.cache.find((c: any) => c.name?.toLowerCase() === cleanName);
+
+              const cleanName = arg.toLowerCase().replace(/^[#<>]*/, '').replace(/>$/, '').trim();
+              if (!cleanName) continue;
+
+              const searchPool = fetchedChannels || interaction.guild.channels.cache;
+              const foundByName = searchPool.find((c: any) => {
+                if (!c || !c.name) return false;
+                const cn = c.name.toLowerCase();
+                if (cn === cleanName) return true;
+                const cnNorm = cn.replace(/[^a-z0-9]/g, '');
+                const cleanNorm = cleanName.replace(/[^a-z0-9]/g, '');
+                return cnNorm.length > 0 && cleanNorm.length > 0 && (cnNorm === cleanNorm || cnNorm.includes(cleanNorm) || cleanNorm.includes(cnNorm));
+              });
+
               if (foundByName) {
                 channel = foundByName;
                 break;
@@ -210,13 +227,21 @@ export const SocialUpdatesManifest: ModuleManifest = {
           }
 
           let sourceId = interaction.options?.getString?.('source');
-          if (!sourceId) {
+          const isChannelArg = (s: string) => {
+            if (!s) return false;
+            if (s.startsWith('<#') && s.endsWith('>')) return true;
+            const clean = s.replace(/[<#>]/g, '').trim();
+            if (channel && (clean === channel.id || clean.toLowerCase() === channel.name?.toLowerCase())) return true;
+            return false;
+          };
+
+          if (!sourceId || isChannelArg(sourceId)) {
             const candidateArgs = rawArgs.filter((a: string) => {
               if (!a) return false;
               const lower = a.toLowerCase();
               if (lower === 'add' || lower === 'subscribe') return false;
               if (['youtube', 'instagram', 'yt', 'ig'].includes(lower)) return false;
-              if (channel && (a.includes(channel.id) || lower.replace(/^#/, '') === channel.name?.toLowerCase())) return false;
+              if (isChannelArg(a)) return false;
               return true;
             });
             if (candidateArgs.length > 0) {
@@ -323,7 +348,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
       method: 'get',
       handler: async (req: any, res: any, context: any) => {
         const { guildId, client, logSyncEvent } = context;
-        await SocialSubscriptionRepository.ensureTable().catch(() => {});
+        await SocialSubscriptionRepository.ensureTable().catch(() => { });
 
         // Ensure scheduler is active
         getScheduler(client, logSyncEvent);
@@ -458,7 +483,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
 
         try {
           let embedConfig: any = {};
-          try { embedConfig = JSON.parse(sub.embedConfig); } catch {}
+          try { embedConfig = JSON.parse(sub.embedConfig); } catch { }
 
           const sampleData = TemplateEngine.getSampleData(sub.provider as 'youtube' | 'instagram');
 
@@ -527,7 +552,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
       method: 'get',
       handler: async (req: any, res: any, context: any) => {
         const { guildId } = context;
-        await SocialSubscriptionRepository.ensureTable().catch(() => {});
+        await SocialSubscriptionRepository.ensureTable().catch(() => { });
         const analytics = await SocialSubscriptionRepository.getAnalytics(guildId);
         res.json(analytics);
       }

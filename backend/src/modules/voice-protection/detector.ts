@@ -54,15 +54,12 @@ export async function updateVoiceChannelConnection(guild: any, config: any, cont
   // If there are no active human members in any monitored channel (and no manual override)
   if (maxHumans === 0 && !isManualOverride) {
     if (currentConnection) {
-      // Check if connection is shared with other modules (voice 24/7 presence, music)
+      // Check if connection is shared with voice 24/7 presence
       const modules = context.getModulesState ? context.getModulesState() : [];
       const voiceModule = modules.find((m: any) => m.id === 'voice');
       const isVoicePresence = voiceModule?.status === 'enabled' && voiceModule.config?.channelId === currentConnection.joinConfig.channelId;
-      
-      const musicModule = modules.find((m: any) => m.id === 'music');
-      const isMusicPlaying = musicModule?.status === 'enabled' && musicModule.config?.playing;
 
-      if (!isVoicePresence && !isMusicPlaying) {
+      if (!isVoicePresence) {
         currentConnection.destroy();
         stopMonitoringAllInGuild(guildId);
         if (context.logSyncEvent) {

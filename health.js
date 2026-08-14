@@ -38,7 +38,6 @@ async function runHealthCheck() {
   const workspaceEnvConfigs = [
     { label: 'Root Env', path: path.resolve(process.cwd(), '.env') },
     { label: 'Backend Env', path: path.resolve(process.cwd(), 'backend', '.env') },
-    { label: 'Clutch Music Env', path: path.resolve(process.cwd(), 'clutch-music', '.env') },
     { label: 'Frontend Env', path: path.resolve(process.cwd(), 'frontend', '.env') }
   ];
 
