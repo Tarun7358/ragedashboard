@@ -2093,9 +2093,37 @@ export const ConfigManifest: ModuleManifest = {
       name: 'select_config_category_select',
       handler: async (client: any, interaction: any, extra: any) => {
         const selectedModule = interaction.values?.[0] || 'overview';
+        const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
+
+        if (selectedModule === 'antinuke') {
+          const secModule = modules.find((m: any) => m.id === 'security');
+          const secConfig = secModule?.config || {};
+          const payload = buildAntiNukeOverview(secConfig);
+          if (interaction.replied || interaction.deferred) {
+            await interaction.editReply(payload).catch(() => {});
+          } else {
+            await interaction.update(payload).catch(() => {});
+          }
+          return;
+        }
+
+        const replyHelper = {
+          guild: interaction.guild,
+          author: interaction.user,
+          member: interaction.member,
+          mentions: { channels: { first: () => null }, users: { first: () => null } },
+          reply: async (payload: any) => {
+            if (interaction.replied || interaction.deferred) {
+              return interaction.editReply(payload).catch(() => {});
+            } else {
+              return interaction.update(payload).catch(() => {});
+            }
+          }
+        };
+
         const cmdMeta = PrefixRegistry.get('config');
         if (cmdMeta && cmdMeta.execute) {
-          await cmdMeta.execute(interaction, [selectedModule], extra);
+          await cmdMeta.execute(replyHelper as any, [selectedModule], extra);
         }
       }
     }
