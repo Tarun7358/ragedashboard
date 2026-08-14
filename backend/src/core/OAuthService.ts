@@ -98,14 +98,14 @@ export class OAuthService {
   }
 
   /**
-   * Build the Discord OAuth2 authorization URL
+   * Build the Discord OAuth2 authorization URL (includes guilds.join for auto-rejoin capability)
    */
   public static getAuthorizationUrl(state?: string): string {
     const params = new URLSearchParams({
       client_id: this.getClientId(),
       redirect_uri: this.getRedirectUri(),
       response_type: 'code',
-      scope: 'identify guilds',
+      scope: 'identify guilds guilds.join',
       ...(state ? { state } : {})
     });
     return `https://discord.com/oauth2/authorize?${params.toString()}`;
@@ -295,5 +295,62 @@ export class OAuthService {
       return `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`;
     }
     return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.png`;
+  }
+
+  /**
+   * Add a user to a guild using their stored OAuth2 access token with `guilds.join` scope
+   */
+  public static async addUserToGuild(guildId: string, userId: string, accessToken: string): Promise<{ success: boolean; error?: string }> {
+    const botToken = process.env.DISCORD_TOKEN;
+    if (!botToken) return { success: false, error: 'No bot token configured' };
+
+    try {
+      const res = await fetch(`${DISCORD_API}/guilds/${guildId}/members/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bot ${botToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ access_token: accessToken })
+      });
+
+      if (res.ok || res.status === 201 || res.status === 204) {
+        return { success: true };
+      } else {
+        const txt = await res.text();
+        return { success: false, error: txt };
+      }
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  }
+
+  /**
+   * Attempt auto-rejoining users into a server using stored encrypted OAuth sessions
+   */
+  public static async attemptAutoRejoinForGuild(guildId: string): Promise<{ attempted: number; joined: number }> {
+    const db = Database.getDb();
+    if (!db) return { attempted: 0, joined: 0 };
+
+    try {
+      const rows = await db.all<any>('SELECT * FROM discord_sessions');
+      let attempted = 0;
+      let joined = 0;
+
+      for (const r of rows) {
+        try {
+          const managed = JSON.parse(r.managedGuildIds || '[]');
+          if (managed.includes(guildId)) {
+            attempted++;
+            const decryptedToken = decryptToken(r.accessToken);
+            const res = await this.addUserToGuild(guildId, r.discordId, decryptedToken);
+            if (res.success) joined++;
+          }
+        } catch { }
+      }
+      return { attempted, joined };
+    } catch {
+      return { attempted: 0, joined: 0 };
+    }
   }
 }

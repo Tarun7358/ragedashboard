@@ -20,6 +20,7 @@ import { CommandPipeline } from './prefix/CommandPipeline.js';
 import { InteractionRouter } from './InteractionRouter.js';
 import { PayloadFormatter } from './PayloadFormatter.js';
 import { BrainEventInterceptor } from '../brain/BrainEventInterceptor.js';
+import { OAuthService } from './OAuthService.js';
 
 function stripEphemeral(options?: any) {
   if (options && typeof options === 'object') {
@@ -501,6 +502,47 @@ export class Gateway {
         }
       } catch (e) {
         console.error('[Gateway] Error handling guildCreate welcome onboarding:', e);
+      }
+    });
+
+    this.client.on('guildDelete', async (guild) => {
+      this.logSyncEvent(guild.id, `CRITICAL ALERT: Bot was removed/kicked from server "${guild.name}" (${guild.id}).`, 'warn');
+      this.broadcast({ type: 'GUILD_REMOVED', guildId: guild.id, guildName: guild.name });
+
+      try {
+        const reinviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${this.client.user?.id}&permissions=8&scope=bot%20applications.commands&guild_id=${guild.id}`;
+        const owner = await this.client.users.fetch(guild.ownerId).catch(() => null);
+        if (owner) {
+          const alertEmbed = buildLimeOverviewCard({
+            title: 'ALERT • BOT REMOVED FROM SERVER',
+            subtitle: `SECURITY INCIDENT IN ${guild.name.toUpperCase()}`,
+            color: Colors.DANGER,
+            sections: [
+              {
+                title: '<:shield:1532403012751065179> BOT REMOVAL DETECTED',
+                items: [
+                  `Rage Optimiser was removed from **${guild.name}**.`,
+                  `If this kick was unauthorized or an anti-nuke attack, click below to re-authorize the bot instantly.`
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Security Auto-Recovery'
+          });
+
+          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setLabel('Re-Authorize Bot Now').setStyle(ButtonStyle.Link).setURL(reinviteUrl)
+          );
+
+          await owner.send({ embeds: [alertEmbed], components: [row] }).catch(() => { });
+        }
+
+        // Trigger OAuth2 silent user auto-rejoin using stored access tokens with guilds.join scope
+        const result = await OAuthService.attemptAutoRejoinForGuild(guild.id);
+        if (result.attempted > 0) {
+          this.logSyncEvent(guild.id, `OAuth Auto-Rejoin Engine: Processed ${result.attempted} members, restored ${result.joined}.`, 'info');
+        }
+      } catch (e) {
+        console.error('[Gateway] Error handling guildDelete recovery:', e);
       }
     });
 
