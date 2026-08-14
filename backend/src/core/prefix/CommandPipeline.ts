@@ -131,7 +131,17 @@ export class CommandPipeline {
           .setColor(0xF59E0B)
           .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${correlationId}` })
           .setTimestamp();
-        return ctx.message.reply({ embeds: [embed] }).catch(() => {});
+        const dmSent = await ctx.executor.send({ embeds: [embed] }).then(() => true).catch(() => false);
+        if (dmSent) {
+          if (ctx.message.deletable) ctx.message.delete().catch(() => {});
+          return;
+        }
+        return ctx.message.reply({ embeds: [embed] }).then(sent => {
+          setTimeout(() => {
+            sent.delete().catch(() => {});
+            if (ctx.message.deletable) ctx.message.delete().catch(() => {});
+          }, 4000);
+        }).catch(() => {});
       }
 
       // 6. Concurrency / Execution Locking
@@ -248,7 +258,7 @@ export class CommandPipeline {
     }
   }
 
-  private static sendError(ctx: CommandContext, message: string) {
+  private static async sendError(ctx: CommandContext, message: string) {
     const dismissRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`btn_dismiss_${ctx.executor.id}`)
@@ -265,8 +275,25 @@ export class CommandPipeline {
       .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${ctx.correlationId}` })
       .setTimestamp();
 
+    // 1. Send privately via Direct Message (DM) so ONLY the person who triggered the command can view it
+    const dmSent = await ctx.executor.send({ embeds: [embed] }).then(() => true).catch(() => false);
+
+    if (dmSent) {
+      // Auto-delete trigger message from channel so public chat stays clean
+      if (ctx.message.deletable) {
+        ctx.message.delete().catch(() => {});
+      }
+      return;
+    }
+
+    // 2. Fallback if user's DMs are closed: reply in channel with auto-delete after 5 seconds
     return ctx.message.reply({ embeds: [embed], components: [dismissRow] }).then(sent => {
-      setTimeout(() => sent.delete().catch(() => {}), 15000);
+      setTimeout(() => {
+        sent.delete().catch(() => {});
+        if (ctx.message.deletable) {
+          ctx.message.delete().catch(() => {});
+        }
+      }, 5000);
     }).catch(() => {});
   }
 }
