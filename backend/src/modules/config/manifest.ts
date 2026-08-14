@@ -7,10 +7,10 @@ import { PrefixResolver } from '../../core/prefix/PrefixResolver.js';
 import { SocialSubscriptionRepository } from '../social-updates/SocialSubscriptionRepository.js';
 import { SubscriptionManager } from '../social-updates/SubscriptionManager.js';
 
-const APPROVED_ICON = '<a:approved:1532390590707142956>';
-const WRONG_EMOJI = '<:wrong:1532390628330307634>';
-const CONFIG_EMOJI = '<:config:1532425712844144701>';
-const SHIELD_EMOJI = '<:shield:1532403012751065179>';
+const APPROVED_ICON = '✅';
+const WRONG_EMOJI = '❌';
+const CONFIG_EMOJI = '⚙️';
+const SHIELD_EMOJI = '🛡️';
 
 export const DEFAULT_SECURITY_RULES: Record<string, { enabled: boolean; limit: number; window: number; action: string; recovery: boolean }> = {
   anti_role_grant: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
@@ -120,22 +120,22 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
   const categoryDefinitions: Record<string, { label: string; title: string; keys: string[] }> = {
     group_roles: {
       label: 'ROLE PROTECTIONS',
-      title: '<:shield:1532403012751065179> ROLE PROTECTION MODULES',
+      title: '🛡️ ROLE PROTECTION MODULES',
       keys: ['anti_role_grant', 'anti_role_remove', 'anti_role_update', 'anti_role_create', 'anti_role_delete']
     },
     group_channels: {
       label: 'CHANNEL PROTECTIONS',
-      title: '<:shield:1532403012751065179> CHANNEL PROTECTION MODULES',
+      title: '🛡️ CHANNEL PROTECTION MODULES',
       keys: ['anti_channel_create', 'anti_channel_delete', 'anti_channel_update']
     },
     group_members: {
       label: 'MEMBER & MODERATION PROTECTIONS',
-      title: '<:gavel:1532621057318584380> MEMBER & MODERATION MODULES',
+      title: '🔨 MEMBER & MODERATION MODULES',
       keys: ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune']
     },
     group_server: {
       label: 'SERVER & WEBHOOK PROTECTIONS',
-      title: '<:config:1532425712844144701> SERVER & WEBHOOK MODULES',
+      title: '⚙️ SERVER & WEBHOOK MODULES',
       keys: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_link']
     }
   };
@@ -180,22 +180,22 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
     .setCustomId('an_rule_select')
     .setPlaceholder(isFiltered ? `Inspecting: ${groupLabel}...` : 'Inspect Anti-Nuke Protection Category...')
     .addOptions([
-      { label: 'Role Protections (Grant, Remove, Create, Delete)', value: 'group_roles', emoji: '<:shield:1532403012751065179>', description: 'Role creation, deletion & assignment rules' },
-      { label: 'Channel Protections (Create, Delete, Update)', value: 'group_channels', emoji: '<:shield:1532403012751065179>', description: 'Channel creation, deletion & modification rules' },
-      { label: 'Member & Mod Protections (Ban, Kick, Timeout)', value: 'group_members', emoji: '<:gavel:1532621057318584380>', description: 'Ban, kick, timeout, bot add, prune rules' },
-      { label: 'Server & Webhook Protections (Webhook, Guild)', value: 'group_server', emoji: '<:config:1532425712844144701>', description: 'Webhook & server modification rules' }
+      { label: 'Role Protections (Grant, Remove, Create, Delete)', value: 'group_roles', emoji: '🛡️', description: 'Role creation, deletion & assignment rules' },
+      { label: 'Channel Protections (Create, Delete, Update)', value: 'group_channels', emoji: '🛡️', description: 'Channel creation, deletion & modification rules' },
+      { label: 'Member & Mod Protections (Ban, Kick, Timeout)', value: 'group_members', emoji: '🔨', description: 'Ban, kick, timeout, bot add, prune rules' },
+      { label: 'Server & Webhook Protections (Webhook, Guild)', value: 'group_server', emoji: '⚙️', description: 'Webhook & server modification rules' }
     ]);
 
   const rowSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(ruleSelectMenu);
 
   const buttonList: ButtonBuilder[] = [];
   if (isFiltered) {
-    buttonList.push(new ButtonBuilder().setCustomId('an_view_full').setLabel('Overview Matrix').setStyle(ButtonStyle.Primary).setEmoji('<:config:1532425712844144701>'));
+    buttonList.push(new ButtonBuilder().setCustomId('an_view_full').setLabel('Overview Matrix').setStyle(ButtonStyle.Primary).setEmoji('⚙️'));
   }
   buttonList.push(
-    new ButtonBuilder().setCustomId('an_toggle_all').setLabel('Toggle Anti-Nuke').setStyle(isMasterEnabled ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<:shield:1532403012751065179>'),
-    new ButtonBuilder().setCustomId('an_toggle_raid').setLabel('Toggle Raid Mode').setStyle(secConfig.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji('<:shield:1532403012751065179>'),
-    new ButtonBuilder().setCustomId('an_emergency_lock').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger).setEmoji('<:shield:1532403012751065179>')
+    new ButtonBuilder().setCustomId('an_toggle_all').setLabel('Toggle Anti-Nuke').setStyle(isMasterEnabled ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('🛡️'),
+    new ButtonBuilder().setCustomId('an_toggle_raid').setLabel('Toggle Raid Mode').setStyle(secConfig.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji('🚨'),
+    new ButtonBuilder().setCustomId('an_emergency_lock').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger).setEmoji('🔒')
   );
 
   const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(buttonList.slice(0, 5));
