@@ -204,6 +204,23 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
 }
 
 export function registerConfigCommands(): void {
+  // 0. Quarantine Role Configuration Command (`r!quarantine-role`)
+  PrefixRegistry.register({
+    name: 'quarantine-role',
+    category: 'Configuration',
+    description: 'Set or auto-create the server Quarantine Isolation Role.',
+    usage: 'r!quarantine-role <@role|role_id|create|view>',
+    aliases: ['quarantinerole', 'qrole', 'setquarantine'],
+    cooldownSeconds: 3,
+    userPermissions: ['Administrator'],
+    execute: async (message: Message, args: string[], extra?: any) => {
+      const cmdMeta = PrefixRegistry.get('config');
+      if (cmdMeta && cmdMeta.execute) {
+        await cmdMeta.execute(message, ['antinuke', 'quarantine-role', ...args], extra);
+      }
+    }
+  });
+
   // 1. Setup Wizard Command (`r!setup` / `/setup`)
   PrefixRegistry.register({
     name: 'setup',
@@ -256,6 +273,7 @@ export function registerConfigCommands(): void {
       { name: 'antinuke threshold <event> <limit> <window>', description: 'Configure action count threshold and rate limit window.' },
       { name: 'antinuke punishment <event> <action>', description: 'Configure punishment (quarantine, ban, kick, strip_roles, warn).' },
       { name: 'antinuke reversion <event> <on|off>', description: 'Toggle automatic rollback / event recovery.' },
+      { name: 'antinuke quarantine-role <@role|create|view>', description: 'Set or auto-create the server Quarantine Isolation Role.' },
       { name: 'antinuke module <event> <limit> <window> <punishment> <reversion>', description: 'Bulk update all parameters for a protection module.' },
       { name: 'automod status', description: 'View AutoMod filter matrix (Anti-Spam, Anti-Link, Blacklist, Caps, Emojis).' },
       { name: 'automod antispam <on|off> [max_msgs] [window_sec] [action]', description: 'Configure Anti-Spam threshold & punishment action.' },
@@ -274,6 +292,8 @@ export function registerConfigCommands(): void {
     ],
     examples: [
       'r!config antinuke status',
+      'r!config antinuke quarantine-role @Quarantine',
+      'r!config antinuke quarantine-role create',
       'r!config antinuke threshold channel_delete 2 10',
       'r!config antinuke module channel_delete 1 10 quarantine on',
       'r!config automod antispam on 5 5 mute',
@@ -618,6 +638,82 @@ export function registerConfigCommands(): void {
             embeds: [createLimeEmbed({
               title: 'Anti-Nuke Module Configuration Applied',
               description: `${APPROVED_ICON} Configured **${targetKeys.length} sub-module(s)**:\n> • Limit: \`${limit} per ${windowRate}s\`\n> • Punishment: \`${punishment.toUpperCase()}\`\n> • Auto-Revert: \`${isReversionOn ? 'ENABLED' : 'DISABLED'}\``
+            })]
+          });
+        }
+
+        // Configure Quarantine Role (`r!config antinuke quarantine-role <@role|role_id|create|view>`)
+        if (['quarantine-role', 'quarantinerole', 'qrole', 'quarantine_role', 'q-role'].includes(action)) {
+          const roleArg = effectiveArgs[2];
+
+          if (!roleArg || roleArg.toLowerCase() === 'view' || roleArg.toLowerCase() === 'status') {
+            const currentRoleId = secConfig.quarantineRoleId;
+            const currentRole = currentRoleId ? message.guild?.roles.cache.get(currentRoleId) : null;
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Quarantine Isolation Role Status',
+                description: currentRole
+                  ? `${APPROVED_ICON} Current Quarantine Role: ${currentRole} (\`${currentRole.id}\`)`
+                  : `${WRONG_EMOJI} No Quarantine Role bound. Use \`r!config antinuke quarantine-role @role\` or \`r!config antinuke quarantine-role create\` to auto-generate a high-security quarantine role.`
+              })]
+            });
+          }
+
+          if (['create', 'auto', 'generate', 'setup'].includes(roleArg.toLowerCase())) {
+            try {
+              let existingRole = message.guild?.roles.cache.find(r => r.name.toLowerCase() === '. quarantine' || r.name.toLowerCase() === 'quarantine');
+              if (!existingRole) {
+                existingRole = await message.guild?.roles.create({
+                  name: '. Quarantine',
+                  color: 0x343541,
+                  reason: 'Rage Optimiser Automated Quarantine Isolation Role'
+                });
+              }
+
+              if (existingRole) {
+                const updatedConfig = { ...secConfig, quarantineRoleId: existingRole.id };
+                if (extra?.updateModuleConfig) {
+                  extra.updateModuleConfig('security', updatedConfig);
+                }
+                return message.reply({
+                  embeds: [createLimeEmbed({
+                    title: 'Quarantine Role Auto-Created & Bound',
+                    description: `${APPROVED_ICON} Successfully created and bound high-security role ${existingRole} (\`${existingRole.id}\`) for automated isolations.`
+                  })]
+                });
+              }
+            } catch (err: any) {
+              return message.reply({
+                embeds: [createLimeEmbed({
+                  title: 'Quarantine Role Creation Failed',
+                  description: `${WRONG_EMOJI} Could not auto-create role: ${err.message || err}`
+                })]
+              });
+            }
+          }
+
+          const targetRole = message.mentions.roles.first() ||
+                             message.guild?.roles.cache.get(roleArg) ||
+                             message.guild?.roles.cache.find(r => r.name.toLowerCase() === roleArg.toLowerCase());
+
+          if (!targetRole) {
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Invalid Quarantine Role',
+                description: `${WRONG_EMOJI} Role not found. Please mention a valid role, provide a role ID, or use \`create\`.\nExample: \`r!config antinuke quarantine-role @Quarantine\``
+              })]
+            });
+          }
+
+          const updatedConfig = { ...secConfig, quarantineRoleId: targetRole.id };
+          if (extra?.updateModuleConfig) {
+            extra.updateModuleConfig('security', updatedConfig);
+          }
+
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Quarantine Role Successfully Bound',
+              description: `${APPROVED_ICON} Bound ${targetRole} (\`${targetRole.id}\`) as the server's Quarantine Isolation Role.`
             })]
           });
         }
