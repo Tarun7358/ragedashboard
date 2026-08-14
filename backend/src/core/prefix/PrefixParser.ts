@@ -94,8 +94,6 @@ export class PrefixParser {
   public static enrichOptions(parsed: ParsedCommand, cmdDef: any): void {
     if (!cmdDef || !Array.isArray(cmdDef.options) || cmdDef.options.length === 0) return;
 
-    // Determine the effective args slice:
-    // If the first arg matches a subcommand name in the definition, skip it and use that sub's options.
     const subName = parsed.subcommand;
     let optionDefs: any[] = cmdDef.options;
     let argOffset = 0;
@@ -104,26 +102,59 @@ export class PrefixParser {
       const subDef = cmdDef.options.find((o: any) => o.name === subName && o.type === 1);
       if (subDef && Array.isArray(subDef.options)) {
         optionDefs = subDef.options;
-        argOffset = 1; // skip the subcommand token in args
+        argOffset = 1;
       }
     }
 
     const effectiveArgs = parsed.args.slice(argOffset);
+    if (effectiveArgs.length === 0) return;
 
-    // Map each defined option to the corresponding positional arg, respecting flags first
+    // Smart type/keyword-based option extraction:
+    const knownPrivacyModes = ['public', 'private', 'locked', 'invisible', 'stage', 'sync'];
+    const channelIdMatches = effectiveArgs.filter(a => /\d{17,20}/.test(a) || /^<#\d+>$/.test(a));
+    const privacyMatch = effectiveArgs.find(a => knownPrivacyModes.includes(a.toLowerCase()));
+    const limitMatch = effectiveArgs.find(a => !isNaN(Number(a)) && !channelIdMatches.includes(a));
+    const remainingTextArgs = effectiveArgs.filter(a => 
+      !channelIdMatches.includes(a) && 
+      (!privacyMatch || a.toLowerCase() !== privacyMatch.toLowerCase()) &&
+      a !== limitMatch
+    );
+
+    if (channelIdMatches.length > 0) {
+      const chanOpt = optionDefs.find(o => o.name === 'channel');
+      if (chanOpt) parsed.options['channel'] = channelIdMatches[0];
+      if (channelIdMatches.length > 1) {
+        const catOpt = optionDefs.find(o => o.name === 'category');
+        if (catOpt) parsed.options['category'] = channelIdMatches[1];
+      }
+    }
+
+    if (privacyMatch) {
+      const privOpt = optionDefs.find(o => o.name === 'privacy');
+      if (privOpt) parsed.options['privacy'] = privacyMatch.toLowerCase();
+    }
+
+    if (limitMatch !== undefined) {
+      const limOpt = optionDefs.find(o => o.name === 'default_limit' || o.name === 'limit');
+      if (limOpt) parsed.options[limOpt.name] = limitMatch;
+    }
+
+    if (remainingTextArgs.length > 0) {
+      const labelOpt = optionDefs.find(o => o.name === 'label');
+      if (labelOpt) parsed.options['label'] = remainingTextArgs.join(' ');
+      const nameOpt = optionDefs.find(o => o.name === 'default_name');
+      if (nameOpt && !parsed.options['default_name']) parsed.options['default_name'] = remainingTextArgs.join(' ');
+    }
+
+    // Standard positional & flag fallback for any unpopulated option definitions
     for (let i = 0; i < optionDefs.length; i++) {
       const optDef = optionDefs[i];
       const optName = optDef.name as string;
 
-      // Flags have highest priority (e.g. --reason "some reason")
+      if (parsed.options[optName] !== undefined) continue;
+
       if (parsed.flags[optName] !== undefined) {
         parsed.options[optName] = String(parsed.flags[optName]);
-        continue;
-      }
-
-      // If it's the last string option, capture all remaining args joined
-      if (i === optionDefs.length - 1 && optDef.type === 3 /* STRING */ && effectiveArgs.length > i) {
-        parsed.options[optName] = effectiveArgs.slice(i).join(' ');
         continue;
       }
 

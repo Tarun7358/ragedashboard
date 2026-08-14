@@ -355,8 +355,9 @@ export class SyntheticInteraction {
       if (typeof val === 'string' && this.guild) {
         const idMatch = val.match(/\d{17,20}/);
         if (idMatch) {
-          const cached = this.guild.channels.cache.get(idMatch[0]);
+          const cached = this.guild.channels.cache.get(idMatch[0]) || this.client.channels.cache.get(idMatch[0]);
           if (cached) return cached;
+          return { id: idMatch[0], name: `Channel-${idMatch[0]}`, type: 2 } as any;
         }
 
         // Clean name resolution (strip leading # and mention symbols, normalize special characters)
@@ -379,8 +380,9 @@ export class SyntheticInteraction {
           if (!arg) continue;
           const idMatch = arg.match(/\d{17,20}/);
           if (idMatch) {
-            const cached = this.guild.channels.cache.get(idMatch[0]);
+            const cached = this.guild.channels.cache.get(idMatch[0]) || this.client.channels.cache.get(idMatch[0]);
             if (cached) return cached;
+            return { id: idMatch[0], name: `Channel-${idMatch[0]}`, type: 2 } as any;
           }
           const cleanName = arg.toLowerCase().replace(/^[<#>]*/, '').replace(/>$/, '').trim();
           if (cleanName && cleanName.length > 1) {

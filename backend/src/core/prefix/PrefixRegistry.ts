@@ -29,6 +29,7 @@ export interface PrefixCommandMeta {
   supportsMentions?: boolean;
   argumentTypes?: string[];
   subcommands?: PrefixCommandSubMeta[];
+  options?: any[];
   experimental?: boolean;
   hidden?: boolean;
   confirmationRequired?: boolean;
@@ -202,6 +203,7 @@ export class PrefixRegistry {
             supportsMentions: cmd.supportsMentions ?? false,
             argumentTypes: cmd.argumentTypes || [],
             subcommands: cmd.subcommands || (cmd.options ? cmd.options.filter((o: any) => o.type === 1).map((o: any) => ({ name: o.name, description: o.description })) : []),
+            options: cmd.options || [],
             experimental: cmd.experimental ?? false,
             hidden: cmd.hidden ?? false,
             confirmationRequired: cmd.confirmationRequired ?? false,
