@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags, Options } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags, Options, ActivityType } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } from '@discordjs/voice';
 import { DiscordResourceRegistry, ModuleManifest, ModuleState } from './types.js';
 import { Database } from './Database.js';
@@ -349,6 +349,29 @@ export class Gateway {
       await PrefixResolver.loadAllPrefixes().catch(console.error);
       await this.client.application?.fetch().catch(() => null);
       this.syncRegistry();
+
+      // Set Rich Activity Status
+      const updateActivity = () => {
+        if (!this.client.user) return;
+        const totalGuilds = this.client.guilds.cache.size;
+        const totalUsers = this.client.guilds.cache.reduce((acc, g) => acc + (g.memberCount || 0), 0);
+
+        const activities = [
+          { name: `Fu4king Nukers | r!help`, type: ActivityType.Custom },
+          { name: `Securing ${totalGuilds} Servers | r!config`, type: ActivityType.Watching },
+          { name: `Protecting ${totalUsers.toLocaleString()} Members`, type: ActivityType.Competing },
+          { name: `r!help | /config`, type: ActivityType.Listening }
+        ];
+
+        const selected = activities[Math.floor(Math.random() * activities.length)];
+        this.client.user.setPresence({
+          activities: [selected],
+          status: 'online'
+        });
+      };
+
+      updateActivity();
+      setInterval(updateActivity, 30000);
 
       // Deploy commands globally across all servers on startup.
       await this.forceDeployCommands().catch((err) => {
