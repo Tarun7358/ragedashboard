@@ -25,24 +25,24 @@ import {
   type AnyComponentBuilder,
 } from 'discord.js';
 
-export const VERIFIED_ICON = '✅';
-export const SQUARE_TICK_ICON = '☑️';
-export const WRONG_ICON = '❌';
-export const SHIELD_ICON = '🛡️';
-export const GAVEL_ICON = '🔨';
-export const BOT_ICON = '🤖';
-export const MEMBER_ICON = '👤';
-export const INFO_ICON = 'ℹ️';
-export const BOOSTER_ICON = '🚀';
-export const ARROW_ICON = '▶';
-export const CONFIG_ICON = '⚙️';
-export const TICKET_ICON = '🎫';
-export const TIMER_ICON = '⏱️';
-export const VIP_ICON = '⭐';
-export const LINK_ICON = '🔗';
-export const VOICE_ICON = '🔊';
-export const STATS_ICON = '📊';
-export const CART_ICON = '🛒';
+export const VERIFIED_ICON = '<a:approved:1532390590707142956>';
+export const SQUARE_TICK_ICON = '<:ticks:1532620580266836148>';
+export const WRONG_ICON = '<:wrong:1532390628330307634>';
+export const SHIELD_ICON = '<:shield:1532403012751065179>';
+export const GAVEL_ICON = '<:gavel:1532621057318584380>';
+export const BOT_ICON = '<:bot:1532621107746570391>';
+export const MEMBER_ICON = '<:member:1532621317487071426>';
+export const INFO_ICON = '<:information:1532621274092929124>';
+export const BOOSTER_ICON = '<:booster:1532621228492460172>';
+export const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
+export const CONFIG_ICON = '<:config:1532425712844144701>';
+export const TICKET_ICON = '<:ticket:1532620631466836021>';
+export const TIMER_ICON = '<:timer:1532620491662037123>';
+export const VIP_ICON = '<:vip:1532620837117759508>';
+export const LINK_ICON = '<:link:1532620952087826602>';
+export const VOICE_ICON = '<:voicechannelgreen:1532425750278438962>';
+export const STATS_ICON = '<:stats:1532429110775779459>';
+export const CART_ICON = '<:cart:1532621146208473115>';
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS (Matching Lime.gg visual design with Rage Optimiser branding)
