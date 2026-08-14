@@ -287,3 +287,19 @@ export interface IModerationNote {
   createdByTag: string;
   createdAt: Date;
 }
+
+// ---- Trusted Actor Abuse Log ----
+export interface ITrustedActorAbuseLog {
+  id?: number;
+  guildId: string;
+  userId: string;
+  trustType: 'whitelist' | 'extraowner';
+  revokedAt: number;
+  warningsIssued: number;
+  actionsTimeline: string; // JSON string of SnapshotRecord[]
+  punishmentType: string;
+  restoreReport?: string;  // JSON string of RestoreReport
+  logChannelMsgId?: string;
+  createdAt?: number;
+}
+

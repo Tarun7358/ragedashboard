@@ -1932,7 +1932,11 @@ export const SecurityManifest: ModuleManifest = {
 
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_channel_delete');
           console.log(`[Anti-Nuke Debug] [channelDelete] Executor ${executor.username} bypassed status: ${isBypassed}`);
-          if (isBypassed) return;
+          if (isBypassed) {
+            const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
+            await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'deleted', 'channel', channel, config);
+            return;
+          }
 
           const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_delete', rule.limit, rule.window);
           console.log(`[Anti-Nuke Debug] [channelDelete] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
@@ -2044,7 +2048,11 @@ export const SecurityManifest: ModuleManifest = {
 
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_channel_create');
           console.log(`[Anti-Nuke Debug] [channelCreate] Executor ${executor.username} bypassed status: ${isBypassed}`);
-          if (isBypassed) return;
+          if (isBypassed) {
+            const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
+            await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'created', 'channel', channel, config);
+            return;
+          }
 
           const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_create', rule.limit, rule.window);
           console.log(`[Anti-Nuke Debug] [channelCreate] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
@@ -2205,7 +2213,11 @@ export const SecurityManifest: ModuleManifest = {
 
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_create');
           console.log(`[Anti-Nuke Debug] [roleCreate] Executor ${executor.username} bypassed status: ${isBypassed}`);
-          if (isBypassed) return;
+          if (isBypassed) {
+            const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
+            await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'created', 'role', role, config);
+            return;
+          }
 
           const triggered = checkRateLimit(guild.id, executor.id, 'anti_role_create', rule.limit, rule.window);
           console.log(`[Anti-Nuke Debug] [roleCreate] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
@@ -2273,7 +2285,11 @@ export const SecurityManifest: ModuleManifest = {
 
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_delete');
           console.log(`[Anti-Nuke Debug] [roleDelete] Executor ${executor.username} bypassed status: ${isBypassed}`);
-          if (isBypassed) return;
+          if (isBypassed) {
+            const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
+            await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'deleted', 'role', role, config);
+            return;
+          }
 
           const triggered = checkRateLimit(guild.id, executor.id, 'anti_role_delete', rule.limit, rule.window);
           console.log(`[Anti-Nuke Debug] [roleDelete] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);

@@ -204,7 +204,7 @@ export class Database {
       'guild_xp', 'guild_economy', 'discord_sessions', 'public_feed',
       'sync_logs', 'schema_migrations', 'tickets', 'ticket_messages',
       'ticket_panels', 'moderation_cases', 'persistent_music_queues', 'prebot_whitelist',
-      'guild_custom_embeds'
+      'guild_custom_embeds', 'trusted_actor_abuse_logs'
     ];
 
     const rows = await this.all<{ name: string }>(
@@ -625,6 +625,20 @@ export class Database {
         updatedAt INTEGER NOT NULL,
         PRIMARY KEY (guildId, name)
       );`,
+      `CREATE TABLE IF NOT EXISTS trusted_actor_abuse_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        trustType TEXT NOT NULL,
+        revokedAt INTEGER NOT NULL,
+        warningsIssued INTEGER DEFAULT 0,
+        actionsTimeline TEXT NOT NULL,
+        punishmentType TEXT NOT NULL,
+        restoreReport TEXT,
+        logChannelMsgId TEXT,
+        createdAt INTEGER DEFAULT (strftime('%s', 'now'))
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_trusted_actor_logs ON trusted_actor_abuse_logs (guildId, id DESC);`,
     ];
 
     for (const schema of schemas) {
