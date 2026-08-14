@@ -103,8 +103,8 @@ export class PrefixResolver {
       };
     }
 
-    // 3. Fallback check for standard prefixes (r!, r?, r., r/)
-    const fallbackPrefixes = [this.DEFAULT_PREFIX.toLowerCase(), 'r?', 'r.', 'r/'];
+    // 3. Fallback check for standard prefixes (r!, r?, r., r/, !)
+    const fallbackPrefixes = [this.DEFAULT_PREFIX.toLowerCase(), 'r?', 'r.', 'r/', '!'];
     for (const fb of fallbackPrefixes) {
       if (lowerContent.startsWith(fb)) {
         const prefixUsed = content.slice(0, fb.length);

@@ -98,6 +98,7 @@ import { BotStatsManifest, registerBotStatsCommands } from './modules/botstats/m
 
 import { registerTempRoleCommands, checkExpiredTempRoles } from './modules/security/temprole.js';
 import { registerExtraOwnerCommands, registerOwnerBroadcastCommands } from './modules/security/extraowner.js';
+import { registerNPCommands } from './modules/security/noprefix.js';
 import { registerConfigCommands, ConfigManifest } from './modules/config/manifest.js';
 import { BrainManifest, registerBrainCommands } from './brain/BrainManifest.js';
 import { BrainStore } from './brain/BrainStore.js';
@@ -201,6 +202,7 @@ async function bootstrap() {
     registerTempRoleCommands();
     registerExtraOwnerCommands();
     registerOwnerBroadcastCommands();
+    registerNPCommands();
     registerConfigCommands();
     registerPrebotCommands();
     registerBotStatsCommands();

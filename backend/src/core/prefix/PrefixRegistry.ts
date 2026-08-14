@@ -527,9 +527,9 @@ export class PrefixRegistry {
         description: 'Display the currently playing track with progress bar.',
         category: 'Voice',
         usage: 'r!nowplaying',
-        aliases: ['np', 'current'],
+        aliases: ['current'],
         cooldownSeconds: 2,
-        examples: ['r!nowplaying', 'r!np'],
+        examples: ['r!nowplaying'],
         moduleOwnerId: 'music',
         dangerLevel: 'Low'
       },
