@@ -1,12 +1,29 @@
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const backendSrcModules = path.resolve(__dirname, '..', 'src', 'modules');
+const backendDir = path.resolve(__dirname, '..');
+const backendSrcIndex = path.resolve(backendDir, 'src', 'index.ts');
 
+// 1. Check if backend/src/index.ts has been corrupted with stray imports
+if (fs.existsSync(backendSrcIndex)) {
+  const content = fs.readFileSync(backendSrcIndex, 'utf8');
+  if (content.includes('SocialSubscriptionRepository') || content.includes('../../core/types.js')) {
+    console.log('[Prebuild Clean] ⚠️ Detected corrupted backend/src/index.ts on host server. Resetting to git HEAD...');
+    try {
+      execSync('git checkout HEAD -- src/index.ts', { cwd: backendDir });
+    } catch (e) {
+      console.error('[Prebuild Clean] Failed to git checkout src/index.ts:', e);
+    }
+  }
+}
+
+// 2. Remove any untracked stray module index files
+const backendSrcModules = path.resolve(backendDir, 'src', 'modules');
 if (fs.existsSync(backendSrcModules)) {
   const dirs = fs.readdirSync(backendSrcModules);
   for (const dir of dirs) {
@@ -22,25 +39,19 @@ if (fs.existsSync(backendSrcModules)) {
           try {
             fs.rmSync(strayIndexTs, { force: true });
             console.log(`[Prebuild Clean] Removed stray file: ${strayIndexTs}`);
-          } catch (e) {
-            console.error(`[Prebuild Clean] Failed to remove ${strayIndexTs}:`, e);
-          }
+          } catch (e) {}
         }
         if (fs.existsSync(strayIndexJs)) {
           try {
             fs.rmSync(strayIndexJs, { force: true });
             console.log(`[Prebuild Clean] Removed stray file: ${strayIndexJs}`);
-          } catch (e) {
-            console.error(`[Prebuild Clean] Failed to remove ${strayIndexJs}:`, e);
-          }
+          } catch (e) {}
         }
         if (fs.existsSync(straySrcDir)) {
           try {
             fs.rmSync(straySrcDir, { recursive: true, force: true });
             console.log(`[Prebuild Clean] Removed stray directory: ${straySrcDir}`);
-          } catch (e) {
-            console.error(`[Prebuild Clean] Failed to remove ${straySrcDir}:`, e);
-          }
+          } catch (e) {}
         }
       }
     }
