@@ -22,18 +22,6 @@ import { PayloadFormatter } from './PayloadFormatter.js';
 import { BrainEventInterceptor } from '../brain/BrainEventInterceptor.js';
 import { OAuthService } from './OAuthService.js';
 
-function stripEphemeral(options?: any) {
-  if (options && typeof options === 'object') {
-    if (options.flags === 64 || options.flags === MessageFlags.Ephemeral) {
-      delete options.flags;
-    }
-    if (options.ephemeral) {
-      delete options.ephemeral;
-    }
-  }
-  return options;
-}
-
 /**
  * transformContentToLimeCard — now a thin passthrough to PayloadFormatter.normalize().
  * All formatting logic lives in PayloadFormatter (single source of truth).
@@ -57,7 +45,7 @@ export function wrapInteraction(interaction: any) {
     interaction.deferReply = async function (options?: any) {
       if (interaction.deferred || interaction.replied) return;
       try {
-        return await originalDeferReply(stripEphemeral(options));
+        return await originalDeferReply(options);
       } catch (err: any) {
         interaction._defer_failed = true;
         console.warn('[wrapInteraction] deferReply failed:', err.message);
@@ -110,7 +98,6 @@ export function wrapInteraction(interaction: any) {
 
   if (originalEditReply) {
     interaction.editReply = async function (options?: any) {
-      options = stripEphemeral(options);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] editReply skipped: interaction is dead (deferReply failed previously)');
         return;
@@ -141,7 +128,6 @@ export function wrapInteraction(interaction: any) {
 
   if (originalFollowUp) {
     interaction.followUp = async function (options?: any) {
-      options = stripEphemeral(options);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] followUp skipped: interaction is dead (deferReply failed previously)');
         return;

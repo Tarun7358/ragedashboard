@@ -249,13 +249,24 @@ export class CommandPipeline {
   }
 
   private static sendError(ctx: CommandContext, message: string) {
+    const dismissRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`btn_dismiss_${ctx.executor.id}`)
+        .setLabel('Dismiss Message')
+        .setEmoji('🗑️')
+        .setStyle(ButtonStyle.Danger)
+    );
+
     const embed = new EmbedBuilder()
-      .setAuthor({ name: 'Rage Optimiser Security Gate • System Error' })
-      .setTitle('<:wrong:1532390628330307634> Command Pipeline Exception')
+      .setAuthor({ name: 'Rage Optimiser Security Gate • System Warning' })
+      .setTitle('<:wrong:1532390628330307634> Command Pipeline Warning')
       .setDescription(message)
       .setColor(0xEF4444)
       .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${ctx.correlationId}` })
       .setTimestamp();
-    return ctx.message.reply({ embeds: [embed] }).catch(() => {});
+
+    return ctx.message.reply({ embeds: [embed], components: [dismissRow] }).then(sent => {
+      setTimeout(() => sent.delete().catch(() => {}), 15000);
+    }).catch(() => {});
   }
 }
