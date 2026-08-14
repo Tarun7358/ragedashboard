@@ -162,6 +162,11 @@ export const JoinToCreateManifest: ModuleManifest = {
           type: 1
         },
         {
+          name: 'triggers',
+          description: 'View all configured Join To Create trigger channels',
+          type: 1
+        },
+        {
           name: 'bitrate',
           description: 'Set the bitrate of your JTC channel',
           type: 1,
@@ -381,13 +386,31 @@ export const JoinToCreateManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
-        if (sub === 'list') {
+        if (sub === 'list' || sub === 'triggers') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
             return interaction.reply({ content: '<:wrong:1532390628330307634> Manage Server permission required.', flags: 64 });
           }
-          if (activeChannels.length === 0) return interaction.reply({ content: '<:information:1532621274092929124> No active JTC channels.', flags: 64 });
-          const lines = activeChannels.map((c: any, i: number) => `**${i + 1}.** <#${c.channelId}> — Owner: <@${c.ownerId}> ${c.locked ? '[Locked]' : '[Open]'}`);
-          return interaction.reply({ content: `<:voicechannelgreen:1532425750278438962> **Active JTC Channels (${activeChannels.length}):**\n${lines.join('\n')}`, flags: 64 });
+
+          const triggers: any[] = config.triggers || [];
+          const triggerLines = triggers.length > 0 
+            ? triggers.map((t: any, i: number) => `**${i + 1}.** <#${t.triggerChannelId}> — Label: \`${t.label || 'Default'}\` (Privacy: \`${t.privacy || 'public'}\`)`).join('\n')
+            : (config.triggerChannelId ? `**1.** <#${config.triggerChannelId}> — Legacy Trigger` : '*No JTC triggers set up yet. Use `r!jtc setup <#voice_channel>` to add one.*');
+
+          const activeLines = activeChannels.length > 0
+            ? activeChannels.map((c: any, i: number) => `**${i + 1}.** <#${c.channelId}> — Owner: <@${c.ownerId}> ${c.locked ? '[Locked]' : '[Open]'}`).join('\n')
+            : '*No active spawned JTC channels currently.*';
+
+          const embed = new EmbedBuilder()
+            .setTitle('<:voicechannelgreen:1532425750278438962> Join To Create (JTC) Configuration')
+            .setColor('#4f8cff')
+            .addFields(
+              { name: '🔊 Configured Trigger Channels (Setup)', value: triggerLines, inline: false },
+              { name: '🎙️ Active Spawned Channels', value: activeLines, inline: false }
+            )
+            .setFooter({ text: 'Rage Optimiser • Voice Engine' })
+            .setTimestamp();
+
+          return interaction.reply({ embeds: [embed] });
         }
 
         if (sub === 'bitrate') {
