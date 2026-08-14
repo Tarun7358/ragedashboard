@@ -54,8 +54,20 @@ async function bootSystem() {
     process.exit(1);
   }
 
-  // 2. Start Core Backend & WebServer
+  // 2. Ensure Backend dist/index.js exists (auto-build if missing after git pull)
   const backendDir = path.resolve(process.cwd(), 'backend');
+  const backendDistPath = path.resolve(backendDir, 'dist', 'index.js');
+  if (!fs.existsSync(backendDistPath)) {
+    console.log('[Orchestrator] 🔨 backend/dist/index.js not found. Running automatic build...');
+    const buildProc = spawn('npm', ['run', 'build', '--workspace=backend'], { stdio: 'inherit', shell: true });
+    const buildCode = await new Promise((resolve) => buildProc.on('close', resolve));
+    if (buildCode !== 0) {
+      console.error('❌ [Orchestrator] Backend build failed. Boot sequence aborted.');
+      process.exit(1);
+    }
+  }
+
+  // 3. Start Core Backend & WebServer
   const backendProc = startSubprocess(
     'CORE', 
     'node', 
@@ -63,14 +75,10 @@ async function bootSystem() {
     backendDir
   );
 
-  // 3. Start Music Backend
-  const musicDir = path.resolve(process.cwd(), 'clutch-music');
-  const musicProc = startSubprocess(
-    'MUSIC', 
-    'node', 
-    ['dist/index.js'], 
-    musicDir
-  );
+  backendProc.on('close', (code) => {
+    console.error(`❌ [Orchestrator] Core backend exited with code ${code}.`);
+    process.exit(code || 1);
+  });
 
   // 4. Handle Shutdown Signals
   const handleShutdown = (signal) => {
@@ -82,11 +90,6 @@ async function bootSystem() {
       backendProc.kill(signal);
       killedCount++;
     }
-    
-    if (musicProc) {
-      musicProc.kill(signal);
-      killedCount++;
-    }
 
     console.log(`[Orchestrator] Terminated ${killedCount} sub-processes. Shutting down.`);
     process.exit(0);
@@ -94,6 +97,9 @@ async function bootSystem() {
 
   process.on('SIGINT', () => handleShutdown('SIGINT'));
   process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+
+  // Keep event loop alive
+  await new Promise(() => {});
 }
 
 bootSystem().catch(err => {

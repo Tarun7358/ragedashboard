@@ -51,6 +51,7 @@ ffprobe
 dist/
 dist-ssr/
 backend/dist/
+backend/public/
 clutch-music/dist/
 
 clutch-music/*.json
