@@ -15,7 +15,7 @@ let _scheduler: Scheduler | null = null;
 function getScheduler(client: any, logFn?: (msg: string, type: any) => void): Scheduler {
   if (!_scheduler) {
     _scheduler = new Scheduler(client, logFn);
-    _scheduler.initAll().catch(err => console.error('[SocialUpdates] Scheduler init failed:', err));
+    _scheduler.initAll().catch((err: any) => console.error('[SocialUpdates] Scheduler init failed:', err));
   } else if (client) {
     _scheduler.updateClient(client);
   }
@@ -116,7 +116,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
-          const lines = subs.map(s =>
+          const lines = subs.map((s: any) =>
             `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<:wrong:1532390628330307634> Paused'} (Health: **${s.validationStatus}**)`
           );
           const embed = new EmbedBuilder()
@@ -127,7 +127,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (action === 'status') {
           const subs = await SocialSubscriptionRepository.findAll(guildId);
-          const active = subs.filter(s => s.enabled).length;
+          const active = subs.filter((s: any) => s.enabled).length;
           const embed = new EmbedBuilder()
             .setTitle('<:information:1532621274092929124> Social Updates Status')
             .setDescription(`**Active Subscriptions:** ${active} / ${subs.length}\n**System Diagnostics:** <a:approved:1532390590707142956> Operational`)
@@ -359,7 +359,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
         const auditLogs = await SocialSubscriptionRepository.getAuditLogs(guildId, 25);
 
         res.json({
-          subscriptions: subs.map(s => SubscriptionManager.deserialize(s)),
+          subscriptions: subs.map((s: any) => SubscriptionManager.deserialize(s)),
           analytics,
           auditLogs,
           queueLength: NotificationQueue.getQueueLength()
@@ -565,7 +565,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
       method: 'get',
       handler: async (_req: any, res: any, _context: any) => {
         res.json({
-          providers: ProviderManager.getRegisteredTypes().map(t => {
+          providers: ProviderManager.getRegisteredTypes().map((t: any) => {
             const p = ProviderManager.getProvider(t);
             return { type: t, displayName: p.displayName };
           })
@@ -675,7 +675,7 @@ export function registerSocialUpdatesCommands(): void {
             .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
           return message.reply({ embeds: [embed] });
         }
-        const lines = subs.map(s =>
+        const lines = subs.map((s: any) =>
           `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<:wrong:1532390628330307634> Paused'} (Health: **${s.validationStatus}**) [ID: \`${s.id}\`]`
         );
         const embed = new EmbedBuilder()
@@ -688,7 +688,7 @@ export function registerSocialUpdatesCommands(): void {
 
       if (action === 'status') {
         const subs = await SocialSubscriptionRepository.findAll(guildId);
-        const active = subs.filter(s => s.enabled).length;
+        const active = subs.filter((s: any) => s.enabled).length;
         const embed = new EmbedBuilder()
           .setTitle('<:information:1532621274092929124> Social Updates Engine Status')
           .setDescription(`**Active Subscriptions:** ${active} / ${subs.length}\n**System Diagnostics:** <a:approved:1532390590707142956> Operational`)
