@@ -103,17 +103,20 @@ export class PrefixResolver {
       };
     }
 
-    // 3. Fallback check for default r! if custom prefix is set differently but user tries r!
-    if (customPrefix !== this.DEFAULT_PREFIX && lowerContent.startsWith(this.DEFAULT_PREFIX.toLowerCase())) {
-      const prefixUsed = content.slice(0, this.DEFAULT_PREFIX.length);
-      const commandString = content.slice(this.DEFAULT_PREFIX.length).trim();
-      return {
-        matched: true,
-        isMention: false,
-        isMentionOnly: false,
-        prefixUsed,
-        commandString
-      };
+    // 3. Fallback check for standard prefixes (r!, r?, r., r/)
+    const fallbackPrefixes = [this.DEFAULT_PREFIX.toLowerCase(), 'r?', 'r.', 'r/'];
+    for (const fb of fallbackPrefixes) {
+      if (lowerContent.startsWith(fb)) {
+        const prefixUsed = content.slice(0, fb.length);
+        const commandString = content.slice(fb.length).trim();
+        return {
+          matched: true,
+          isMention: false,
+          isMentionOnly: false,
+          prefixUsed,
+          commandString
+        };
+      }
     }
 
     return { matched: false, isMention: false, isMentionOnly: false, prefixUsed: '', commandString: '' };
