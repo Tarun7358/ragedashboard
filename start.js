@@ -47,9 +47,10 @@ async function bootSystem() {
     const req = createRequire(import.meta.url);
     req('sqlite3');
   } catch (err) {
-    console.log('[Orchestrator] 🛠️ Native sqlite3 bindings missing for host architecture. Re-installing sqlite3...');
-    const rebuildProc = spawn('npm', ['install', 'sqlite3@^5.1.7'], { stdio: 'inherit', shell: true });
-    await new Promise((resolve) => rebuildProc.on('close', resolve));
+    console.log('[Orchestrator] 🛠️ Native sqlite3 bindings missing for host architecture. Downloading prebuilt binary...');
+    const sqlite3Dir = path.resolve(process.cwd(), 'node_modules', 'sqlite3');
+    const prebuildProc = spawn('npx', ['prebuild-install', '-r', 'napi'], { cwd: sqlite3Dir, stdio: 'inherit', shell: true });
+    await new Promise((resolve) => prebuildProc.on('close', resolve));
   }
 
   // 1. Run Health Check Validation
