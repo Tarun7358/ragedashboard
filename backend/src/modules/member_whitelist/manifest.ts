@@ -157,6 +157,17 @@ async function renderWhitelistConfigUI(
 
   let currentBypasses = Array.isArray(record.enabledModules) ? record.enabledModules : allBypasses;
 
+  const securityKeys = [
+    'anti_ban', 'anti_unban', 'anti_kick', 'anti_prune', 'anti_bot_add', 'anti_bot_remove',
+    'anti_channel_create', 'anti_channel_delete', 'anti_channel_update',
+    'anti_role_create', 'anti_role_delete', 'anti_role_update', 'anti_role_grant', 'anti_role_remove',
+    'anti_member_update', 'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update',
+    'anti_integration', 'anti_guild_update', 'anti_webhook_create', 'anti_webhook_delete',
+    'anti_webhook_update', 'anti_invite_create', 'anti_invite_delete', 'anti_timeout'
+  ];
+  const automodKeys = ['anti_everyone_ping', 'anti_role_ping', 'anti_link'];
+  const voiceKeys = ['voice_protection'];
+
   const buildEmbed = (bypasses: string[]) => {
     const verifiedIcon = '<a:approved:1532390590707142956>';
     const wrongIcon = '<:wrong:1532390628330307634>';
@@ -164,6 +175,17 @@ async function renderWhitelistConfigUI(
     const activeCount = bypasses.length;
     const totalCount = protections.length;
     const isAll = activeCount >= totalCount;
+
+    const hasSec = securityKeys.every(k => bypasses.includes(k));
+    const countSec = securityKeys.filter(k => bypasses.includes(k)).length;
+    const secStatus = hasSec ? `${verifiedIcon} Active (Full Bypass)` : (countSec > 0 ? `⚠️ Partial (${countSec}/${securityKeys.length})` : `${wrongIcon} Disabled`);
+
+    const hasAm = automodKeys.every(k => bypasses.includes(k));
+    const countAm = automodKeys.filter(k => bypasses.includes(k)).length;
+    const amStatus = hasAm ? `${verifiedIcon} Active (Full Bypass)` : (countAm > 0 ? `⚠️ Partial (${countAm}/${automodKeys.length})` : `${wrongIcon} Disabled`);
+
+    const hasVc = voiceKeys.every(k => bypasses.includes(k));
+    const vcStatus = hasVc ? `${verifiedIcon} Active (Full Bypass)` : `${wrongIcon} Disabled`;
 
     let bypassSummary = '';
     if (isAll) {
@@ -181,7 +203,11 @@ async function renderWhitelistConfigUI(
       `**Target Entity**: ${isRole ? `<@&${targetId}>` : `<@${targetId}>`}`,
       `**Entry Status**: ${isNew ? '<a:approved:1532390590707142956> Newly Whitelisted' : '<:config:1532425712844144701> Active Whitelist Entry'}`,
       `**Audit Notes**: ${record.notes || notesInput || '*None provided*'}\n`,
-      `**Protection Bypass Overview**`,
+      `**Sub-Module Category Statuses**:`,
+      `> 🛡️ **Security Bypasses**: ${secStatus}`,
+      `> ⚙️ **AutoMod Bypasses**: ${amStatus}`,
+      `> 🎤 **Voice Bypasses**: ${vcStatus}\n`,
+      `**Granular Protection Bypass Overview**`,
       bypassSummary
     ].join('\n');
 
@@ -193,23 +219,12 @@ async function renderWhitelistConfigUI(
       .setTimestamp();
   };
 
-  const securityKeys = [
-    'anti_ban', 'anti_unban', 'anti_kick', 'anti_prune', 'anti_bot_add', 'anti_bot_remove',
-    'anti_channel_create', 'anti_channel_delete', 'anti_channel_update',
-    'anti_role_create', 'anti_role_delete', 'anti_role_update', 'anti_role_grant', 'anti_role_remove',
-    'anti_member_update', 'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update',
-    'anti_integration', 'anti_guild_update', 'anti_webhook_create', 'anti_webhook_delete',
-    'anti_webhook_update', 'anti_invite_create', 'anti_invite_delete', 'anti_timeout'
-  ];
-  const automodKeys = ['anti_everyone_ping', 'anti_role_ping', 'anti_link'];
-  const voiceKeys = ['voice_protection'];
-
   const buildComponents = (bypasses: string[]) => {
     const selectedVals = resolveSelectedOptions(bypasses);
 
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`wl_config_select_${targetId}_${interaction.user.id}`)
-      .setPlaceholder('⚙️ Granular Sub-Module Protections to Grant')
+      .setPlaceholder('⚙️ Enable/Disable Individual Sub-Modules Separately…')
       .setMinValues(0)
       .setMaxValues(WHITELIST_MENU_OPTIONS.length)
       .addOptions(
