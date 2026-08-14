@@ -76,6 +76,31 @@ export function registerEnableDisableCommands(): void {
       const toggleMod = context?.toggleModule;
       const modulesState = context?.getModulesState ? context.getModulesState() : [];
 
+      const TIMER_EMOJI = '<:timer:1532403043239272499>';
+
+      // Step 1: Send initial Loading / Initializing Embed
+      const loadingEmbed = buildLimeOverviewCard({
+        title: `${TIMER_EMOJI} INITIALIZING MODULE ACTIVATION...`,
+        subtitle: `CONFIGURING SECURITY PARAMETERS FOR ${target.toUpperCase()}`,
+        color: Colors.BRAND,
+        sections: [
+          {
+            title: `${CONFIG_EMOJI} INITIALIZATION IN PROGRESS`,
+            items: [
+              `• **Target Suite**: \`${target.toUpperCase()}\``,
+              `• **Status**: Initializing default rules, threshold limits & bypass tables...`,
+              `• *Please wait while the system applies configuration changes...*`
+            ]
+          }
+        ],
+        footerText: 'Rage Optimiser Enterprise • Security Initialization'
+      });
+
+      const replyMsg = await message.reply({ embeds: [loadingEmbed] }).catch(() => null);
+
+      // Brief delay to allow visual progress feedback
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
       // A. ENABLE ANTI-NUKE
       if (['antinuke', 'security', 'an'].includes(target)) {
         if (toggleMod) toggleMod('security', true);
@@ -107,6 +132,12 @@ export function registerEnableDisableCommands(): void {
           thumbnail: message.guild.iconURL({ size: 256 }) || undefined,
           sections: [
             {
+              title: `${APPROVED_ICON} ACTIVATION PROCESS COMPLETED`,
+              items: [
+                '• All 24 Anti-Nuke protection modules have been successfully enabled with optimal enterprise default limits.'
+              ]
+            },
+            {
               title: `${SHIELD_EMOJI} ACTIVE ANTI-NUKE PROTECTIONS`,
               items: [
                 '• **Role Protections**: Role Create, Delete, Grant, Remove & Update',
@@ -123,9 +154,10 @@ export function registerEnableDisableCommands(): void {
               ]
             }
           ],
-          footerText: 'Rage Optimiser Enterprise • Anti-Nuke System Active'
+          footerText: 'Rage Optimiser Enterprise • Process Complete • Anti-Nuke Active'
         });
 
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
       }
 
@@ -156,6 +188,12 @@ export function registerEnableDisableCommands(): void {
           thumbnail: message.guild.iconURL({ size: 256 }) || undefined,
           sections: [
             {
+              title: `${APPROVED_ICON} ACTIVATION PROCESS COMPLETED`,
+              items: [
+                '• AI AutoMod chat filters & Anti-Link restrictions have been applied successfully.'
+              ]
+            },
+            {
               title: `${GAVEL_EMOJI} ACTIVE AUTOMOD MODULES`,
               items: [
                 '• **Anti-Link Filter**: Automatically blocks & deletes unauthorized URLs',
@@ -172,9 +210,10 @@ export function registerEnableDisableCommands(): void {
               ]
             }
           ],
-          footerText: 'Rage Optimiser Enterprise • AutoMod Active'
+          footerText: 'Rage Optimiser Enterprise • Process Complete • AutoMod Active'
         });
 
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
       }
 
@@ -191,6 +230,12 @@ export function registerEnableDisableCommands(): void {
           color: Colors.LIME,
           sections: [
             {
+              title: `${APPROVED_ICON} ACTIVATION PROCESS COMPLETED`,
+              items: [
+                '• Voice safeguards & Join-To-Create dynamic channels initialized.'
+              ]
+            },
+            {
               title: `${SHIELD_EMOJI} VOICE PROTECTION FEATURES`,
               items: [
                 '• **Voice Channel Guard**: Anti-mass mute, deafen, and disconnect protection',
@@ -198,9 +243,10 @@ export function registerEnableDisableCommands(): void {
               ]
             }
           ],
-          footerText: 'Rage Optimiser Enterprise • Voice Engine Active'
+          footerText: 'Rage Optimiser Enterprise • Process Complete • Voice Engine Active'
         });
 
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
       }
 
@@ -237,6 +283,12 @@ export function registerEnableDisableCommands(): void {
           thumbnail: message.guild.iconURL({ size: 256 }) || undefined,
           sections: [
             {
+              title: `${APPROVED_ICON} ACTIVATION PROCESS COMPLETED`,
+              items: [
+                '• Enterprise Security Engine has initialized all protection modules with default limits.'
+              ]
+            },
+            {
               title: `${SHIELD_EMOJI} ACTIVATED ENTERPRISE MODULES`,
               items: [
                 '• **Anti-Nuke Protection**: Active (24/24 unbypassable protections enabled)',
@@ -246,9 +298,10 @@ export function registerEnableDisableCommands(): void {
               ]
             }
           ],
-          footerText: 'Rage Optimiser Enterprise • All Modules Enabled'
+          footerText: 'Rage Optimiser Enterprise • Process Complete • All Defense Live'
         });
 
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
       }
 
@@ -256,15 +309,28 @@ export function registerEnableDisableCommands(): void {
       if (toggleMod) {
         const result = toggleMod(target, true);
         if (result) {
-          return message.reply({
-            content: `${APPROVED_ICON} Module **${result.name}** (\`${result.id}\`) has been **enabled**.`
+          const card = buildLimeOverviewCard({
+            title: `${APPROVED_ICON} MODULE ENABLED: ${result.name.toUpperCase()}`,
+            subtitle: `MODULE ID: ${result.id}`,
+            color: Colors.LIME,
+            sections: [
+              {
+                title: `${APPROVED_ICON} ACTIVATION PROCESS COMPLETED`,
+                items: [
+                  `Module **${result.name}** (\`${result.id}\`) has been **successfully enabled**.`
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Process Complete'
           });
+          if (replyMsg) return replyMsg.edit({ embeds: [card] });
+          return message.reply({ embeds: [card] });
         }
       }
 
-      return message.reply({
-        content: `${WRONG_EMOJI} Unknown target **${target}**. Valid options: \`antinuke\`, \`automod\`, \`voice\`, \`all\`.`
-      });
+      const errContent = `${WRONG_EMOJI} Unknown target **${target}**. Valid options: \`antinuke\`, \`automod\`, \`voice\`, \`all\`.`;
+      if (replyMsg) return replyMsg.edit({ content: errContent, embeds: [] });
+      return message.reply({ content: errContent });
     }
   });
 
@@ -309,6 +375,30 @@ export function registerEnableDisableCommands(): void {
       const toggleMod = context?.toggleModule;
       const modulesState = context?.getModulesState ? context.getModulesState() : [];
 
+      const TIMER_EMOJI = '<:timer:1532403043239272499>';
+
+      // Step 1: Send initial Loading / Deactivating Embed
+      const loadingEmbed = buildLimeOverviewCard({
+        title: `${TIMER_EMOJI} DEACTIVATING MODULE SUITE...`,
+        subtitle: `STANDBY PROCESS FOR ${target.toUpperCase()}`,
+        color: Colors.WARN,
+        sections: [
+          {
+            title: `${CONFIG_EMOJI} DEACTIVATION IN PROGRESS`,
+            items: [
+              `• **Target Suite**: \`${target.toUpperCase()}\``,
+              `• **Status**: Deactivating rules & placing protections in standby mode...`,
+              `• *Please wait while the system updates configuration state...*`
+            ]
+          }
+        ],
+        footerText: 'Rage Optimiser Enterprise • Deactivation Process'
+      });
+
+      const replyMsg = await message.reply({ embeds: [loadingEmbed] }).catch(() => null);
+
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
       if (['antinuke', 'security', 'an'].includes(target)) {
         if (toggleMod) toggleMod('security', false);
         const secMod = modulesState.find((m: any) => m.id === 'security');
@@ -320,16 +410,17 @@ export function registerEnableDisableCommands(): void {
           color: Colors.DANGER,
           sections: [
             {
-              title: `${SHIELD_EMOJI} SYSTEM STATUS`,
+              title: `${WRONG_EMOJI} DEACTIVATION PROCESS COMPLETED`,
               items: [
-                '• Anti-Nuke protections are now **disabled**.',
+                '• Anti-Nuke protection rules have been placed on standby.',
                 `• Re-enable anytime using \`${prefix}enable antinuke\`.`
               ]
             }
           ],
-          footerText: 'Rage Optimiser Enterprise • Security Warning'
+          footerText: 'Rage Optimiser Enterprise • Process Complete • Security Warning'
         });
 
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
       }
 
@@ -344,16 +435,17 @@ export function registerEnableDisableCommands(): void {
           color: Colors.DANGER,
           sections: [
             {
-              title: `${GAVEL_EMOJI} SYSTEM STATUS`,
+              title: `${WRONG_EMOJI} DEACTIVATION PROCESS COMPLETED`,
               items: [
-                '• AutoMod and Anti-Link filters are now **disabled**.',
+                '• AutoMod and Anti-Link filters have been turned off.',
                 `• Re-enable anytime using \`${prefix}enable automod\`.`
               ]
             }
           ],
-          footerText: 'Rage Optimiser Enterprise • AutoMod Standby'
+          footerText: 'Rage Optimiser Enterprise • Process Complete • AutoMod Standby'
         });
 
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
       }
 
@@ -370,31 +462,45 @@ export function registerEnableDisableCommands(): void {
           color: Colors.DANGER,
           sections: [
             {
-              title: `${SHIELD_EMOJI} STANDBY NOTICE`,
+              title: `${WRONG_EMOJI} DEACTIVATION PROCESS COMPLETED`,
               items: [
-                'All security modules are turned off.',
-                `Re-enable anytime using \`${prefix}enable all\`.`
+                '• All security modules have been placed in standby mode.',
+                `• Re-enable anytime using \`${prefix}enable all\`.`
               ]
             }
           ],
-          footerText: 'Rage Optimiser Enterprise • Security Disabled'
+          footerText: 'Rage Optimiser Enterprise • Process Complete • Security Disabled'
         });
 
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
       }
 
       if (toggleMod) {
         const result = toggleMod(target, false);
         if (result) {
-          return message.reply({
-            content: `${APPROVED_ICON} Module **${result.name}** (\`${result.id}\`) has been **disabled**.`
+          const card = buildLimeOverviewCard({
+            title: `${WRONG_EMOJI} MODULE DISABLED: ${result.name.toUpperCase()}`,
+            subtitle: `MODULE ID: ${result.id}`,
+            color: Colors.DANGER,
+            sections: [
+              {
+                title: `${WRONG_EMOJI} DEACTIVATION PROCESS COMPLETED`,
+                items: [
+                  `Module **${result.name}** (\`${result.id}\`) has been **disabled**.`
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Process Complete'
           });
+          if (replyMsg) return replyMsg.edit({ embeds: [card] });
+          return message.reply({ embeds: [card] });
         }
       }
 
-      return message.reply({
-        content: `${WRONG_EMOJI} Unknown target **${target}**. Valid options: \`antinuke\`, \`automod\`, \`voice\`, \`all\`.`
-      });
+      const errContent = `${WRONG_EMOJI} Unknown target **${target}**. Valid options: \`antinuke\`, \`automod\`, \`voice\`, \`all\`.`;
+      if (replyMsg) return replyMsg.edit({ content: errContent, embeds: [] });
+      return message.reply({ content: errContent });
     }
   });
 }
