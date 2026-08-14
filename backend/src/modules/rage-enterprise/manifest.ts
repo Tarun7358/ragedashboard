@@ -64,6 +64,13 @@ export const RageEnterpriseManifest: ModuleManifest = {
           description: 'Open System Owner Diagnostics Board'
         }
       ]
+    },
+    {
+      name: 'notes',
+      description: 'Record, view, or manage internal member moderation notes',
+      options: [
+        { name: 'target', type: 6, description: 'The member to view or add notes for', required: false }
+      ]
     }
   ],
   events: [
@@ -74,8 +81,11 @@ export const RageEnterpriseManifest: ModuleManifest = {
         await handleEnterpriseAction(subcommand, client, interaction, context);
       }
     },
-    // Enterprise dashboard shortcut event handlers (only for unmapped utility commands)
+    // Enterprise dashboard shortcut event handlers (for utility & moderation commands)
     ...[
+      'notes', 'warn', 'purge', 'lockdown', 'quarantine', 'raidmode', 'antispam', 'antilink',
+      'welcome', 'autorole', 'goodbye', 'birthday', 'boost', 'milestones',
+      'player', 'queue', 'skip', 'shuffle', 'autoplay', 'filters', 'lyrics', 'volume',
       'status', 'performance', 'telemetry', 'health', 'uptime', 'cache', 'memory',
       'emergency', 'diagnostics', 'developer', 'reload', 'restart', 'sync', 'debug'
     ].map(cmdName => ({
