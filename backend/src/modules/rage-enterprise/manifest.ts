@@ -83,7 +83,7 @@ export const RageEnterpriseManifest: ModuleManifest = {
     },
     // Enterprise dashboard shortcut event handlers (for utility & moderation commands)
     ...[
-      'notes', 'warn', 'purge', 'lockdown', 'quarantine', 'raidmode', 'antispam', 'antilink',
+      'notes', 'warn', 'purge', 'clear', 'lockdown', 'quarantine', 'raidmode', 'antispam', 'antilink',
       'welcome', 'autorole', 'goodbye', 'birthday', 'boost', 'milestones',
       'player', 'queue', 'skip', 'shuffle', 'autoplay', 'filters', 'lyrics', 'volume',
       'status', 'performance', 'telemetry', 'health', 'uptime', 'cache', 'memory',

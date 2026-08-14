@@ -44,6 +44,85 @@ async function clearUserWarnings(guildId: string, userId: string): Promise<void>
   }
 }
 
+async function handlePurgeExecution(client: any, interaction: any, context: any) {
+  if (!hasModAccess(interaction, context)) {
+    const errEmbed = new EmbedBuilder()
+      .setTitle('<:wrong:1532390628330307634> Access Denied')
+      .setDescription('You do not possess the required administrative clearances to execute this command.')
+      .setColor('#ff4444')
+      .setFooter({ text: 'Rage Optimiser • Access Control System' });
+    return interaction.reply({ embeds: [errEmbed], flags: 64 });
+  }
+
+  const optAmount = interaction.options?.getInteger?.('amount');
+  const arg0 = context?.parsed?.args?.[0];
+  const parsedArg = arg0 ? parseInt(arg0, 10) : null;
+  const rawAmount = optAmount ?? (parsedArg && !isNaN(parsedArg) ? parsedArg : null);
+
+  let purgeAll = false;
+  let amount = 0;
+
+  if (rawAmount !== null && !isNaN(rawAmount)) {
+    amount = rawAmount;
+    if (amount < 1 || amount > 100) {
+      const errEmbed = new EmbedBuilder()
+        .setTitle('<:wrong:1532390628330307634> Invalid Parameter')
+        .setDescription('The quantity parameter for message deletion must be between 1 and 100.')
+        .setColor('#ff4444')
+        .setFooter({ text: 'Rage Optimiser • Validation Check' });
+      return interaction.reply({ embeds: [errEmbed], flags: 64 });
+    }
+  } else {
+    purgeAll = true;
+  }
+
+  try {
+    let totalDeleted = 0;
+    if (purgeAll) {
+      let fetched;
+      do {
+        fetched = await interaction.channel.messages.fetch({ limit: 100 }).catch(() => null);
+        if (!fetched || fetched.size === 0) break;
+        const deleted = await interaction.channel.bulkDelete(fetched, true).catch(() => null);
+        if (!deleted || deleted.size === 0) break;
+        totalDeleted += deleted.size;
+      } while (fetched && fetched.size === 100 && totalDeleted < 1000);
+    } else {
+      const deleted = await interaction.channel.bulkDelete(amount, true);
+      totalDeleted = deleted?.size ?? amount;
+    }
+
+    const successEmbed = new EmbedBuilder()
+      .setTitle('<a:approved:1532390590707142956> Channel Message Deletion Complete')
+      .setDescription(purgeAll 
+        ? `🔥 **All channel messages have been cleared.**` 
+        : `A bulk deletion request of **${totalDeleted}** messages was successfully executed.`)
+      .addFields(
+        { name: 'Deleted Messages Count', value: `\`${totalDeleted}\``, inline: true },
+        { name: 'Target Channel', value: `${interaction.channel}`, inline: true },
+        { name: 'Purge Mode', value: purgeAll ? '`FULL CHANNEL CLEAR`' : `\`SPECIFIED COUNT (${amount})\``, inline: true }
+      )
+      .setColor('#10b981')
+      .setTimestamp()
+      .setFooter({ text: 'Rage Optimiser • Security System' });
+
+    const replyMsg = await interaction.reply({ embeds: [successEmbed], flags: 64 });
+    
+    setTimeout(() => {
+      if (replyMsg?.delete) replyMsg.delete().catch(() => {});
+    }, 5000);
+
+    context?.logSyncEvent?.(`Moderation: ${interaction.user.username} purged ${totalDeleted} messages in #${interaction.channel.name} (Full Clear: ${purgeAll}).`, 'info');
+  } catch (e: any) {
+    const errEmbed = new EmbedBuilder()
+      .setTitle('<:wrong:1532390628330307634> Bulk Deletion Failed')
+      .setDescription('An error occurred while attempting to delete messages. Messages older than 14 days cannot be bulk deleted.')
+      .setColor('#ff4444')
+      .setFooter({ text: 'Rage Optimiser • Error Logs' });
+    await interaction.reply({ embeds: [errEmbed], flags: 64 });
+  }
+}
+
 export const ModerationManifest: ModuleManifest = {
   id: 'moderation',
   name: 'Moderation Console',
@@ -466,47 +545,11 @@ export const ModerationManifest: ModuleManifest = {
     },
     {
       name: 'command_purge',
-      handler: async (client: any, interaction: any, context: any) => {
-        if (!hasModAccess(interaction, context)) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<:wrong:1532390628330307634> Access Denied')
-            .setDescription('You do not possess the required administrative clearances to execute this command.')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
-        const amount = interaction.options.getInteger('amount');
-        if (amount < 1 || amount > 100) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<:wrong:1532390628330307634> Invalid Parameter')
-            .setDescription('The quantity parameters for message deletion must be between 1 and 100.')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Validation Check' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
-        try {
-          await interaction.channel.bulkDelete(amount, true);
-          const successEmbed = new EmbedBuilder()
-            .setTitle('<a:approved:1532390590707142956> Bulk Message Deletion Protocol')
-            .setDescription(`A bulk deletion request was successfully executed.`)
-            .addFields(
-              { name: 'Deleted Messages Count', value: `\`${amount}\``, inline: true },
-              { name: 'Target Channel', value: `${interaction.channel}`, inline: true }
-            )
-            .setColor('#10b981')
-            .setTimestamp()
-            .setFooter({ text: 'Rage Optimiser • Security System' });
-          await interaction.reply({ embeds: [successEmbed], flags: 64 });
-          context.logSyncEvent(`Moderation: ${interaction.user.username} purged ${amount} messages in #${interaction.channel.name}.`, 'info');
-        } catch (e) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<:wrong:1532390628330307634> Bulk Deletion Failed')
-            .setDescription('An error occurred while attempting to delete messages. Messages older than 14 days cannot be bulk deleted.')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Error Logs' });
-          await interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
-      }
+      handler: (client: any, interaction: any, context: any) => handlePurgeExecution(client, interaction, context)
+    },
+    {
+      name: 'command_clear',
+      handler: (client: any, interaction: any, context: any) => handlePurgeExecution(client, interaction, context)
     },
     {
       name: 'command_lock',
