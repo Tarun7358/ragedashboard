@@ -639,18 +639,14 @@ export const CommunityManifest: ModuleManifest = {
     {
       name: 'command_help',
       handler: async (client: any, interaction: any, context: any) => {
-        const embed = new EmbedBuilder()
-          .setTitle('RAGE OPTIMISER Commands')
-          .setDescription('Here are some available commands:')
-          .addFields(
-            { name: '🛡️ Moderation', value: '`/ban`, `/kick`, `/timeout`, `/warn`, `/purge`, `/lock`, `/slowmode`' },
-            { name: '🎮 Community', value: '`/avatar`, `/userinfo`, `/serverinfo`, `/ping`, `/poll`, `/giveaway`' },
-            { name: '💰 Economy', value: '`/balance`, `/daily`, `/work`, `/pay`, `/rob`, `/shop`, `/inventory`' },
-            { name: '🎲 Fun', value: '`/8ball`, `/flip`, `/roll`, `/meme`, `/joke`, `/weather`' },
-            { name: '🛠️ Utilities', value: '`/afk`, `/remindme`, `/stats`' }
-          )
-          .setColor('#2ecc71');
-        await interaction.reply({ embeds: [embed] });
+        const { PrefixHelpCenter } = await import('../../core/prefix/PrefixHelpCenter.js');
+        const fakeMsg: any = {
+          client,
+          guildId: interaction.guildId,
+          author: interaction.user,
+          reply: (data: any) => interaction.reply({ ...data, flags: 64 })
+        };
+        return PrefixHelpCenter.sendRootHelp(fakeMsg, 'r!', client.ws.ping);
       }
     },
     {

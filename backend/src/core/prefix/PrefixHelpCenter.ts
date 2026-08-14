@@ -16,6 +16,7 @@ const APPROVED_ICON = '<a:approved:1532390590707142956>';
 const WRONG_EMOJI = '<:wrong:1532390628330307634>';
 const SHIELD_EMOJI = '<:shield:1532403012751065179>';
 const ARROW_ICON = '<a:animatedarrowwhite:1527647357473132554>';
+export const DEFAULT_HELP_BANNER = 'https://cdn.discordapp.com/attachments/1318247749904367699/1534546572698976418/ChatGPT_Image_Aug_5_2026_06_00_23_PM.png?ex=6a74855d&is=6a7333dd&hm=cc81e1454fadaba8c9db182ebbb5b87fc6c7274da67ddd393f4f242587a4f6aa';
 
 interface CategoryInfo {
   icon: string;
@@ -199,6 +200,7 @@ export class PrefixHelpCenter {
       .setTitle('<:config:1532425712844144701> Command Hub & Security Modules')
       .setDescription(descLines.join('\n'))
       .setThumbnail(botUser?.displayAvatarURL({ size: 256 }) ?? null)
+      .setImage(DEFAULT_HELP_BANNER)
       .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
       .setTimestamp();
 
@@ -286,6 +288,7 @@ export class PrefixHelpCenter {
       .setTitle(`${meta.icon} ${category} Module Commands`)
       .setDescription(embedDesc)
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
+      .setImage(DEFAULT_HELP_BANNER)
       .setFooter({ text: `Rage Optimiser • Unbypassable Security • Module Commands: ${visibleCmds.length}` })
       .setTimestamp();
 
