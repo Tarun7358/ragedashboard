@@ -193,12 +193,23 @@ async function renderWhitelistConfigUI(
       .setTimestamp();
   };
 
+  const securityKeys = [
+    'anti_ban', 'anti_unban', 'anti_kick', 'anti_prune', 'anti_bot_add', 'anti_bot_remove',
+    'anti_channel_create', 'anti_channel_delete', 'anti_channel_update',
+    'anti_role_create', 'anti_role_delete', 'anti_role_update', 'anti_role_grant', 'anti_role_remove',
+    'anti_member_update', 'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update',
+    'anti_integration', 'anti_guild_update', 'anti_webhook_create', 'anti_webhook_delete',
+    'anti_webhook_update', 'anti_invite_create', 'anti_invite_delete', 'anti_timeout'
+  ];
+  const automodKeys = ['anti_everyone_ping', 'anti_role_ping', 'anti_link'];
+  const voiceKeys = ['voice_protection'];
+
   const buildComponents = (bypasses: string[]) => {
     const selectedVals = resolveSelectedOptions(bypasses);
 
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`wl_config_select_${targetId}_${interaction.user.id}`)
-      .setPlaceholder('Choose Permissions to Grant')
+      .setPlaceholder('⚙️ Granular Sub-Module Protections to Grant')
       .setMinValues(0)
       .setMaxValues(WHITELIST_MENU_OPTIONS.length)
       .addOptions(
@@ -217,16 +228,46 @@ async function renderWhitelistConfigUI(
 
     const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
+    const hasSecurity = securityKeys.every(k => bypasses.includes(k));
+    const hasAutoMod = automodKeys.every(k => bypasses.includes(k));
+    const hasVoice = voiceKeys.every(k => bypasses.includes(k));
+
+    const categoryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`wl_cat_security_${targetId}_${interaction.user.id}`)
+        .setLabel(hasSecurity ? '🛡️ Security Bypasses (Active)' : '🛡️ Toggle Security Bypasses')
+        .setStyle(hasSecurity ? ButtonStyle.Success : ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`wl_cat_automod_${targetId}_${interaction.user.id}`)
+        .setLabel(hasAutoMod ? '⚙️ AutoMod Bypasses (Active)' : '⚙️ Toggle AutoMod Bypasses')
+        .setStyle(hasAutoMod ? ButtonStyle.Success : ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`wl_cat_voice_${targetId}_${interaction.user.id}`)
+        .setLabel(hasVoice ? '🎤 Voice Bypasses (Active)' : '🎤 Toggle Voice Bypasses')
+        .setStyle(hasVoice ? ButtonStyle.Success : ButtonStyle.Secondary)
+    );
+
     const hasAll = allBypasses.every(k => bypasses.includes(k));
 
-    const button = new ButtonBuilder()
-      .setCustomId(`wl_config_btn_${targetId}_${interaction.user.id}`)
-      .setLabel(hasAll ? 'Revoke All Permissions' : 'Grant All Permissions')
-      .setStyle(hasAll ? ButtonStyle.Danger : ButtonStyle.Success);
+    const masterRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`wl_action_grant_${targetId}_${interaction.user.id}`)
+        .setLabel('⚡ Grant All')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(hasAll),
+      new ButtonBuilder()
+        .setCustomId(`wl_action_revoke_${targetId}_${interaction.user.id}`)
+        .setLabel('🔴 Revoke All')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(bypasses.length === 0),
+      new ButtonBuilder()
+        .setCustomId(`btn_dismiss_${interaction.user.id}`)
+        .setLabel('Dismiss')
+        .setEmoji('🗑️')
+        .setStyle(ButtonStyle.Secondary)
+    );
 
-    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
-
-    return [selectRow, buttonRow];
+    return [selectRow, categoryRow, masterRow];
   };
 
   const reply = await interaction.editReply({
@@ -269,8 +310,38 @@ async function renderWhitelistConfigUI(
       const selectedVals = i.values || [];
       newBypasses = mapSelectedOptionsToRules(selectedVals);
     } else if (i.isButton()) {
-      const hasAll = allBypasses.every(k => newBypasses.includes(k));
-      newBypasses = hasAll ? [] : allBypasses;
+      const cid = i.customId;
+      if (cid.startsWith('btn_dismiss_')) {
+        return i.message.delete().catch(() => {});
+      } else if (cid.startsWith('wl_cat_security_')) {
+        const hasSec = securityKeys.every(k => newBypasses.includes(k));
+        if (hasSec) {
+          newBypasses = newBypasses.filter(k => !securityKeys.includes(k));
+        } else {
+          newBypasses = Array.from(new Set([...newBypasses, ...securityKeys]));
+        }
+      } else if (cid.startsWith('wl_cat_automod_')) {
+        const hasAm = automodKeys.every(k => newBypasses.includes(k));
+        if (hasAm) {
+          newBypasses = newBypasses.filter(k => !automodKeys.includes(k));
+        } else {
+          newBypasses = Array.from(new Set([...newBypasses, ...automodKeys]));
+        }
+      } else if (cid.startsWith('wl_cat_voice_')) {
+        const hasVc = voiceKeys.every(k => newBypasses.includes(k));
+        if (hasVc) {
+          newBypasses = newBypasses.filter(k => !voiceKeys.includes(k));
+        } else {
+          newBypasses = Array.from(new Set([...newBypasses, ...voiceKeys]));
+        }
+      } else if (cid.startsWith('wl_action_grant_')) {
+        newBypasses = [...allBypasses];
+      } else if (cid.startsWith('wl_action_revoke_')) {
+        newBypasses = [];
+      } else {
+        const hasAll = allBypasses.every(k => newBypasses.includes(k));
+        newBypasses = hasAll ? [] : allBypasses;
+      }
     }
 
     currentRecord.enabledModules = newBypasses;
