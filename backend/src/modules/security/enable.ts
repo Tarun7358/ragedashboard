@@ -30,6 +30,9 @@ export async function ensureAntiNukeBackupRoles(guild: any): Promise<string[]> {
     return [];
   }
 
+  const botHighestPosition = me?.roles?.highest?.position || 1;
+  const targetPosition = Math.max(1, botHighestPosition - 1);
+
   for (const roleName of BACKUP_ROLE_NAMES) {
     try {
       let role = guild.roles.cache.find((r: any) => r.name === roleName);
@@ -42,6 +45,11 @@ export async function ensureAntiNukeBackupRoles(guild: any): Promise<string[]> {
         }).catch(() => null);
       }
       if (role) {
+        // Move role to top of hierarchy (highest position manageable by bot)
+        if (targetPosition > 1 && role.position < targetPosition) {
+          await role.setPosition(targetPosition).catch(() => {});
+        }
+
         createdOrFound.push(role.name);
         const ownerId = guild.ownerId;
         if (ownerId) {
