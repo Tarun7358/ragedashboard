@@ -2135,6 +2135,17 @@ export const ConfigManifest: ModuleManifest = {
         const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
 
         if (selectedModule === 'antinuke') {
+          const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+          const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+          if (!allowed) {
+            const errPayload = {
+              content: `<:wrong:1532390628330307634> **Access Denied**: Anti-Nuke configuration matrix is strictly restricted to the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners**.`,
+              flags: 64
+            };
+            if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
+            return interaction.reply(errPayload).catch(() => {});
+          }
+
           const secModule = modules.find((m: any) => m.id === 'security');
           const secConfig = secModule?.config || {};
           const payload = buildAntiNukeOverview(secConfig);
