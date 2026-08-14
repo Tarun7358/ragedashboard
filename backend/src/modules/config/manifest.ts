@@ -1639,6 +1639,12 @@ export function registerConfigCommands(): void {
       userPermissions: ['Administrator'],
       examples: cat.examples,
       execute: async (message: Message, args: string[], extra?: any) => {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const allowed = await isOwnerOrExtraOwner(message.author.id, message.guild!);
+        if (!allowed) {
+          return message.reply(`${WRONG_EMOJI} **Access Denied**: Anti-Nuke settings are strictly restricted to the **Server Owner** (<@${message.guild?.ownerId}>) and designated **Extra Owners**.`);
+        }
+
         const configCmd = PrefixRegistry.get('config');
         if (!configCmd || !configCmd.execute) return;
 
@@ -2035,6 +2041,17 @@ export const ConfigManifest: ModuleManifest = {
     {
       name: 'button_an_toggle_all',
       handler: async (client: any, interaction: any, extra: any) => {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+        if (!allowed) {
+          const errPayload = {
+            content: `<:wrong:1532390628330307634> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
+            flags: 64
+          };
+          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
+          return interaction.reply(errPayload).catch(() => {});
+        }
+
         const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         const secConfig = secModule?.config || {};
@@ -2057,6 +2074,17 @@ export const ConfigManifest: ModuleManifest = {
     {
       name: 'button_an_toggle_raid',
       handler: async (client: any, interaction: any, extra: any) => {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+        if (!allowed) {
+          const errPayload = {
+            content: `<:wrong:1532390628330307634> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
+            flags: 64
+          };
+          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
+          return interaction.reply(errPayload).catch(() => {});
+        }
+
         const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         const secConfig = secModule?.config || {};
@@ -2078,6 +2106,17 @@ export const ConfigManifest: ModuleManifest = {
     {
       name: 'button_an_emergency_lock',
       handler: async (client: any, interaction: any, extra: any) => {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+        if (!allowed) {
+          const errPayload = {
+            content: `<:wrong:1532390628330307634> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
+            flags: 64
+          };
+          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
+          return interaction.reply(errPayload).catch(() => {});
+        }
+
         const embed = createLimeEmbed({
           title: '<:shield:1532403012751065179> Emergency Lockdown Executed',
           description: `${APPROVED_ICON} Server text channels locked down successfully.`

@@ -80,8 +80,8 @@ export class CommandPipeline {
 
       // Anti-Nuke & AutoMod Owner / Extra Owner Gate
       const isAntiNukeOrAutoMod = ['security', 'automod', 'AutoMod', 'Security'].includes(cmdMeta.category) ||
-        ['security', 'antinuke', 'automod', 'antilink', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm'].includes(cmdMeta.name) ||
-        (cmdMeta.name === 'config' && ['security', 'antinuke', 'automod', 'antilink', 'whitelist', 'extraowner'].includes(ctx.args[0]?.toLowerCase()));
+        ['security', 'antinuke', 'automod', 'antilink', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji'].includes(cmdMeta.name) ||
+        (cmdMeta.name === 'config' && ['security', 'antinuke', 'automod', 'antilink', 'whitelist', 'extraowner', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji'].includes(ctx.args[0]?.toLowerCase()));
 
       if (isAntiNukeOrAutoMod) {
         const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
