@@ -41,6 +41,17 @@ async function bootSystem() {
   console.log('🚀 BOOTING RAGE OPTIMISER MULTI-BOT SYSTEM');
   console.log('======================================================\n');
 
+  // 0. Ensure Native SQLite3 Bindings for Current OS/Architecture
+  try {
+    const { createRequire } = await import('module');
+    const req = createRequire(import.meta.url);
+    req('sqlite3');
+  } catch (err) {
+    console.log('[Orchestrator] 🛠️ Native sqlite3 bindings missing for host architecture. Rebuilding...');
+    const rebuildProc = spawn('npm', ['rebuild', 'sqlite3'], { stdio: 'inherit', shell: true });
+    await new Promise((resolve) => rebuildProc.on('close', resolve));
+  }
+
   // 1. Run Health Check Validation
   console.log('[Orchestrator] Running health validation...');
   const healthCheck = spawn('node', ['health.js'], { stdio: 'inherit' });
