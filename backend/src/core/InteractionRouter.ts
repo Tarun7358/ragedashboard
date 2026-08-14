@@ -138,6 +138,54 @@ export class InteractionRouter {
       const cmd = manifest.commands.find((c: any) => c.name === commandName);
       if (!cmd) continue;
 
+      // 1. Anti-Nuke & AutoMod Owner / Extra Owner Security Gate for Slash Commands
+      const subCmd = interaction.options?.getSubcommand?.(false) || '';
+      const isAntiNukeOrAutoMod =
+        ['security', 'automod', 'AutoMod', 'Security'].includes(cmd.category || manifest.category) ||
+        ['security', 'antinuke', 'automod', 'antilink', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji', 'prebot'].includes(commandName) ||
+        (commandName === 'config' && ['security', 'antinuke', 'automod', 'antilink', 'whitelist', 'extraowner', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji'].includes(subCmd.toLowerCase()));
+
+      if (isAntiNukeOrAutoMod && interaction.guild) {
+        const { isOwnerOrExtraOwner } = await import('../utils/whitelistCheck.js');
+        const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+        if (!allowed) {
+          if (interaction.isRepliable()) {
+            await interaction.reply({
+              content: '❌ **Access Denied**: Only the Guild Owner and Extra Owners can access Anti-Nuke and AutoMod features.',
+              flags: 64
+            }).catch(() => {});
+          }
+          return;
+        }
+      }
+
+      // 2. User Permission Validation for Slash Commands
+      const isDeveloper = interaction.user.id === process.env.OWNER_ID ||
+                          interaction.user.id === interaction.guild?.ownerId ||
+                          interaction.user.id === interaction.client.application?.owner?.id;
+
+      if (!isDeveloper && interaction.member) {
+        const reqPerms = cmd.userPermissions || cmd.permissions || [];
+        if (reqPerms.length > 0) {
+          const hasAdmin = (interaction.member.permissions as any)?.has?.(PermissionFlagsBits.Administrator);
+          if (!hasAdmin) {
+            const missing = reqPerms.filter((p: string) => {
+              const flag = (PermissionFlagsBits as any)[p] || (PermissionFlagsBits as any)[p.replace(/\s+/g, '')];
+              return flag ? !(interaction.member.permissions as any).has(flag) : false;
+            });
+            if (missing.length > 0) {
+              if (interaction.isRepliable()) {
+                await interaction.reply({
+                  content: `❌ **Access Denied**: You require the following permission(s) to use this command: **${missing.join(', ')}**`,
+                  flags: 64
+                }).catch(() => {});
+              }
+              return;
+            }
+          }
+        }
+      }
+
       const eventObj = manifest.events?.find((e: any) => e.name === `command_${commandName}`);
       if (eventObj) {
         try {
