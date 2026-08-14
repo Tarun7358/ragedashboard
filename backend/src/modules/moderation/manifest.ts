@@ -95,7 +95,7 @@ async function handlePurgeExecution(client: any, interaction: any, context: any)
     const successEmbed = new EmbedBuilder()
       .setTitle('<a:approved:1532390590707142956> Channel Message Deletion Complete')
       .setDescription(purgeAll 
-        ? `🔥 **All channel messages have been cleared.**` 
+        ? `<a:approved:1532390590707142956> **All channel messages have been cleared.**` 
         : `A bulk deletion request of **${totalDeleted}** messages was successfully executed.`)
       .addFields(
         { name: 'Deleted Messages Count', value: `\`${totalDeleted}\``, inline: true },

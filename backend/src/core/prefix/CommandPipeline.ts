@@ -253,7 +253,7 @@ export class CommandPipeline {
       new ButtonBuilder()
         .setCustomId(`btn_dismiss_${ctx.executor.id}`)
         .setLabel('Dismiss Message')
-        .setEmoji('🗑️')
+        .setEmoji('<:wrong:1532390628330307634>')
         .setStyle(ButtonStyle.Danger)
     );
 

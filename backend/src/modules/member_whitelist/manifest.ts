@@ -204,9 +204,9 @@ async function renderWhitelistConfigUI(
       `**Entry Status**: ${isNew ? '<a:approved:1532390590707142956> Newly Whitelisted' : '<:config:1532425712844144701> Active Whitelist Entry'}`,
       `**Audit Notes**: ${record.notes || notesInput || '*None provided*'}\n`,
       `**Sub-Module Category Statuses**:`,
-      `> 🛡️ **Security Bypasses**: ${secStatus}`,
-      `> ⚙️ **AutoMod Bypasses**: ${amStatus}`,
-      `> 🎤 **Voice Bypasses**: ${vcStatus}\n`,
+      `> <:shield:1532403012751065179> **Security Bypasses**: ${secStatus}`,
+      `> <:config:1532425712844144701> **AutoMod Bypasses**: ${amStatus}`,
+      `> <:voicechannelgreen:1532425750278438962> **Voice Bypasses**: ${vcStatus}\n`,
       `**Granular Protection Bypass Overview**`,
       bypassSummary
     ].join('\n');
@@ -250,15 +250,18 @@ async function renderWhitelistConfigUI(
     const categoryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`wl_cat_security_${targetId}_${interaction.user.id}`)
-        .setLabel(hasSecurity ? '🛡️ Security Bypasses (Active)' : '🛡️ Toggle Security Bypasses')
+        .setLabel(hasSecurity ? 'Security Bypasses (Active)' : 'Toggle Security Bypasses')
+        .setEmoji('<:shield:1532403012751065179>')
         .setStyle(hasSecurity ? ButtonStyle.Success : ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`wl_cat_automod_${targetId}_${interaction.user.id}`)
-        .setLabel(hasAutoMod ? '⚙️ AutoMod Bypasses (Active)' : '⚙️ Toggle AutoMod Bypasses')
+        .setLabel(hasAutoMod ? 'AutoMod Bypasses (Active)' : 'Toggle AutoMod Bypasses')
+        .setEmoji('<:config:1532425712844144701>')
         .setStyle(hasAutoMod ? ButtonStyle.Success : ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`wl_cat_voice_${targetId}_${interaction.user.id}`)
-        .setLabel(hasVoice ? '🎤 Voice Bypasses (Active)' : '🎤 Toggle Voice Bypasses')
+        .setLabel(hasVoice ? 'Voice Bypasses (Active)' : 'Toggle Voice Bypasses')
+        .setEmoji('<:voicechannelgreen:1532425750278438962>')
         .setStyle(hasVoice ? ButtonStyle.Success : ButtonStyle.Secondary)
     );
 
@@ -267,18 +270,20 @@ async function renderWhitelistConfigUI(
     const masterRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`wl_action_grant_${targetId}_${interaction.user.id}`)
-        .setLabel('⚡ Grant All')
+        .setLabel('Grant All')
+        .setEmoji('<a:approved:1532390590707142956>')
         .setStyle(ButtonStyle.Success)
         .setDisabled(hasAll),
       new ButtonBuilder()
         .setCustomId(`wl_action_revoke_${targetId}_${interaction.user.id}`)
-        .setLabel('🔴 Revoke All')
+        .setLabel('Revoke All')
+        .setEmoji('<:wrong:1532390628330307634>')
         .setStyle(ButtonStyle.Danger)
         .setDisabled(bypasses.length === 0),
       new ButtonBuilder()
         .setCustomId(`btn_dismiss_${interaction.user.id}`)
         .setLabel('Dismiss')
-        .setEmoji('🗑️')
+        .setEmoji('<:wrong:1532390628330307634>')
         .setStyle(ButtonStyle.Secondary)
     );
 
