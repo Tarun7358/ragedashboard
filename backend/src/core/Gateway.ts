@@ -430,10 +430,16 @@ export class Gateway {
           thumbnail: guild.iconURL({ size: 256 }) || undefined,
           sections: [
             {
-              title: `${CONFIG_ICON} GENERAL SERVER CONFIGURATION`,
+              title: `⚡ QUICK ACTIVATION & MODULE CONTROLS (OFF BY DEFAULT)`,
               items: [
-                'Use `r!config` or `/config` to access the interactive server dashboard.',
-                'Configure Anti-Nuke thresholds, AutoMod filters, Audit Logging, Levels, Backups, and Member Verification.'
+                'For maximum setup safety, **all protection modules start OFF by default** in new servers.',
+                'Use the commands below to turn on security modules with optimal default values:',
+                '',
+                '• `r!enable antinuke` — Enable all Anti-Nuke, Anti-Bot & Protection modules',
+                '• `r!enable automod` — Enable Anti-Link, Anti-Spam & Chat Filters',
+                '• `r!enable voice` — Enable Voice Safeguards & Join-To-Create',
+                '• `r!enable all` — Enable complete enterprise security suite instantly',
+                '• `r!config` or `/config` — Access full interactive server dashboard'
               ]
             },
             {
@@ -484,17 +490,18 @@ export class Gateway {
             thumbnail: guild.iconURL({ size: 256 }) || undefined,
             sections: [
               {
-                title: `${SHIELD_ICON} SYSTEM CAPABILITIES`,
+                title: `${SHIELD_ICON} INITIAL STATE: OFF BY DEFAULT`,
                 items: [
-                  '• Anti-Nuke Protection & Dynamic Thresholds (`r!config antinuke`)',
-                  '• PreBot Whitelist & Google 2FA Protection (`r!prebot`)',
-                  '• Real-time Audit Logging, Moderation, Levels & Music Streaming'
+                  'Protection modules start **OFF** for seamless server setup.'
                 ]
               },
               {
-                title: `${CONFIG_ICON} QUICK START`,
+                title: `⚡ ONE-CLICK ACTIVATION COMMANDS`,
                 items: [
-                  'Use `/config` or `r!config` to open the server control dashboard.\nUse `r!help` to browse the full command matrix.'
+                  '• `r!enable antinuke` — Activate all Anti-Nuke protections with standard limits',
+                  '• `r!enable automod` — Activate Anti-Link & Anti-Spam filters',
+                  '• `r!enable all` — Activate full enterprise protection suite',
+                  '• `r!config` or `/config` — Open interactive server control dashboard'
                 ]
               },
               {

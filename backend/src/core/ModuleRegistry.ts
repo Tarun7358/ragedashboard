@@ -436,14 +436,20 @@ export class ModuleRegistry {
 
   private createDefaultModulesState(): ModuleState[] {
     const states: ModuleState[] = [];
+    const disabledByDefault = ['security', 'automod', 'voice-protection', 'join-role-guard', 'logging', 'backups'];
     this.manifests.forEach(manifest => {
+      const isOff = disabledByDefault.includes(manifest.id);
       states.push({
         id: manifest.id,
         name: manifest.name,
-        status: 'enabled',
+        status: isOff ? 'disabled' : 'enabled',
         progress: 0,
         errors: [],
-        config: {}
+        config: manifest.id === 'security'
+          ? { antiNukeEnabled: false }
+          : manifest.id === 'automod'
+          ? { autoModEnabled: false, blockLinks: false }
+          : {}
       });
     });
     return states;
