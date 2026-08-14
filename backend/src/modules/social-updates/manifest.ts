@@ -1,5 +1,6 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, Message, PermissionFlagsBits } from 'discord.js';
 import { ModuleManifest } from '../../core/types.js';
+import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { SocialSubscriptionRepository } from './SocialSubscriptionRepository.js';
 import { ProviderManager } from './ProviderManager.js';
 import { TemplateEngine } from './TemplateEngine.js';
@@ -573,3 +574,260 @@ export const SocialUpdatesManifest: ModuleManifest = {
     }
   ]
 };
+
+export function registerSocialUpdatesCommands(): void {
+  PrefixRegistry.register({
+    name: 'social-updates',
+    category: 'Social Updates',
+    description: 'Monitor YouTube channels and Instagram accounts, sending customizable Discord notifications for new content.',
+    usage: 'r!social-updates <add | remove | list | status | forcecheck | validate | statistics>',
+    aliases: ['social', 'socials', 'yt', 'ig'],
+    cooldownSeconds: 3,
+    examples: [
+      'r!social add youtube clasherliveop #announcements',
+      'r!social add instagram nature #social-feed',
+      'r!social list',
+      'r!social remove sub_12345',
+      'r!social forcecheck',
+      'r!social status'
+    ],
+    moduleOwnerId: 'social_updates',
+    dangerLevel: 'Low',
+    subcommands: [
+      {
+        name: 'add',
+        description: 'Subscribe a YouTube channel or Instagram account to send automated Discord alerts for new posts & videos.',
+        usage: 'r!social add <youtube|instagram> <handle_or_channel_id> <#discordChannel>',
+        examples: [
+          'r!social add youtube clasherliveop #announcements',
+          'r!social add instagram nature #social-feed'
+        ],
+        userPermissions: ['ManageGuild']
+      },
+      {
+        name: 'remove',
+        description: 'Delete an active YouTube or Instagram social subscription by ID.',
+        usage: 'r!social remove <subscription_id>',
+        examples: ['r!social remove sub_12345'],
+        userPermissions: ['ManageGuild']
+      },
+      {
+        name: 'list',
+        description: 'List all active social media subscriptions, target Discord channels, status, and health metrics.',
+        usage: 'r!social list',
+        examples: ['r!social list']
+      },
+      {
+        name: 'status',
+        description: 'Check overall operational status, active subscriptions count, and diagnostics of the social notification engine.',
+        usage: 'r!social status',
+        examples: ['r!social status']
+      },
+      {
+        name: 'forcecheck',
+        description: 'Trigger an immediate manual scan across all registered social media accounts for new uploads.',
+        usage: 'r!social forcecheck',
+        examples: ['r!social forcecheck'],
+        userPermissions: ['ManageGuild']
+      },
+      {
+        name: 'validate',
+        description: 'Validate health and API status of all registered social subscriptions.',
+        usage: 'r!social validate',
+        examples: ['r!social validate'],
+        userPermissions: ['ManageGuild']
+      },
+      {
+        name: 'statistics',
+        description: 'Display delivery telemetry, total notifications sent, failed attempts, and average delivery speed.',
+        usage: 'r!social statistics',
+        examples: ['r!social statistics']
+      }
+    ],
+    execute: async (message: Message, args: string[], context?: any) => {
+      const guildId = message.guildId;
+      if (!guildId || !message.guild) {
+        return message.reply({ content: '<:wrong:1532390628330307634> Command can only be executed within a server.' });
+      }
+
+      const action = (args[0] || '').toLowerCase().trim();
+      const isAdmin = message.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild) ||
+        message.guild.ownerId === message.author.id;
+
+      if (['add', 'subscribe', 'remove', 'delete', 'unsubscribe', 'forcecheck', 'validate'].includes(action) && !isAdmin) {
+        const embed = new EmbedBuilder()
+          .setTitle('<:shield:1532403012751065179> Access Denied')
+          .setDescription('Requires Manage Server permission to modify social update settings.')
+          .setColor(0xEF4444)
+          .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+        return message.reply({ embeds: [embed] });
+      }
+
+      await SocialSubscriptionRepository.ensureTable().catch(() => {});
+
+      if (action === 'list') {
+        const subs = await SocialSubscriptionRepository.findAll(guildId);
+        if (subs.length === 0) {
+          const embed = new EmbedBuilder()
+            .setTitle('<:information:1532621274092929124> Social Updates Subscriptions')
+            .setDescription('No active subscriptions configured. Use `r!social add <youtube|instagram> <handle/channel_id> <#channel>` to add YouTube channels or Instagram accounts.')
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+          return message.reply({ embeds: [embed] });
+        }
+        const lines = subs.map(s =>
+          `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<:wrong:1532390628330307634> Paused'} (Health: **${s.validationStatus}**) [ID: \`${s.id}\`]`
+        );
+        const embed = new EmbedBuilder()
+          .setTitle('<:information:1532621274092929124> Social Updates Subscriptions')
+          .setDescription(lines.join('\n'))
+          .setColor(0x99CC00)
+          .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+        return message.reply({ embeds: [embed] });
+      }
+
+      if (action === 'status') {
+        const subs = await SocialSubscriptionRepository.findAll(guildId);
+        const active = subs.filter(s => s.enabled).length;
+        const embed = new EmbedBuilder()
+          .setTitle('<:information:1532621274092929124> Social Updates Engine Status')
+          .setDescription(`**Active Subscriptions:** ${active} / ${subs.length}\n**System Diagnostics:** <a:approved:1532390590707142956> Operational`)
+          .setColor(0x99CC00)
+          .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+        return message.reply({ embeds: [embed] });
+      }
+
+      if (action === 'forcecheck') {
+        if (_scheduler) {
+          _scheduler.triggerImmediateCheck();
+          const embed = new EmbedBuilder()
+            .setTitle('<a:approved:1532390590707142956> Global Force Check Initiated')
+            .setDescription('Force check triggered globally across all registered social media subscriptions.')
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+          return message.reply({ embeds: [embed] });
+        }
+      }
+
+      if (action === 'validate') {
+        const subs = await SocialSubscriptionRepository.findAll(guildId);
+        let successCount = 0;
+        for (const sub of subs) {
+          const ok = await SubscriptionManager.validateSubscription(sub.id).catch(() => false);
+          if (ok) successCount++;
+        }
+        const embed = new EmbedBuilder()
+          .setTitle('<a:approved:1532390590707142956> Subscriptions Validated')
+          .setDescription(`**${successCount}** out of **${subs.length}** social subscriptions passed health checks.`)
+          .setColor(0x99CC00)
+          .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+        return message.reply({ embeds: [embed] });
+      }
+
+      if (action === 'statistics' || action === 'stats' || action === 'analytics') {
+        const analytics = await SocialSubscriptionRepository.getAnalytics(guildId);
+        const embed = new EmbedBuilder()
+          .setTitle('<:information:1532621274092929124> Social Updates Analytics & Telemetry')
+          .setColor(0x99CC00)
+          .addFields(
+            { name: 'Total Subscriptions', value: `${analytics.totalSubscriptions}`, inline: true },
+            { name: 'Active Subscriptions', value: `${analytics.activeSubscriptions}`, inline: true },
+            { name: 'Notifications Sent', value: `${analytics.totalNotificationsSent}`, inline: true },
+            { name: 'Failed Attempts', value: `${analytics.totalFailedAttempts}`, inline: true },
+            { name: 'Avg Delivery Time', value: `${analytics.avgDeliveryTimeMs}ms`, inline: true }
+          )
+          .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+        return message.reply({ embeds: [embed] });
+      }
+
+      if (action === 'add' || action === 'subscribe') {
+        let provider = (args[1] || '').toLowerCase();
+        if (provider === 'yt') provider = 'youtube';
+        if (provider === 'ig') provider = 'instagram';
+
+        const sourceId = args[2];
+        const channelMention = message.mentions.channels.first() || (args[3] ? message.guild.channels.cache.get(args[3].replace(/[<#>]/g, '')) : null);
+
+        if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channelMention) {
+          const embed = new EmbedBuilder()
+            .setTitle('<:wrong:1532390628330307634> Invalid Add Syntax')
+            .setDescription([
+              `> **Syntax**: \`r!social add <youtube|instagram> <handle_or_channel_id> <#discordChannel>\``,
+              `> **YouTube Handle Example**: \`r!social add youtube clasherliveop #announcements\``,
+              `> **Instagram Example**: \`r!social add instagram nature #social-feed\``
+            ].join('\n'))
+            .setColor(0xEF4444)
+            .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+          return message.reply({ embeds: [embed] });
+        }
+
+        const res = await SubscriptionManager.addSubscription(guildId, provider, sourceId, channelMention.id, {});
+        if (!res.success) {
+          const embed = new EmbedBuilder()
+            .setTitle('<:wrong:1532390628330307634> Subscription Error')
+            .setDescription(`Failed to add social feed: \`${res.error}\``)
+            .setColor(0xEF4444)
+            .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+          return message.reply({ embeds: [embed] });
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle('<a:approved:1532390590707142956> Social Account Subscribed')
+          .setDescription(`Successfully subscribed **${provider.toUpperCase()}** account \`${res.subscription?.sourceName || sourceId}\` to **<#${channelMention.id}>**.`)
+          .addFields(
+            { name: 'Subscription ID', value: `\`${res.subscription?.id}\``, inline: true },
+            { name: 'Platform', value: `\`${provider.toUpperCase()}\``, inline: true },
+            { name: 'Target Channel', value: `<#${channelMention.id}>`, inline: true }
+          )
+          .setColor(0x99CC00)
+          .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+        return message.reply({ embeds: [embed] });
+      }
+
+      if (action === 'remove' || action === 'delete' || action === 'unsubscribe') {
+        const subId = args[1];
+        if (!subId) {
+          const embed = new EmbedBuilder()
+            .setTitle('<:wrong:1532390628330307634> Invalid Remove Syntax')
+            .setDescription(`> **Syntax**: \`r!social remove <subscription_id>\`\n> *(Use \`r!social list\` to view active IDs)*`)
+            .setColor(0xEF4444)
+            .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+          return message.reply({ embeds: [embed] });
+        }
+
+        const res = await SubscriptionManager.removeSubscription(guildId, subId);
+        if (!res.success) {
+          const embed = new EmbedBuilder()
+            .setTitle('<:wrong:1532390628330307634> Removal Error')
+            .setDescription(`\`${res.error}\``)
+            .setColor(0xEF4444)
+            .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+          return message.reply({ embeds: [embed] });
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle('<a:approved:1532390590707142956> Social Account Removed')
+          .setDescription(`Successfully deleted social subscription \`${subId}\`.`)
+          .setColor(0x99CC00)
+          .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+        return message.reply({ embeds: [embed] });
+      }
+
+      // Default Help Manual
+      const embed = new EmbedBuilder()
+        .setTitle('<:information:1532621274092929124> Social Updates Control Manual')
+        .setDescription([
+          `> <:lightpurplearrow:1532621364115013693> **\`r!social add <yt|ig> <handle/id> <#channel>\`** — Add new social feed`,
+          `> <:lightpurplearrow:1532621364115013693> **\`r!social remove <id>\`** — Remove a social subscription`,
+          `> <:lightpurplearrow:1532621364115013693> **\`r!social status\`** — View overall system operational status`,
+          `> <:lightpurplearrow:1532621364115013693> **\`r!social list\`** — List all configured social subscriptions`,
+          `> <:lightpurplearrow:1532621364115013693> **\`r!social forcecheck\`** — Trigger immediate global update scan`,
+          `> <:lightpurplearrow:1532621364115013693> **\`r!social validate\`** — Validate health of registered subscriptions`,
+          `> <:lightpurplearrow:1532621364115013693> **\`r!social statistics\`** — View analytics and delivery telemetry`
+        ].join('\n'))
+        .setColor(0x99CC00)
+        .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+      return message.reply({ embeds: [embed] });
+    }
+  });
+}

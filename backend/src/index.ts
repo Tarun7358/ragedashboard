@@ -106,6 +106,7 @@ import { BrainStore } from './brain/BrainStore.js';
 import { BrainEventInterceptor } from './brain/BrainEventInterceptor.js';
 
 import { EmbedBuilderManifest, registerEmbedPrefixCommands } from './modules/embed_builder/manifest.js';
+import { registerSocialUpdatesCommands } from './modules/social-updates/manifest.js';
 
 // All manifests in one place
 export const ALL_MANIFESTS = [
@@ -212,6 +213,7 @@ async function bootstrap() {
     registerLoggingCommands();
     registerBrainCommands();
     registerEmbedPrefixCommands();
+    registerSocialUpdatesCommands();
 
     await gateway.connect();
     console.log(`✅ Rage Optimiser booted with ${ALL_MANIFESTS.length} modules registered.`);
