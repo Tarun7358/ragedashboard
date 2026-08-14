@@ -98,6 +98,18 @@ export class CommandPipeline {
         return this.sendError(ctx, permResult.reason || 'You lack the required permissions to execute this command.');
       }
 
+      // Auto-delete sensitive trigger messages containing 2fa, passcodes, or confidential commands
+      const rawInputLower = ctx.parsed.rawInput.toLowerCase();
+      const isSensitiveTrigger = cmdMeta.name === 'prebot' || cmdMeta.hidden || 
+        rawInputLower.includes('2fa') || 
+        rawInputLower.includes('passcode') || 
+        rawInputLower.includes('secret') || 
+        rawInputLower.includes('pin');
+
+      if (isSensitiveTrigger && ctx.message.deletable) {
+        ctx.message.delete().catch(() => {});
+      }
+
       // 4. Bot Permission Validation
       const botMember = ctx.guild.members.me;
       if (botMember && cmdMeta.botPermissions) {

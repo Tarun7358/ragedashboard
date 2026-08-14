@@ -378,18 +378,29 @@ export function registerPrebotCommands(): void {
           }
 
           await TwoFactorManager.savePrebot2FAConfig(guild.id, message.author.id, pinArg.trim(), true);
+          if (message.deletable) message.delete().catch(() => {});
+
+          const dismissRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`btn_dismiss_${message.author.id}`)
+              .setLabel('Dismiss Message')
+              .setEmoji('🗑️')
+              .setStyle(ButtonStyle.Danger)
+          );
+
           return message.reply({
             embeds: [new EmbedBuilder()
               .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Set & Activated!`)
               .setColor(Colors.SUCCESS)
               .setDescription([
                 `**Server**: \`${guild.name}\``,
-                `**Passcode**: \`${pinArg.trim()}\``,
+                `**Passcode**: \`•••••• (Hidden for Security)\``,
                 `**Security Status**: 🟢 **ENABLED (Active)**`,
                 `\nAll future PreBot additions (\`r!prebot add\`, \`r!prebot quickadd\`) will now require this 6-digit passcode.`
               ].join('\n'))
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
-              .setTimestamp()]
+              .setTimestamp()],
+            components: [dismissRow]
           });
         }
 
@@ -411,13 +422,24 @@ export function registerPrebotCommands(): void {
           }
 
           await TwoFactorManager.savePrebot2FAConfig(guild.id, message.author.id, newPin.trim(), true);
+          if (message.deletable) message.delete().catch(() => {});
+
+          const dismissRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`btn_dismiss_${message.author.id}`)
+              .setLabel('Dismiss Message')
+              .setEmoji('🗑️')
+              .setStyle(ButtonStyle.Danger)
+          );
+
           return message.reply({
             embeds: [new EmbedBuilder()
               .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Updated!`)
               .setColor(Colors.SUCCESS)
-              .setDescription(`Your 6-digit PreBot 2FA passcode has been successfully updated to \`${newPin.trim()}\`.`)
+              .setDescription(`Your 6-digit PreBot 2FA passcode has been successfully updated and masked.`)
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
-              .setTimestamp()]
+              .setTimestamp()],
+            components: [dismissRow]
           });
         }
 
@@ -758,19 +780,27 @@ export const PrebotWhitelistManifest: ModuleManifest = {
             }
 
             await TwoFactorManager.savePrebot2FAConfig(guild.id, interaction.user.id, codeInput.trim(), true);
+            const dismissRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`btn_dismiss_${interaction.user.id}`)
+                .setLabel('Dismiss Message')
+                .setEmoji('🗑️')
+                .setStyle(ButtonStyle.Danger)
+            );
+
             const successEmbed = new EmbedBuilder()
               .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Set & Activated!`)
               .setColor(Colors.SUCCESS)
               .setDescription([
                 `**Server**: \`${guild.name}\``,
-                `**Passcode**: \`${codeInput.trim()}\``,
+                `**Passcode**: \`•••••• (Hidden for Security)\``,
                 `**Security Status**: 🟢 **ENABLED (Active)**`,
                 `\nAll future PreBot additions will now require this 6-digit passcode.`
               ].join('\n'))
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
               .setTimestamp();
 
-            return interaction.editReply({ embeds: [successEmbed] }).catch(() => { });
+            return interaction.editReply({ embeds: [successEmbed], components: [dismissRow] }).catch(() => { });
           }
 
           if (['change', 'update', 'edit'].includes(action)) {
@@ -804,13 +834,21 @@ export const PrebotWhitelistManifest: ModuleManifest = {
             }
 
             await TwoFactorManager.savePrebot2FAConfig(guild.id, interaction.user.id, newPin.trim(), true);
+            const dismissRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`btn_dismiss_${interaction.user.id}`)
+                .setLabel('Dismiss Message')
+                .setEmoji('🗑️')
+                .setStyle(ButtonStyle.Danger)
+            );
+
             const successEmbed = new EmbedBuilder()
               .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Updated!`)
               .setColor(Colors.SUCCESS)
-              .setDescription(`Your 6-digit PreBot 2FA passcode has been successfully updated to \`${newPin.trim()}\`.`)
+              .setDescription(`Your 6-digit PreBot 2FA passcode has been successfully updated and masked.`)
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
               .setTimestamp();
-            return interaction.editReply({ embeds: [successEmbed] }).catch(() => { });
+            return interaction.editReply({ embeds: [successEmbed], components: [dismissRow] }).catch(() => { });
           }
 
           if (['off', 'disable'].includes(action)) {

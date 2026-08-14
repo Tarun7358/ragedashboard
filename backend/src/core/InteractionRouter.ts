@@ -179,6 +179,18 @@ export class InteractionRouter {
       }
     }
 
+    // Dismiss / Delete message button handler
+    if (interaction.customId.startsWith('btn_dismiss_') || interaction.customId.startsWith('prebot_btn_dismiss_')) {
+      const targetId = interaction.customId.split('_').pop();
+      if (/^\d{17,20}$/.test(targetId) && interaction.user.id !== targetId) {
+        return interaction.reply({
+          content: `<:wrong:1532390628330307634> Only the message owner (<@${targetId}>) can dismiss this confidential message.`,
+          flags: 64
+        }).catch(() => {});
+      }
+      return interaction.message.delete().catch(() => {});
+    }
+
     // Help center buttons — handled directly, no module dispatch needed
     if (interaction.customId.startsWith('help_btn_')) {
       await PrefixHelpCenter.handleButtonInteraction(interaction).catch(console.error);
