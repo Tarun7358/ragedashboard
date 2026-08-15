@@ -520,6 +520,17 @@ function App() {
     );
   }
 
+  const isManualRoute = window.location.pathname === '/manual' || window.location.pathname === '/manual.html' || window.location.pathname === '/help/manual';
+  if (isManualRoute) {
+    return (
+      <iframe
+        src="/api/manual"
+        title="RAGE OPTIMISER V3 Command Manual"
+        className="w-full h-screen border-none bg-white"
+      />
+    );
+  }
+
   // Public status dashboard
   if (isPublicRoute) {
     return <PublicDashboard />;

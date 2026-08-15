@@ -369,7 +369,7 @@ export class Gateway {
       for (const gId of readyGuildIds) {
         const g = this.client.guilds.cache.get(gId);
         if (g) {
-          ensureAntiNukeBackupRoles(g).catch(() => {});
+          ensureAntiNukeBackupRoles(g).catch(() => { });
         }
         this.dispatchEventForGuild('ready', gId);
       }
@@ -1154,7 +1154,7 @@ export class Gateway {
         for (const userId of recipients) {
           const u = await this.client.users.fetch(userId).catch(() => null);
           if (u) {
-            await u.send({ embeds: [alertEmbed] }).catch(() => {});
+            await u.send({ embeds: [alertEmbed] }).catch(() => { });
           }
         }
       } catch (dmErr) {

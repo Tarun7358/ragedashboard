@@ -1,6 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { createServer, Server } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import helmet from 'helmet';
@@ -154,6 +155,27 @@ export class WebServer {
         timestamp: new Date().toISOString()
       });
     };
+
+    // Public Command & Security Manual PDF / HTML route
+    const handleManual = (req: Request, res: Response) => {
+      const possiblePaths = [
+        path.join(process.cwd(), 'RAGE_OPTIMISER_V3_COMMANDS_PDF_MANUAL.html'),
+        path.join(process.cwd(), 'CLUTCH NATION', 'RAGE_OPTIMISER_V3_COMMANDS_PDF_MANUAL.html'),
+        path.resolve(__dirname, '..', '..', 'RAGE_OPTIMISER_V3_COMMANDS_PDF_MANUAL.html')
+      ];
+
+      for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+          return res.sendFile(p);
+        }
+      }
+
+      res.status(404).send('<h1>Manual Not Found</h1>');
+    };
+
+    this.app.get('/manual', handleManual);
+    this.app.get('/manual.html', handleManual);
+    this.app.get('/api/manual', handleManual);
 
     // Health endpoints
     this.app.get('/health', handleHealth);
