@@ -1,7 +1,6 @@
 import { EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
-import { activeRestorationGuilds } from '../security/manifest.js';
 
 const pendingBackupLoads = new Map<string, string>(); // Format: "guildId:userId" -> backupId
 
@@ -166,7 +165,6 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
 
   log(`Initiating fast parallel restoration of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
   activeBackupRestorations.add(guild.id);
-  activeRestorationGuilds.add(guild.id);
 
   try {
     const rolesScope = scope?.roles !== false;
@@ -423,7 +421,6 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
   } finally {
     setTimeout(() => {
       activeBackupRestorations.delete(guild.id);
-      activeRestorationGuilds.delete(guild.id);
     }, 5000);
   }
 }
