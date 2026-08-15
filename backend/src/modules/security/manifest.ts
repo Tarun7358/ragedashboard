@@ -745,8 +745,12 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
 
 async function isExecutorBypassed(guild: any, executorId: string, config: any, context?: any, ruleId?: string): Promise<boolean> {
   if (!guild || !executorId) return false;
+
+  // 1. Bypass during active server restoration or backup load
+  if (activeRestorationGuilds.has(guild.id)) {
+    return true;
+  }
   
-  // 1. Bypass during active server clone / backup load
   try {
     const { activeBackupRestorations } = await import('../backups/manifest.js');
     if (activeBackupRestorations && activeBackupRestorations.has(guild.id)) {
@@ -2270,6 +2274,7 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'channelDelete',
       handler: async (client: any, channel: any, context: any) => {
+        if (!channel.guild || activeRestorationGuilds.has(channel.guild.id)) return;
         console.log(`[Anti-Nuke Debug] [channelDelete] Channel deleted: "#${channel.name}" (${channel.id}) in guild "${channel.guild.name}" (${channel.guild.id})`);
         const modules = context.getModulesState ? context.getModulesState(channel.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
@@ -2388,6 +2393,7 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'channelCreate',
       handler: async (client: any, channel: any, context: any) => {
+        if (!channel.guild || activeRestorationGuilds.has(channel.guild.id)) return;
         console.log(`[Anti-Nuke Debug] [channelCreate] Channel created: "#${channel.name}" (${channel.id}) in guild "${channel.guild.name}" (${channel.guild.id})`);
         const modules = context.getModulesState ? context.getModulesState(channel.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');

@@ -1312,7 +1312,6 @@ export class Gateway {
       this.setRegistry(guildId, reg);
       this.reevaluateModules(guildId);
       this.broadcast({ type: 'STATE_UPDATE', modules: this.getModulesState(guildId), registry: reg, guildId });
-      this.logSyncEvent(guildId, 'Discord resource registry fetched from live Gateway.', 'success');
     } catch (err) {
       console.error(`Failed to sync live Discord resources for guild ${guildId}:`, err);
     }
