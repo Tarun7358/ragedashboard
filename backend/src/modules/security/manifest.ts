@@ -2616,6 +2616,18 @@ export const SecurityManifest: ModuleManifest = {
             return;
           }
 
+          // ZERO-TRUST BOT DEFENSE: Instant permanent ban & restoration on Action #1
+          if (executor.bot) {
+            const prebot = await getPrebotEntry(guild.id, executor.id);
+            const isBypassed = await checkBypassImmunity(executor.id, guild, context, 'anti_channel_update');
+            if (!prebot && !isBypassed) {
+              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: Reverting channel update #${newChannel.name} & banning unwhitelisted bot ${executor.username}.`, 'warn');
+              await revokeBotAndPurgeRoles(guild, executor.id, executor.username, `Instant Permanent Ban for Updating #${newChannel.name}`, client, context);
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
+              return;
+            }
+          }
+
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_channel_update');
           console.log(`[Anti-Nuke Debug] [channelUpdate] Executor ${executor.username} bypassed status: ${isBypassed}`);
           if (isBypassed) return;
@@ -2902,6 +2914,18 @@ export const SecurityManifest: ModuleManifest = {
             return;
           }
 
+          // ZERO-TRUST BOT DEFENSE: Instant permanent ban & restoration on Action #1
+          if (executor.bot) {
+            const prebot = await getPrebotEntry(guild.id, executor.id);
+            const isBypassed = await checkBypassImmunity(executor.id, guild, context, 'anti_role_update');
+            if (!prebot && !isBypassed) {
+              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: Reverting role update "${newRole.name}" & banning unwhitelisted bot ${executor.username}.`, 'warn');
+              await revokeBotAndPurgeRoles(guild, executor.id, executor.username, `Instant Permanent Ban for Updating Role "${newRole.name}"`, client, context);
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
+              return;
+            }
+          }
+
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_update');
           console.log(`[Anti-Nuke Debug] [roleUpdate] Executor ${executor.username} bypassed status: ${isBypassed}`);
           if (isBypassed) return;
@@ -3167,6 +3191,19 @@ export const SecurityManifest: ModuleManifest = {
           const executor = logEntry.executor;
           if (!executor || executor.id === client.user.id) return;
           if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_ban')) return;
+
+          // ZERO-TRUST BOT DEFENSE: Instant permanent ban & restoration on Action #1
+          if (executor.bot) {
+            const prebot = await getPrebotEntry(guild.id, executor.id);
+            const isBypassed = await checkBypassImmunity(executor.id, guild, context, 'anti_ban');
+            if (!prebot && !isBypassed) {
+              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: Unbanning ${ban.user.username} & banning unwhitelisted violator bot ${executor.username}.`, 'warn');
+              await guild.members.unban(ban.user.id, 'Anti-Nuke Recovery: Revoking unauthorized ban').catch(() => null);
+              await revokeBotAndPurgeRoles(guild, executor.id, executor.username, `Instant Permanent Ban for Unauthorized Ban of ${ban.user.username}`, client, context);
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
+              return;
+            }
+          }
 
           const triggered = checkRateLimit(guild.id, executor.id, 'anti_ban', rule.limit, rule.window, Boolean(executor.bot));
           if (!triggered) return;
