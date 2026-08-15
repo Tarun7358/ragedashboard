@@ -404,6 +404,43 @@ export async function saveLiveSnapshotToDb(guildId: string, snap: any) {
   }
 }
 
+let autoBackupIntervalStarted = false;
+
+export function startAutoBackupScheduler(client: any, context?: any) {
+  if (autoBackupIntervalStarted || !client) return;
+  autoBackupIntervalStarted = true;
+
+  console.log('⚡ [Auto-Backup Engine]: 5-Minute automated server snapshot engine active.');
+
+  const runAutoBackup = async () => {
+    try {
+      if (!client.guilds || !client.guilds.cache) return;
+      const guilds = Array.from(client.guilds.cache.values());
+
+      for (const guild of guilds as any[]) {
+        try {
+          const channelCount = guild.channels?.cache?.size || 0;
+          const roleCount = guild.roles?.cache?.size || 0;
+
+          // Anti-Poisoning Protection: Only save snapshot if guild is healthy (has >= 2 channels and >= 1 role)
+          if (channelCount >= 2 && roleCount >= 1) {
+            const snap = await captureLiveSnapshot(guild);
+            await saveLiveSnapshotToDb(guild.id, snap);
+          }
+        } catch (e) {
+          console.error(`[Auto-Backup 5m] Failed snapshot for guild ${guild?.id}:`, e);
+        }
+      }
+    } catch (err) {
+      console.error('[Auto-Backup 5m] Engine error:', err);
+    }
+  };
+
+  // Run initial backup after 5s, then every 5 minutes (300,000 ms)
+  setTimeout(runAutoBackup, 5000);
+  setInterval(runAutoBackup, 5 * 60 * 1000);
+}
+
 export async function restoreFromLiveSnapshot(param1: any, param2: any, context: any) {
   let guild: any = null;
   let client: any = null;
@@ -2199,6 +2236,7 @@ export const SecurityManifest: ModuleManifest = {
       name: 'ready',
       handler: async (client: any, context: any) => {
         GuildSchemaSnapshotManager.startAutoSnapshots(client);
+        startAutoBackupScheduler(client, context);
       }
     },
     {
