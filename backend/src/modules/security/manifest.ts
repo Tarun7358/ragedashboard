@@ -2301,48 +2301,56 @@ export const SecurityManifest: ModuleManifest = {
           const guild = channel.guild;
           if (!guild) return;
 
-          let deletionLog = await fetchAuditLogWithRetry(guild, AuditLogEvent.ChannelDelete, channel.id);
+          // Zero-Latency Audit Log Check
+          let fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.ChannelDelete }).catch(() => null);
+          let deletionLog = fetchedLogs?.entries.find((e: any) => e.targetId === channel.id && isRecentEntry(e));
           let executor = deletionLog?.executor;
 
-          // Zero-Trust Fallback: If Discord Audit Log is delayed during rapid nuking, pre-emptively sweep and ban unwhitelisted bots with admin perms
+          // ZERO-TRUST BOT SWEEP (Zero Delay): If Audit Log is delayed or missing, immediately ban any unwhitelisted administrative bot
           if (!executor) {
-            console.log(`[Anti-Nuke Debug] [channelDelete] Audit log delayed for #${channel.name}. Executing zero-trust pre-emptive bot ban...`);
+            console.log(`[Anti-Nuke Debug] [channelDelete] Audit log pending for #${channel.name}. Executing zero-latency bot sweep...`);
             const allMembers = guild.members.cache;
             const unapprovedBots = allMembers.filter((m: any) => m.user.bot && m.id !== client.user.id && m.id !== (process.env.MUSIC_CLIENT_ID || '1520323151928623125'));
 
             for (const [, botMember] of unapprovedBots) {
               const isBypassedBot = await isExecutorBypassed(guild, botMember.id, config, context, 'anti_channel_delete');
               if (!isBypassedBot && (botMember.permissions.has('Administrator') || botMember.permissions.has('ManageChannels'))) {
-                context.logSyncEvent(guild.id, `🚨 [Zero-Trust Defense]: Pre-emptively banning unwhitelisted bot @${botMember.user.username} during rapid channel deletion!`, 'warn');
-                await guild.members.ban(botMember.id, { reason: 'Anti-Nuke Zero-Trust: Rapid unauthorized channel deletion detected' }).catch(() => {});
+                context.logSyncEvent(guild.id, `🚨 [Zero-Trust Defense]: Pre-emptively banning unwhitelisted bot @${botMember.user.username} during channel deletion attack!`, 'warn');
+                await guild.members.ban(botMember.id, { reason: 'Anti-Nuke Zero-Trust: Instant Ban for Unapproved Bot Channel Deletion' }).catch(() => {});
+                await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+                return;
               }
             }
           }
 
           if (executor && executor.id === client.user.id) {
-            console.log(`[Anti-Nuke Debug] [channelDelete] Executor is the bot itself, ignoring`);
             return;
           }
 
           if (executor) {
             const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_channel_delete');
-            console.log(`[Anti-Nuke Debug] [channelDelete] Executor ${executor.username} bypassed status: ${isBypassed}`);
             if (isBypassed) {
               const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
               await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'deleted', 'channel', channel, config);
               return;
             }
 
+            // ZERO-TRUST DEFENSE FOR BOTS: Instant ban on Action #1 (No Rate Limits)
+            if (executor.bot) {
+              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: INSTANTLY BANNED rogue bot @${executor.username} (${executor.id}) for deleting #${channel.name}!`, 'warn');
+              await guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => {});
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+              return;
+            }
+
             const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_delete', rule.limit, rule.window, Boolean(executor.bot));
-            console.log(`[Anti-Nuke Debug] [channelDelete] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
             if (!triggered) return;
           }
 
           addThreatPoints(guild.id, 30);
-          context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized channel deletion of #${channel.name} by ${executor.username}.`, 'warn');
+          context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized channel deletion of #${channel.name} by ${executor?.username || 'Unknown'}.`, 'warn');
 
           if (rule.recovery !== false) {
-            console.log(`[Anti-Nuke Debug] [channelDelete] Executing recovery (re-creating deleted channel #${channel.name})`);
             const channelOptions: any = {
               name: channel.name,
               type: channel.type,
@@ -2383,8 +2391,9 @@ export const SecurityManifest: ModuleManifest = {
             }
           }
 
-          console.log(`[Anti-Nuke Debug] [channelDelete] Punishing violator ${executor.username} with action ${rule.action}`);
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Channel Deletion (#${channel.name})`, rule.action, config, context, 'anti_channel_delete');
+          if (executor) {
+            await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Channel Deletion (#${channel.name})`, rule.action, config, context, 'anti_channel_delete');
+          }
         } catch (err) {
           console.error('[Anti-Nuke Debug] [channelDelete] Error in handler:', err);
         }
@@ -2408,20 +2417,11 @@ export const SecurityManifest: ModuleManifest = {
           const guild = channel.guild;
           if (!guild) return;
 
-          // FAST-PATH: Fetch audit log entry with retries or immediate fallback
+          // Zero-Latency Audit Log Check
           let fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.ChannelCreate }).catch(() => null);
           let logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === channel.id && isRecentEntry(e));
-
-          // If audit log is delayed (common during rapid nukes), retry once quickly
-          if (!logEntry) {
-            await new Promise((r) => setTimeout(r, 200));
-            fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.ChannelCreate }).catch(() => null);
-            logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === channel.id && isRecentEntry(e));
-          }
-
           let executor = logEntry?.executor;
 
-          // Helper for Mass Channel Purge during channel creation attacks
           const purgeAllSpamChannels = async (targetName: string) => {
             try {
               const spamChannels = guild.channels.cache.filter((c: any) => c.name === targetName || (c.createdTimestamp && Date.now() - c.createdTimestamp < 30000));
@@ -2429,10 +2429,10 @@ export const SecurityManifest: ModuleManifest = {
             } catch {}
           };
 
-          // Fallback: If audit log entry is delayed/missing during high velocity nuke, check for unwhitelisted bots
+          // ZERO-TRUST BOT SWEEP (Zero Delay): If Audit Log is delayed or missing, immediately ban any unwhitelisted bot
           if (!executor) {
-            console.log(`[Anti-Nuke Debug] [channelCreate] Audit log pending for #${channel.name}. Performing zero-trust bot sweep...`);
-            const allMembers = await guild.members.fetch().catch(() => guild.members.cache);
+            console.log(`[Anti-Nuke Debug] [channelCreate] Audit log pending for #${channel.name}. Executing zero-latency bot sweep...`);
+            const allMembers = guild.members.cache;
             const unapprovedBots = allMembers.filter((m: any) => m.user.bot && m.id !== client.user.id && m.id !== (process.env.MUSIC_CLIENT_ID || '1520323151928623125'));
             
             for (const [, botMember] of unapprovedBots) {
@@ -2453,7 +2453,7 @@ export const SecurityManifest: ModuleManifest = {
 
           if (executor.id === client.user.id) return;
 
-          // ZERO-TRUST BOT DEFENSE: Instant permanent ban & channel purge for unwhitelisted bots
+          // ZERO-TRUST BOT DEFENSE: Instant permanent ban & channel purge for unwhitelisted bots (No Rate Limits)
           if (executor.bot) {
             const prebot = await getPrebotEntry(guild.id, executor.id);
             const isBypassed = await checkBypassImmunity(executor.id, guild, context, 'anti_channel_create');
@@ -2684,34 +2684,50 @@ export const SecurityManifest: ModuleManifest = {
           const guild = role.guild;
           if (!guild) return;
 
-          const logEntry = await fetchAuditLogWithRetry(guild, AuditLogEvent.RoleDelete, role.id);
+          let fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.RoleDelete }).catch(() => null);
+          let logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === role.id && isRecentEntry(e));
+          let executor = logEntry?.executor;
 
-          if (!logEntry) {
-            console.log(`[Anti-Nuke Debug] [roleDelete] No recent audit log entry found for target role ${role.id}`);
-            return;
-          }
-
-          const executor = logEntry.executor;
+          // ZERO-TRUST BOT SWEEP (Zero Delay): If Audit Log is delayed or missing, immediately ban any unwhitelisted administrative bot
           if (!executor) {
-            console.log(`[Anti-Nuke Debug] [roleDelete] Executor not found in audit log entry`);
-            return;
+            console.log(`[Anti-Nuke Debug] [roleDelete] Audit log pending for "${role.name}". Executing zero-latency bot sweep...`);
+            const allMembers = guild.members.cache;
+            const unapprovedBots = allMembers.filter((m: any) => m.user.bot && m.id !== client.user.id && m.id !== (process.env.MUSIC_CLIENT_ID || '1520323151928623125'));
+
+            for (const [, botMember] of unapprovedBots) {
+              const isBypassedBot = await isExecutorBypassed(guild, botMember.id, config, context, 'anti_role_delete');
+              if (!isBypassedBot && (botMember.permissions.has('Administrator') || botMember.permissions.has('ManageRoles'))) {
+                context.logSyncEvent(guild.id, `🚨 [Zero-Trust Defense]: Pre-emptively banning unwhitelisted bot @${botMember.user.username} during role deletion attack!`, 'warn');
+                await guild.members.ban(botMember.id, { reason: 'Anti-Nuke Zero-Trust: Instant Ban for Unapproved Bot Role Deletion' }).catch(() => {});
+                await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+                return;
+              }
+            }
           }
-          if (executor.id === client.user.id) {
-            console.log(`[Anti-Nuke Debug] [roleDelete] Executor is the bot itself, ignoring`);
+
+          if (executor && executor.id === client.user.id) {
             return;
           }
 
-          const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_delete');
-          console.log(`[Anti-Nuke Debug] [roleDelete] Executor ${executor.username} bypassed status: ${isBypassed}`);
-          if (isBypassed) {
-            const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
-            await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'deleted', 'role', role, config);
-            return;
-          }
+          if (executor) {
+            const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_delete');
+            if (isBypassed) {
+              const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
+              await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'deleted', 'role', role, config);
+              return;
+            }
 
-          const triggered = checkRateLimit(guild.id, executor.id, 'anti_role_delete', rule.limit, rule.window);
-          console.log(`[Anti-Nuke Debug] [roleDelete] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
-          if (!triggered) return;
+            // ZERO-TRUST DEFENSE FOR BOTS: Instant ban on Action #1 (No Rate Limits)
+            if (executor.bot) {
+              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: INSTANTLY BANNED rogue bot @${executor.username} (${executor.id}) for deleting role "${role.name}"!`, 'warn');
+              await guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => {});
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+              return;
+            }
+
+            const triggered = checkRateLimit(guild.id, executor.id, 'anti_role_delete', rule.limit, rule.window);
+            if (!triggered) return;
+          }
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized role deletion of "${role.name}" by ${executor.username}.`, 'warn');
 
