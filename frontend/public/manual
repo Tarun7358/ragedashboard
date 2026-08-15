@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RAGE OPTIMISER V3 — A-Z Master Command & Security Manual</title>
+  <style>
+    @media print {
+      body { font-size: 11pt; color: #000; background: #fff; }
+      .no-print { display: none; }
+      .page-break { page-break-before: always; }
+      h1, h2, h3 { page-break-after: avoid; }
+    }
+    body {
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #1e293b;
+      background-color: #f8fafc;
+      margin: 0;
+      padding: 40px;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 50px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    .header-bar {
+      border-bottom: 3px solid #10b981;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    h1 {
+      color: #0f172a;
+      margin: 0;
+      font-size: 26pt;
+    }
+    .badge {
+      background: #10b981;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 10pt;
+    }
+    h2 {
+      color: #0f172a;
+      border-bottom: 1.5px solid #e2e8f0;
+      padding-bottom: 8px;
+      margin-top: 35px;
+      font-size: 16pt;
+    }
+    h3 {
+      color: #047857;
+      margin-top: 20px;
+      font-size: 13pt;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 10pt;
+    }
+    th {
+      background-color: #f1f5f9;
+      color: #334155;
+      font-weight: 600;
+    }
+    code {
+      background-color: #f1f5f9;
+      color: #0f766e;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 9.5pt;
+    }
+    pre {
+      background-color: #0f172a;
+      color: #f8fafc;
+      padding: 14px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    pre code {
+      background-color: transparent;
+      color: #38bdf8;
+    }
+    .btn-print {
+      background-color: #10b981;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    .btn-print:hover {
+      background-color: #059669;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="no-print">
+    <button class="btn-print" onclick="window.print()">📄 Save as PDF / Print Manual</button>
+  </div>
+
+  <div class="header-bar">
+    <div>
+      <h1>RAGE OPTIMISER V3</h1>
+      <div style="color: #64748b; font-size: 11pt;">A-Z Master Command & Security Manual</div>
+    </div>
+    <span class="badge">Version 3.5.0</span>
+  </div>
+
+  <h2>1. Permission & Authority Hierarchy</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Authority Level</th>
+        <th>Rate Limits</th>
+        <th>Warning Alerts</th>
+        <th>Punishment & Restores</th>
+        <th>Configuration Rights</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Primary Guild Owner</b> (<code>guild.ownerId</code>)</td>
+        <td>❌ None (100% Immune)</td>
+        <td>❌ None</td>
+        <td>❌ None</td>
+        <td>Full Control (All Commands)</td>
+      </tr>
+      <tr>
+        <td><b>Extra Owner</b> (<code>r!extraowner</code>)</td>
+        <td>❌ None (100% Immune)</td>
+        <td>❌ None</td>
+        <td>❌ None</td>
+        <td>Full Control (All Commands)</td>
+      </tr>
+      <tr>
+        <td><b>Whitelisted Admin</b> (<code>r!whitelist</code>)</td>
+        <td>⚠️ Behavioral Monitored</td>
+        <td>✅ Yes (<code>warn_at</code>)</td>
+        <td>✅ Yes (<code>punish_at</code>)</td>
+        <td>Security Operations</td>
+      </tr>
+      <tr>
+        <td><b>PreBot Approved Bot</b> (<code>r!prebot</code>)</td>
+        <td>⚠️ Module Restricted</td>
+        <td>✅ Yes</td>
+        <td>✅ Yes (If unapproved)</td>
+        <td>None</td>
+      </tr>
+      <tr>
+        <td><b>Standard User / Rogue Actor</b></td>
+        <td>🚨 Zero-Tolerance (Instant)</td>
+        <td>❌ Direct Action</td>
+        <td>✅ Instant Ban/Kick & Rollback</td>
+        <td>None</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. A to Z Master Command Directory</h2>
+
+  <h3>A</h3>
+  <ul>
+    <li><code>r!antinuke [subcommand]</code> / <code>/config antinuke</code> — Central Anti-Nuke zero-trust engine control suite (<code>status</code>, <code>threshold</code>, <code>punishment</code>, <code>trustedactor</code>, <code>timeout-duration</code>, <code>quarantine-role</code>, <code>setall</code>).</li>
+    <li><code>r!antispam &lt;on|off&gt; [max_msgs] [window_sec] [action]</code> / <code>/automod antispam</code> — Configure anti-spam flood filters.</li>
+    <li><code>r!antilink [on|off]</code> / <code>/automod antilink</code> — Configure Anti-Link filter. Automatically deletes unauthorized link messages and sends DM warnings.</li>
+    <li><code>r!autorole &lt;add|remove&gt; &lt;@role&gt;</code> / <code>/welcome autorole</code> — Auto-assign roles to new human joins.</li>
+  </ul>
+
+  <h3>B</h3>
+  <ul>
+    <li><code>r!backup &lt;create|list|restore&gt;</code> / <code>/backup</code> — Take atomic snapshots of server channels, roles, and permissions for instant rollback recovery.</li>
+    <li><code>r!ban &lt;@user&gt; [reason]</code> / <code>/ban</code> — Permanently ban violator accounts.</li>
+    <li><code>r!blacklist &lt;add|remove|list&gt; [word]</code> / <code>/automod blacklist</code> — Manage blacklisted words.</li>
+  </ul>
+
+  <h3>C</h3>
+  <ul>
+    <li><code>r!clear &lt;amount&gt;</code> / <code>r!purge &lt;amount&gt;</code> / <code>/purge</code> — Bulk delete up to 100 messages.</li>
+    <li><code>r!config [module] [options...]</code> / <code>/config</code> — Master server control panel.</li>
+  </ul>
+
+  <h3>E</h3>
+  <ul>
+    <li><code>r!emergency &lt;on|off|lockdown&gt;</code> / <code>/emergency</code> — Enable/disable server lockdown mode.</li>
+    <li><code>r!extraowner &lt;add|remove|list&gt; &lt;@user&gt;</code> / <code>/extraowner</code> — Manage Extra Owners with 100% immunity.</li>
+  </ul>
+
+  <h3>L</h3>
+  <ul>
+    <li><code>r!logging &lt;channel|status|set&gt;</code> / <code>/logging</code> — Configure security audit log channel.</li>
+  </ul>
+
+  <h3>P</h3>
+  <ul>
+    <li><code>r!prebot &lt;add|remove|list&gt; &lt;bot_id&gt;</code> / <code>/prebot</code> — Pre-approve bots before join. Unapproved bots are banned on Action #1.</li>
+    <li><code>r!prefix [set|reset]</code> / <code>/prefix</code> — Customize server command prefix (Default: <code>r!</code>).</li>
+    <li><code>r!punishment &lt;event|all&gt; &lt;action&gt;</code> — Set anti-nuke punishment (<code>quarantine</code>, <code>ban</code>, <code>kick</code>, <code>strip_roles</code>, <code>warn</code>).</li>
+  </ul>
+
+  <h3>Q</h3>
+  <ul>
+    <li><code>r!quarantine &lt;@user&gt; [reason]</code> / <code>/quarantine</code> — Apply Discord Timeout + Quarantine role.</li>
+    <li><code>r!quarantine-role &lt;create|@role|view&gt;</code> / <code>r!qrole</code> — Auto-create or bind Quarantine role.</li>
+  </ul>
+
+  <h3>R</h3>
+  <ul>
+    <li><code>r!restore</code> / <code>/restore</code> — Trigger full atomic restoration to rebuild missing channels/roles.</li>
+  </ul>
+
+  <h3>T</h3>
+  <ul>
+    <li><code>r!threshold &lt;event|all&gt; &lt;limit&gt; [window_sec]</code> — Set maximum allowed actions within time window.</li>
+    <li><code>r!timeout &lt;@user&gt; &lt;duration&gt; [reason]</code> / <code>/timeout</code> — Native Discord timeout.</li>
+    <li><code>r!timeout-duration &lt;10m|1h|1d|7d|28d&gt;</code> / <code>r!timeouttime</code> — Configure Anti-Nuke timeout duration.</li>
+    <li><code>r!trustedactor &lt;warn_at&gt; &lt;punish_at&gt; [window_sec]</code> — Configure Behavioral Firewall thresholds for Whitelisted users.</li>
+  </ul>
+
+  <h3>U</h3>
+  <ul>
+    <li><code>r!unquarantine &lt;@user&gt;</code> / <code>/unquarantine</code> — Release quarantined user & restore roles.</li>
+  </ul>
+
+  <h3>W</h3>
+  <ul>
+    <li><code>r!whitelist &lt;add|remove|list&gt; &lt;@user&gt;</code> / <code>/whitelist</code> — Manage Whitelisted Admin list.</li>
+  </ul>
+
+  <h2>3. Key Security Configurations</h2>
+  <pre><code># Set Timeout Duration to 28 Days (Maximum)
+r!config antinuke timeout-duration 28d
+
+# Set Anti-Link to Warn & Delete
+r!config antinuke punishment anti_link warn
+
+# Set Master Anti-Nuke (1 Action / 10 Sec -> BAN + Auto-Restore)
+r!config antinuke setall all 1 10 ban on
+
+# Configure Trusted Actor Behavioral Gate
+r!config antinuke trustedactor 1 2 10
+
+# Auto-Create & Bind Quarantine Role
+r!config antinuke quarantine-role create</code></pre>
+
+</div>
+
+</body>
+</html>

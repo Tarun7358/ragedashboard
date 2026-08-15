@@ -524,7 +524,7 @@ function App() {
   if (isManualRoute) {
     return (
       <iframe
-        src="/api/manual"
+        src="/manual.html"
         title="RAGE OPTIMISER V3 Command Manual"
         className="w-full h-screen border-none bg-white"
       />
