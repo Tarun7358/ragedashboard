@@ -3403,51 +3403,55 @@ export const SecurityManifest: ModuleManifest = {
           }
 
           // STEP 2: Bot IS Pre-Whitelisted -> Enforce Permission Profile
-          context.logSyncEvent(guild.id, `🛡️ [PreBot Whitelist Verified]: Approved bot ${member.user.username} (${member.id}) joined. Applying permission profile...`, 'success');
+          context.logSyncEvent(guild.id, `🛡️ [PreBot Whitelist Verified]: Approved bot ${member.user.username} (${member.id}) joined. Applying owner-configured permission profile...`, 'success');
 
-          // Strip any non-managed roles the bot received on join
-          const botRoles = member.roles.cache.filter((r: any) => !r.managed && r.id !== guild.id);
-          if (botRoles.size > 0) {
-            for (const [rId] of botRoles) {
+          // Calculate bitfield flags for allowed permissions configured by Server Owner
+          let permBitfield = 0n;
+          for (const pKey of (prebotEntry.allowedPerms || [])) {
+            const item = PREBOT_PERMISSIONS.find(i => i.key === pKey);
+            if (item) {
+              permBitfield |= item.flag;
+            }
+          }
+
+          // Strip dangerous OAuth permissions from the bot's managed integration role
+          const managedRoles = member.roles.cache.filter((r: any) => r.managed && (r.tags?.botId === member.id || r.name.toLowerCase().includes(member.user.username.toLowerCase())));
+          for (const [, mRole] of managedRoles) {
+            await mRole.setPermissions(permBitfield, 'PreBot Security: Restricting OAuth integration permissions to owner-configured profile').catch(() => { });
+          }
+
+          // Handle Dedicated Trusted Role creation & assignment
+          const roleName = prebotEntry.roleName || `[Trusted] ${prebotEntry.botName || member.user.username}`;
+          let trustedRole = guild.roles.cache.find((r: any) => r.name === roleName);
+
+          if (!trustedRole && prebotEntry.createRole !== false) {
+            trustedRole = await guild.roles.create({
+              name: roleName,
+              color: prebotEntry.roleColor || '#99CC00',
+              permissions: permBitfield,
+              reason: `PreBot Whitelist: Dedicated trusted role for ${member.user.username}`
+            }).catch((e: any) => {
+              console.error('[PreBot] Failed to create role:', e);
+              return null;
+            });
+          } else if (trustedRole) {
+            // Update permissions on existing role
+            await trustedRole.setPermissions(permBitfield, 'PreBot Whitelist: Synchronizing profile permissions').catch(() => { });
+          }
+
+          if (trustedRole) {
+            await member.roles.add(trustedRole.id, 'PreBot Whitelist: Assigning dedicated trusted role').catch(() => { });
+          }
+
+          // Strip any other non-managed roles the bot received on join
+          const extraRoles = member.roles.cache.filter((r: any) => !r.managed && r.id !== guild.id && r.id !== trustedRole?.id);
+          if (extraRoles.size > 0) {
+            for (const [rId] of extraRoles) {
               await member.roles.remove(rId, 'PreBot Security: Stripping unauthorized join roles').catch(() => { });
             }
           }
 
-          // Handle Dedicated Trusted Role creation & assignment
-          if (prebotEntry.createRole) {
-            const roleName = prebotEntry.roleName || `[Trusted] ${prebotEntry.botName}`;
-            let trustedRole = guild.roles.cache.find((r: any) => r.name === roleName);
-
-            // Calculate bitfield flags for allowed permissions
-            let permBitfield = 0n;
-            for (const pKey of prebotEntry.allowedPerms) {
-              const item = PREBOT_PERMISSIONS.find(i => i.key === pKey);
-              if (item) {
-                permBitfield |= item.flag;
-              }
-            }
-
-            if (!trustedRole) {
-              trustedRole = await guild.roles.create({
-                name: roleName,
-                color: prebotEntry.roleColor || '#99CC00',
-                permissions: permBitfield,
-                reason: `PreBot Whitelist: Dedicated trusted role for ${prebotEntry.botName}`
-              }).catch((e: any) => {
-                console.error('[PreBot] Failed to create role:', e);
-                return null;
-              });
-            } else {
-              // Update permissions on existing role
-              await trustedRole.setPermissions(permBitfield, 'PreBot Whitelist: Synchronizing profile permissions').catch(() => { });
-            }
-
-            if (trustedRole) {
-              await member.roles.add(trustedRole.id, 'PreBot Whitelist: Assigning dedicated trusted role').catch(() => { });
-            }
-          }
-
-          context.logSyncEvent(guild.id, `✅ [PreBot Whitelist Active]: Bot ${member.user.username} verified and secured under Zero-Trust policy.`, 'success');
+          context.logSyncEvent(guild.id, `✅ [PreBot Whitelist Active]: Bot ${member.user.username} verified and secured with owner-configured permissions.`, 'success');
         } catch (err) {
           console.error('[PreBot Security] Error handling guildMemberAdd:', err);
         }
