@@ -172,7 +172,7 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
     console.log(`[Backup Restore] [${guild.id}] ${msg}`);
   };
 
-  log(`Initiating high-speed simultaneous restoration of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
+  log(`Initiating restoration of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
   activeBackupRestorations.add(guild.id);
 
   try {
@@ -181,8 +181,8 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
     const settingsScope = scope?.settings !== false;
     const emojisScope = scope?.expressions !== false;
 
-    // ── STEP 1: ULTRA-FAST SIMULTANEOUS PARALLEL PURGE ──
-    log('⚡ Executing simultaneous deletion of existing channels & roles...', 'info');
+    // ── STEP 1: PARALLEL PURGE ──
+    log('⚡ Cleaning existing channels & roles...', 'info');
 
     let tempChannel: any = null;
     if (channelsScope) {
@@ -216,85 +216,145 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
       await Promise.allSettled(rolesToDelete.map((r: any) => r.delete('Backup restoration - clean rewrite').catch(() => null)));
     }
 
-    // ── STEP 2: SIMULTANEOUS ROLE RECREATION ──
+    // ── STEP 2: ROLE RECREATION (With 429 Rate Limit Retries) ──
     const newRolesMap = new Map<string, any>();
     if (rolesScope && snapshot.data.roles && snapshot.data.roles.length > 0) {
-      log('⚡ Rebuilding role hierarchy simultaneously...', 'info');
+      log('⚡ Rebuilding role hierarchy...', 'info');
       const sortedRoles = [...snapshot.data.roles].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
 
-      const createdRoles = await Promise.allSettled(sortedRoles.map(async (roleData: any) => {
+      for (const roleData of sortedRoles) {
         try {
           let perms: any = 0n;
-          if (typeof roleData.permissions === 'string') {
-            perms = BigInt(roleData.permissions);
+          if (typeof roleData.permissions === 'string' && roleData.permissions !== '0') {
+            try { perms = BigInt(roleData.permissions); } catch {}
           } else if (Array.isArray(roleData.permissions)) {
             perms = roleData.permissions;
           }
 
-          const created = await guild.roles.create({
-            name: roleData.name,
-            color: roleData.color,
-            hoist: roleData.hoist,
-            mentionable: roleData.mentionable,
-            permissions: perms
-          });
-          newRolesMap.set(roleData.name, created);
-          return created;
+          let createdRole: any = null;
+          for (let attempt = 1; attempt <= 4; attempt++) {
+            try {
+              createdRole = await guild.roles.create({
+                name: roleData.name,
+                color: roleData.color || 0,
+                hoist: Boolean(roleData.hoist),
+                mentionable: Boolean(roleData.mentionable),
+                permissions: perms
+              });
+              break;
+            } catch (err: any) {
+              if (err?.status === 429 || err?.code === 429 || err?.retryAfter) {
+                const waitMs = (err?.retryAfter || 1) * 1000 + 200;
+                await new Promise(r => setTimeout(r, waitMs));
+              } else {
+                log(`Failed to create role "${roleData.name}": ${err.message}`, 'warn');
+                break;
+              }
+            }
+          }
+
+          if (createdRole) {
+            newRolesMap.set(roleData.name, createdRole);
+          }
         } catch (e: any) {
           log(`Failed to recreate role "${roleData.name}": ${e.message}`, 'warn');
-          return null;
         }
-      }));
-      log(`Recreated ${createdRoles.filter(r => r.status === 'fulfilled' && r.value).length} roles.`, 'info');
+        await new Promise(r => setTimeout(r, 100));
+      }
+      log(`Recreated ${newRolesMap.size} of ${sortedRoles.length} roles.`, 'info');
     }
 
-    // ── STEP 3: SIMULTANEOUS CATEGORY & CHANNEL RECREATION ──
+    // ── STEP 3: CATEGORY & CHANNEL RECREATION (With 429 Rate Limit Retries) ──
     if (channelsScope && snapshot.data.channels && snapshot.data.channels.length > 0) {
-      log('⚡ Rebuilding categories & sub-channels simultaneously...', 'info');
+      log('⚡ Rebuilding categories & channels...', 'info');
 
-      // Recreate categories simultaneously
+      // 3A: Recreate Categories First
       const newCategoriesMap = new Map<string, any>();
       const categories = snapshot.data.channels.filter((c: any) => c.type === ChannelType.GuildCategory || c.type === 4);
 
-      await Promise.allSettled(categories.map(async (catData: any) => {
+      for (const catData of categories) {
         try {
-          const created = await guild.channels.create({
-            name: catData.name,
-            type: ChannelType.GuildCategory,
-            position: catData.position
-          });
-          newCategoriesMap.set(catData.name, created);
+          let createdCat: any = null;
+          for (let attempt = 1; attempt <= 4; attempt++) {
+            try {
+              createdCat = await guild.channels.create({
+                name: catData.name,
+                type: ChannelType.GuildCategory
+              });
+              break;
+            } catch (err: any) {
+              if (err?.status === 429 || err?.code === 429 || err?.retryAfter) {
+                const waitMs = (err?.retryAfter || 1) * 1000 + 200;
+                await new Promise(r => setTimeout(r, waitMs));
+              } else {
+                log(`Failed to create category "${catData.name}": ${err.message}`, 'warn');
+                break;
+              }
+            }
+          }
+          if (createdCat) {
+            newCategoriesMap.set(catData.name, createdCat);
+          }
         } catch (e: any) {
           log(`Failed to create category "${catData.name}": ${e.message}`, 'warn');
         }
-      }));
+        await new Promise(r => setTimeout(r, 100));
+      }
 
-      // Recreate text and voice channels simultaneously
+      // 3B: Recreate Text & Voice Channels
       const nonCategories = snapshot.data.channels.filter((c: any) => c.type !== ChannelType.GuildCategory && c.type !== 4);
       const createdChannelsList: { created: any; backup: any }[] = [];
 
-      await Promise.allSettled(nonCategories.map(async (chanData: any) => {
+      for (const chanData of nonCategories) {
         try {
           const parent = chanData.parentName ? newCategoriesMap.get(chanData.parentName) : null;
-          const type = chanData.type === 2 || chanData.type === ChannelType.GuildVoice ? ChannelType.GuildVoice : ChannelType.GuildText;
-          const created = await guild.channels.create({
+          const isVoice = chanData.type === 2 || chanData.type === ChannelType.GuildVoice;
+          const type = isVoice ? ChannelType.GuildVoice : ChannelType.GuildText;
+
+          const chanOptions: any = {
             name: chanData.name,
             type,
-            parent: parent ? parent.id : null,
-            topic: chanData.topic,
-            nsfw: chanData.nsfw,
-            userLimit: chanData.userLimit,
-            position: chanData.position
-          });
-          createdChannelsList.push({ created, backup: chanData });
+            parent: parent ? parent.id : undefined,
+            nsfw: Boolean(chanData.nsfw)
+          };
+
+          if (!isVoice && chanData.topic) {
+            chanOptions.topic = chanData.topic;
+          }
+          if (isVoice && typeof chanData.userLimit === 'number' && chanData.userLimit > 0) {
+            chanOptions.userLimit = chanData.userLimit;
+          }
+
+          let createdChan: any = null;
+          for (let attempt = 1; attempt <= 4; attempt++) {
+            try {
+              createdChan = await guild.channels.create(chanOptions);
+              break;
+            } catch (err: any) {
+              if (err?.status === 429 || err?.code === 429 || err?.retryAfter) {
+                const waitMs = (err?.retryAfter || 1) * 1000 + 200;
+                await new Promise(r => setTimeout(r, waitMs));
+              } else {
+                log(`Failed to create channel "#${chanData.name}": ${err.message}`, 'warn');
+                break;
+              }
+            }
+          }
+
+          if (createdChan) {
+            createdChannelsList.push({ created: createdChan, backup: chanData });
+          }
         } catch (e: any) {
           log(`Failed to create channel "#${chanData.name}": ${e.message}`, 'warn');
         }
-      }));
+        await new Promise(r => setTimeout(r, 100));
+      }
 
-      // Synchronize permission overwrites simultaneously
-      log('⚡ Synchronizing permission overrides across all channels...', 'info');
-      await Promise.allSettled(createdChannelsList.map(async (item) => {
+      log(`Recreated ${createdChannelsList.length} of ${nonCategories.length} channels.`, 'info');
+
+      // 3C: Synchronize Permission Overwrites
+      log('⚡ Synchronizing channel permission overrides...', 'info');
+      for (const item of createdChannelsList) {
         const { created, backup } = item;
         const overwrites: any[] = [];
 
@@ -315,8 +375,12 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
           if (targetId) {
             let allowPerms: any = ov.allow;
             let denyPerms: any = ov.deny;
-            if (typeof ov.allow === 'string') allowPerms = BigInt(ov.allow);
-            if (typeof ov.deny === 'string') denyPerms = BigInt(ov.deny);
+            if (typeof ov.allow === 'string' && ov.allow !== '0') {
+              try { allowPerms = BigInt(ov.allow); } catch {}
+            }
+            if (typeof ov.deny === 'string' && ov.deny !== '0') {
+              try { denyPerms = BigInt(ov.deny); } catch {}
+            }
 
             overwrites.push({
               id: targetId,
@@ -330,14 +394,14 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
         if (overwrites.length > 0) {
           await created.permissionOverwrites.set(overwrites).catch(() => null);
         }
-      }));
+      }
 
-      if (tempChannel) {
+      if (tempChannel && createdChannelsList.length > 0) {
         await tempChannel.delete('Restoration complete').catch(() => null);
       }
     }
 
-    // ── STEP 4: SIMULTANEOUS SETTINGS & EMOJIS RECREATION ──
+    // ── STEP 4: SETTINGS & EMOJIS RECREATION ──
     const remainingTasks: Promise<any>[] = [];
 
     if (settingsScope && snapshot.data.settings) {
@@ -362,7 +426,7 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
 
     await Promise.allSettled(remainingTasks);
 
-    log(`✅ Simultaneous restoration of snapshot "${snapshot.id}" completed successfully!`, 'success');
+    log(`✅ Restoration of snapshot "${snapshot.id}" completed successfully!`, 'success');
   } catch (err: any) {
     log(`❌ Restoration failed: ${err.message}`, 'warn');
   } finally {
