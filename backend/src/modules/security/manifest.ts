@@ -2511,6 +2511,7 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'channelUpdate',
       handler: async (client: any, oldChannel: any, newChannel: any, context: any) => {
+        if (!newChannel.guild || activeRestorationGuilds.has(newChannel.guild.id)) return;
         console.log(`[Anti-Nuke Debug] [channelUpdate] Channel updated: "#${newChannel.name}" (${newChannel.id}) in guild "${newChannel.guild.name}" (${newChannel.guild.id})`);
         const modules = context.getModulesState ? context.getModulesState(newChannel.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
@@ -2598,6 +2599,7 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'roleCreate',
       handler: async (client: any, role: any, context: any) => {
+        if (!role.guild || activeRestorationGuilds.has(role.guild.id)) return;
         console.log(`[Anti-Nuke Debug] [roleCreate] Role created: "${role.name}" (${role.id}) in guild "${role.guild.name}" (${role.guild.id})`);
         const modules = context.getModulesState ? context.getModulesState(role.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
@@ -2676,6 +2678,7 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'roleDelete',
       handler: async (client: any, role: any, context: any) => {
+        if (!role.guild || activeRestorationGuilds.has(role.guild.id)) return;
         console.log(`[Anti-Nuke Debug] [roleDelete] Role deleted: "${role.name}" (${role.id}) in guild "${role.guild.name}" (${role.guild.id})`);
         const modules = context.getModulesState ? context.getModulesState(role.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
@@ -2781,6 +2784,7 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'roleUpdate',
       handler: async (client: any, oldRole: any, newRole: any, context: any) => {
+        if (!newRole.guild || activeRestorationGuilds.has(newRole.guild.id)) return;
         console.log(`[Anti-Nuke Debug] [roleUpdate] Role updated: "${newRole.name}" (${newRole.id}) in guild "${newRole.guild.name}" (${newRole.guild.id})`);
         const modules = context.getModulesState ? context.getModulesState(newRole.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
@@ -2862,6 +2866,7 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'guildMemberUpdate',
       handler: async (client: any, oldMember: any, newMember: any, context: any) => {
+        if (!newMember.guild || activeRestorationGuilds.has(newMember.guild.id)) return;
         console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Member updated: "${newMember.user.username}" (${newMember.id}) in guild "${newMember.guild.name}" (${newMember.guild.id})`);
         const modules = context.getModulesState ? context.getModulesState(newMember.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
