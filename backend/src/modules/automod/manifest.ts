@@ -297,10 +297,11 @@ export const AutomodManifest: ModuleManifest = {
         const config = amMod?.config || {};
 
         const sub = interaction.options.getSubcommand(false);
+        const subCmd = sub || interaction.parsed?.args?.[0]?.toLowerCase();
         const actionArg = interaction.options.getString('action');
 
         // IGNORE CHANNEL
-        if (sub === 'ignore-channel' || interaction.parsed?.args?.[0] === 'ignore-channel') {
+        if (['ignore-channel', 'ignorechannel', 'channel-ignore', 'channelignore', 'channels', 'channel'].includes(subCmd)) {
           const action = actionArg || interaction.parsed?.args?.[1]?.toLowerCase();
           let targetChannel: any = interaction.options.getChannel('channel') || interaction.message?.mentions?.channels?.first();
 
@@ -363,7 +364,7 @@ export const AutomodManifest: ModuleManifest = {
         }
 
         // IGNORE ROLE
-        if (sub === 'ignore-role' || interaction.parsed?.args?.[0] === 'ignore-role') {
+        if (['ignore-role', 'ignorerole', 'role-ignore', 'roleignore', 'roles', 'role'].includes(subCmd)) {
           const action = actionArg || interaction.parsed?.args?.[1]?.toLowerCase();
           let targetRole: any = interaction.options.getRole('role') || interaction.message?.mentions?.roles?.first();
 

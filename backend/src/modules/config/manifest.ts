@@ -247,6 +247,64 @@ export function registerConfigCommands(): void {
     }
   });
 
+  // 0b. Standalone AutoMod & AntiLink Commands (`r!automod`, `r!antilink`)
+  PrefixRegistry.register({
+    name: 'automod',
+    category: 'AutoMod',
+    description: 'AutoMod chat filtering, anti-link rules & channel/role bypasses.',
+    usage: 'r!automod <status|antilink|antispam|antieveryone|ignore-channel|ignore-role> [args]',
+    aliases: ['am', 'automode'],
+    cooldownSeconds: 3,
+    userPermissions: ['Administrator'],
+    execute: async (message: Message, args: string[], extra?: any) => {
+      const { AutomodManifest } = await import('../automod/manifest.js');
+      const eventHandler = AutomodManifest.events?.find((e: any) => e.name === 'command_automod')?.handler;
+      if (eventHandler) {
+        const fakeInteraction: any = {
+          guild: message.guild,
+          user: message.author,
+          member: message.member,
+          channel: message.channel,
+          client: message.client,
+          parsed: { args },
+          options: {
+            getSubcommand: () => args[0]?.toLowerCase() || 'status',
+            getString: (name: string) => args[1]?.toLowerCase(),
+            getChannel: () => message.mentions.channels.first(),
+            getRole: () => message.mentions.roles.first(),
+            getBoolean: () => null,
+            getInteger: () => null
+          },
+          reply: async (data: any) => message.reply(data)
+        };
+        await eventHandler(message.client, fakeInteraction, extra);
+      }
+    }
+  });
+
+  PrefixRegistry.register({
+    name: 'antilink',
+    category: 'AutoMod',
+    description: 'AntiLink filter & channel/role bypass configuration.',
+    usage: 'r!antilink <enable|disable|ignore-channel|ignore-role|status> [add|remove|list] [#channel|@role]',
+    aliases: ['anti-link', 'linkfilter', 'antilinks'],
+    cooldownSeconds: 3,
+    userPermissions: ['Administrator'],
+    execute: async (message: Message, args: string[], extra?: any) => {
+      const automodCmd = PrefixRegistry.get('automod');
+      if (automodCmd && automodCmd.execute) {
+        const sub = args[0]?.toLowerCase();
+        if (sub === 'ignore-channel' || sub === 'ignorechannel' || sub === 'channel' || sub === 'channels') {
+          return automodCmd.execute(message, ['ignore-channel', ...args.slice(1)], extra);
+        }
+        if (sub === 'ignore-role' || sub === 'ignorerole' || sub === 'role' || sub === 'roles') {
+          return automodCmd.execute(message, ['ignore-role', ...args.slice(1)], extra);
+        }
+        return automodCmd.execute(message, ['antilink', ...args], extra);
+      }
+    }
+  });
+
   // 1. Setup Wizard Command (`r!setup` / `/setup`)
   PrefixRegistry.register({
     name: 'setup',
