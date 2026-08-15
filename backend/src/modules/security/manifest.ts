@@ -3392,6 +3392,44 @@ export const SecurityManifest: ModuleManifest = {
             const logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === member.id && isRecentEntry(e));
             const executor = logEntry?.executor;
 
+            // Build exact PreBot Whitelist Security Alert Embed matching UI
+            const alertEmbed = new EmbedBuilder()
+              .setColor(0xEF4444)
+              .setAuthor({ name: `RAGE OPTIMISER • ${guild.name}` })
+              .setTitle('❌ PreBot Whitelist Security Alert')
+              .setDescription([
+                `Bot **@${member.user.username}** (\`${member.user.username}\`) attempted to join **${guild.name}** but was **NOT pre-registered** in the PreBot Whitelist.`,
+                `Under Rage Optimiser's **Zero-Trust Security Architecture**, all bots must be pre-approved with an explicit permission profile prior to joining.\n`,
+                `**Action Taken**: Bot was automatically removed from the server.\n`,
+                `**How to Approve This Bot**:`,
+                `Run the command below in your server before inviting the bot again:`,
+                `> \`/prebot add bot:@${member.user.username}\` or \`r!prebot add ${member.id}\``
+              ].join('\n'))
+              .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
+              .setTimestamp();
+
+            // Send Security Alert Embed to Log Channel
+            const logChanId = config.logChannelId || guild.systemChannelId || guild.publicUpdatesChannelId;
+            if (logChanId) {
+              const logChan = guild.channels.cache.get(logChanId);
+              if (logChan && logChan.isTextBased()) {
+                await logChan.send({ embeds: [alertEmbed] }).catch(() => {});
+              }
+            }
+
+            // Send Security Alert DM to Inviter / Owner
+            if (executor) {
+              const executorMember = await guild.members.fetch(executor.id).catch(() => null);
+              if (executorMember) {
+                await executorMember.send({ embeds: [alertEmbed] }).catch(() => {});
+              }
+            } else {
+              const ownerMember = await guild.members.fetch(guild.ownerId).catch(() => null);
+              if (ownerMember) {
+                await ownerMember.send({ embeds: [alertEmbed] }).catch(() => {});
+              }
+            }
+
             if (executor && executor.id !== client.user.id) {
               const isOwner = await isOwnerOrExtraOwner(executor.id, guild);
               const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_bot_add');
