@@ -2952,11 +2952,44 @@ export const SecurityManifest: ModuleManifest = {
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized ban of ${ban.user.username} by ${executor.username}.`, 'warn');
 
-          if (rule.recovery !== false) {
-            await guild.members.unban(ban.user.id, 'Anti-Nuke Recovery: Revoking unauthorized ban').catch(console.error);
-          }
+          // Parallel Simultaneous Action: Unban, Punish Violator, Create Invite, and DM User
+          await Promise.allSettled([
+            // 1. Unban User
+            rule.recovery !== false ? guild.members.unban(ban.user.id, 'Anti-Nuke Recovery: Revoking unauthorized ban').catch(() => null) : Promise.resolve(),
 
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Ban of ${ban.user.username}`, rule.action, config, context, 'anti_ban');
+            // 2. Punish/Ban the Violator Bot Immediately
+            punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Ban of ${ban.user.username}`, rule.action, config, context, 'anti_ban'),
+
+            // 3. Create Server Invite & Send DM to Unbanned User
+            (async () => {
+              try {
+                const targetUser = ban.user;
+                if (!targetUser) return;
+
+                // Find a suitable text channel to create an invite
+                const inviteChannel = guild.channels.cache.find((c: any) => c.type === 0 && c.permissionsFor?.(guild.members.me)?.has('CreateInstantInvite')) || guild.systemChannel;
+                let inviteUrl = '';
+                if (inviteChannel) {
+                  const invite = await inviteChannel.createInvite({ maxAge: 86400, maxUses: 5, unique: true, reason: 'Anti-Nuke Auto-Rejoin Link' }).catch(() => null);
+                  if (invite) inviteUrl = invite.url;
+                }
+
+                const dmEmbed = {
+                  title: `🛡️ Security Recovery: Rejoin ${guild.name}`,
+                  color: 0x00FF66,
+                  description: `Hello **${targetUser.username}**,\n\nYou were target of an unauthorized ban action in **${guild.name}** by an unwhitelisted bot/actor.\n\nOur Anti-Nuke engine has **revoked your ban** and **neutralized the attacker**.\n\n${inviteUrl ? `👉 **Click here to rejoin the server:**\n${inviteUrl}` : 'Please contact server staff for an invite link.'}`,
+                  footer: { text: 'RAGE OPTIMISER V3 Security System' },
+                  timestamp: new Date().toISOString()
+                };
+
+                await targetUser.send({ embeds: [dmEmbed] }).catch(() => {
+                  console.log(`[Anti-Nuke Debug] Unable to DM user ${targetUser.username} (DMs closed)`);
+                });
+              } catch (e) {
+                console.error('[Anti-Nuke Debug] Error sending auto-rejoin DM:', e);
+              }
+            })()
+          ]);
         } catch (err) {
           console.error(err);
         }
