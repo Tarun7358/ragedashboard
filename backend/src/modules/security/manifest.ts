@@ -2630,7 +2630,11 @@ export const SecurityManifest: ModuleManifest = {
 
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_channel_update');
           console.log(`[Anti-Nuke Debug] [channelUpdate] Executor ${executor.username} bypassed status: ${isBypassed}`);
-          if (isBypassed) return;
+          if (isBypassed) {
+            const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
+            await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'created' as any, 'channel' as any, newChannel, config);
+            return;
+          }
 
           const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_update', rule.limit, rule.window);
           console.log(`[Anti-Nuke Debug] [channelUpdate] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
@@ -2928,7 +2932,11 @@ export const SecurityManifest: ModuleManifest = {
 
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_update');
           console.log(`[Anti-Nuke Debug] [roleUpdate] Executor ${executor.username} bypassed status: ${isBypassed}`);
-          if (isBypassed) return;
+          if (isBypassed) {
+            const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
+            await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'created' as any, 'role' as any, newRole, config);
+            return;
+          }
 
           const triggered = checkRateLimit(guild.id, executor.id, 'anti_role_update', rule.limit, rule.window);
           console.log(`[Anti-Nuke Debug] [roleUpdate] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
@@ -3190,7 +3198,11 @@ export const SecurityManifest: ModuleManifest = {
 
           const executor = logEntry.executor;
           if (!executor || executor.id === client.user.id) return;
-          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_ban')) return;
+          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_ban')) {
+            const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
+            await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'deleted' as any, 'role' as any, ban.user, config);
+            return;
+          }
 
           // ZERO-TRUST BOT DEFENSE: Instant permanent ban & restoration on Action #1
           if (executor.bot) {

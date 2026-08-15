@@ -188,11 +188,16 @@ export class TrustedActorAbuseHandler {
         } catch (e) {}
       }
 
-      // 3. STEP 2: QUARANTINE USER
+      // 3. STEP 2: KICK & QUARANTINE USER
+      if (member.kickable) {
+        await member.kick('Trusted Actor Abuse: Exceeded 2+ changes under 10 seconds').catch(() => {});
+      }
       await this.applyQuarantine(guild, member);
 
-      // 4. STEP 3: RESTORE ALL DELETED/CREATED ASSETS (LIFO Order)
+      // 4. STEP 3: RESTORE ALL DELETED/CREATED ASSETS FAST (LIFO Order + Live Snapshot)
       const restoreReport: RestoreReport = await RestoreEngine.restoreAll(guild, timeline);
+      const { restoreFromLiveSnapshot } = await import('../../modules/security/manifest.js');
+      await restoreFromLiveSnapshot(guild, guild.client, {}).catch(() => {});
 
       // 5. STEP 4: WRITE AUDIT DB LOG
       const now = Date.now();
