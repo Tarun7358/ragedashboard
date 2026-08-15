@@ -891,7 +891,17 @@ export function registerConfigCommands(): void {
       }
 
       // PreBot Whitelist Guard Master Toggle (`r!config prebot ...`)
-      if (moduleName === 'prebot' || moduleName === 'prebotwhitelist') {
+      if (['prebot', 'prebotwhitelist', 'botwhitelist', 'bwl'].includes(moduleName)) {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const isAuthorized = await isOwnerOrExtraOwner(message.author.id, message.guild!);
+        if (!isAuthorized) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Access Denied',
+              description: `${WRONG_EMOJI} **Confidential Feature**: PreBot Whitelist configuration is strictly restricted to the **Server Owner** (<@${message.guild?.ownerId}>) and designated **Extra Owners**.`
+            })]
+          });
+        }
         const action = effectiveArgs[1]?.toLowerCase() || 'status';
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const secModule = modules.find((m: any) => m.id === 'security');

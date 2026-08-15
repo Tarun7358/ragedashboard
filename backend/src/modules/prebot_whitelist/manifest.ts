@@ -249,11 +249,12 @@ async function launchPrebotBuilder(
 
   collector.on('collect', async (rawI: any) => {
     const i = wrapInteraction(rawI);
-    if (i.user.id !== interaction.user.id) {
+    const isAuthorized = await isOwnerOrExtraOwner(i.user.id, guild);
+    if (!isAuthorized) {
       const errEmbed = new EmbedBuilder()
-        .setTitle('🔒 Interactivity Denied')
+        .setTitle('🔒 Access Denied')
         .setColor(Colors.DANGER)
-        .setDescription('Only the command executor can configure this PreBot Whitelist profile.')
+        .setDescription('PreBot Whitelist management is strictly restricted to the **Server Owner** and **Extra Owners**.')
         .setTimestamp();
       return i.reply({ embeds: [errEmbed], flags: 64 });
     }
@@ -336,7 +337,7 @@ export function registerPrebotCommands(): void {
     category: 'Security',
     description: 'Confidential PreBot Whitelist Management (Server Owner & Extra Owner Only)',
     usage: 'r!prebot <add|remove|list|info> [bot]',
-    aliases: ['prebotwhitelist'],
+    aliases: ['prebotwhitelist', 'botwhitelist', 'bwl', 'whitelistbot', 'pb'],
     cooldownSeconds: 3,
     examples: ['r!prebot add 1234567890', 'r!prebot list'],
     moduleOwnerId: 'prebot_whitelist',
