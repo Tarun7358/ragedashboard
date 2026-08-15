@@ -613,34 +613,53 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
           };
         });
 
+        const createOptions: any = {
+          name: cSnap.name,
+          type: cSnap.type,
+          parent: parentActualId || undefined,
+          permissionOverwrites: overwrites,
+          reason: 'UPM Recovery: Recreating deleted channel'
+        };
+        if (cSnap.position !== undefined) createOptions.position = cSnap.position;
+
+        if (cSnap.type === ChannelType.GuildText || cSnap.type === 0 || cSnap.type === ChannelType.GuildAnnouncement || cSnap.type === 5) {
+          if (cSnap.topic) createOptions.topic = cSnap.topic;
+          if (cSnap.nsfw !== undefined) createOptions.nsfw = Boolean(cSnap.nsfw);
+          if (cSnap.rateLimitPerUser) createOptions.rateLimitPerUser = cSnap.rateLimitPerUser;
+        }
+
+        if (cSnap.type === ChannelType.GuildVoice || cSnap.type === 2 || cSnap.type === ChannelType.GuildStageVoice || cSnap.type === 13) {
+          if (cSnap.bitrate) createOptions.bitrate = cSnap.bitrate;
+          if (cSnap.userLimit) createOptions.userLimit = cSnap.userLimit;
+          if (cSnap.rtcRegion) createOptions.rtcRegion = cSnap.rtcRegion;
+        }
+
         if (!existingChannel) {
-          existingChannel = await guild.channels.create({
-            name: cSnap.name,
-            type: cSnap.type,
-            parent: parentActualId || undefined,
-            nsfw: cSnap.nsfw,
-            topic: cSnap.topic || undefined,
-            rateLimitPerUser: cSnap.rateLimitPerUser || undefined,
-            userLimit: cSnap.userLimit || undefined,
-            bitrate: cSnap.bitrate || undefined,
-            rtcRegion: cSnap.rtcRegion || undefined,
-            permissionOverwrites: overwrites,
-            position: cSnap.position !== undefined ? cSnap.position : undefined,
-            reason: 'UPM Recovery: Recreating deleted channel'
-          }).catch(() => null);
+          existingChannel = await guild.channels.create(createOptions).catch((err: any) => {
+            console.error(`[UPM Restore Error] Failed to create channel ${cSnap.name}:`, err);
+            return null;
+          });
         } else {
-          await existingChannel.edit({
+          const editOptions: any = {
             name: cSnap.name,
             parent: parentActualId || undefined,
-            nsfw: cSnap.nsfw,
-            topic: cSnap.topic || undefined,
-            rateLimitPerUser: cSnap.rateLimitPerUser || undefined,
-            userLimit: cSnap.userLimit || undefined,
-            bitrate: cSnap.bitrate || undefined,
-            rtcRegion: cSnap.rtcRegion || undefined,
-            permissionOverwrites: overwrites,
-            position: cSnap.position !== undefined ? cSnap.position : undefined
-          }).catch(() => null);
+            permissionOverwrites: overwrites
+          };
+          if (cSnap.position !== undefined) editOptions.position = cSnap.position;
+
+          if (cSnap.type === ChannelType.GuildText || cSnap.type === 0 || cSnap.type === ChannelType.GuildAnnouncement || cSnap.type === 5) {
+            if (cSnap.topic !== undefined) editOptions.topic = cSnap.topic;
+            if (cSnap.nsfw !== undefined) editOptions.nsfw = Boolean(cSnap.nsfw);
+            if (cSnap.rateLimitPerUser !== undefined) editOptions.rateLimitPerUser = cSnap.rateLimitPerUser;
+          }
+
+          if (cSnap.type === ChannelType.GuildVoice || cSnap.type === 2 || cSnap.type === ChannelType.GuildStageVoice || cSnap.type === 13) {
+            if (cSnap.bitrate) editOptions.bitrate = cSnap.bitrate;
+            if (cSnap.userLimit) editOptions.userLimit = cSnap.userLimit;
+            if (cSnap.rtcRegion) editOptions.rtcRegion = cSnap.rtcRegion;
+          }
+
+          await existingChannel.edit(editOptions).catch(() => null);
         }
 
         if (existingChannel) {
@@ -2358,9 +2377,42 @@ export const SecurityManifest: ModuleManifest = {
               return;
             }
 
-            // ZERO-TRUST DEFENSE FOR BOTS: Instant ban & role purge on Action #1 (No Rate Limits)
+            // ZERO-TRUST DEFENSE FOR BOTS: Instant ban & role purge & channel re-creation
             if (executor.bot) {
               await revokeBotAndPurgeRoles(guild, executor.id, executor.username, `Instant Permanent Ban for Deleting #${channel.name}`, client, context);
+
+              const directOptions: any = {
+                name: channel.name,
+                type: channel.type,
+                parent: channel.parentId || undefined,
+                permissionOverwrites: channel.permissionOverwrites?.cache ? Array.from(channel.permissionOverwrites.cache.values()).map((o: any) => ({
+                  id: o.id,
+                  type: o.type,
+                  allow: o.allow?.bitfield ?? o.allow,
+                  deny: o.deny?.bitfield ?? o.deny
+                })) : []
+              };
+
+              if (channel.type === ChannelType.GuildText || channel.type === 0 || channel.type === ChannelType.GuildAnnouncement || channel.type === 5) {
+                if (channel.topic) directOptions.topic = channel.topic;
+                if (channel.nsfw) directOptions.nsfw = Boolean(channel.nsfw);
+                if (channel.rateLimitPerUser) directOptions.rateLimitPerUser = channel.rateLimitPerUser;
+              }
+
+              if (channel.type === ChannelType.GuildVoice || channel.type === 2 || channel.type === ChannelType.GuildStageVoice || channel.type === 13) {
+                if (channel.bitrate) directOptions.bitrate = channel.bitrate;
+                if (channel.userLimit) directOptions.userLimit = channel.userLimit;
+              }
+
+              const reCreated = await guild.channels.create(directOptions).catch((err: any) => {
+                console.error('[Anti-Nuke Debug] [channelDelete] Direct recovery failed:', err);
+                return null;
+              });
+
+              if (reCreated && typeof channel.position === 'number') {
+                await reCreated.setPosition(channel.position).catch(() => { });
+              }
+
               await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
               return;
             }
@@ -2377,9 +2429,6 @@ export const SecurityManifest: ModuleManifest = {
               name: channel.name,
               type: channel.type,
               parent: channel.parentId || undefined,
-              topic: channel.topic || undefined,
-              nsfw: Boolean(channel.nsfw),
-              rateLimitPerUser: channel.rateLimitPerUser || 0,
               permissionOverwrites: channel.permissionOverwrites?.cache ? Array.from(channel.permissionOverwrites.cache.values()).map((o: any) => ({
                 id: o.id,
                 type: o.type,
@@ -2388,8 +2437,16 @@ export const SecurityManifest: ModuleManifest = {
               })) : []
             };
 
-            if (channel.bitrate) channelOptions.bitrate = channel.bitrate;
-            if (channel.userLimit) channelOptions.userLimit = channel.userLimit;
+            if (channel.type === ChannelType.GuildText || channel.type === 0 || channel.type === ChannelType.GuildAnnouncement || channel.type === 5) {
+              if (channel.topic) channelOptions.topic = channel.topic;
+              if (channel.nsfw) channelOptions.nsfw = Boolean(channel.nsfw);
+              if (channel.rateLimitPerUser) channelOptions.rateLimitPerUser = channel.rateLimitPerUser;
+            }
+
+            if (channel.type === ChannelType.GuildVoice || channel.type === 2 || channel.type === ChannelType.GuildStageVoice || channel.type === 13) {
+              if (channel.bitrate) channelOptions.bitrate = channel.bitrate;
+              if (channel.userLimit) channelOptions.userLimit = channel.userLimit;
+            }
 
             const restoredChannel = await guild.channels.create(channelOptions).catch((err: any) => {
               console.error('[Anti-Nuke Debug] [channelDelete] Failed to re-create channel:', err);
