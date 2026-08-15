@@ -1,6 +1,6 @@
 import { Guild, GuildMember, EmbedBuilder } from 'discord.js';
 import { Database } from '../Database.js';
-import { removeExtraOwnerFromCache, getExtraOwnerFromCache } from '../../utils/whitelistCheck.js';
+import { removeExtraOwnerFromCache, getExtraOwnerFromCache, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import { TrustedActorStateSnapshot, SnapshotRecord } from './TrustedActorStateSnapshot.js';
 import { TrustedActorRateLimiter } from './TrustedActorRateLimiter.js';
 import { RestoreEngine, RestoreReport } from './RestoreEngine.js';
@@ -31,17 +31,18 @@ export class TrustedActorAbuseHandler {
       }
     } catch {}
 
-    // 0b. Sub-millisecond Guild Owner / Bot Self Immunity check
-    const isImmune = executorId === guild.ownerId ||
-                     executorId === process.env.OWNER_ID ||
-                     executorId === guild.client?.application?.owner?.id ||
-                     executorId === guild.client?.user?.id;
-    if (isImmune) return false;
+    // 0b. Sub-millisecond Guild Owner / Extra Owner / Bot Self Immunity check
+    const isOwner = executorId === guild.ownerId ||
+                    executorId === process.env.OWNER_ID ||
+                    executorId === guild.client?.application?.owner?.id ||
+                    executorId === guild.client?.user?.id;
+    if (isOwner) return false;
 
-    // 1. Sub-millisecond Trust Level Resolution via O(1) RAM Cache (<0.005ms)
-    const cachedExtraOwner = getExtraOwnerFromCache(guild.id, executorId);
-    const isExtraOwner = !!cachedExtraOwner;
-    const trustType: 'whitelist' | 'extraowner' = isExtraOwner ? 'extraowner' : 'whitelist';
+    // Extra Owners have full unlimited immunity (no rate limits or warnings)
+    const isExtraOwner = await isOwnerOrExtraOwner(executorId, guild);
+    if (isExtraOwner) return false;
+
+    const trustType: 'whitelist' = 'whitelist';
 
     // 2. Instant State Snapshot Capture (<0.01ms)
     let snapshotRecord: SnapshotRecord;
