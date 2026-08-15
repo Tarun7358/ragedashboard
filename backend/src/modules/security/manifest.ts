@@ -2200,34 +2200,42 @@ export const SecurityManifest: ModuleManifest = {
           const guild = channel.guild;
           if (!guild) return;
 
-          const deletionLog = await fetchAuditLogWithRetry(guild, AuditLogEvent.ChannelDelete, channel.id);
+          let deletionLog = await fetchAuditLogWithRetry(guild, AuditLogEvent.ChannelDelete, channel.id);
+          let executor = deletionLog?.executor;
 
-          if (!deletionLog) {
-            console.log(`[Anti-Nuke Debug] [channelDelete] No recent audit log entry found for target channel ${channel.id}`);
-            return;
-          }
-
-          const executor = deletionLog.executor;
+          // Zero-Trust Fallback: If Discord Audit Log is delayed during rapid nuking, pre-emptively sweep and ban unwhitelisted bots with admin perms
           if (!executor) {
-            console.log(`[Anti-Nuke Debug] [channelDelete] Executor not found in audit log entry`);
-            return;
+            console.log(`[Anti-Nuke Debug] [channelDelete] Audit log delayed for #${channel.name}. Executing zero-trust pre-emptive bot ban...`);
+            const allMembers = guild.members.cache;
+            const unapprovedBots = allMembers.filter((m: any) => m.user.bot && m.id !== client.user.id && m.id !== (process.env.MUSIC_CLIENT_ID || '1520323151928623125'));
+
+            for (const [, botMember] of unapprovedBots) {
+              const isBypassedBot = await isExecutorBypassed(guild, botMember.id, config, context, 'anti_channel_delete');
+              if (!isBypassedBot && (botMember.permissions.has('Administrator') || botMember.permissions.has('ManageChannels'))) {
+                context.logSyncEvent(guild.id, `🚨 [Zero-Trust Defense]: Pre-emptively banning unwhitelisted bot @${botMember.user.username} during rapid channel deletion!`, 'warn');
+                await guild.members.ban(botMember.id, { reason: 'Anti-Nuke Zero-Trust: Rapid unauthorized channel deletion detected' }).catch(() => {});
+              }
+            }
           }
-          if (executor.id === client.user.id) {
+
+          if (executor && executor.id === client.user.id) {
             console.log(`[Anti-Nuke Debug] [channelDelete] Executor is the bot itself, ignoring`);
             return;
           }
 
-          const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_channel_delete');
-          console.log(`[Anti-Nuke Debug] [channelDelete] Executor ${executor.username} bypassed status: ${isBypassed}`);
-          if (isBypassed) {
-            const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
-            await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'deleted', 'channel', channel, config);
-            return;
-          }
+          if (executor) {
+            const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_channel_delete');
+            console.log(`[Anti-Nuke Debug] [channelDelete] Executor ${executor.username} bypassed status: ${isBypassed}`);
+            if (isBypassed) {
+              const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
+              await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'deleted', 'channel', channel, config);
+              return;
+            }
 
-          const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_delete', rule.limit, rule.window);
-          console.log(`[Anti-Nuke Debug] [channelDelete] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
-          if (!triggered) return;
+            const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_delete', rule.limit, rule.window);
+            console.log(`[Anti-Nuke Debug] [channelDelete] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
+            if (!triggered) return;
+          }
 
           addThreatPoints(guild.id, 30);
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized channel deletion of #${channel.name} by ${executor.username}.`, 'warn');
