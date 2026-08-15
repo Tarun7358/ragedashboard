@@ -766,13 +766,43 @@ async function isExecutorBypassed(guild: any, executorId: string, config: any, c
   return checkBypassImmunity(executorId, guild, context, ruleId);
 }
 
+export async function revokeBotAndPurgeRoles(guild: any, executorId: string, executorUsername: string, reason: string, client: any, context: any) {
+  try {
+    const { deletePrebotEntry } = await import('../prebot_whitelist/manifest.js');
+    const wasPrebotRevoked = await deletePrebotEntry(guild.id, executorId);
+
+    const member = await guild.members.fetch(executorId).catch(() => guild.members.cache.get(executorId));
+    if (member) {
+      const rolesToDelete = guild.roles.cache.filter((r: any) =>
+        !r.managed && r.name !== '@everyone' && (
+          member.roles.cache.has(r.id) ||
+          r.name.toLowerCase().includes('[trusted]') ||
+          r.name.toLowerCase().includes(executorUsername.toLowerCase())
+        )
+      );
+
+      for (const [, roleObj] of rolesToDelete) {
+        if (member.roles.cache.has(roleObj.id)) {
+          await member.roles.remove(roleObj.id).catch(() => {});
+        }
+        if (roleObj.name.toLowerCase().includes('[trusted]') || roleObj.name.toLowerCase().includes(executorUsername.toLowerCase())) {
+          await roleObj.delete('Anti-Nuke Zero-Trust: Deleting trusted bot role of banned bot').catch(() => {});
+        }
+      }
+    }
+
+    await guild.members.ban(executorId, { reason: `Anti-Nuke Zero-Trust: ${reason}` }).catch(console.error);
+
+    const prebotLogStr = wasPrebotRevoked ? ` ⚠️ [PreBot Whitelist Auto-Revoked & Trusted Roles Deleted]: Removed bot @${executorUsername} from PreBot Whitelist.` : '';
+    context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: INSTANTLY BANNED & PURGED ROLES for rogue bot @${executorUsername} (${executorId}). Reason: ${reason}.${prebotLogStr}`, 'warn');
+  } catch (err: any) {
+    console.error(`[Anti-Nuke Revoke] Failed for bot ${executorId}:`, err);
+  }
+}
+
 async function punishViolator(client: any, guild: any, executorId: string, executorUsername: string, reason: string, ruleAction: string, config: any, context: any, ruleId?: string) {
-  // BUG FIX (BUG-005): Key by guildId_userId to prevent cross-guild false positives
-  // where a quarantine in Guild A blocks a legitimate quarantine in Guild B for the same user.
   const quarantineKey = `${guild.id}_${executorId}`;
 
-  // BUG FIX: Check activeQuarantines FIRST before any async whitelist lookup to
-  // prevent double-processing when concurrent events fire for the same executor.
   if (activeQuarantines.has(quarantineKey)) {
     console.log(`[Anti-Nuke Safety] Skipping punishment for ${executorUsername} — already in activeQuarantines cooldown.`);
     return;
@@ -787,28 +817,20 @@ async function punishViolator(client: any, guild: any, executorId: string, execu
     return;
   }
 
-  // Re-check after async whitelist lookup to handle race between concurrent events
   if (activeQuarantines.has(quarantineKey)) {
     console.log(`[Anti-Nuke Safety] Skipping punishment for ${executorUsername} — quarantine race condition detected.`);
     return;
   }
   activeQuarantines.add(quarantineKey);
-  setTimeout(() => activeQuarantines.delete(quarantineKey), 15000); // 15s cooldown to cover audit log delays
-
+  setTimeout(() => activeQuarantines.delete(quarantineKey), 15000);
 
   try {
     const member = await guild.members.fetch(executorId).catch(() => null);
     if (!member) return;
 
-    // ZERO TOLERANCE FOR BOTS: If violator is a bot, FORCE BAN INSTANTLY on Action #1 & AUTO-REVOKE PREBOT WHITELIST!
+    // ZERO TOLERANCE FOR BOTS: If violator is a bot, FORCE BAN INSTANTLY, PURGE TRUSTED ROLES & AUTO-REVOKE PREBOT WHITELIST!
     if (member.user.bot) {
-      const { deletePrebotEntry } = await import('../prebot_whitelist/manifest.js');
-      const wasPrebotRevoked = await deletePrebotEntry(guild.id, executorId);
-
-      await guild.members.ban(executorId, { reason: `Anti-Nuke Zero-Trust: Instant Bot Ban (${reason})` }).catch(console.error);
-      
-      const prebotLogStr = wasPrebotRevoked ? ` ⚠️ [PreBot Whitelist Auto-Revoked]: Removed bot @${executorUsername} from PreBot Whitelist.` : '';
-      context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: INSTANTLY BANNED rogue bot @${executorUsername} (${executorId}). Reason: ${reason}.${prebotLogStr}`, 'warn');
+      await revokeBotAndPurgeRoles(guild, executorId, executorUsername, `Instant Bot Ban (${reason})`, client, context);
       context.logSyncEvent(guild.id, `🔄 [Anti-Nuke Recovery]: Initiating total server state rollback to revert all unauthorized changes made by @${executorUsername}...`, 'info');
       await restoreFromLiveSnapshot(guild, client, context).catch(console.error);
       return;
@@ -2315,8 +2337,7 @@ export const SecurityManifest: ModuleManifest = {
             for (const [, botMember] of unapprovedBots) {
               const isBypassedBot = await isExecutorBypassed(guild, botMember.id, config, context, 'anti_channel_delete');
               if (!isBypassedBot && (botMember.permissions.has('Administrator') || botMember.permissions.has('ManageChannels'))) {
-                context.logSyncEvent(guild.id, `🚨 [Zero-Trust Defense]: Pre-emptively banning unwhitelisted bot @${botMember.user.username} during channel deletion attack!`, 'warn');
-                await guild.members.ban(botMember.id, { reason: 'Anti-Nuke Zero-Trust: Instant Ban for Unapproved Bot Channel Deletion' }).catch(() => {});
+                await revokeBotAndPurgeRoles(guild, botMember.id, botMember.user.username, 'Instant Ban for Unapproved Bot Channel Deletion', client, context);
                 await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
                 return;
               }
@@ -2335,10 +2356,9 @@ export const SecurityManifest: ModuleManifest = {
               return;
             }
 
-            // ZERO-TRUST DEFENSE FOR BOTS: Instant ban on Action #1 (No Rate Limits)
+            // ZERO-TRUST DEFENSE FOR BOTS: Instant ban & role purge on Action #1 (No Rate Limits)
             if (executor.bot) {
-              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: INSTANTLY BANNED rogue bot @${executor.username} (${executor.id}) for deleting #${channel.name}!`, 'warn');
-              await guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => {});
+              await revokeBotAndPurgeRoles(guild, executor.id, executor.username, `Instant Permanent Ban for Deleting #${channel.name}`, client, context);
               await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
               return;
             }
@@ -2440,10 +2460,8 @@ export const SecurityManifest: ModuleManifest = {
               const isBypassed = await checkBypassImmunity(botMember.id, guild, context, 'anti_channel_create');
               if (!prebot && !isBypassed) {
                 context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Emergency Sweep]: Purging spam channels #${channel.name} & banning rogue bot ${botMember.user.username}.`, 'warn');
-                await Promise.allSettled([
-                  purgeAllSpamChannels(channel.name),
-                  guild.members.ban(botMember.id, { reason: 'Anti-Nuke Emergency: Instant Ban for Unapproved Bot Channel Creation' }).catch(() => {})
-                ]);
+                await purgeAllSpamChannels(channel.name);
+                await revokeBotAndPurgeRoles(guild, botMember.id, botMember.user.username, 'Instant Ban for Unapproved Bot Channel Creation', client, context);
                 await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
                 return;
               }
@@ -2459,10 +2477,8 @@ export const SecurityManifest: ModuleManifest = {
             const isBypassed = await checkBypassImmunity(executor.id, guild, context, 'anti_channel_create');
             if (!prebot && !isBypassed) {
               context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: Purging spam channels #${channel.name} & banning unwhitelisted bot ${executor.username}.`, 'warn');
-              await Promise.allSettled([
-                purgeAllSpamChannels(channel.name),
-                guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => {})
-              ]);
+              await purgeAllSpamChannels(channel.name);
+              await revokeBotAndPurgeRoles(guild, executor.id, executor.username, 'Instant Permanent Ban on Unwhitelisted Bot Channel Creation', client, context);
               await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
               return;
             }
