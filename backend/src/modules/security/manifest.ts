@@ -2319,6 +2319,14 @@ export const SecurityManifest: ModuleManifest = {
 
           let executor = logEntry?.executor;
 
+          // Helper for Mass Channel Purge during channel creation attacks
+          const purgeAllSpamChannels = async (targetName: string) => {
+            try {
+              const spamChannels = guild.channels.cache.filter((c: any) => c.name === targetName || (c.createdTimestamp && Date.now() - c.createdTimestamp < 30000));
+              await Promise.allSettled(spamChannels.map((c: any) => c.delete('Anti-Nuke Mass Channel Purge').catch(() => {})));
+            } catch {}
+          };
+
           // Fallback: If audit log entry is delayed/missing during high velocity nuke, check for unwhitelisted bots
           if (!executor) {
             console.log(`[Anti-Nuke Debug] [channelCreate] Audit log pending for #${channel.name}. Performing zero-trust bot sweep...`);
@@ -2329,9 +2337,11 @@ export const SecurityManifest: ModuleManifest = {
               const prebot = await getPrebotEntry(guild.id, botMember.id);
               const isBypassed = await checkBypassImmunity(botMember.id, guild, context, 'anti_channel_create');
               if (!prebot && !isBypassed) {
-                context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Emergency Sweep]: Deleting unauthorized channel #${channel.name} & banning rogue bot ${botMember.user.username}.`, 'warn');
-                await channel.delete('Anti-Nuke Emergency: Deleting channel from unapproved bot').catch(() => {});
-                await guild.members.ban(botMember.id, { reason: 'Anti-Nuke Emergency: Instant Ban for Unapproved Bot Channel Creation' }).catch(() => {});
+                context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Emergency Sweep]: Purging spam channels #${channel.name} & banning rogue bot ${botMember.user.username}.`, 'warn');
+                await Promise.allSettled([
+                  purgeAllSpamChannels(channel.name),
+                  guild.members.ban(botMember.id, { reason: 'Anti-Nuke Emergency: Instant Ban for Unapproved Bot Channel Creation' }).catch(() => {})
+                ]);
                 await restoreFromLiveSnapshot(client, guild.id, context).catch(() => {});
                 return;
               }
@@ -2346,9 +2356,11 @@ export const SecurityManifest: ModuleManifest = {
             const prebot = await getPrebotEntry(guild.id, executor.id);
             const isBypassed = await checkBypassImmunity(executor.id, guild, context, 'anti_channel_create');
             if (!prebot && !isBypassed) {
-              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: Deleting channel #${channel.name} & banning unwhitelisted bot ${executor.username}.`, 'warn');
-              await channel.delete('Anti-Nuke Zero-Trust: Deleting channel created by unwhitelisted bot').catch(() => {});
-              await guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => {});
+              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: Purging spam channels #${channel.name} & banning unwhitelisted bot ${executor.username}.`, 'warn');
+              await Promise.allSettled([
+                purgeAllSpamChannels(channel.name),
+                guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => {})
+              ]);
               await restoreFromLiveSnapshot(client, guild.id, context).catch(() => {});
               return;
             }
@@ -2361,13 +2373,13 @@ export const SecurityManifest: ModuleManifest = {
             return;
           }
 
-          const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_create', rule.limit, rule.window);
+          const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_create', rule.limit, rule.window, Boolean(executor.bot));
           if (!triggered) return;
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized channel creation #${channel.name} by ${executor.username}.`, 'warn');
 
           if (rule.recovery !== false) {
-            await channel.delete('Anti-Nuke Recovery: Deleting unauthorized channel.').catch(console.error);
+            await purgeAllSpamChannels(channel.name);
           }
 
           await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Channel Creation (#${channel.name})`, rule.action, config, context, 'anti_channel_create');
