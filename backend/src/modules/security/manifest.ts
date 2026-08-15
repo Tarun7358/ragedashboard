@@ -2649,6 +2649,19 @@ export const SecurityManifest: ModuleManifest = {
             return;
           }
 
+          // ZERO-TRUST BOT DEFENSE: Instant permanent ban & role deletion for unwhitelisted bots (Action #1)
+          if (executor.bot) {
+            const prebot = await getPrebotEntry(guild.id, executor.id);
+            const isBypassed = await checkBypassImmunity(executor.id, guild, context, 'anti_role_create');
+            if (!prebot && !isBypassed) {
+              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: Deleting unauthorized role "${role.name}" & banning unwhitelisted bot ${executor.username}.`, 'warn');
+              await role.delete('Anti-Nuke Recovery: Deleting unauthorized role.').catch(() => { });
+              await revokeBotAndPurgeRoles(guild, executor.id, executor.username, 'Instant Permanent Ban on Unwhitelisted Bot Role Creation', client, context);
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
+              return;
+            }
+          }
+
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_create');
           console.log(`[Anti-Nuke Debug] [roleCreate] Executor ${executor.username} bypassed status: ${isBypassed}`);
           if (isBypassed) {
@@ -3262,66 +3275,30 @@ export const SecurityManifest: ModuleManifest = {
           const guild = member.guild;
           if (!guild) return;
 
-          const fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.BotAdd }).catch(() => null);
-          const logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === member.id && isRecentEntry(e));
-          if (!logEntry) return;
-
-          const executor = logEntry.executor;
-          if (!executor || executor.id === client.user.id) return;
-
-          // STEP 1: Authority Check — Is executor Owner or ExtraOwner or Whitelisted?
-          const isOwner = await isOwnerOrExtraOwner(executor.id, guild);
-          const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_bot_add');
-          const isTrustedExecutor = isOwner || isBypassed;
-
-          if (!isTrustedExecutor) {
-            // Executor is UNAUTHORIZED -> Trigger standard Anti-Nuke punishment
-            const triggered = checkRateLimit(guild.id, executor.id, 'anti_bot_add', rule.limit, rule.window);
-            if (!triggered) return;
-
-            context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized bot add of ${member.user.username} by ${executor.username}.`, 'warn');
-
-            if (rule.recovery !== false) {
-              await member.kick('Anti-Nuke Recovery: Kicking unauthorized bot').catch(console.error);
-            }
-
-            await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Bot Addition (${member.user.username})`, rule.action, config, context, 'anti_bot_add');
-            return;
-          }
-
-          // STEP 2: Executor IS Trusted -> Check PreBot Whitelist Registry
+          // STEP 1: PreBot Whitelist Registry Check (Zero Latency)
           const prebotEntry = await getPrebotEntry(guild.id, member.id);
 
           if (!prebotEntry) {
-            // Bot is NOT Pre-Whitelisted -> Kick bot & send warning DM to executor
-            context.logSyncEvent(guild.id, `⚠️ [PreBot Whitelist Violation]: Bot ${member.user.username} (${member.id}) was invited by trusted user ${executor.username} but was NOT pre-registered. Kicking bot.`, 'warn');
-
+            // Bot is NOT Pre-Whitelisted -> Kick bot INSTANTLY!
+            context.logSyncEvent(guild.id, `🚨 [PreBot Zero-Trust Defense]: Bot ${member.user.username} (${member.id}) joined ${guild.name} but was NOT pre-registered in PreBot Whitelist. Kicking bot instantly.`, 'warn');
             await member.kick('PreBot Whitelist Security: Bot is not pre-registered').catch(console.error);
 
-            // Send DM warning to the trusted executor
-            try {
-              const warningDmEmbed = new EmbedBuilder()
-                .setTitle(`${WRONG_ICON} PreBot Whitelist Security Alert`)
-                .setColor(Colors.WARN)
-                .setDescription([
-                  `**RAGE OPTIMISER** • **${guild.name}**\n`,
-                  `> Bot **<@${member.id}>** (\`${member.user.username}\`) attempted to join **${guild.name}** but was **NOT pre-registered** in the PreBot Whitelist.`,
-                  `> Under Rage Optimiser's **Zero-Trust Security Architecture**, all bots must be pre-approved with an explicit permission profile prior to joining.\n`,
-                  `**Action Taken**: Bot was automatically removed from the server.`,
-                  `\n**How to Approve This Bot**:`,
-                  `Run the command below in your server before inviting the bot again:`,
-                  `> \`/prebot add bot:@${member.user.username}\` or \`r!prebot add ${member.id}\``
-                ].join('\n'))
-                .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
-                .setTimestamp();
+            // Fetch audit log to identify & punish the user who invited the rogue bot
+            const fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.BotAdd }).catch(() => null);
+            const logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === member.id && isRecentEntry(e));
+            const executor = logEntry?.executor;
 
-              await executor.send({ embeds: [warningDmEmbed] }).catch(() => { });
-            } catch (dmErr) { }
-
+            if (executor && executor.id !== client.user.id) {
+              const isOwner = await isOwnerOrExtraOwner(executor.id, guild);
+              const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_bot_add');
+              if (!isOwner && !isBypassed) {
+                await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Invited Unauthorized Bot (${member.user.username})`, rule.action, config, context, 'anti_bot_add');
+              }
+            }
             return;
           }
 
-          // STEP 3: Bot IS Pre-Whitelisted -> Enforce Permission Profile
+          // STEP 2: Bot IS Pre-Whitelisted -> Enforce Permission Profile
           context.logSyncEvent(guild.id, `🛡️ [PreBot Whitelist Verified]: Approved bot ${member.user.username} (${member.id}) joined. Applying permission profile...`, 'success');
 
           // Strip any non-managed roles the bot received on join
