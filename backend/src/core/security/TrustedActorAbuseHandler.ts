@@ -23,6 +23,11 @@ export class TrustedActorAbuseHandler {
     if (!guild || !executorId || !targetObj) return false;
     if (config.trustedActorEnabled === false) return false;
 
+    // 0. Trusted Actor Abuse Monitor is strictly for HUMAN USERS only.
+    // Bots are processed directly by instant Zero-Trust Anti-Nuke enforcement.
+    const member = guild.members.cache.get(executorId) || await guild.members.fetch(executorId).catch(() => null);
+    if (!member || member.user?.bot) return false;
+
     // 0a. Check active backup restoration bypass
     try {
       const { activeBackupRestorations } = await import('../../modules/backups/manifest.js');
@@ -67,7 +72,6 @@ export class TrustedActorAbuseHandler {
 
     TrustedActorRateLimiter.record(guild.id, executorId, actionName, targetName, windowSeconds);
 
-    const member = guild.members.cache.get(executorId) || await guild.members.fetch(executorId).catch(() => null);
     if (!member) return false;
 
     // 4. Sub-Millisecond (<1ms) Punishment & Revocation Trigger
