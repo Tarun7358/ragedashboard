@@ -106,6 +106,23 @@ export function normalizeRuleName(input: string): string {
   return `anti_${cleaned}`;
 }
 
+export function parseDurationToMs(str: string): number | null {
+  if (!str) return null;
+  const regex = /^(\d+)\s*([s|m|h|d|w])?$/i;
+  const match = str.trim().match(regex);
+  if (!match) return null;
+  const val = parseInt(match[1], 10);
+  const unit = (match[2] || 'm').toLowerCase();
+  switch (unit) {
+    case 's': return val * 1000;
+    case 'm': return val * 60000;
+    case 'h': return val * 3600000;
+    case 'd': return val * 86400000;
+    case 'w': return val * 7 * 86400000;
+    default: return val * 60000;
+  }
+}
+
 export function getEffectiveRule(rules: any, ruleKey: string, secConfig?: any): { enabled: boolean; limit: number; window: number; action: string; recovery: boolean; [key: string]: any } {
   const normalizedKey = normalizeRuleName(ruleKey);
   const defaultConfig = DEFAULT_SECURITY_RULES[normalizedKey] || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
@@ -283,6 +300,9 @@ export function registerConfigCommands(): void {
       { name: 'antinuke punishment <event> <action>', description: 'Configure punishment (quarantine, ban, kick, strip_roles, warn).' },
       { name: 'antinuke reversion <event> <on|off>', description: 'Toggle automatic rollback / event recovery.' },
       { name: 'antinuke quarantine-role <@role|create|view>', description: 'Set or auto-create the server Quarantine Isolation Role.' },
+      { name: 'antinuke trustedactor <warn_at> <punish_at> [window_sec]', description: 'Configure Behavioral warning & punishment action limits for Whitelisted users.' },
+      { name: 'antinuke timeout-duration <10m|1h|1d|7d|28d>', description: 'Configure Discord Timeout punishment duration for anti-nuke violations.' },
+      { name: 'antinuke setall [category|all] <limit> <window> [punishment]', description: 'Bulk update all 24 protection modules at once.' },
       { name: 'antinuke module <event> <limit> <window> <punishment> <reversion>', description: 'Bulk update all parameters for a protection module.' },
       { name: 'automod status', description: 'View AutoMod filter matrix (Anti-Spam, Anti-Link, Blacklist, Caps, Emojis).' },
       { name: 'automod antispam <on|off> [max_msgs] [window_sec] [action]', description: 'Configure Anti-Spam threshold & punishment action.' },
@@ -319,7 +339,7 @@ export function registerConfigCommands(): void {
     execute: async (message: Message, args: string[], extra?: any) => {
       // Alias argument normalizer (e.g. r!antinuke threshold anti_role_grant 11)
       let effectiveArgs = [...args];
-      const antinukeSubActions = ['status', 'threshold', 'punishment', 'reversion', 'recovery', 'rollback', 'enable', 'disable', 'toggle', 'module', 'set', 'matrix', 'list', 'setall', 'all', 'trustedactor', 'trusted-actor', 'behavioral'];
+      const antinukeSubActions = ['status', 'threshold', 'punishment', 'reversion', 'recovery', 'rollback', 'enable', 'disable', 'toggle', 'module', 'set', 'matrix', 'list', 'setall', 'all', 'trustedactor', 'trusted-actor', 'behavioral', 'timeout-duration', 'timeout_duration', 'timeouttime', 'timeout-time', 'timeout'];
       if (effectiveArgs.length > 0 && antinukeSubActions.includes(effectiveArgs[0]?.toLowerCase())) {
         effectiveArgs.unshift('antinuke');
       }
@@ -582,6 +602,50 @@ export function registerConfigCommands(): void {
                            `> • **Warning Threshold**: DM warning at **\`${warnAt}\`** rapid action(s)\n` +
                            `> • **Punish Threshold**: Trust revoked & state restored at **\`${punishAt}\`** rapid action(s)\n` +
                            `> • **Monitoring Window**: **\`${windowSec} seconds\`**`
+            })]
+          });
+        }
+
+        // Configure Timeout Duration (`r!config antinuke timeout-duration <1m|10m|1h|1d|7d|28d>`)
+        if (['timeout-duration', 'timeout_duration', 'timeouttime', 'timeout-time', 'timeout'].includes(action)) {
+          const durationArg = effectiveArgs[2];
+          if (!durationArg || durationArg.toLowerCase() === 'view') {
+            const currentMs = secConfig.timeoutDurationMs || (28 * 24 * 60 * 60 * 1000);
+            const currentMins = Math.round(currentMs / 60000);
+            const currentHours = (currentMs / 3600000).toFixed(1);
+            const currentDays = (currentMs / 86400000).toFixed(1);
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Anti-Nuke Timeout Duration Status',
+                description: `${APPROVED_ICON} Current Timeout Punishment Duration: **${currentDays} day(s)** (\`${currentMins} mins\`).\nUse \`r!config antinuke timeout-duration <10m|1h|1d|7d|28d>\` to modify.`
+              })]
+            });
+          }
+
+          const ms = parseDurationToMs(durationArg);
+          const maxMs = 28 * 24 * 60 * 60 * 1000;
+          if (!ms || ms < 10000 || ms > maxMs) {
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Invalid Timeout Duration Syntax',
+                description: `${WRONG_EMOJI} Please provide a valid duration between **10 seconds** and **28 days**.\nExamples:\n` +
+                             `• \`r!config antinuke timeout-duration 10m\` (10 Minutes)\n` +
+                             `• \`r!config antinuke timeout-duration 1h\` (1 Hour)\n` +
+                             `• \`r!config antinuke timeout-duration 7d\` (7 Days)\n` +
+                             `• \`r!config antinuke timeout-duration 28d\` (28 Days — Maximum)`
+              })]
+            });
+          }
+
+          const updatedConfig = { ...secConfig, timeoutDurationMs: ms };
+          if (extra?.updateModuleConfig) {
+            extra.updateModuleConfig('security', updatedConfig);
+          }
+
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Timeout Duration Successfully Configured',
+              description: `${APPROVED_ICON} Updated Anti-Nuke Timeout Punishment Duration to **${durationArg}** (\`${Math.round(ms / 60000)} minutes\`).`
             })]
           });
         }

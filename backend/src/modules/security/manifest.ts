@@ -889,6 +889,10 @@ async function punishViolator(client: any, guild: any, executorId: string, execu
         await freshMember.roles.remove(roleId).catch(() => { });
       }
 
+      // Apply Discord Native Timeout (configured duration or default 28 days)
+      const timeoutMs = config.timeoutDurationMs || (28 * 24 * 60 * 60 * 1000);
+      await freshMember.timeout(timeoutMs, `[Anti-Nuke Quarantine] ${reason}`).catch(() => {});
+
       const quarantinedUsers = config.quarantinedUsers || [];
       if (!quarantinedUsers.some((u: any) => u.userId === executorId)) {
         quarantinedUsers.push({
@@ -903,7 +907,12 @@ async function punishViolator(client: any, guild: any, executorId: string, execu
         });
         context.updateModuleConfig('security', { quarantinedUsers });
       }
-      context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Action]: Quarantined ${executorUsername} and stripped all Administrative roles. Reason: ${reason}`, 'warn');
+      context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Action]: Quarantined & Timed out ${executorUsername} for ${Math.round(timeoutMs / 60000)} mins. Reason: ${reason}`, 'warn');
+    } else if (ruleAction === 'timeout') {
+      const freshMember = await guild.members.fetch(executorId).catch(() => member);
+      const timeoutMs = config.timeoutDurationMs || (28 * 24 * 60 * 60 * 1000);
+      await freshMember.timeout(timeoutMs, `[Anti-Nuke Timeout] ${reason}`).catch(console.error);
+      context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Action]: Timed out ${executorUsername} for ${Math.round(timeoutMs / 60000)} mins. Reason: ${reason}`, 'warn');
     } else if (ruleAction === 'ban') {
       await guild.members.ban(executorId, { reason }).catch(console.error);
       context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Action]: Banned ${executorUsername}. Reason: ${reason}`, 'warn');
