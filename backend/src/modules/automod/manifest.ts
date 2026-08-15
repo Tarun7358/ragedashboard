@@ -499,22 +499,71 @@ export const AutomodManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed] });
         }
 
+        // ANTIEVERYONE / MASSPING / HERE FULL CONFIG
+        if (['antieveryone', 'everyone', 'here', 'antihere', 'massping', 'anti_everyone_here'].includes(sub) ||
+            ['antieveryone', 'everyone', 'here', 'antihere', 'massping', 'anti_everyone_here'].includes(interaction.parsed?.args?.[0]?.toLowerCase())) {
+          
+          const optStr = interaction.options?.getString?.('enable') || actionArg || interaction.parsed?.args?.[1]?.toLowerCase();
+          const enableOpt = interaction.options?.getBoolean?.('enable');
+          
+          let enableState = true;
+          if (enableOpt !== null && enableOpt !== undefined) {
+            enableState = enableOpt;
+          } else if (['off', 'disable', 'disabled', 'false', '0'].includes(optStr)) {
+            enableState = false;
+          } else if (['on', 'enable', 'enabled', 'true', '1'].includes(optStr)) {
+            enableState = true;
+          }
+
+          // Update automod config
+          const updatedAmConfig = { ...config, antiEveryoneEnabled: enableState };
+          context.updateModuleConfig('automod', updatedAmConfig);
+
+          // Also update security module rule anti_everyone_here
+          const secMod = modules.find((m: any) => m.id === 'security');
+          if (secMod) {
+            const secConfig = secMod.config || {};
+            const rules = { ...(secConfig.rules || {}) };
+            const existing = rules.anti_everyone_here || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
+            rules.anti_everyone_here = { ...existing, enabled: enableState };
+            context.updateModuleConfig('security', { ...secConfig, rules });
+          }
+
+          context.logSyncEvent(`AutoMod: Updated Anti-Everyone/Here filter (enabled=${enableState})`, 'info');
+
+          const embed = createLimeEmbed({
+            title: '<:shield:1532403012751065179> Anti-Everyone & Anti-Here Mention Filter Updated',
+            description: [
+              `• **Anti-Everyone & Anti-Here Filter**: ${enableState ? '<a:approved:1532390590707142956> **Enabled**' : '<:wrong:1532390628330307634> **Disabled**'}`,
+              `• **Protection Target**: \`@everyone\` and \`@here\` mass mentions`,
+              `• **Action on Violation**: \`Delete Message & Quarantine Violator\``
+            ].join('\n')
+          });
+          return interaction.reply({ embeds: [embed] });
+        }
+
         // DEFAULT STATUS & OVERVIEW
+        const secMod = modules.find((m: any) => m.id === 'security');
+        const secConfig = secMod?.config || {};
+        const ruleEveryone = secConfig?.rules?.anti_everyone_here;
+        const isEveryoneEnabled = (ruleEveryone?.enabled !== false) && (config.antiEveryoneEnabled !== false) && (secConfig.antiNukeEnabled !== false);
+
         const ignoredChannelsList = (config.ignoredChannels || []).map((id: string) => `<#${id}>`).join(', ') || '*None*';
         const ignoredRolesList = (config.ignoredRoles || []).map((id: string) => `<@&${id}>`).join(', ') || '*None*';
 
         const statusEmbed = Embeds.info(
           '<:gavel:1532621057318584380> AutoMod & AntiLink Protection Center',
-          '*Automated chat filtering, anti-link rules, ignored channels, and role bypasses.*',
+          '*Automated chat filtering, anti-link rules, anti-everyone tags, ignored channels, and role bypasses.*',
           {
             module: 'automod',
             fields: [
               { name: '<:bot:1532621107746570391> AutoMod Status',          value: `\`${amMod?.status || 'enabled'}\``,                     inline: true },
               { name: '<:link:1532620952087826602> AntiLink Filter',         value: config.blockLinks !== false ? '<a:approved:1532390590707142956> **Enabled**' : '<:wrong:1532390628330307634> **Disabled**', inline: true },
+              { name: '<:shield:1532403012751065179> Anti-Everyone Tag',     value: isEveryoneEnabled ? '<a:approved:1532390590707142956> **Enabled**' : '<:wrong:1532390628330307634> **Disabled**', inline: true },
               { name: '<:shield:1532403012751065179> Punishment Mode',         value: `\`${config.punishment || 'warn'}\``,                  inline: true },
               { name: '<:information:1532621274092929124> Ignored Channels',        value: ignoredChannelsList,                                    inline: false },
               { name: '<:vip:1532620837117759508> Ignored Roles',           value: ignoredRolesList,                                       inline: false },
-              { name: '<:config:1532425712844144701> Configure Commands',      value: '• `r!automod ignore-channel <add|remove|list> #channel`\n• `r!automod ignore-role <add|remove|list> @role`\n• `r!automod antilink <enable|disable>`', inline: false },
+              { name: '<:config:1532425712844144701> Configure Commands',      value: '• `r!automod antieveryone <on|off>` — Enable/disable @everyone & @here tag filter\n• `r!automod antilink <enable|disable>` — Enable/disable link filter\n• `r!automod ignore-channel <add|remove|list> #channel`\n• `r!automod ignore-role <add|remove|list> @role`', inline: false },
             ],
           }
         );

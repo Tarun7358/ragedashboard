@@ -157,7 +157,7 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
     group_members: {
       label: 'MEMBER & MODERATION PROTECTIONS',
       title: '<:gavel:1532621057318584380> MEMBER & MODERATION MODULES',
-      keys: ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune']
+      keys: ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune', 'anti_everyone_here']
     },
     group_server: {
       label: 'SERVER & WEBHOOK PROTECTIONS',
