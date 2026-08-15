@@ -318,6 +318,9 @@ export const AutomodManifest: ModuleManifest = {
                 if (!targetChannel && interaction.client) {
                   targetChannel = await interaction.client.channels.fetch(cleanId).catch(() => null);
                 }
+                if (!targetChannel) {
+                  targetChannel = { id: cleanId, name: cleanId, toString: () => `<#${cleanId}>` };
+                }
                 if (targetChannel) break;
               }
               const cleanName = arg.toLowerCase().replace(/^[#<>]*/, '').replace(/>$/, '').trim();
@@ -377,6 +380,9 @@ export const AutomodManifest: ModuleManifest = {
                 targetRole = guild.roles.cache.get(cleanId);
                 if (!targetRole) {
                   targetRole = await guild.roles.fetch(cleanId).catch(() => null);
+                }
+                if (!targetRole) {
+                  targetRole = { id: cleanId, name: cleanId, toString: () => `<@&${cleanId}>` };
                 }
                 if (targetRole) break;
               }
