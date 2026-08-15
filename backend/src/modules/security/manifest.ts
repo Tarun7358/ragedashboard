@@ -404,7 +404,31 @@ export async function saveLiveSnapshotToDb(guildId: string, snap: any) {
   }
 }
 
-export async function restoreFromLiveSnapshot(guild: any, client: any, context: any) {
+export async function restoreFromLiveSnapshot(param1: any, param2: any, context: any) {
+  let guild: any = null;
+  let client: any = null;
+
+  if (param1?.fetchAuditLogs || (param1?.id && param1?.channels?.cache)) {
+    guild = param1;
+    client = param2;
+  } else if (param2?.fetchAuditLogs || (param2?.id && param2?.channels?.cache)) {
+    guild = param2;
+    client = param1;
+  } else if (typeof param2 === 'string') {
+    client = param1;
+    const gId = param2;
+    guild = client?.guilds?.cache?.get(gId);
+  } else if (typeof param1 === 'string') {
+    client = param2;
+    const gId = param1;
+    guild = client?.guilds?.cache?.get(gId);
+  }
+
+  if (!guild) {
+    console.error('[UPM Restore Error] Unable to resolve valid Discord Guild object in restoreFromLiveSnapshot');
+    return;
+  }
+
   const guildId = guild.id;
   context.logSyncEvent(guildId, '🔄 [UPM Restore]: Initializing full server restoration sequence...', 'info');
 
@@ -2348,7 +2372,7 @@ export const SecurityManifest: ModuleManifest = {
                   purgeAllSpamChannels(channel.name),
                   guild.members.ban(botMember.id, { reason: 'Anti-Nuke Emergency: Instant Ban for Unapproved Bot Channel Creation' }).catch(() => {})
                 ]);
-                await restoreFromLiveSnapshot(client, guild.id, context).catch(() => {});
+                await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
                 return;
               }
             }
@@ -2367,7 +2391,7 @@ export const SecurityManifest: ModuleManifest = {
                 purgeAllSpamChannels(channel.name),
                 guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => {})
               ]);
-              await restoreFromLiveSnapshot(client, guild.id, context).catch(() => {});
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
               return;
             }
           }
