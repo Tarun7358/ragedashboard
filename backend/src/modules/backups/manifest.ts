@@ -93,7 +93,7 @@ async function createBackupData(guild: any, creatorTag: string): Promise<any> {
     name: r.name,
     color: r.color,
     hoist: r.hoist,
-    permissions: r.permissions.toArray(),
+    permissions: r.permissions?.bitfield?.toString() || '0',
     position: r.position,
     mentionable: r.mentionable
   }));
@@ -120,8 +120,8 @@ async function createBackupData(guild: any, creatorTag: string): Promise<any> {
         return {
           name,
           type: targetType,
-          allow: o.allow.toArray(),
-          deny: o.deny.toArray()
+          allow: o.allow?.bitfield?.toString() || (Array.isArray(o.allow) ? o.allow : '0'),
+          deny: o.deny?.bitfield?.toString() || (Array.isArray(o.deny) ? o.deny : '0')
         };
       }).filter((o: any) => o.name !== '') || []
     };
@@ -162,12 +162,17 @@ async function createBackupData(guild: any, creatorTag: string): Promise<any> {
 export const activeBackupRestorations = new Set<string>();
 
 async function executeRestoration(guild: any, snapshot: any, scope: any, context: any) {
+  if (activeBackupRestorations.has(guild.id)) {
+    context.logSyncEvent?.(guild.id, 'Backup Restore: Restoration already active for this server.', 'warn');
+    return;
+  }
+
   const log = (msg: string, type: 'info' | 'warn' | 'success' = 'info') => {
-    context.logSyncEvent(guild.id, `Backup Restore: ${msg}`, type);
+    context.logSyncEvent?.(guild.id, `Backup Restore: ${msg}`, type);
     console.log(`[Backup Restore] [${guild.id}] ${msg}`);
   };
 
-  log(`Initiating restoration/cloning of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
+  log(`Initiating high-speed simultaneous restoration of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
   activeBackupRestorations.add(guild.id);
 
   try {
@@ -176,163 +181,120 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
     const settingsScope = scope?.settings !== false;
     const emojisScope = scope?.expressions !== false;
 
-    // 1. Roles restoration (Parallel Batched)
-    const newRolesMap = new Map<string, any>();
-    if (rolesScope && snapshot.data.roles) {
-      log('Restoring server roles hierarchy (fast parallel batching)...', 'info');
-      const existingRoles = await guild.roles.fetch();
-      const rolesToDelete: any[] = [];
-      
-      for (const [id, r] of existingRoles) {
-        const isProtectedRole = r.name === '@everyone' || 
-                                r.managed || 
-                                Boolean(r.tags?.botId) || 
-                                Boolean(r.tags?.integrationId) || 
-                                Boolean(r.tags?.premiumSubscriberRole);
-        if (isProtectedRole) continue;
-        const highestRole = guild.members.me.roles.highest;
-        if (r.position >= highestRole.position) {
-          log(`Skipping role "${r.name}" (higher or equal in hierarchy than bot)`, 'info');
-          continue;
-        }
-        rolesToDelete.push(r);
-      }
+    // ── STEP 1: ULTRA-FAST SIMULTANEOUS PARALLEL PURGE ──
+    log('⚡ Executing simultaneous deletion of existing channels & roles...', 'info');
 
-      // Fast delete old roles in parallel batches
-      const DELETE_BATCH_SIZE = 8;
-      for (let i = 0; i < rolesToDelete.length; i += DELETE_BATCH_SIZE) {
-        const batch = rolesToDelete.slice(i, i + DELETE_BATCH_SIZE);
-        await Promise.allSettled(batch.map((r: any) => r.delete('Backup restoration - clean rewrite').catch(() => null)));
-      }
-
-      // Recreate roles in order of position (ascending) in batches with rate-limit safety delay
-      const sortedRoles = [...snapshot.data.roles].sort((a: any, b: any) => a.position - b.position);
-      const CREATE_ROLE_BATCH_SIZE = 3;
-      for (let i = 0; i < sortedRoles.length; i += CREATE_ROLE_BATCH_SIZE) {
-        const batch = sortedRoles.slice(i, i + CREATE_ROLE_BATCH_SIZE);
-        await Promise.allSettled(batch.map(async (roleData: any) => {
-          try {
-            const created = await guild.roles.create({
-              name: roleData.name,
-              color: roleData.color,
-              hoist: roleData.hoist,
-              mentionable: roleData.mentionable,
-              permissions: BigInt(roleData.permissions || '0')
-            });
-            newRolesMap.set(roleData.name, created);
-            log(`Created role: "${roleData.name}"`, 'info');
-          } catch (e: any) {
-            log(`Failed to recreate role "${roleData.name}": ${e.message}`, 'warn');
-          }
-        }));
-        if (i + CREATE_ROLE_BATCH_SIZE < sortedRoles.length) {
-          await new Promise(r => setTimeout(r, 150));
-        }
-      }
-    }
-
-    // 2. Settings restoration
-    if (settingsScope && snapshot.data.settings) {
-      log('Updating guild settings configurations...', 'info');
-      try {
-        await guild.edit({
-          verificationLevel: snapshot.data.settings.verificationLevel,
-          defaultMessageNotifications: snapshot.data.settings.defaultMessageNotifications,
-          explicitContentFilter: snapshot.data.settings.explicitContentFilter
-        });
-        log('Guild settings synchronized successfully.', 'info');
-      } catch (e: any) {
-        log(`Failed to edit guild settings: ${e.message}`, 'warn');
-      }
-    }
-
-    // 3. Channels restoration (Parallel Batched)
-    if (channelsScope && snapshot.data.channels) {
-      log('Restoring channel layout structure (fast parallel execution)...', 'info');
-      const existingChannels = await guild.channels.fetch();
-      
-      // Create a temporary progress/logging channel so bot interaction isn't orphaned
-      let tempChannel: any = null;
+    let tempChannel: any = null;
+    if (channelsScope) {
+      const existingChannels = await guild.channels.fetch().catch(() => new Map());
       try {
         tempChannel = await guild.channels.create({
           name: 'restoring-progress',
           type: ChannelType.GuildText,
-          topic: 'Temporary channel created during server restoration/cloning.'
+          topic: 'Temporary channel created during server restoration.'
         });
-        log('Temporary progress channel created.', 'info');
       } catch (e) {
-        tempChannel = existingChannels.find((c: any) => c && c.type === ChannelType.GuildText);
+        tempChannel = Array.from(existingChannels.values()).find((c: any) => c && c.type === ChannelType.GuildText);
       }
 
-      // Fast delete existing channels in parallel batches
       const channelsToDelete = Array.from(existingChannels.values()).filter((c: any) => c && (!tempChannel || c.id !== tempChannel.id));
-      const CHAN_DELETE_BATCH = 5;
-      for (let i = 0; i < channelsToDelete.length; i += CHAN_DELETE_BATCH) {
-        const batch = channelsToDelete.slice(i, i + CHAN_DELETE_BATCH);
-        await Promise.allSettled(batch.map((c: any) => c.delete('Backup restoration - clean rewrite').catch(() => null)));
-        if (i + CHAN_DELETE_BATCH < channelsToDelete.length) {
-          await new Promise(r => setTimeout(r, 100));
-        }
-      }
+      await Promise.allSettled(channelsToDelete.map((c: any) => c.delete('Backup restoration - clean rewrite').catch(() => null)));
+    }
 
-      // Recreate categories in parallel
+    if (rolesScope) {
+      const existingRoles = await guild.roles.fetch().catch(() => new Map());
+      const me = guild.members.me;
+      const highestRolePos = me?.roles?.highest?.position ?? 999;
+
+      const rolesToDelete: any[] = [];
+      for (const [, r] of existingRoles) {
+        const isProtected = r.name === '@everyone' || r.managed || Boolean(r.tags?.botId) || Boolean(r.tags?.integrationId) || Boolean(r.tags?.premiumSubscriberRole);
+        if (isProtected) continue;
+        if (r.position >= highestRolePos) continue;
+        rolesToDelete.push(r);
+      }
+      await Promise.allSettled(rolesToDelete.map((r: any) => r.delete('Backup restoration - clean rewrite').catch(() => null)));
+    }
+
+    // ── STEP 2: SIMULTANEOUS ROLE RECREATION ──
+    const newRolesMap = new Map<string, any>();
+    if (rolesScope && snapshot.data.roles && snapshot.data.roles.length > 0) {
+      log('⚡ Rebuilding role hierarchy simultaneously...', 'info');
+      const sortedRoles = [...snapshot.data.roles].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+
+      const createdRoles = await Promise.allSettled(sortedRoles.map(async (roleData: any) => {
+        try {
+          let perms: any = 0n;
+          if (typeof roleData.permissions === 'string') {
+            perms = BigInt(roleData.permissions);
+          } else if (Array.isArray(roleData.permissions)) {
+            perms = roleData.permissions;
+          }
+
+          const created = await guild.roles.create({
+            name: roleData.name,
+            color: roleData.color,
+            hoist: roleData.hoist,
+            mentionable: roleData.mentionable,
+            permissions: perms
+          });
+          newRolesMap.set(roleData.name, created);
+          return created;
+        } catch (e: any) {
+          log(`Failed to recreate role "${roleData.name}": ${e.message}`, 'warn');
+          return null;
+        }
+      }));
+      log(`Recreated ${createdRoles.filter(r => r.status === 'fulfilled' && r.value).length} roles.`, 'info');
+    }
+
+    // ── STEP 3: SIMULTANEOUS CATEGORY & CHANNEL RECREATION ──
+    if (channelsScope && snapshot.data.channels && snapshot.data.channels.length > 0) {
+      log('⚡ Rebuilding categories & sub-channels simultaneously...', 'info');
+
+      // Recreate categories simultaneously
       const newCategoriesMap = new Map<string, any>();
       const categories = snapshot.data.channels.filter((c: any) => c.type === ChannelType.GuildCategory || c.type === 4);
-      const CAT_BATCH_SIZE = 3;
-      for (let i = 0; i < categories.length; i += CAT_BATCH_SIZE) {
-        const batch = categories.slice(i, i + CAT_BATCH_SIZE);
-        await Promise.allSettled(batch.map(async (catData: any) => {
-          try {
-            const created = await guild.channels.create({
-              name: catData.name,
-              type: ChannelType.GuildCategory,
-              position: catData.position
-            });
-            newCategoriesMap.set(catData.name, created);
-            log(`Created Category: [${catData.name}]`, 'info');
-          } catch (e: any) {
-            log(`Failed to create category "${catData.name}": ${e.message}`, 'warn');
-          }
-        }));
-        if (i + CAT_BATCH_SIZE < categories.length) {
-          await new Promise(r => setTimeout(r, 120));
-        }
-      }
 
-      // Recreate text and voice channels in parallel batches
+      await Promise.allSettled(categories.map(async (catData: any) => {
+        try {
+          const created = await guild.channels.create({
+            name: catData.name,
+            type: ChannelType.GuildCategory,
+            position: catData.position
+          });
+          newCategoriesMap.set(catData.name, created);
+        } catch (e: any) {
+          log(`Failed to create category "${catData.name}": ${e.message}`, 'warn');
+        }
+      }));
+
+      // Recreate text and voice channels simultaneously
       const nonCategories = snapshot.data.channels.filter((c: any) => c.type !== ChannelType.GuildCategory && c.type !== 4);
-      const newChannelsList: { created: any; backup: any }[] = [];
-      const CHAN_CREATE_BATCH = 4;
+      const createdChannelsList: { created: any; backup: any }[] = [];
 
-      for (let i = 0; i < nonCategories.length; i += CHAN_CREATE_BATCH) {
-        const batch = nonCategories.slice(i, i + CHAN_CREATE_BATCH);
-        await Promise.allSettled(batch.map(async (chanData: any) => {
-          try {
-            const parent = chanData.parentName ? newCategoriesMap.get(chanData.parentName) : null;
-            const type = chanData.type === 2 || chanData.type === ChannelType.GuildVoice ? ChannelType.GuildVoice : ChannelType.GuildText;
-            const created = await guild.channels.create({
-              name: chanData.name,
-              type,
-              parent: parent ? parent.id : null,
-              topic: chanData.topic,
-              nsfw: chanData.nsfw,
-              userLimit: chanData.userLimit,
-              position: chanData.position
-            });
-            newChannelsList.push({ created, backup: chanData });
-            log(`Created Channel: #${chanData.name}`, 'info');
-          } catch (e: any) {
-            log(`Failed to create channel "#${chanData.name}": ${e.message}`, 'warn');
-          }
-        }));
-        if (i + CHAN_CREATE_BATCH < nonCategories.length) {
-          await new Promise(r => setTimeout(r, 120));
+      await Promise.allSettled(nonCategories.map(async (chanData: any) => {
+        try {
+          const parent = chanData.parentName ? newCategoriesMap.get(chanData.parentName) : null;
+          const type = chanData.type === 2 || chanData.type === ChannelType.GuildVoice ? ChannelType.GuildVoice : ChannelType.GuildText;
+          const created = await guild.channels.create({
+            name: chanData.name,
+            type,
+            parent: parent ? parent.id : null,
+            topic: chanData.topic,
+            nsfw: chanData.nsfw,
+            userLimit: chanData.userLimit,
+            position: chanData.position
+          });
+          createdChannelsList.push({ created, backup: chanData });
+        } catch (e: any) {
+          log(`Failed to create channel "#${chanData.name}": ${e.message}`, 'warn');
         }
-      }
+      }));
 
-      // Apply permission overwrites in parallel
-      log('Synchronizing permission overrides across all channels...', 'info');
-      await Promise.allSettled(newChannelsList.map(async (item) => {
+      // Synchronize permission overwrites simultaneously
+      log('⚡ Synchronizing permission overrides across all channels...', 'info');
+      await Promise.allSettled(createdChannelsList.map(async (item) => {
         const { created, backup } = item;
         const overwrites: any[] = [];
 
@@ -351,11 +313,16 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
           }
 
           if (targetId) {
+            let allowPerms: any = ov.allow;
+            let denyPerms: any = ov.deny;
+            if (typeof ov.allow === 'string') allowPerms = BigInt(ov.allow);
+            if (typeof ov.deny === 'string') denyPerms = BigInt(ov.deny);
+
             overwrites.push({
               id: targetId,
               type: ov.type,
-              allow: ov.allow,
-              deny: ov.deny
+              allow: allowPerms,
+              deny: denyPerms
             });
           }
         }
@@ -365,33 +332,40 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
         }
       }));
 
-      // Delete progress channel at end
       if (tempChannel) {
         await tempChannel.delete('Restoration complete').catch(() => null);
       }
     }
 
-    // 4. Emojis restoration in parallel
-    if (emojisScope && snapshot.data.emojis && snapshot.data.emojis.length > 0) {
-      log('Restoring custom server emojis...', 'info');
-      const existingEmojis = await guild.emojis.fetch().catch(() => new Map());
-      await Promise.allSettled(Array.from(existingEmojis.values()).map((e: any) => e.delete().catch(() => null)));
+    // ── STEP 4: SIMULTANEOUS SETTINGS & EMOJIS RECREATION ──
+    const remainingTasks: Promise<any>[] = [];
 
-      await Promise.allSettled(snapshot.data.emojis.map(async (emoji: any) => {
-        try {
-          await guild.emojis.create({ attachment: emoji.url, name: emoji.name });
-          log(`Restored emoji: :${emoji.name}:`, 'info');
-        } catch (e: any) {
-          log(`Failed to create emoji :${emoji.name}: ${e.message}`, 'warn');
-        }
-      }));
+    if (settingsScope && snapshot.data.settings) {
+      remainingTasks.push(
+        guild.edit({
+          verificationLevel: snapshot.data.settings.verificationLevel,
+          defaultMessageNotifications: snapshot.data.settings.defaultMessageNotifications,
+          explicitContentFilter: snapshot.data.settings.explicitContentFilter
+        }).catch((e: any) => log(`Failed to edit guild settings: ${e.message}`, 'warn'))
+      );
     }
 
-    log(`Restoration of snapshot "${snapshot.id}" completed successfully!`, 'success');
+    if (emojisScope && snapshot.data.emojis && snapshot.data.emojis.length > 0) {
+      remainingTasks.push((async () => {
+        const existingEmojis = await guild.emojis.fetch().catch(() => new Map());
+        await Promise.allSettled(Array.from(existingEmojis.values()).map((e: any) => e.delete().catch(() => null)));
+        await Promise.allSettled(snapshot.data.emojis.map((emoji: any) =>
+          guild.emojis.create({ attachment: emoji.url, name: emoji.name }).catch(() => null)
+        ));
+      })());
+    }
+
+    await Promise.allSettled(remainingTasks);
+
+    log(`✅ Simultaneous restoration of snapshot "${snapshot.id}" completed successfully!`, 'success');
   } catch (err: any) {
-    log(`Restoration failed: ${err.message}`, 'warn');
+    log(`❌ Restoration failed: ${err.message}`, 'warn');
   } finally {
-    // Keep active restoration bypass flag for an additional 10 seconds to allow all Discord gateway events to settle
     setTimeout(() => {
       activeBackupRestorations.delete(guild.id);
     }, 10000);
