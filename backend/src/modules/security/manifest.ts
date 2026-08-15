@@ -441,6 +441,8 @@ export function startAutoBackupScheduler(client: any, context?: any) {
   setInterval(runAutoBackup, 5 * 60 * 1000);
 }
 
+const activeRestorationGuilds = new Set<string>();
+
 export async function restoreFromLiveSnapshot(param1: any, param2: any, context: any) {
   let guild: any = null;
   let client: any = null;
@@ -467,84 +469,91 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
   }
 
   const guildId = guild.id;
-  context.logSyncEvent(guildId, '🔄 [UPM Restore]: Initializing full server restoration sequence...', 'info');
 
-  let snap = liveSnapshots.get(guildId);
-  if (!snap) {
-    const db = Database.getDb();
-    if (db) {
-      try {
-        const row = await Database.get('SELECT * FROM upm_snapshots WHERE guildId = ?', [guildId]);
-        if (row) {
-          snap = {
-            timestamp: row.timestamp,
-            channels: JSON.parse(row.channels || '[]'),
-            roles: JSON.parse(row.roles || '[]'),
-            guildSettings: JSON.parse(row.guildSettings || '{}')
-          };
-          liveSnapshots.set(guildId, snap);
-        }
-      } catch (err) {
-        console.error('Failed to fetch live snapshot from SQLite database:', err);
-      }
-    }
-  }
-
-  // Fallback to GuildSchemaSnapshotManager if liveSnapshot is missing or empty
-  if (!snap || !snap.channels || snap.channels.length === 0) {
-    const schemaSnap = await GuildSchemaSnapshotManager.getSnapshot(guildId);
-    if (schemaSnap && schemaSnap.channels && schemaSnap.channels.length > 0) {
-      snap = {
-        timestamp: schemaSnap.timestamp,
-        channels: schemaSnap.channels,
-        roles: schemaSnap.roles,
-        guildSettings: {}
-      };
-      liveSnapshots.set(guildId, snap);
-    }
-  }
-
-  if (!snap || ((!snap.channels || snap.channels.length === 0) && (!snap.roles || snap.roles.length === 0))) {
-    context.logSyncEvent(guildId, '❌ [UPM Restore Failed]: No valid snapshot found in database or memory. Capturing fresh snapshot...', 'warn');
-    const freshSnap = await captureLiveSnapshot(guild);
-    saveLiveSnapshotToDb(guildId, freshSnap).catch(() => {});
+  // CONCURRENCY LOCK: Prevent duplicate restoration runs for the same server
+  if (activeRestorationGuilds.has(guildId)) {
+    console.log(`[UPM Restore] Restoration already in progress for guild ${guild.name} (${guildId}), skipping duplicate call.`);
     return;
   }
 
-  // Restore Guild Settings
-  if (snap.guildSettings) {
-    const gs = snap.guildSettings;
-    const needsEdit = guild.name !== gs.name ||
-                      guild.verificationLevel !== gs.verificationLevel ||
-                      guild.explicitContentFilter !== gs.explicitContentFilter;
-    if (needsEdit) {
-      await guild.edit({
-        name: gs.name,
-        verificationLevel: gs.verificationLevel,
-        explicitContentFilter: gs.explicitContentFilter,
-        systemChannelId: gs.systemChannelId,
-        rulesChannelId: gs.rulesChannelId,
-        publicUpdatesChannelId: gs.publicUpdatesChannelId
-      }).catch(() => null);
+  activeRestorationGuilds.add(guildId);
+
+  try {
+    context.logSyncEvent(guildId, '🔄 [UPM Restore]: Initializing full server restoration sequence...', 'info');
+
+    let snap = liveSnapshots.get(guildId);
+    if (!snap) {
+      const db = Database.getDb();
+      if (db) {
+        try {
+          const row = await Database.get('SELECT * FROM upm_snapshots WHERE guildId = ?', [guildId]);
+          if (row) {
+            snap = {
+              timestamp: row.timestamp,
+              channels: JSON.parse(row.channels || '[]'),
+              roles: JSON.parse(row.roles || '[]'),
+              guildSettings: JSON.parse(row.guildSettings || '{}')
+            };
+            liveSnapshots.set(guildId, snap);
+          }
+        } catch (err) {
+          console.error('Failed to fetch live snapshot from SQLite database:', err);
+        }
+      }
     }
-  }
 
-  // Restore Roles in parallel batches
-  const roleMap = new Map<string, any>();
-  if (snap.roles) {
-    const sortedRoles = [...snap.roles].sort((a, b) => a.position - b.position);
-    const BATCH_SIZE = 5;
+    // Fallback to GuildSchemaSnapshotManager if liveSnapshot is missing or empty
+    if (!snap || !snap.channels || snap.channels.length === 0) {
+      const schemaSnap = await GuildSchemaSnapshotManager.getSnapshot(guildId);
+      if (schemaSnap && schemaSnap.channels && schemaSnap.channels.length > 0) {
+        snap = {
+          timestamp: schemaSnap.timestamp,
+          channels: schemaSnap.channels,
+          roles: schemaSnap.roles,
+          guildSettings: {}
+        };
+        liveSnapshots.set(guildId, snap);
+      }
+    }
 
-    for (let i = 0; i < sortedRoles.length; i += BATCH_SIZE) {
-      const batch = sortedRoles.slice(i, i + BATCH_SIZE);
-      await Promise.allSettled(batch.map(async (rSnap) => {
+    if (!snap || ((!snap.channels || snap.channels.length === 0) && (!snap.roles || snap.roles.length === 0))) {
+      context.logSyncEvent(guildId, '❌ [UPM Restore Failed]: No valid snapshot found in database or memory. Capturing fresh snapshot...', 'warn');
+      const freshSnap = await captureLiveSnapshot(guild);
+      saveLiveSnapshotToDb(guildId, freshSnap).catch(() => {});
+      return;
+    }
+
+    // Restore Guild Settings
+    if (snap.guildSettings) {
+      const gs = snap.guildSettings;
+      const needsEdit = guild.name !== gs.name ||
+                        guild.verificationLevel !== gs.verificationLevel ||
+                        guild.explicitContentFilter !== gs.explicitContentFilter;
+      if (needsEdit) {
+        await guild.edit({
+          name: gs.name,
+          verificationLevel: gs.verificationLevel,
+          explicitContentFilter: gs.explicitContentFilter,
+          systemChannelId: gs.systemChannelId,
+          rulesChannelId: gs.rulesChannelId,
+          publicUpdatesChannelId: gs.publicUpdatesChannelId
+        }).catch(() => null);
+      }
+    }
+
+    // Restore Roles sequentially to preserve exact permissions and order
+    const roleMap = new Map<string, any>();
+    if (snap.roles) {
+      const sortedRoles = [...snap.roles].sort((a, b) => (a.position || 0) - (b.position || 0));
+
+      for (const rSnap of sortedRoles) {
         if (rSnap.name === '@everyone') {
           const everyoneRole = guild.roles.everyone;
           if (everyoneRole && everyoneRole.permissions.bitfield.toString() !== rSnap.permissions) {
             await everyoneRole.setPermissions(BigInt(rSnap.permissions)).catch(() => null);
           }
           roleMap.set(rSnap.id, everyoneRole);
-          return;
+          continue;
         }
 
         let existingRole = guild.roles.cache.get(rSnap.id) || guild.roles.cache.find((r: any) => r.name === rSnap.name && !r.managed);
@@ -575,108 +584,118 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
         if (existingRole) {
           roleMap.set(rSnap.id, existingRole);
         }
-      }));
+      }
     }
-  }
 
-  // Restore Channels in parallel batches
-  if (snap.channels) {
-    const categories = snap.channels.filter((c: any) => c.type === 4);
-    const otherChannels = snap.channels.filter((c: any) => c.type !== 4);
-    const channelMap = new Map<string, any>();
+    // Restore Channels sequentially by position to prevent duplicate category creation & misordering
+    if (snap.channels) {
+      const sortedChannels = [...snap.channels].sort((a, b) => (a.position || 0) - (b.position || 0));
+      const categories = sortedChannels.filter((c: any) => c.type === 4);
+      const otherChannels = sortedChannels.filter((c: any) => c.type !== 4);
+      const channelMap = new Map<string, any>();
 
-    const restoreChannel = async (cSnap: any, parentActualId?: string) => {
-      let existingChannel = guild.channels.cache.get(cSnap.id) || guild.channels.cache.find((c: any) => c.name === cSnap.name && c.type === cSnap.type);
+      const restoreSingleChannel = async (cSnap: any, parentActualId?: string) => {
+        // Strict cache lookup: ID match or exact name + type match
+        let existingChannel = guild.channels.cache.get(cSnap.id) || 
+                              guild.channels.cache.find((c: any) => c.name.toLowerCase() === cSnap.name.toLowerCase() && c.type === cSnap.type);
 
-      const overwrites = (cSnap.permissionOverwrites || []).map((o: any) => {
-        let targetId = o.id;
-        const mappedRole = roleMap.get(o.id);
-        if (mappedRole) {
-          targetId = mappedRole.id;
+        const overwrites = (cSnap.permissionOverwrites || []).map((o: any) => {
+          let targetId = o.id;
+          const mappedRole = roleMap.get(o.id);
+          if (mappedRole) {
+            targetId = mappedRole.id;
+          }
+          return {
+            id: targetId,
+            type: o.type,
+            allow: BigInt(o.allow),
+            deny: BigInt(o.deny)
+          };
+        });
+
+        if (!existingChannel) {
+          existingChannel = await guild.channels.create({
+            name: cSnap.name,
+            type: cSnap.type,
+            parent: parentActualId || undefined,
+            nsfw: cSnap.nsfw,
+            topic: cSnap.topic || undefined,
+            rateLimitPerUser: cSnap.rateLimitPerUser || undefined,
+            userLimit: cSnap.userLimit || undefined,
+            bitrate: cSnap.bitrate || undefined,
+            rtcRegion: cSnap.rtcRegion || undefined,
+            permissionOverwrites: overwrites,
+            position: cSnap.position !== undefined ? cSnap.position : undefined,
+            reason: 'UPM Recovery: Recreating deleted channel'
+          }).catch(() => null);
+        } else {
+          await existingChannel.edit({
+            name: cSnap.name,
+            parent: parentActualId || undefined,
+            nsfw: cSnap.nsfw,
+            topic: cSnap.topic || undefined,
+            rateLimitPerUser: cSnap.rateLimitPerUser || undefined,
+            userLimit: cSnap.userLimit || undefined,
+            bitrate: cSnap.bitrate || undefined,
+            rtcRegion: cSnap.rtcRegion || undefined,
+            permissionOverwrites: overwrites,
+            position: cSnap.position !== undefined ? cSnap.position : undefined
+          }).catch(() => null);
         }
-        return {
-          id: targetId,
-          type: o.type,
-          allow: BigInt(o.allow),
-          deny: BigInt(o.deny)
-        };
-      });
 
-      if (!existingChannel) {
-        existingChannel = await guild.channels.create({
-          name: cSnap.name,
-          type: cSnap.type,
-          parent: parentActualId || undefined,
-          nsfw: cSnap.nsfw,
-          topic: cSnap.topic || undefined,
-          rateLimitPerUser: cSnap.rateLimitPerUser || undefined,
-          userLimit: cSnap.userLimit || undefined,
-          bitrate: cSnap.bitrate || undefined,
-          rtcRegion: cSnap.rtcRegion || undefined,
-          permissionOverwrites: overwrites,
-          reason: 'UPM Recovery: Recreating deleted channel'
-        }).catch(() => null);
-      } else {
-        await existingChannel.edit({
-          name: cSnap.name,
-          parent: parentActualId || undefined,
-          nsfw: cSnap.nsfw,
-          topic: cSnap.topic || undefined,
-          rateLimitPerUser: cSnap.rateLimitPerUser || undefined,
-          userLimit: cSnap.userLimit || undefined,
-          bitrate: cSnap.bitrate || undefined,
-          rtcRegion: cSnap.rtcRegion || undefined,
-          permissionOverwrites: overwrites
-        }).catch(() => null);
+        if (existingChannel) {
+          channelMap.set(cSnap.id, existingChannel);
+        }
+      };
+
+      // STEP 1: Restore Categories sequentially (one by one) to prevent parallel duplicate creation
+      for (const catSnap of categories) {
+        await restoreSingleChannel(catSnap);
       }
 
-      if (existingChannel) {
-        channelMap.set(cSnap.id, existingChannel);
-      }
-    };
-
-    // Restore Categories in parallel
-    await Promise.allSettled(categories.map((catSnap: any) => restoreChannel(catSnap)));
-
-    // Restore Sub-channels in parallel batches of 5
-    const CH_BATCH_SIZE = 5;
-    for (let i = 0; i < otherChannels.length; i += CH_BATCH_SIZE) {
-      const batch = otherChannels.slice(i, i + CH_BATCH_SIZE);
-      await Promise.allSettled(batch.map((chSnap: any) => {
+      // STEP 2: Restore Sub-channels sequentially per category to ensure correct parent mapping and ordering
+      for (const chSnap of otherChannels) {
         const parentActualId = chSnap.parentId ? channelMap.get(chSnap.parentId)?.id : undefined;
-        return restoreChannel(chSnap, parentActualId);
-      }));
-    }
+        await restoreSingleChannel(chSnap, parentActualId);
+      }
 
-    // RECONCILIATION: Purge ONLY extra channels created during the nuke IF snapshot has valid channels
-    if (snap.channels && snap.channels.length > 0) {
+      // STEP 3: STRICT DEDUPLICATION SWEEP — Delete any duplicate channels or categories created during race conditions
       const restoredChannelIds = new Set(Array.from(channelMap.values()).map((c: any) => c.id));
-      const snapChannelIds = new Set(snap.channels.map((c: any) => c.id));
-      const snapChannelNames = new Set(snap.channels.map((c: any) => c.name.toLowerCase()));
-      const channelsToDelete: any[] = [];
+      const seenKeyToChannelId = new Map<string, string>();
+      const extraChannelsToDelete: any[] = [];
 
       for (const [cId, currentChan] of guild.channels.cache) {
         const isSystemChannel = cId === guild.rulesChannelId || cId === guild.systemChannelId || cId === guild.publicUpdatesChannelId;
-        const isKnown = snapChannelIds.has(cId) || restoredChannelIds.has(cId) || snapChannelNames.has(currentChan.name.toLowerCase());
+        if (isSystemChannel) continue;
 
-        if (!isKnown && !isSystemChannel) {
-          channelsToDelete.push(currentChan);
+        const key = `${currentChan.name.toLowerCase()}_${currentChan.type}`;
+
+        // If this channel was restored explicitly by our map, keep it!
+        if (restoredChannelIds.has(cId)) {
+          seenKeyToChannelId.set(key, cId);
+          continue;
+        }
+
+        // If we already have a valid restored channel with the exact same name and type, this is a DUPLICATE!
+        if (seenKeyToChannelId.has(key)) {
+          extraChannelsToDelete.push(currentChan);
+        } else {
+          seenKeyToChannelId.set(key, cId);
         }
       }
 
-      if (channelsToDelete.length > 0) {
-        await Promise.allSettled(channelsToDelete.map(async (currentChan) => {
-          context.logSyncEvent(guildId, `🧹 [UPM Recovery Sweep]: Fast deleting unauthorized channel #${currentChan.name}.`, 'warn');
-          await currentChan.delete('UPM Recovery: Deleting unauthorized channel created during nuke attack').catch(() => {});
+      if (extraChannelsToDelete.length > 0) {
+        context.logSyncEvent(guildId, `🧹 [UPM Recovery Sweep]: Fast purging ${extraChannelsToDelete.length} duplicate channels/categories...`, 'warn');
+        await Promise.allSettled(extraChannelsToDelete.map(async (ch) => {
+          await ch.delete('UPM Recovery Deduplication: Removing duplicate channel created during nuke attack').catch(() => {});
         }));
       }
     }
 
-    // RECONCILIATION: Purge ONLY extra roles created during the nuke IF snapshot has valid roles
+    // STEP 4: STRICT ROLE DEDUPLICATION SWEEP
     if (snap.roles && snap.roles.length > 0) {
       const restoredRoleIds = new Set(Array.from(roleMap.values()).map((r: any) => r.id));
-      const snapRoleIds = new Set(snap.roles.map((r: any) => r.id));
-      const snapRoleNames = new Set(snap.roles.map((r: any) => r.name.toLowerCase()));
+      const seenRoleNames = new Set(Array.from(roleMap.values()).map((r: any) => r.name.toLowerCase()));
       const rolesToDelete: any[] = [];
 
       for (const [rId, currentRole] of guild.roles.cache) {
@@ -686,21 +705,26 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
                             Boolean(currentRole.tags?.integrationId) || 
                             Boolean(currentRole.tags?.premiumSubscriberRole) ||
                             currentRole.name === '. Quarantine';
-        const isKnownRole = isProtected || snapRoleIds.has(rId) || restoredRoleIds.has(rId) || snapRoleNames.has(currentRole.name.toLowerCase());
-        if (!isKnownRole) {
+        if (isProtected) continue;
+
+        // If role was explicitly restored, keep it!
+        if (restoredRoleIds.has(rId)) continue;
+
+        // If a role with this exact name already exists from snapshot, this extra role is a duplicate!
+        if (seenRoleNames.has(currentRole.name.toLowerCase())) {
           rolesToDelete.push(currentRole);
         }
       }
 
       if (rolesToDelete.length > 0) {
+        context.logSyncEvent(guildId, `🧹 [UPM Recovery Sweep]: Fast purging ${rolesToDelete.length} duplicate roles...`, 'warn');
         await Promise.allSettled(rolesToDelete.map(async (currentRole) => {
-          context.logSyncEvent(guildId, `🧹 [UPM Recovery Sweep]: Fast deleting unauthorized role @${currentRole.name}.`, 'warn');
-          await currentRole.delete('UPM Recovery: Deleting unauthorized role created during nuke attack').catch(() => {});
+          await currentRole.delete('UPM Recovery Deduplication: Removing duplicate role created during nuke attack').catch(() => {});
         }));
       }
     }
 
-    // Restore Emojis if present in snapshot
+    // STEP 5: Restore Emojis if present in snapshot
     if (snap.emojis && Array.isArray(snap.emojis)) {
       const existingEmojiNames = new Set(guild.emojis.cache.map((e: any) => e.name));
       const missingEmojis = snap.emojis.filter((eSnap: any) => !existingEmojiNames.has(eSnap.name) && eSnap.url);
@@ -710,9 +734,13 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
         }));
       }
     }
-  }
 
-  context.logSyncEvent(guildId, '✅ [UPM Restore Completed]: Full server state successfully restored from snapshot.', 'success');
+    context.logSyncEvent(guildId, '✅ [UPM Restore Completed]: Full server state successfully restored from snapshot.', 'success');
+  } catch (err: any) {
+    console.error(`❌ [UPM Restore Critical Error]:`, err);
+  } finally {
+    activeRestorationGuilds.delete(guildId);
+  }
 }
 
 async function isExecutorBypassed(guild: any, executorId: string, config: any, context?: any, ruleId?: string): Promise<boolean> {
