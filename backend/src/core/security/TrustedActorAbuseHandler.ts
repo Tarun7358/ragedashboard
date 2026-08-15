@@ -194,8 +194,16 @@ export class TrustedActorAbuseHandler {
         } catch (e) {}
       }
 
-      // 3. STEP 2: KICK & QUARANTINE USER
-      if (member.kickable) {
+      // 3. STEP 2: KICK & QUARANTINE USER / BAN & PURGE BOT
+      if (member.user.bot) {
+        try {
+          const { deletePrebotEntry } = await import('../../modules/prebot_whitelist/manifest.js');
+          await deletePrebotEntry(guild.id, member.id);
+        } catch {}
+        if (member.bannable) {
+          await guild.members.ban(member.id, { reason: 'Trusted Actor Abuse Zero-Trust: Exceeded 2+ changes under 10 seconds' }).catch(() => {});
+        }
+      } else if (member.kickable) {
         await member.kick('Trusted Actor Abuse: Exceeded 2+ changes under 10 seconds').catch(() => {});
       }
       await this.applyQuarantine(guild, member);
