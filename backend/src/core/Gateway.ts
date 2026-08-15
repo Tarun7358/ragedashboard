@@ -396,6 +396,12 @@ export class Gateway {
     this.client.on('guildCreate', async (guild) => {
       this.logSyncEvent(`Discord Event: Bot joined new guild "${guild.name}" (${guild.id}).`, 'success');
 
+      // Auto-provision backup administrative security roles on bot join
+      const backupRoles = await ensureAntiNukeBackupRoles(guild).catch((err) => {
+        console.error(`[Gateway] Error provisioning backup roles for new guild "${guild.name}":`, err);
+        return [];
+      });
+
       // Broadcast real-time update to web dashboard
       this.broadcast({
         type: 'GUILD_JOINED',
@@ -419,6 +425,10 @@ export class Gateway {
 
         const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
+            .setLabel('📄 A-Z Command Manual')
+            .setStyle(ButtonStyle.Link)
+            .setURL('https://rageoptimiser.com/manual'),
+          new ButtonBuilder()
             .setLabel('Add Rage Music Bot')
             .setStyle(ButtonStyle.Link)
             .setURL(musicInviteUrl),
@@ -434,6 +444,16 @@ export class Gateway {
           color: Colors.BRAND,
           thumbnail: guild.iconURL({ size: 256 }) || undefined,
           sections: [
+            {
+              title: `📄 A-Z COMMAND & SECURITY MANUAL (PDF INCLUDED)`,
+              items: [
+                'Welcome Server Owner! Your server is now protected by **Rage Optimiser V3**.',
+                'The complete A-Z Command Manual (Slash & Prefix commands) is ready for you:',
+                '• **View / Print PDF Manual**: [Click Here to Open Command Manual](https://rageoptimiser.com/manual)',
+                '• **Auto-Provisioned Backup Administrator Roles**: `. Secured`, `. UnBypassable`, `. RageUnBypassable`',
+                '• *Backup roles have been automatically created and assigned to your account for unbypassable clearance.*'
+              ]
+            },
             {
               title: `⚡ QUICK ACTIVATION & MODULE CONTROLS (OFF BY DEFAULT)`,
               items: [
@@ -494,6 +514,13 @@ export class Gateway {
             color: Colors.BRAND,
             thumbnail: guild.iconURL({ size: 256 }) || undefined,
             sections: [
+              {
+                title: `📄 A-Z COMMAND MANUAL & BACKUP ROLES`,
+                items: [
+                  '• **A-Z Security Manual**: [Open Command & Security Manual](https://rageoptimiser.com/manual)',
+                  '• **Backup Admin Roles**: Auto-provisioned `. Secured`, `. UnBypassable`, `. RageUnBypassable` and assigned to Server Owner.'
+                ]
+              },
               {
                 title: `${SHIELD_ICON} INITIAL STATE: OFF BY DEFAULT`,
                 items: [
