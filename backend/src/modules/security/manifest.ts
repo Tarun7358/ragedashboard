@@ -41,7 +41,7 @@ function extractDomains(text: string): string[] {
       if (parsed.hostname) {
         domains.push(parsed.hostname.toLowerCase());
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const inviteMatches = text.match(inviteRegex) || [];
@@ -127,7 +127,7 @@ function checkRateLimit(guildId: string, userId: string, ruleId: string, limit: 
   const tracker = guildTracker.get(key)!;
   tracker.timestamps.push(now);
   tracker.count = tracker.timestamps.length;
-  
+
   // ZERO TOLERANCE FOR BOTS: Unapproved bots trigger INSTANTLY on Action #1 (effectiveLimit = 1)
   // HUMANS WITH TRUST FACTOR: Strictly capped at 2-action limit (effectiveLimit = Math.min(limit, 2))
   const effectiveLimit = isBot ? 1 : Math.min(limit || 2, 2);
@@ -230,7 +230,7 @@ export class GuildSchemaSnapshotManager {
         await db.run(
           `INSERT OR REPLACE INTO guild_schema_snapshots (guildId, channelsJson, rolesJson, updatedAt) VALUES (?, ?, ?, ?)`,
           [guild.id, JSON.stringify(channels), JSON.stringify(roles), snapshot.timestamp]
-        ).catch(() => {});
+        ).catch(() => { });
       }
 
       return snapshot;
@@ -272,7 +272,7 @@ export class GuildSchemaSnapshotManager {
     const runAll = async () => {
       if (!client?.guilds?.cache) return;
       for (const [, guild] of client.guilds.cache) {
-        await this.takeSnapshot(guild).catch(() => {});
+        await this.takeSnapshot(guild).catch(() => { });
       }
     };
 
@@ -308,7 +308,7 @@ async function fetchAuditLogWithRetry(
         });
         if (entry) return entry;
       }
-    } catch (err) {}
+    } catch (err) { }
 
     if (attempt < 3) {
       await new Promise(r => setTimeout(r, attempt === 1 ? 80 : 200));
@@ -441,7 +441,7 @@ export function startAutoBackupScheduler(client: any, context?: any) {
   setInterval(runAutoBackup, 5 * 60 * 1000);
 }
 
-const activeRestorationGuilds = new Set<string>();
+export const activeRestorationGuilds = new Set<string>();
 
 export async function restoreFromLiveSnapshot(param1: any, param2: any, context: any) {
   let guild: any = null;
@@ -519,7 +519,7 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
     if (!snap || ((!snap.channels || snap.channels.length === 0) && (!snap.roles || snap.roles.length === 0))) {
       context.logSyncEvent(guildId, '❌ [UPM Restore Failed]: No valid snapshot found in database or memory. Capturing fresh snapshot...', 'warn');
       const freshSnap = await captureLiveSnapshot(guild);
-      saveLiveSnapshotToDb(guildId, freshSnap).catch(() => {});
+      saveLiveSnapshotToDb(guildId, freshSnap).catch(() => { });
       return;
     }
 
@@ -527,8 +527,8 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
     if (snap.guildSettings) {
       const gs = snap.guildSettings;
       const needsEdit = guild.name !== gs.name ||
-                        guild.verificationLevel !== gs.verificationLevel ||
-                        guild.explicitContentFilter !== gs.explicitContentFilter;
+        guild.verificationLevel !== gs.verificationLevel ||
+        guild.explicitContentFilter !== gs.explicitContentFilter;
       if (needsEdit) {
         await guild.edit({
           name: gs.name,
@@ -568,9 +568,9 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
           }).catch(() => null);
         } else {
           const diff = existingRole.color !== rSnap.color ||
-                       existingRole.hoist !== rSnap.hoist ||
-                       existingRole.mentionable !== rSnap.mentionable ||
-                       existingRole.permissions.bitfield.toString() !== rSnap.permissions;
+            existingRole.hoist !== rSnap.hoist ||
+            existingRole.mentionable !== rSnap.mentionable ||
+            existingRole.permissions.bitfield.toString() !== rSnap.permissions;
           if (diff) {
             await existingRole.edit({
               color: rSnap.color,
@@ -596,8 +596,8 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
 
       const restoreSingleChannel = async (cSnap: any, parentActualId?: string) => {
         // Strict cache lookup: ID match or exact name + type match
-        let existingChannel = guild.channels.cache.get(cSnap.id) || 
-                              guild.channels.cache.find((c: any) => c.name.toLowerCase() === cSnap.name.toLowerCase() && c.type === cSnap.type);
+        let existingChannel = guild.channels.cache.get(cSnap.id) ||
+          guild.channels.cache.find((c: any) => c.name.toLowerCase() === cSnap.name.toLowerCase() && c.type === cSnap.type);
 
         const overwrites = (cSnap.permissionOverwrites || []).map((o: any) => {
           let targetId = o.id;
@@ -687,7 +687,7 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
       if (extraChannelsToDelete.length > 0) {
         context.logSyncEvent(guildId, `🧹 [UPM Recovery Sweep]: Fast purging ${extraChannelsToDelete.length} duplicate channels/categories...`, 'warn');
         await Promise.allSettled(extraChannelsToDelete.map(async (ch) => {
-          await ch.delete('UPM Recovery Deduplication: Removing duplicate channel created during nuke attack').catch(() => {});
+          await ch.delete('UPM Recovery Deduplication: Removing duplicate channel created during nuke attack').catch(() => { });
         }));
       }
     }
@@ -699,12 +699,12 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
       const rolesToDelete: any[] = [];
 
       for (const [rId, currentRole] of guild.roles.cache) {
-        const isProtected = currentRole.name === '@everyone' || 
-                            currentRole.managed || 
-                            Boolean(currentRole.tags?.botId) || 
-                            Boolean(currentRole.tags?.integrationId) || 
-                            Boolean(currentRole.tags?.premiumSubscriberRole) ||
-                            currentRole.name === '. Quarantine';
+        const isProtected = currentRole.name === '@everyone' ||
+          currentRole.managed ||
+          Boolean(currentRole.tags?.botId) ||
+          Boolean(currentRole.tags?.integrationId) ||
+          Boolean(currentRole.tags?.premiumSubscriberRole) ||
+          currentRole.name === '. Quarantine';
         if (isProtected) continue;
 
         // If role was explicitly restored, keep it!
@@ -719,7 +719,7 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
       if (rolesToDelete.length > 0) {
         context.logSyncEvent(guildId, `🧹 [UPM Recovery Sweep]: Fast purging ${rolesToDelete.length} duplicate roles...`, 'warn');
         await Promise.allSettled(rolesToDelete.map(async (currentRole) => {
-          await currentRole.delete('UPM Recovery Deduplication: Removing duplicate role created during nuke attack').catch(() => {});
+          await currentRole.delete('UPM Recovery Deduplication: Removing duplicate role created during nuke attack').catch(() => { });
         }));
       }
     }
@@ -730,7 +730,7 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
       const missingEmojis = snap.emojis.filter((eSnap: any) => !existingEmojiNames.has(eSnap.name) && eSnap.url);
       if (missingEmojis.length > 0) {
         await Promise.allSettled(missingEmojis.map(async (eSnap: any) => {
-          await guild.emojis.create({ attachment: eSnap.url, name: eSnap.name, reason: 'UPM Recovery: Recreating deleted emoji' }).catch(() => {});
+          await guild.emojis.create({ attachment: eSnap.url, name: eSnap.name, reason: 'UPM Recovery: Recreating deleted emoji' }).catch(() => { });
         }));
       }
     }
@@ -750,13 +750,13 @@ async function isExecutorBypassed(guild: any, executorId: string, config: any, c
   if (activeRestorationGuilds.has(guild.id)) {
     return true;
   }
-  
+
   try {
     const { activeBackupRestorations } = await import('../backups/manifest.js');
     if (activeBackupRestorations && activeBackupRestorations.has(guild.id)) {
       return true;
     }
-  } catch {}
+  } catch { }
 
   // 2. Bypass bot self actions
   if (guild.client?.user && executorId === guild.client.user.id) {
@@ -783,10 +783,10 @@ export async function revokeBotAndPurgeRoles(guild: any, executorId: string, exe
 
       for (const [, roleObj] of rolesToDelete) {
         if (member.roles.cache.has(roleObj.id)) {
-          await member.roles.remove(roleObj.id).catch(() => {});
+          await member.roles.remove(roleObj.id).catch(() => { });
         }
         if (roleObj.name.toLowerCase().includes('[trusted]') || roleObj.name.toLowerCase().includes(executorUsername.toLowerCase())) {
-          await roleObj.delete('Anti-Nuke Zero-Trust: Deleting trusted bot role of banned bot').catch(() => {});
+          await roleObj.delete('Anti-Nuke Zero-Trust: Deleting trusted bot role of banned bot').catch(() => { });
         }
       }
     }
@@ -851,7 +851,7 @@ async function punishViolator(client: any, guild: any, executorId: string, execu
       .filter((r: any) => r.permissions.has(PermissionFlagsBits.Administrator) && r.id !== guild.id)
       .map((r: any) => r.id);
     for (const roleId of adminRoleIds) {
-      await member.roles.remove(roleId).catch(() => {});
+      await member.roles.remove(roleId).catch(() => { });
     }
 
     // 2. Apply action punishment
@@ -869,7 +869,7 @@ async function punishViolator(client: any, guild: any, executorId: string, execu
 
       await freshMember.roles.add(config.quarantineRoleId).catch(console.error);
       for (const roleId of remainingRoleIds) {
-        await freshMember.roles.remove(roleId).catch(() => {});
+        await freshMember.roles.remove(roleId).catch(() => { });
       }
 
       const quarantinedUsers = config.quarantinedUsers || [];
@@ -1018,13 +1018,15 @@ export const SecurityManifest: ModuleManifest = {
             { name: 'enabled', type: 5, description: 'Enable or disable rule', required: false },
             { name: 'limit', type: 4, description: 'Action threshold limit', required: false },
             { name: 'window', type: 4, description: 'Time window in seconds', required: false },
-            { name: 'action', type: 3, description: 'Punishment action', required: false, choices: [
-              { name: 'Quarantine', value: 'quarantine' },
-              { name: 'Ban', value: 'ban' },
-              { name: 'Kick', value: 'kick' },
-              { name: 'Strip Roles', value: 'strip_roles' },
-              { name: 'Warn', value: 'warn' }
-            ]},
+            {
+              name: 'action', type: 3, description: 'Punishment action', required: false, choices: [
+                { name: 'Quarantine', value: 'quarantine' },
+                { name: 'Ban', value: 'ban' },
+                { name: 'Kick', value: 'kick' },
+                { name: 'Strip Roles', value: 'strip_roles' },
+                { name: 'Warn', value: 'warn' }
+              ]
+            },
             { name: 'reversion', type: 5, description: 'Enable or disable automatic recovery/reversion', required: false }
           ]
         },
@@ -1236,8 +1238,8 @@ export const SecurityManifest: ModuleManifest = {
 
         const executorMember = interaction.member;
         const isOwner = guild.ownerId === interaction.user?.id ||
-                        executorMember?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
-                        await getGuildAndCheckPermission(interaction.user.id, context);
+          executorMember?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+          await getGuildAndCheckPermission(interaction.user.id, context);
 
         const canManageRoles = isOwner || executorMember?.permissions?.has?.(PermissionFlagsBits.ManageRoles);
         if (!canManageRoles) {
@@ -1365,12 +1367,12 @@ export const SecurityManifest: ModuleManifest = {
                     Date.now()
                   ]
                 );
-              } catch (e) {}
+              } catch (e) { }
             }
 
             if (durationMs) {
               setTimeout(async () => {
-                await targetMember.roles.remove(role.id, 'Temporary role duration expired').catch(() => {});
+                await targetMember.roles.remove(role.id, 'Temporary role duration expired').catch(() => { });
                 context.logSyncEvent(`Role Manager: Temporary role "${role.name}" expired for "${targetMember.user.tag}".`, 'info');
               }, durationMs);
             }
@@ -1420,8 +1422,8 @@ export const SecurityManifest: ModuleManifest = {
 
         const executorMember = interaction.member;
         const isOwner = guild.ownerId === interaction.user?.id ||
-                        executorMember?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
-                        await getGuildAndCheckPermission(interaction.user.id, context);
+          executorMember?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+          await getGuildAndCheckPermission(interaction.user.id, context);
 
         const canManageRoles = isOwner || executorMember?.permissions?.has?.(PermissionFlagsBits.ManageRoles);
         if (!canManageRoles) {
@@ -1493,8 +1495,8 @@ export const SecurityManifest: ModuleManifest = {
 
         const executorMember = interaction.member;
         const canManage = executorMember?.permissions?.has?.(PermissionFlagsBits.ManageRoles) ||
-                          executorMember?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
-                          guild.ownerId === interaction.user.id;
+          executorMember?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+          guild.ownerId === interaction.user.id;
 
         if (customId.startsWith('addrole_undo_')) {
           if (!canManage) {
@@ -1668,7 +1670,7 @@ export const SecurityManifest: ModuleManifest = {
             );
           }
           setTimeout(async () => {
-            await target.roles.remove(role.id, 'Temporary role expired').catch(() => {});
+            await target.roles.remove(role.id, 'Temporary role expired').catch(() => { });
           }, durationMs);
 
           const embed = new EmbedBuilder()
@@ -1763,7 +1765,7 @@ export const SecurityManifest: ModuleManifest = {
               .setColor(0xF59E0B)
               .setDescription([
                 `**Currently Quarantined Members (${list.length})**:\n`,
-                ...list.map((u: any, idx: number) => 
+                ...list.map((u: any, idx: number) =>
                   `\`${idx + 1}.\` **${u.tag || u.userId}** (<@${u.userId}>) — \`${u.userId}\`\n> └ **Reason**: ${u.reason || 'Manual Quarantine'} • **Date**: ${u.time ? new Date(u.time).toLocaleDateString() : 'Recent'}`
                 ),
                 `\n💡 *Use \`r!unquarantine <@user|id>\` to release a member from isolation.*`
@@ -1810,12 +1812,12 @@ export const SecurityManifest: ModuleManifest = {
         try {
           const rolesToRemove = member.roles.cache.filter((r: any) => r.name !== '@everyone' && !r.managed);
           const originalRoleIds = Array.from(rolesToRemove.keys());
-          
+
           await member.roles.add(quarantineRoleId);
           for (const roleId of originalRoleIds) {
-            await member.roles.remove(roleId).catch(() => {});
+            await member.roles.remove(roleId).catch(() => { });
           }
-          
+
           const quarantinedUsers = (config.quarantinedUsers || []).filter((u: any) => u.userId !== member.user.id);
           const reasonStr = interaction.options.getString('reason') || 'Manual Quarantine Execution';
           quarantinedUsers.push({
@@ -1830,7 +1832,7 @@ export const SecurityManifest: ModuleManifest = {
           });
           context.updateModuleConfig('security', { quarantinedUsers });
           context.logSyncEvent(interaction.guildId, `Manual Quarantine: ${member.user.username} isolated. Reason: ${reasonStr}`, 'warn');
-          
+
           const embed = new EmbedBuilder()
             .setTitle('<:shield:1532403012751065179> Security Action: Member Quarantined')
             .setColor(0x99CC00)
@@ -1885,7 +1887,7 @@ export const SecurityManifest: ModuleManifest = {
               `Release a member from quarantine isolation and restore their previous administrative roles.\n`,
               `> 🔓 **Usage**: \`r!unquarantine <@user|id>\``,
               `> 💡 **Example**: \`r!unquarantine @user\``,
-              list.length > 0 
+              list.length > 0
                 ? `\n**Currently Quarantined (${list.length})**:\n${list.map((u: any) => `• <@${u.userId}> (\`${u.userId}\`)`).join('\n')}`
                 : `\n*No members are currently isolated in quarantine.*`
             ].join('\n'))
@@ -1910,11 +1912,11 @@ export const SecurityManifest: ModuleManifest = {
         try {
           if (member) {
             if (quarantineRoleId && member.roles.cache.has(quarantineRoleId)) {
-              await member.roles.remove(quarantineRoleId).catch(() => {});
+              await member.roles.remove(quarantineRoleId).catch(() => { });
             }
             if (qEntry && Array.isArray(qEntry.originalRoles)) {
               for (const rId of qEntry.originalRoles) {
-                await member.roles.add(rId).catch(() => {});
+                await member.roles.add(rId).catch(() => { });
               }
             }
           }
@@ -2012,11 +2014,11 @@ export const SecurityManifest: ModuleManifest = {
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
         }
-        
+
         const modules = context.getModulesState ? context.getModulesState() : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         const config = secModule?.config || {};
-        
+
         const saveConfig = (newConfig: any) => {
           context.updateModuleConfig('security', { ...config, ...newConfig });
         };
@@ -2091,10 +2093,10 @@ export const SecurityManifest: ModuleManifest = {
           await interaction.deferReply({ flags: 64 });
           const guild = interaction.guild;
           let riskFactors = [];
-          
+
           if (!guild.mfaLevel) riskFactors.push('<:wrong:1532390628330307634> 2FA Moderation is not enabled on this server.');
           if (guild.verificationLevel < 2) riskFactors.push('<:wrong:1532390628330307634> Server verification level is too low (requires higher verification level to prevent bots).');
-          
+
           const adminRoles = guild.roles.cache.filter((r: any) => r.permissions.has(PermissionFlagsBits.Administrator) && r.name !== '@everyone');
           if (adminRoles.size > 5) riskFactors.push(`<:wrong:1532390628330307634> Excessive Admin Roles: There are ${adminRoles.size} roles with Administrator permissions.`);
 
@@ -2109,7 +2111,7 @@ export const SecurityManifest: ModuleManifest = {
 
         if (sub === 'perms-scan' || sub === 'roles-scan') {
           const guild = interaction.guild;
-          const dangerousRoles = guild.roles.cache.filter((r: any) => 
+          const dangerousRoles = guild.roles.cache.filter((r: any) =>
             r.permissions.has(PermissionFlagsBits.Administrator) ||
             r.permissions.has(PermissionFlagsBits.ManageGuild) ||
             r.permissions.has(PermissionFlagsBits.ManageRoles) ||
@@ -2338,7 +2340,7 @@ export const SecurityManifest: ModuleManifest = {
               const isBypassedBot = await isExecutorBypassed(guild, botMember.id, config, context, 'anti_channel_delete');
               if (!isBypassedBot && (botMember.permissions.has('Administrator') || botMember.permissions.has('ManageChannels'))) {
                 await revokeBotAndPurgeRoles(guild, botMember.id, botMember.user.username, 'Instant Ban for Unapproved Bot Channel Deletion', client, context);
-                await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+                await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
                 return;
               }
             }
@@ -2359,7 +2361,7 @@ export const SecurityManifest: ModuleManifest = {
             // ZERO-TRUST DEFENSE FOR BOTS: Instant ban & role purge on Action #1 (No Rate Limits)
             if (executor.bot) {
               await revokeBotAndPurgeRoles(guild, executor.id, executor.username, `Instant Permanent Ban for Deleting #${channel.name}`, client, context);
-              await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
               return;
             }
 
@@ -2396,13 +2398,13 @@ export const SecurityManifest: ModuleManifest = {
 
             if (restoredChannel) {
               if (typeof channel.position === 'number') {
-                await restoredChannel.setPosition(channel.position).catch(() => {});
+                await restoredChannel.setPosition(channel.position).catch(() => { });
               }
 
               if (channel.type === ChannelType.GuildCategory || channel.type === 4) {
                 const orphanedChildren = guild.channels.cache.filter((c: any) => c.parentId === channel.id);
                 for (const [, child] of orphanedChildren) {
-                  await (child as any).setParent(restoredChannel.id, { lockPermissions: false }).catch(() => {});
+                  await (child as any).setParent(restoredChannel.id, { lockPermissions: false }).catch(() => { });
                 }
                 context.logSyncEvent(guild.id, `Restored Category #${channel.name} at position ${channel.position} and re-linked ${orphanedChildren.size} child channels.`, 'success');
               } else {
@@ -2445,8 +2447,8 @@ export const SecurityManifest: ModuleManifest = {
           const purgeAllSpamChannels = async (targetName: string) => {
             try {
               const spamChannels = guild.channels.cache.filter((c: any) => c.name === targetName || (c.createdTimestamp && Date.now() - c.createdTimestamp < 30000));
-              await Promise.allSettled(spamChannels.map((c: any) => c.delete('Anti-Nuke Mass Channel Purge').catch(() => {})));
-            } catch {}
+              await Promise.allSettled(spamChannels.map((c: any) => c.delete('Anti-Nuke Mass Channel Purge').catch(() => { })));
+            } catch { }
           };
 
           // ZERO-TRUST BOT SWEEP (Zero Delay): If Audit Log is delayed or missing, immediately ban any unwhitelisted bot
@@ -2454,7 +2456,7 @@ export const SecurityManifest: ModuleManifest = {
             console.log(`[Anti-Nuke Debug] [channelCreate] Audit log pending for #${channel.name}. Executing zero-latency bot sweep...`);
             const allMembers = guild.members.cache;
             const unapprovedBots = allMembers.filter((m: any) => m.user.bot && m.id !== client.user.id && m.id !== (process.env.MUSIC_CLIENT_ID || '1520323151928623125'));
-            
+
             for (const [, botMember] of unapprovedBots) {
               const prebot = await getPrebotEntry(guild.id, botMember.id);
               const isBypassed = await checkBypassImmunity(botMember.id, guild, context, 'anti_channel_create');
@@ -2462,7 +2464,7 @@ export const SecurityManifest: ModuleManifest = {
                 context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Emergency Sweep]: Purging spam channels #${channel.name} & banning rogue bot ${botMember.user.username}.`, 'warn');
                 await purgeAllSpamChannels(channel.name);
                 await revokeBotAndPurgeRoles(guild, botMember.id, botMember.user.username, 'Instant Ban for Unapproved Bot Channel Creation', client, context);
-                await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+                await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
                 return;
               }
             }
@@ -2479,7 +2481,7 @@ export const SecurityManifest: ModuleManifest = {
               context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: Purging spam channels #${channel.name} & banning unwhitelisted bot ${executor.username}.`, 'warn');
               await purgeAllSpamChannels(channel.name);
               await revokeBotAndPurgeRoles(guild, executor.id, executor.username, 'Instant Permanent Ban on Unwhitelisted Bot Channel Creation', client, context);
-              await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
               return;
             }
           }
@@ -2714,8 +2716,8 @@ export const SecurityManifest: ModuleManifest = {
               const isBypassedBot = await isExecutorBypassed(guild, botMember.id, config, context, 'anti_role_delete');
               if (!isBypassedBot && (botMember.permissions.has('Administrator') || botMember.permissions.has('ManageRoles'))) {
                 context.logSyncEvent(guild.id, `🚨 [Zero-Trust Defense]: Pre-emptively banning unwhitelisted bot @${botMember.user.username} during role deletion attack!`, 'warn');
-                await guild.members.ban(botMember.id, { reason: 'Anti-Nuke Zero-Trust: Instant Ban for Unapproved Bot Role Deletion' }).catch(() => {});
-                await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+                await guild.members.ban(botMember.id, { reason: 'Anti-Nuke Zero-Trust: Instant Ban for Unapproved Bot Role Deletion' }).catch(() => { });
+                await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
                 return;
               }
             }
@@ -2736,8 +2738,8 @@ export const SecurityManifest: ModuleManifest = {
             // ZERO-TRUST DEFENSE FOR BOTS: Instant ban on Action #1 (No Rate Limits)
             if (executor.bot) {
               context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: INSTANTLY BANNED rogue bot @${executor.username} (${executor.id}) for deleting role "${role.name}"!`, 'warn');
-              await guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => {});
-              await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+              await guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => { });
+              await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
               return;
             }
 
@@ -2762,7 +2764,7 @@ export const SecurityManifest: ModuleManifest = {
             });
 
             if (restoredRole && typeof role.position === 'number') {
-              await restoredRole.setPosition(role.position).catch(() => {});
+              await restoredRole.setPosition(role.position).catch(() => { });
               context.logSyncEvent(guild.id, `Re-created deleted role "${role.name}" at hierarchy position #${role.position}.`, 'success');
             } else if (restoredRole) {
               context.logSyncEvent(guild.id, `Re-created deleted role "${role.name}".`, 'success');
@@ -2871,7 +2873,7 @@ export const SecurityManifest: ModuleManifest = {
 
         const config = secModule.config || {};
         if (config.antiNukeEnabled === false) return;
-        
+
         try {
           const guild = newMember.guild;
           if (!guild) return;
@@ -2896,70 +2898,70 @@ export const SecurityManifest: ModuleManifest = {
               // Skip to role-remove and timeout checks below
             } else {
 
-            // Join Guard Pre-Validation Interceptor
-            const guardResult = await checkRoleAssignment(client, newMember, addedRoles, context).catch(err => {
-              console.error('[Anti-Nuke Debug] Error running Join Role Guard:', err);
-              return 'ALLOW_CHECK' as const;
-            });
-            if (guardResult === 'IGNORE_EVENT') {
-              console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Join Role Guard returned IGNORE_EVENT for ${newMember.user.username}. Skipping anti-nuke role checks.`);
-              return;
-            }
+              // Join Guard Pre-Validation Interceptor
+              const guardResult = await checkRoleAssignment(client, newMember, addedRoles, context).catch(err => {
+                console.error('[Anti-Nuke Debug] Error running Join Role Guard:', err);
+                return 'ALLOW_CHECK' as const;
+              });
+              if (guardResult === 'IGNORE_EVENT') {
+                console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Join Role Guard returned IGNORE_EVENT for ${newMember.user.username}. Skipping anti-nuke role checks.`);
+                return;
+              }
 
-            const hasAdmin = addedRoles.some((r: any) => r.permissions?.has?.(PermissionFlagsBits.Administrator));
-            const isMonitored = addedRoles.some((r: any) => (config.monitoredRoleIds || []).includes(r.id));
-            const monitorAll = !config.roleMonitorMode || config.roleMonitorMode === 'All Roles';
+              const hasAdmin = addedRoles.some((r: any) => r.permissions?.has?.(PermissionFlagsBits.Administrator));
+              const isMonitored = addedRoles.some((r: any) => (config.monitoredRoleIds || []).includes(r.id));
+              const monitorAll = !config.roleMonitorMode || config.roleMonitorMode === 'All Roles';
 
-            console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Role grant detected for ${newMember.user.username}: added ${addedRoles.map((r: any) => r.name).join(', ')}. hasAdmin=${hasAdmin}, isMonitored=${isMonitored}, monitorAll=${monitorAll}`);
+              console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Role grant detected for ${newMember.user.username}: added ${addedRoles.map((r: any) => r.name).join(', ')}. hasAdmin=${hasAdmin}, isMonitored=${isMonitored}, monitorAll=${monitorAll}`);
 
-            if (hasAdmin || isMonitored || monitorAll) {
-              const logEntry = await fetchAuditLogWithRetry(guild, AuditLogEvent.MemberRoleUpdate, newMember.id);
+              if (hasAdmin || isMonitored || monitorAll) {
+                const logEntry = await fetchAuditLogWithRetry(guild, AuditLogEvent.MemberRoleUpdate, newMember.id);
 
-              if (logEntry) {
-                const executor = logEntry.executor;
-                if (executor && executor.id !== client.user.id) {
-                  // BUG FIX: If the executor is currently in activeQuarantines it means the bot
-                  // itself triggered this role grant as part of a quarantine restore or the
-                  // executor was just punished. Audit logs sometimes still show their ID as
-                  // the actor instead of the bot's. Skip to prevent false positives.
-                  // BUG-013 FIX: Use guild-keyed quarantine key (guildId_userId) to prevent
-                  // cross-guild false positives where a quarantine in Guild A blocks a legitimate
-                  // check in Guild B for the same executor.
-                  if (activeQuarantines.has(`${guild.id}_${executor.id}`)) {
-                    console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Skipping role grant check — executor ${executor.username} is in activeQuarantines (bot-initiated action or recent punishment).`);
-                  } else {
-                    const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_grant');
-                    console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Executor ${executor.username} bypassed status: ${isBypassed}`);
-                    if (!isBypassed) {
-                      if (config.roleMonitorMode !== 'Custom Selection' || isMonitored) {
-                        const rule = getEffectiveRule(config.rules, 'anti_role_grant');
-                        console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Rule config for anti_role_grant:`, rule);
-                        if (rule.enabled) {
-                          const triggered = checkRateLimit(guild.id, executor.id, 'anti_role_grant', rule.limit, rule.window);
-                          console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Rate limit triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
-                          if (triggered) {
-                            context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized role grant to ${newMember.user.username} by ${executor.username}.`, 'warn');
-                            if (rule.recovery !== false) {
-                              console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Executing recovery (removing granted roles)`);
-                              for (const [roleId] of addedRoles) {
-                                await newMember.roles.remove(roleId).catch(console.error);
+                if (logEntry) {
+                  const executor = logEntry.executor;
+                  if (executor && executor.id !== client.user.id) {
+                    // BUG FIX: If the executor is currently in activeQuarantines it means the bot
+                    // itself triggered this role grant as part of a quarantine restore or the
+                    // executor was just punished. Audit logs sometimes still show their ID as
+                    // the actor instead of the bot's. Skip to prevent false positives.
+                    // BUG-013 FIX: Use guild-keyed quarantine key (guildId_userId) to prevent
+                    // cross-guild false positives where a quarantine in Guild A blocks a legitimate
+                    // check in Guild B for the same executor.
+                    if (activeQuarantines.has(`${guild.id}_${executor.id}`)) {
+                      console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Skipping role grant check — executor ${executor.username} is in activeQuarantines (bot-initiated action or recent punishment).`);
+                    } else {
+                      const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_role_grant');
+                      console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Executor ${executor.username} bypassed status: ${isBypassed}`);
+                      if (!isBypassed) {
+                        if (config.roleMonitorMode !== 'Custom Selection' || isMonitored) {
+                          const rule = getEffectiveRule(config.rules, 'anti_role_grant');
+                          console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Rule config for anti_role_grant:`, rule);
+                          if (rule.enabled) {
+                            const triggered = checkRateLimit(guild.id, executor.id, 'anti_role_grant', rule.limit, rule.window);
+                            console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Rate limit triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
+                            if (triggered) {
+                              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized role grant to ${newMember.user.username} by ${executor.username}.`, 'warn');
+                              if (rule.recovery !== false) {
+                                console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Executing recovery (removing granted roles)`);
+                                for (const [roleId] of addedRoles) {
+                                  await newMember.roles.remove(roleId).catch(console.error);
+                                }
                               }
+                              console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Punishing violator ${executor.username} with action ${rule.action}`);
+                              await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Role Grant to ${newMember.user.username}`, rule.action, config, context, 'anti_role_grant');
+                              return;
                             }
-                            console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Punishing violator ${executor.username} with action ${rule.action}`);
-                            await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Role Grant to ${newMember.user.username}`, rule.action, config, context, 'anti_role_grant');
-                            return;
                           }
                         }
                       }
                     }
+                  } else {
+                    console.log(`[Anti-Nuke Debug] [guildMemberUpdate] No recent MemberRoleUpdate audit log entry found for target user ${newMember.id}`);
                   }
-              } else {
-                console.log(`[Anti-Nuke Debug] [guildMemberUpdate] No recent MemberRoleUpdate audit log entry found for target user ${newMember.id}`);
+                }
               }
-            }
+            } // end else (not new-member auto-role bypass)
           }
-        } // end else (not new-member auto-role bypass)
-      }
           // 2. Role Remove Checks
           const removedRoles = oldRoles.filter((r: any) => !newRoles.has(r.id));
           if (removedRoles.size > 0) {
@@ -3308,8 +3310,8 @@ export const SecurityManifest: ModuleManifest = {
                 .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
                 .setTimestamp();
 
-              await executor.send({ embeds: [warningDmEmbed] }).catch(() => {});
-            } catch (dmErr) {}
+              await executor.send({ embeds: [warningDmEmbed] }).catch(() => { });
+            } catch (dmErr) { }
 
             return;
           }
@@ -3321,7 +3323,7 @@ export const SecurityManifest: ModuleManifest = {
           const botRoles = member.roles.cache.filter((r: any) => !r.managed && r.id !== guild.id);
           if (botRoles.size > 0) {
             for (const [rId] of botRoles) {
-              await member.roles.remove(rId, 'PreBot Security: Stripping unauthorized join roles').catch(() => {});
+              await member.roles.remove(rId, 'PreBot Security: Stripping unauthorized join roles').catch(() => { });
             }
           }
 
@@ -3351,11 +3353,11 @@ export const SecurityManifest: ModuleManifest = {
               });
             } else {
               // Update permissions on existing role
-              await trustedRole.setPermissions(permBitfield, 'PreBot Whitelist: Synchronizing profile permissions').catch(() => {});
+              await trustedRole.setPermissions(permBitfield, 'PreBot Whitelist: Synchronizing profile permissions').catch(() => { });
             }
 
             if (trustedRole) {
-              await member.roles.add(trustedRole.id, 'PreBot Whitelist: Assigning dedicated trusted role').catch(() => {});
+              await member.roles.add(trustedRole.id, 'PreBot Whitelist: Assigning dedicated trusted role').catch(() => { });
             }
           }
 
@@ -3387,7 +3389,7 @@ export const SecurityManifest: ModuleManifest = {
             for (const [rId, role] of addedRoles) {
               // If assigned role is NOT the bot's dedicated trusted role, revert it!
               if (role.name !== trustedRoleName) {
-                await newMember.roles.remove(rId, 'PreBot Drift Monitor: Reverting unauthorized role assignment').catch(() => {});
+                await newMember.roles.remove(rId, 'PreBot Drift Monitor: Reverting unauthorized role assignment').catch(() => { });
                 context.logSyncEvent(guild.id, `🚨 [PreBot Drift Monitor]: Stripped unauthorized role "${role.name}" from pre-whitelisted bot ${newMember.user.username}.`, 'warn');
               }
             }
@@ -3420,7 +3422,7 @@ export const SecurityManifest: ModuleManifest = {
           }
 
           if (newRole.permissions.bitfield !== expectedBitfield) {
-            await newRole.setPermissions(expectedBitfield, 'PreBot Drift Monitor: Reverting unauthorized permission changes on trusted role').catch(() => {});
+            await newRole.setPermissions(expectedBitfield, 'PreBot Drift Monitor: Reverting unauthorized permission changes on trusted role').catch(() => { });
             context.logSyncEvent(guild.id, `🚨 [PreBot Drift Monitor]: Reverted unauthorized permission changes on trusted role "${newRole.name}".`, 'warn');
           }
         } catch (err) {
@@ -3935,7 +3937,7 @@ export const SecurityManifest: ModuleManifest = {
         const triggered = checkRateLimit(message.guild.id, message.author.id, 'anti_link', rule.limit, rule.window);
 
         // Always delete the message containing a link from a non-whitelisted user
-        await message.delete().catch(() => {});
+        await message.delete().catch(() => { });
 
         const isAutomodActive = automodModule && automodModule.status === 'enabled' && automodConfig.blockLinks !== false;
         if (!isAutomodActive && !(message as any)._antiLinkHandled) {
@@ -3946,7 +3948,7 @@ export const SecurityManifest: ModuleManifest = {
             .setColor(0xF59E0B)
             .setFooter({ text: `${message.guild.name} • Security Anti-Link Protection` })
             .setTimestamp();
-          await message.member?.send({ embeds: [dmEmbed] }).catch(() => {});
+          await message.member?.send({ embeds: [dmEmbed] }).catch(() => { });
         }
 
         if (triggered) {
@@ -3968,7 +3970,7 @@ export const SecurityManifest: ModuleManifest = {
                 )
                 .setFooter({ text: `${message.guild.name} • Security Telemetry Log` })
                 .setTimestamp();
-              await alertChannel.send({ embeds: [alertEmbed] }).catch(() => {});
+              await alertChannel.send({ embeds: [alertEmbed] }).catch(() => { });
             }
           }
 
@@ -3984,7 +3986,7 @@ export const SecurityManifest: ModuleManifest = {
               })
               .setFooter({ text: `${message.guild.name} • Rage Security Center`, iconURL: message.guild.iconURL() || undefined })
               .setTimestamp();
-            await message.member.send({ embeds: [dmEmbed] }).catch(() => {});
+            await message.member.send({ embeds: [dmEmbed] }).catch(() => { });
 
             const warningEmbed = new EmbedBuilder()
               .setTitle('<:link:1532620952087826602> Anti-Link Protection')
@@ -3996,7 +3998,7 @@ export const SecurityManifest: ModuleManifest = {
 
             const warningMsg = await message.channel.send({ embeds: [warningEmbed] }).catch(() => null);
             if (warningMsg) {
-              setTimeout(() => warningMsg.delete().catch(() => {}), 8000);
+              setTimeout(() => warningMsg.delete().catch(() => { }), 8000);
             }
           } else if (rule.action === 'timeout') {
             const duration = (rule.timeoutDuration || 5) * 60 * 1000;
@@ -4013,7 +4015,7 @@ export const SecurityManifest: ModuleManifest = {
               })
               .setFooter({ text: `${message.guild.name} • Rage Security Center`, iconURL: message.guild.iconURL() || undefined })
               .setTimestamp();
-            await message.member.send({ embeds: [timeoutDmEmbed] }).catch(() => {});
+            await message.member.send({ embeds: [timeoutDmEmbed] }).catch(() => { });
           } else {
             await punishViolator(
               client,
@@ -4148,17 +4150,17 @@ export const SecurityManifest: ModuleManifest = {
 
         const { userId } = req.params;
         const { action } = req.body;
-        
+
         const modules = context.getModulesState ? context.getModulesState() : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         const config = secModule?.config || {};
         const quarantinedUsers = config.quarantinedUsers || [];
         const userEntry = quarantinedUsers.find((u: any) => u.userId === userId);
-        
+
         if (!userEntry) {
           return res.status(404).json({ error: 'User not found in quarantine queue' });
         }
-        
+
         try {
           const client = context.client;
           if (client && process.env.GUILD_ID) {
@@ -4178,7 +4180,7 @@ export const SecurityManifest: ModuleManifest = {
               }
             }
           }
-          
+
           const updatedUsers = quarantinedUsers.filter((u: any) => u.userId !== userId);
           context.updateModuleConfig('security', { quarantinedUsers: updatedUsers });
           res.json({ success: true, updatedUsers });
@@ -4207,7 +4209,7 @@ export const SecurityManifest: ModuleManifest = {
 
         const adminRoles = registry.roles.filter((r: any) => r.permissions.includes('Administrator') && r.id !== '1508399252546654370');
         const hasBackup = modules.some((m: any) => m.id === 'backups' && m.status === 'ready');
-        
+
         let score = 95;
         const issues: Array<{ type: string; title: string; desc: string; risk: 'danger' | 'warning' | 'info' }> = [];
 

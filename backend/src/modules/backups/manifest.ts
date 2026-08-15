@@ -1,6 +1,7 @@
 import { EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
+import { activeRestorationGuilds } from '../security/manifest.js';
 
 const pendingBackupLoads = new Map<string, string>(); // Format: "guildId:userId" -> backupId
 
@@ -30,58 +31,49 @@ async function getGuildBackups(guildId?: string): Promise<any[]> {
 }
 
 async function getBackupById(backupId: string): Promise<any | null> {
-  try {
-    const db = Database.getDb();
-    if (!db) return null;
-    const row = await db.get<any>('SELECT * FROM guild_backups WHERE id = ?', [backupId]);
-    if (row) {
-      return {
-        ...row,
-        data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data
-      };
-    }
-    return null;
-  } catch (err) {
-    console.error('Failed to get backup by ID from SQLite:', err);
-    return null;
-  }
+  const db = Database.getDb();
+  if (!db) return null;
+  const row = await db.get<any>('SELECT * FROM guild_backups WHERE id = ?', [backupId]);
+  if (!row) return null;
+  return {
+    ...row,
+    data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data
+  };
 }
 
 async function saveBackup(snapshot: any): Promise<void> {
-  try {
-    const db = Database.getDb();
-    if (!db) return;
-    await db.run(
-      `INSERT OR REPLACE INTO guild_backups (
-        id, timestamp, guildId, guildName, createdByName, channelsCount, rolesCount, emojisCount, data
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        snapshot.id,
-        snapshot.timestamp,
-        snapshot.guildId,
-        snapshot.guildName,
-        snapshot.createdByName,
-        snapshot.channelsCount,
-        snapshot.rolesCount,
-        snapshot.emojisCount,
-        JSON.stringify(snapshot.data)
-      ]
-    );
-  } catch (err) {
-    console.error('Failed to save backup to SQLite:', err);
-  }
+  const db = Database.getDb();
+  if (!db) return;
+
+  await db.run(
+    `INSERT INTO guild_backups (id, guildId, guildName, createdByName, timestamp, channelsCount, rolesCount, emojisCount, data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       guildName = excluded.guildName,
+       createdByName = excluded.createdByName,
+       timestamp = excluded.timestamp,
+       channelsCount = excluded.channelsCount,
+       rolesCount = excluded.rolesCount,
+       emojisCount = excluded.emojisCount,
+       data = excluded.data`,
+    [
+      snapshot.id,
+      snapshot.guildId,
+      snapshot.guildName,
+      snapshot.createdByName,
+      snapshot.timestamp,
+      snapshot.channelsCount,
+      snapshot.rolesCount,
+      snapshot.emojisCount,
+      JSON.stringify(snapshot.data)
+    ]
+  );
 }
 
-async function deleteBackup(backupId: string): Promise<boolean> {
-  try {
-    const db = Database.getDb();
-    if (!db) return false;
-    await db.run('DELETE FROM guild_backups WHERE id = ?', [backupId]);
-    return true;
-  } catch (err) {
-    console.error('Failed to delete backup from SQLite:', err);
-    return false;
-  }
+async function deleteBackup(backupId: string): Promise<void> {
+  const db = Database.getDb();
+  if (!db) return;
+  await db.run('DELETE FROM guild_backups WHERE id = ?', [backupId]);
 }
 
 async function createBackupData(guild: any, creatorTag: string): Promise<any> {
@@ -172,8 +164,9 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
     console.log(`[Backup Restore] [${guild.id}] ${msg}`);
   };
 
-  log(`Initiating restoration of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
+  log(`Initiating fast parallel restoration of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
   activeBackupRestorations.add(guild.id);
+  activeRestorationGuilds.add(guild.id);
 
   try {
     const rolesScope = scope?.roles !== false;
@@ -182,7 +175,7 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
     const emojisScope = scope?.expressions !== false;
 
     // ── STEP 1: PARALLEL PURGE ──
-    log('⚡ Cleaning existing channels & roles...', 'info');
+    log('⚡ Purging existing channels & roles...', 'info');
 
     let tempChannel: any = null;
     if (channelsScope) {
@@ -216,23 +209,25 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
       await Promise.allSettled(rolesToDelete.map((r: any) => r.delete('Backup restoration - clean rewrite').catch(() => null)));
     }
 
-    // ── STEP 2: ROLE RECREATION (With 429 Rate Limit Retries) ──
+    // ── STEP 2: FAST BATCHED ROLE RECREATION ──
     const newRolesMap = new Map<string, any>();
     if (rolesScope && snapshot.data.roles && snapshot.data.roles.length > 0) {
       log('⚡ Rebuilding role hierarchy...', 'info');
       const sortedRoles = [...snapshot.data.roles].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
 
-      for (const roleData of sortedRoles) {
-        try {
-          let perms: any = 0n;
-          if (typeof roleData.permissions === 'string' && roleData.permissions !== '0') {
-            try { perms = BigInt(roleData.permissions); } catch {}
-          } else if (Array.isArray(roleData.permissions)) {
-            perms = roleData.permissions;
-          }
+      const BATCH = 5;
+      for (let i = 0; i < sortedRoles.length; i += BATCH) {
+        const chunk = sortedRoles.slice(i, i + BATCH);
+        await Promise.allSettled(chunk.map(async (roleData: any) => {
+          try {
+            let perms: any = 0n;
+            if (typeof roleData.permissions === 'string' && roleData.permissions !== '0') {
+              try { perms = BigInt(roleData.permissions); } catch {}
+            } else if (Array.isArray(roleData.permissions)) {
+              perms = roleData.permissions;
+            }
 
-          let createdRole: any = null;
-          for (let attempt = 1; attempt <= 4; attempt++) {
+            let createdRole: any = null;
             try {
               createdRole = await guild.roles.create({
                 name: roleData.name,
@@ -241,159 +236,155 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
                 mentionable: Boolean(roleData.mentionable),
                 permissions: perms
               });
-              break;
             } catch (err: any) {
-              if (err?.status === 429 || err?.code === 429 || err?.retryAfter) {
-                const waitMs = (err?.retryAfter || 1) * 1000 + 200;
-                await new Promise(r => setTimeout(r, waitMs));
-              } else {
-                log(`Failed to create role "${roleData.name}": ${err.message}`, 'warn');
-                break;
+              if (err?.status === 429 || err?.code === 429) {
+                await new Promise(r => setTimeout(r, 400));
+                createdRole = await guild.roles.create({
+                  name: roleData.name,
+                  color: roleData.color || 0,
+                  hoist: Boolean(roleData.hoist),
+                  mentionable: Boolean(roleData.mentionable),
+                  permissions: perms
+                }).catch(() => null);
               }
             }
-          }
 
-          if (createdRole) {
-            newRolesMap.set(roleData.name, createdRole);
-          }
-        } catch (e: any) {
-          log(`Failed to recreate role "${roleData.name}": ${e.message}`, 'warn');
-        }
-        await new Promise(r => setTimeout(r, 100));
+            if (createdRole) {
+              newRolesMap.set(roleData.name, createdRole);
+            }
+          } catch (e: any) {}
+        }));
+        await new Promise(r => setTimeout(r, 50));
       }
       log(`Recreated ${newRolesMap.size} of ${sortedRoles.length} roles.`, 'info');
     }
 
-    // ── STEP 3: CATEGORY & CHANNEL RECREATION (With 429 Rate Limit Retries) ──
+    // ── STEP 3: FAST BATCHED CATEGORY & CHANNEL RECREATION ──
     if (channelsScope && snapshot.data.channels && snapshot.data.channels.length > 0) {
       log('⚡ Rebuilding categories & channels...', 'info');
 
-      // 3A: Recreate Categories First
+      // 3A: Categories (Batch)
       const newCategoriesMap = new Map<string, any>();
       const categories = snapshot.data.channels.filter((c: any) => c.type === ChannelType.GuildCategory || c.type === 4);
 
-      for (const catData of categories) {
-        try {
-          let createdCat: any = null;
-          for (let attempt = 1; attempt <= 4; attempt++) {
+      for (let i = 0; i < categories.length; i += 5) {
+        const chunk = categories.slice(i, i + 5);
+        await Promise.allSettled(chunk.map(async (catData: any) => {
+          try {
+            let createdCat: any = null;
             try {
               createdCat = await guild.channels.create({
                 name: catData.name,
                 type: ChannelType.GuildCategory
               });
-              break;
             } catch (err: any) {
-              if (err?.status === 429 || err?.code === 429 || err?.retryAfter) {
-                const waitMs = (err?.retryAfter || 1) * 1000 + 200;
-                await new Promise(r => setTimeout(r, waitMs));
-              } else {
-                log(`Failed to create category "${catData.name}": ${err.message}`, 'warn');
-                break;
+              if (err?.status === 429 || err?.code === 429) {
+                await new Promise(r => setTimeout(r, 400));
+                createdCat = await guild.channels.create({
+                  name: catData.name,
+                  type: ChannelType.GuildCategory
+                }).catch(() => null);
               }
             }
-          }
-          if (createdCat) {
-            newCategoriesMap.set(catData.name, createdCat);
-          }
-        } catch (e: any) {
-          log(`Failed to create category "${catData.name}": ${e.message}`, 'warn');
-        }
-        await new Promise(r => setTimeout(r, 100));
+            if (createdCat) {
+              newCategoriesMap.set(catData.name, createdCat);
+            }
+          } catch (e: any) {}
+        }));
+        await new Promise(r => setTimeout(r, 50));
       }
 
-      // 3B: Recreate Text & Voice Channels
+      // 3B: Text & Voice Channels (Batch)
       const nonCategories = snapshot.data.channels.filter((c: any) => c.type !== ChannelType.GuildCategory && c.type !== 4);
       const createdChannelsList: { created: any; backup: any }[] = [];
 
-      for (const chanData of nonCategories) {
-        try {
-          const parent = chanData.parentName ? newCategoriesMap.get(chanData.parentName) : null;
-          const isVoice = chanData.type === 2 || chanData.type === ChannelType.GuildVoice;
-          const type = isVoice ? ChannelType.GuildVoice : ChannelType.GuildText;
+      for (let i = 0; i < nonCategories.length; i += 5) {
+        const chunk = nonCategories.slice(i, i + 5);
+        await Promise.allSettled(chunk.map(async (chanData: any) => {
+          try {
+            const parent = chanData.parentName ? newCategoriesMap.get(chanData.parentName) : null;
+            const isVoice = chanData.type === 2 || chanData.type === ChannelType.GuildVoice;
+            const type = isVoice ? ChannelType.GuildVoice : ChannelType.GuildText;
 
-          const chanOptions: any = {
-            name: chanData.name,
-            type,
-            parent: parent ? parent.id : undefined,
-            nsfw: Boolean(chanData.nsfw)
-          };
+            const chanOptions: any = {
+              name: chanData.name,
+              type,
+              parent: parent ? parent.id : undefined,
+              nsfw: Boolean(chanData.nsfw)
+            };
 
-          if (!isVoice && chanData.topic) {
-            chanOptions.topic = chanData.topic;
-          }
-          if (isVoice && typeof chanData.userLimit === 'number' && chanData.userLimit > 0) {
-            chanOptions.userLimit = chanData.userLimit;
-          }
+            if (!isVoice && chanData.topic) {
+              chanOptions.topic = chanData.topic;
+            }
+            if (isVoice && typeof chanData.userLimit === 'number' && chanData.userLimit > 0) {
+              chanOptions.userLimit = chanData.userLimit;
+            }
 
-          let createdChan: any = null;
-          for (let attempt = 1; attempt <= 4; attempt++) {
+            let createdChan: any = null;
             try {
               createdChan = await guild.channels.create(chanOptions);
-              break;
             } catch (err: any) {
-              if (err?.status === 429 || err?.code === 429 || err?.retryAfter) {
-                const waitMs = (err?.retryAfter || 1) * 1000 + 200;
-                await new Promise(r => setTimeout(r, waitMs));
-              } else {
-                log(`Failed to create channel "#${chanData.name}": ${err.message}`, 'warn');
-                break;
+              if (err?.status === 429 || err?.code === 429) {
+                await new Promise(r => setTimeout(r, 400));
+                createdChan = await guild.channels.create(chanOptions).catch(() => null);
               }
             }
-          }
 
-          if (createdChan) {
-            createdChannelsList.push({ created: createdChan, backup: chanData });
-          }
-        } catch (e: any) {
-          log(`Failed to create channel "#${chanData.name}": ${e.message}`, 'warn');
-        }
-        await new Promise(r => setTimeout(r, 100));
+            if (createdChan) {
+              createdChannelsList.push({ created: createdChan, backup: chanData });
+            }
+          } catch (e: any) {}
+        }));
+        await new Promise(r => setTimeout(r, 50));
       }
 
       log(`Recreated ${createdChannelsList.length} of ${nonCategories.length} channels.`, 'info');
 
-      // 3C: Synchronize Permission Overwrites
+      // 3C: Synchronize Permission Overwrites (Fast Parallel Batch)
       log('⚡ Synchronizing channel permission overrides...', 'info');
-      for (const item of createdChannelsList) {
-        const { created, backup } = item;
-        const overwrites: any[] = [];
+      for (let i = 0; i < createdChannelsList.length; i += 5) {
+        const chunk = createdChannelsList.slice(i, i + 5);
+        await Promise.allSettled(chunk.map(async (item) => {
+          const { created, backup } = item;
+          const overwrites: any[] = [];
 
-        for (const ov of backup.permissionOverwrites || []) {
-          let targetId = '';
-          if (ov.type === 0) {
-            if (ov.name === '@everyone') {
-              targetId = guild.roles.everyone.id;
+          for (const ov of backup.permissionOverwrites || []) {
+            let targetId = '';
+            if (ov.type === 0) {
+              if (ov.name === '@everyone') {
+                targetId = guild.roles.everyone.id;
+              } else {
+                const roleObj = newRolesMap.get(ov.name);
+                if (roleObj) targetId = roleObj.id;
+              }
             } else {
-              const roleObj = newRolesMap.get(ov.name);
-              if (roleObj) targetId = roleObj.id;
+              const memberObj = guild.members.cache.find((m: any) => userTag(m.user) === ov.name);
+              if (memberObj) targetId = memberObj.id;
             }
-          } else {
-            const memberObj = guild.members.cache.find((m: any) => userTag(m.user) === ov.name);
-            if (memberObj) targetId = memberObj.id;
+
+            if (targetId) {
+              let allowPerms: any = ov.allow;
+              let denyPerms: any = ov.deny;
+              if (typeof ov.allow === 'string' && ov.allow !== '0') {
+                try { allowPerms = BigInt(ov.allow); } catch {}
+              }
+              if (typeof ov.deny === 'string' && ov.deny !== '0') {
+                try { denyPerms = BigInt(ov.deny); } catch {}
+              }
+
+              overwrites.push({
+                id: targetId,
+                type: ov.type,
+                allow: allowPerms,
+                deny: denyPerms
+              });
+            }
           }
 
-          if (targetId) {
-            let allowPerms: any = ov.allow;
-            let denyPerms: any = ov.deny;
-            if (typeof ov.allow === 'string' && ov.allow !== '0') {
-              try { allowPerms = BigInt(ov.allow); } catch {}
-            }
-            if (typeof ov.deny === 'string' && ov.deny !== '0') {
-              try { denyPerms = BigInt(ov.deny); } catch {}
-            }
-
-            overwrites.push({
-              id: targetId,
-              type: ov.type,
-              allow: allowPerms,
-              deny: denyPerms
-            });
+          if (overwrites.length > 0) {
+            await created.permissionOverwrites.set(overwrites).catch(() => null);
           }
-        }
-
-        if (overwrites.length > 0) {
-          await created.permissionOverwrites.set(overwrites).catch(() => null);
-        }
+        }));
       }
 
       if (tempChannel && createdChannelsList.length > 0) {
@@ -432,7 +423,8 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
   } finally {
     setTimeout(() => {
       activeBackupRestorations.delete(guild.id);
-    }, 10000);
+      activeRestorationGuilds.delete(guild.id);
+    }, 5000);
   }
 }
 
@@ -876,8 +868,7 @@ export const BackupsManifest: ModuleManifest = {
       path: '/delete/:id',
       method: 'post',
       handler: async (req: any, res: any, context: any) => {
-        const success = await deleteBackup(req.params.id);
-        if (!success) return res.status(404).json({ error: 'Backup not found or delete failed' });
+        await deleteBackup(req.params.id);
         res.json({ success: true });
       }
     }
