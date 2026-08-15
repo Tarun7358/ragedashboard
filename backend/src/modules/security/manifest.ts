@@ -2232,7 +2232,7 @@ export const SecurityManifest: ModuleManifest = {
               return;
             }
 
-            const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_delete', rule.limit, rule.window);
+            const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_delete', rule.limit, rule.window, Boolean(executor.bot));
             console.log(`[Anti-Nuke Debug] [channelDelete] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
             if (!triggered) return;
           }
@@ -2947,7 +2947,7 @@ export const SecurityManifest: ModuleManifest = {
           if (!executor || executor.id === client.user.id) return;
           if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_ban')) return;
 
-          const triggered = checkRateLimit(guild.id, executor.id, 'anti_ban', rule.limit, rule.window);
+          const triggered = checkRateLimit(guild.id, executor.id, 'anti_ban', rule.limit, rule.window, Boolean(executor.bot));
           if (!triggered) return;
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized ban of ${ban.user.username} by ${executor.username}.`, 'warn');
