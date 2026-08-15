@@ -893,8 +893,14 @@ export function registerConfigCommands(): void {
           const isCapsActive = isMasterActive && (amConfig.preventCapsSpam === true || amConfig.capsLimitEnabled === true);
           const isEmojiActive = isMasterActive && (amConfig.emojiSpamEnabled === true);
 
+          const secModule = modules.find((m: any) => m.id === 'security');
+          const secConfig = secModule?.config || {};
+          const ruleEveryone = secConfig?.rules?.anti_everyone_here;
+          const isAntiEveryoneActive = (ruleEveryone?.enabled !== false) && (amConfig.antiEveryoneEnabled !== false) && (secConfig.antiNukeEnabled !== false);
+
           const antispamIcon = isAntiSpamActive ? APPROVED_ICON : WRONG_EMOJI;
           const antilinkIcon = isAntiLinkActive ? APPROVED_ICON : WRONG_EMOJI;
+          const everyoneIcon = isAntiEveryoneActive ? APPROVED_ICON : WRONG_EMOJI;
           const blacklistIcon = isBlacklistActive ? APPROVED_ICON : WRONG_EMOJI;
           const capsIcon = isCapsActive ? APPROVED_ICON : WRONG_EMOJI;
           const emojiIcon = isEmojiActive ? APPROVED_ICON : WRONG_EMOJI;
@@ -907,6 +913,7 @@ export function registerConfigCommands(): void {
               {
                 title: '<:link:1532620952087826602> AUTOMOD PROTECTION FILTERS',
                 items: [
+                  `${everyoneIcon} **Anti-Everyone Tag**: \`${isAntiEveryoneActive ? 'ENABLED' : 'DISABLED'}\` | Target: \`@everyone / @here\` | Action: \`${(ruleEveryone?.action || 'quarantine').toUpperCase()}\``,
                   `${antispamIcon} **Anti-Spam Filter**: \`${isAntiSpamActive ? 'ENABLED' : 'DISABLED'}\` | Limit: \`${amConfig.maxMessages || amConfig.maxSpamMessages || 5} msgs / ${amConfig.windowSeconds || amConfig.spamWindowSeconds || 5}s\` | Action: \`${(amConfig.spamAction || 'mute').toUpperCase()}\``,
                   `${antilinkIcon} **Anti-Link Filter**: \`${isAntiLinkActive ? 'ENABLED' : 'DISABLED'}\` | Invites: \`${amConfig.allowInvites || amConfig.allowDiscordInvites ? 'ALLOWED' : 'BLOCKED'}\` | Action: \`${(amConfig.punishment || amConfig.linkAction || 'delete').toUpperCase()}\``,
                   `${blacklistIcon} **Word Blacklist**: \`${isBlacklistActive ? 'ENABLED' : 'DISABLED'}\` | Words: \`${(amConfig.badWords || amConfig.blacklist || []).length} keywords\``,
@@ -924,6 +931,7 @@ export function registerConfigCommands(): void {
         if (action === 'on' || action === 'off' || action === 'enable' || action === 'disable') {
           const isEnabled = action === 'on' || action === 'enable';
           updateAmConfig({
+            antiEveryoneEnabled: isEnabled,
             antiSpamEnabled: isEnabled,
             blockLinks: isEnabled,
             antiLinkEnabled: isEnabled,
@@ -931,10 +939,20 @@ export function registerConfigCommands(): void {
             preventCapsSpam: isEnabled,
             emojiSpamEnabled: isEnabled
           });
+
+          const secModule = modules.find((m: any) => m.id === 'security');
+          if (secModule && extra?.updateModuleConfig) {
+            const secConfig = secModule.config || {};
+            const rules = { ...(secConfig.rules || {}) };
+            const existing = rules.anti_everyone_here || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
+            rules.anti_everyone_here = { ...existing, enabled: isEnabled };
+            extra.updateModuleConfig('security', { ...secConfig, rules });
+          }
+
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Master AutoMod Protection Toggle',
-              description: `${APPROVED_ICON} All AutoMod content filters (Anti-Spam, Anti-Link, Blacklist, Caps, Emoji) are now **\`${isEnabled ? 'ENABLED (ACTIVE)' : 'DISABLED (INACTIVE)'}\`**.`
+              description: `${APPROVED_ICON} All AutoMod content filters (Anti-Everyone Tag, Anti-Spam, Anti-Link, Blacklist, Caps, Emoji) are now **\`${isEnabled ? 'ENABLED (ACTIVE)' : 'DISABLED (INACTIVE)'}\`**.`
             })]
           });
         }
