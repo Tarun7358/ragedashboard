@@ -37,6 +37,7 @@ export const DEFAULT_SECURITY_RULES: Record<string, { enabled: boolean; limit: n
   anti_sticker_create: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
   anti_sticker_delete: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
   anti_sticker_update: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_everyone_here: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_link: { enabled: true, limit: 3, window: 10, action: 'warn', recovery: false }
 };
 
@@ -85,6 +86,14 @@ const RULE_ALIAS_MAP: Record<string, string> = {
   'sticker_create': 'anti_sticker_create',
   'sticker_delete': 'anti_sticker_delete',
   'sticker_update': 'anti_sticker_update',
+  'everyone': 'anti_everyone_here',
+  'antieveryone': 'anti_everyone_here',
+  'here': 'anti_everyone_here',
+  'antihere': 'anti_everyone_here',
+  'mass_ping': 'anti_everyone_here',
+  'massping': 'anti_everyone_here',
+  'anti_everyone': 'anti_everyone_here',
+  'anti_here': 'anti_everyone_here',
   'link': 'anti_link',
   'antilink': 'anti_link'
 };

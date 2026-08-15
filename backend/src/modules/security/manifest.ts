@@ -3953,16 +3953,51 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'messageCreate',
       handler: async (client: any, message: any, context: any) => {
-        if (message.author?.bot) return;
-        if (!message.guild) return;
+        if (!message.guild || !message.author) return;
+        if (message.author.id === client.user?.id) return;
 
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(message.guild.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_link');
+        const guild = message.guild;
 
+        // ─────────────────────────────────────────────────────────────────────────────
+        // ANTI-EVERYONE & ANTI-HERE MENTION PROTECTION MODULE
+        // ─────────────────────────────────────────────────────────────────────────────
+        const hasEveryoneOrHere = message.mentions?.everyone === true || message.content?.includes('@everyone') || message.content?.includes('@here');
+        if (hasEveryoneOrHere) {
+          const ruleEveryone = getEffectiveRule(config.rules, 'anti_everyone_here', config);
+          if (ruleEveryone.enabled && config.antiNukeEnabled !== false) {
+            const isBypassed = await isExecutorBypassed(guild, message.author.id, config, context, 'anti_everyone_here');
+            if (!isBypassed) {
+              // Delete offending mention message immediately
+              await message.delete().catch(() => {});
+
+              if (message.author.bot) {
+                // ZERO-TRUST BOT DEFENSE: Instant permanent ban for rogue bot mass pinging @everyone/@here
+                context.logSyncEvent(guild.id, `🚨 [Anti-Everyone Zero-Trust]: Deleted @everyone/@here ping & banning unwhitelisted bot ${message.author.username}.`, 'warn');
+                await revokeBotAndPurgeRoles(guild, message.author.id, message.author.username, 'Instant Ban for Unauthorized @everyone/@here Mention', client, context);
+                await restoreFromLiveSnapshot(guild, client, context).catch(() => {});
+                return;
+              }
+
+              const triggered = checkRateLimit(guild.id, message.author.id, 'anti_everyone_here', ruleEveryone.limit, ruleEveryone.window);
+              if (triggered) {
+                context.logSyncEvent(guild.id, `🚨 [Anti-Everyone Triggered]: Deleted @everyone/@here ping by ${message.author.username}. Action: ${ruleEveryone.action}`, 'warn');
+                await punishViolator(client, guild, message.author.id, message.author.username, 'Anti-Nuke: Unauthorized @everyone/@here Mention', ruleEveryone.action, config, context, 'anti_everyone_here');
+                return;
+              }
+            }
+          }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // ANTI-LINK PROTECTION MODULE
+        // ─────────────────────────────────────────────────────────────────────────────
+        if (message.author?.bot) return;
+        const rule = getEffectiveRule(config.rules, 'anti_link');
         if (!rule.enabled) return;
 
         const content = message.content.toLowerCase();
