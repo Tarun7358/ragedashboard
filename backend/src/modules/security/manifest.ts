@@ -128,8 +128,9 @@ function checkRateLimit(guildId: string, userId: string, ruleId: string, limit: 
   tracker.timestamps.push(now);
   tracker.count = tracker.timestamps.length;
   
-  // ZERO TOLERANCE FOR BOTS: Unapproved bots are triggered on Action #1 (limit = 1)
-  const effectiveLimit = isBot ? 1 : limit;
+  // ZERO TOLERANCE FOR BOTS: Unapproved bots trigger INSTANTLY on Action #1 (effectiveLimit = 1)
+  // HUMANS WITH TRUST FACTOR: Strictly capped at 2-action limit (effectiveLimit = Math.min(limit, 2))
+  const effectiveLimit = isBot ? 1 : Math.min(limit || 2, 2);
   return tracker.count >= effectiveLimit;
 }
 
@@ -706,11 +707,16 @@ async function punishViolator(client: any, guild: any, executorId: string, execu
     const member = await guild.members.fetch(executorId).catch(() => null);
     if (!member) return;
 
-    // ZERO TOLERANCE FOR BOTS: If violator is a bot, FORCE BAN INSTANTLY on Action #1!
+    // ZERO TOLERANCE FOR BOTS: If violator is a bot, FORCE BAN INSTANTLY on Action #1 & AUTO-REVOKE PREBOT WHITELIST!
     if (member.user.bot) {
+      const { deletePrebotEntry } = await import('../prebot_whitelist/manifest.js');
+      const wasPrebotRevoked = await deletePrebotEntry(guild.id, executorId);
+
       await guild.members.ban(executorId, { reason: `Anti-Nuke Zero-Trust: Instant Bot Ban (${reason})` }).catch(console.error);
-      context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: INSTANTLY BANNED unauthorized bot ${executorUsername} (${executorId}). Reason: ${reason}`, 'warn');
-      context.logSyncEvent(guild.id, `🔄 [Anti-Nuke Recovery]: Initiating total server state rollback to revert all unauthorized changes made by ${executorUsername}...`, 'info');
+      
+      const prebotLogStr = wasPrebotRevoked ? ` ⚠️ [PreBot Whitelist Auto-Revoked]: Removed bot @${executorUsername} from PreBot Whitelist.` : '';
+      context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: INSTANTLY BANNED rogue bot @${executorUsername} (${executorId}). Reason: ${reason}.${prebotLogStr}`, 'warn');
+      context.logSyncEvent(guild.id, `🔄 [Anti-Nuke Recovery]: Initiating total server state rollback to revert all unauthorized changes made by @${executorUsername}...`, 'info');
       await restoreFromLiveSnapshot(guild, client, context).catch(console.error);
       return;
     }
