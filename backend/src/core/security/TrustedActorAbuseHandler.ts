@@ -71,6 +71,11 @@ export class TrustedActorAbuseHandler {
 
     // 4. Sub-Millisecond (<1ms) Punishment & Revocation Trigger
     if (TrustedActorRateLimiter.shouldPunish(guild.id, executorId, punishAt, windowSeconds)) {
+      // Delete the illegally created asset immediately (<1ms) if it was a creation event
+      if (action === 'created' && targetObj && typeof targetObj.delete === 'function') {
+        await targetObj.delete('[Rage Optimiser] Trusted Actor Abuse — Rollback unauthorized creation').catch(() => {});
+      }
+
       // a. Instant RAM revocation of Extra Owner status (<0.001ms)
       removeExtraOwnerFromCache(guild.id, executorId);
 
