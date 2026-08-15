@@ -436,8 +436,8 @@ export function startAutoBackupScheduler(client: any, context?: any) {
     }
   };
 
-  // Run initial backup after 5s, then every 5 minutes (300,000 ms)
-  setTimeout(runAutoBackup, 5000);
+  // Run initial backup IMMEDIATELY, then every 5 minutes (300,000 ms)
+  runAutoBackup();
   setInterval(runAutoBackup, 5 * 60 * 1000);
 }
 
@@ -517,9 +517,7 @@ export async function restoreFromLiveSnapshot(param1: any, param2: any, context:
     }
 
     if (!snap || ((!snap.channels || snap.channels.length === 0) && (!snap.roles || snap.roles.length === 0))) {
-      context.logSyncEvent(guildId, '❌ [UPM Restore Failed]: No valid snapshot found in database or memory. Capturing fresh snapshot...', 'warn');
-      const freshSnap = await captureLiveSnapshot(guild);
-      saveLiveSnapshotToDb(guildId, freshSnap).catch(() => { });
+      context.logSyncEvent(guildId, '❌ [UPM Restore Failed]: No valid snapshot found in database or memory for server restoration.', 'warn');
       return;
     }
 
@@ -3336,9 +3334,9 @@ export const SecurityManifest: ModuleManifest = {
           const prebotEntry = await getPrebotEntry(guild.id, member.id);
 
           if (!prebotEntry) {
-            // Bot is NOT Pre-Whitelisted -> Kick bot INSTANTLY!
-            context.logSyncEvent(guild.id, `🚨 [PreBot Zero-Trust Defense]: Bot ${member.user.username} (${member.id}) joined ${guild.name} but was NOT pre-registered in PreBot Whitelist. Kicking bot instantly.`, 'warn');
-            await member.kick('PreBot Whitelist Security: Bot is not pre-registered').catch(console.error);
+            // Bot is NOT Pre-Whitelisted -> BAN bot INSTANTLY!
+            context.logSyncEvent(guild.id, `🚨 [PreBot Zero-Trust Defense]: Bot ${member.user.username} (${member.id}) joined ${guild.name} but was NOT pre-registered in PreBot Whitelist. Banning bot permanently!`, 'warn');
+            await guild.members.ban(member.id, { reason: 'PreBot Whitelist Security: Permanent ban for unauthorized bot join' }).catch(console.error);
 
             // Fetch audit log to identify & punish the user who invited the rogue bot
             const fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.BotAdd }).catch(() => null);
