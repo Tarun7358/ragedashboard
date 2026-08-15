@@ -319,7 +319,7 @@ export function registerConfigCommands(): void {
     execute: async (message: Message, args: string[], extra?: any) => {
       // Alias argument normalizer (e.g. r!antinuke threshold anti_role_grant 11)
       let effectiveArgs = [...args];
-      const antinukeSubActions = ['status', 'threshold', 'punishment', 'reversion', 'recovery', 'rollback', 'enable', 'disable', 'toggle', 'module', 'set', 'matrix', 'list', 'setall', 'all'];
+      const antinukeSubActions = ['status', 'threshold', 'punishment', 'reversion', 'recovery', 'rollback', 'enable', 'disable', 'toggle', 'module', 'set', 'matrix', 'list', 'setall', 'all', 'trustedactor', 'trusted-actor', 'behavioral'];
       if (effectiveArgs.length > 0 && antinukeSubActions.includes(effectiveArgs[0]?.toLowerCase())) {
         effectiveArgs.unshift('antinuke');
       }
@@ -542,6 +542,46 @@ export function registerConfigCommands(): void {
             embeds: [createLimeEmbed({
               title: 'Anti-Nuke Sensitivity Threshold Saved',
               description: `${APPROVED_ICON} Updated **${targetKeys.length} sub-module(s)** threshold: **${limit} actions per ${parsedWindow || 10} seconds**.`
+            })]
+          });
+        }
+
+        // Configure Trusted Actor Limits (`r!config antinuke trustedactor <warn_at> <punish_at> [window_seconds]`)
+        if (action === 'trustedactor' || action === 'trusted-actor' || action === 'behavioral') {
+          const warnAt = parseInt(effectiveArgs[2], 10);
+          const punishAt = parseInt(effectiveArgs[3], 10);
+          const parsedWindow = parseInt(effectiveArgs[4], 10);
+
+          if (isNaN(warnAt) || warnAt < 1 || isNaN(punishAt) || punishAt <= warnAt) {
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Trusted Actor Security Limits Syntax',
+                description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke trustedactor <warn_at> <punish_at> [window_seconds]\`\n` +
+                             `• **Default**: \`r!config antinuke trustedactor 1 2 10\` (Warn at 1, Revoke & Restore at 2 under 10s)\n` +
+                             `• **Relaxed**: \`r!config antinuke trustedactor 2 4 10\` (Warn at 2, Revoke & Restore at 4 under 10s)`
+              })]
+            });
+          }
+
+          const windowSec = !isNaN(parsedWindow) && parsedWindow > 0 ? parsedWindow : 10;
+          const updatedConfig = {
+            ...secConfig,
+            trustedActorWarnAt: warnAt,
+            trustedActorPunishAt: punishAt,
+            trustedActorWindow: windowSec
+          };
+
+          if (extra?.updateModuleConfig) {
+            extra.updateModuleConfig('security', updatedConfig);
+          }
+
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Trusted Actor Behavioral Limits Saved',
+              description: `${APPROVED_ICON} Updated Behavioral Firewall for Whitelisted & Extra Owners:\n` +
+                           `> • **Warning Threshold**: DM warning at **\`${warnAt}\`** rapid action(s)\n` +
+                           `> • **Punish Threshold**: Trust revoked & state restored at **\`${punishAt}\`** rapid action(s)\n` +
+                           `> • **Monitoring Window**: **\`${windowSec} seconds\`**`
             })]
           });
         }
