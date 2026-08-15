@@ -167,14 +167,21 @@ export class CommandPipeline {
       const syntheticInteraction = new SyntheticInteraction(ctx.message, ctx.parsed, cmdMeta);
       let handlerFound = false;
 
-      // Path A: manifest event handler (standard module commands)
-      // Prioritize the manifest that explicitly owns the command or module ID
-      let targetManifest = manifests.find(m => m.id === cmdMeta.moduleOwnerId || m.commands?.some((c: any) => c.name === cmdMeta.name));
-      if (targetManifest) {
-        const eventObj = targetManifest.events?.find((e: any) => e.name === `command_${cmdMeta.name}`);
-        if (eventObj) {
-          handlerFound = true;
-          await eventObj.handler(ctx.message.client, syntheticInteraction, ctx.extra);
+      // Path A: execute stored directly on meta (commands registered via PrefixRegistry.register())
+      if (typeof cmdMeta.execute === 'function') {
+        handlerFound = true;
+        await cmdMeta.execute(ctx.message, ctx.args, ctx.extra);
+      }
+
+      // Path B: manifest event handler (standard module commands fallback)
+      if (!handlerFound) {
+        let targetManifest = manifests.find(m => m.id === cmdMeta.moduleOwnerId || m.commands?.some((c: any) => c.name === cmdMeta.name));
+        if (targetManifest) {
+          const eventObj = targetManifest.events?.find((e: any) => e.name === `command_${cmdMeta.name}`);
+          if (eventObj) {
+            handlerFound = true;
+            await eventObj.handler(ctx.message.client, syntheticInteraction, ctx.extra);
+          }
         }
       }
 
@@ -187,12 +194,6 @@ export class CommandPipeline {
             break;
           }
         }
-      }
-
-      // Path B: execute stored directly on meta (commands registered via PrefixRegistry.register())
-      if (!handlerFound && typeof cmdMeta.execute === 'function') {
-        handlerFound = true;
-        await cmdMeta.execute(ctx.message, ctx.args, ctx.extra);
       }
 
       this.locks.delete(lockKey);

@@ -105,7 +105,7 @@ interface ActionTracker {
 
 const userActions = new Map<string, Map<string, ActionTracker>>();
 
-function checkRateLimit(guildId: string, userId: string, ruleId: string, limit: number, windowSeconds: number): boolean {
+function checkRateLimit(guildId: string, userId: string, ruleId: string, limit: number, windowSeconds: number, isBot: boolean = false): boolean {
   const key = `${userId}_${ruleId}`;
   if (!userActions.has(guildId)) {
     userActions.set(guildId, new Map());
@@ -127,7 +127,10 @@ function checkRateLimit(guildId: string, userId: string, ruleId: string, limit: 
   const tracker = guildTracker.get(key)!;
   tracker.timestamps.push(now);
   tracker.count = tracker.timestamps.length;
-  return tracker.count >= limit;
+  
+  // ZERO TOLERANCE FOR BOTS: Unapproved bots are triggered on Action #1 (limit = 1)
+  const effectiveLimit = isBot ? 1 : limit;
+  return tracker.count >= effectiveLimit;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -345,6 +348,12 @@ export async function captureLiveSnapshot(guild: any) {
     mentionable: role.mentionable
   }));
 
+  const emojis = guild.emojis.cache.map((emoji: any) => ({
+    id: emoji.id,
+    name: emoji.name,
+    url: emoji.imageURL ? emoji.imageURL() : (emoji.url || null)
+  }));
+
   const guildSettings = {
     name: guild.name,
     icon: guild.icon || null,
@@ -362,6 +371,7 @@ export async function captureLiveSnapshot(guild: any) {
     timestamp: Date.now(),
     channels,
     roles,
+    emojis,
     guildSettings
   };
 }
@@ -418,8 +428,24 @@ export async function restoreFromLiveSnapshot(guild: any, client: any, context: 
     }
   }
 
-  if (!snap) {
-    context.logSyncEvent(guildId, '❌ [UPM Restore Failed]: No snapshot found in database or memory.', 'warn');
+  // Fallback to GuildSchemaSnapshotManager if liveSnapshot is missing or empty
+  if (!snap || !snap.channels || snap.channels.length === 0) {
+    const schemaSnap = await GuildSchemaSnapshotManager.getSnapshot(guildId);
+    if (schemaSnap && schemaSnap.channels && schemaSnap.channels.length > 0) {
+      snap = {
+        timestamp: schemaSnap.timestamp,
+        channels: schemaSnap.channels,
+        roles: schemaSnap.roles,
+        guildSettings: {}
+      };
+      liveSnapshots.set(guildId, snap);
+    }
+  }
+
+  if (!snap || ((!snap.channels || snap.channels.length === 0) && (!snap.roles || snap.roles.length === 0))) {
+    context.logSyncEvent(guildId, '❌ [UPM Restore Failed]: No valid snapshot found in database or memory. Capturing fresh snapshot...', 'warn');
+    const freshSnap = await captureLiveSnapshot(guild);
+    saveLiveSnapshotToDb(guildId, freshSnap).catch(() => {});
     return;
   }
 
@@ -441,52 +467,57 @@ export async function restoreFromLiveSnapshot(guild: any, client: any, context: 
     }
   }
 
-  // Restore Roles
+  // Restore Roles in parallel batches
   const roleMap = new Map<string, any>();
   if (snap.roles) {
     const sortedRoles = [...snap.roles].sort((a, b) => a.position - b.position);
-    for (const rSnap of sortedRoles) {
-      if (rSnap.name === '@everyone') {
-        const everyoneRole = guild.roles.everyone;
-        if (everyoneRole && everyoneRole.permissions.bitfield.toString() !== rSnap.permissions) {
-          await everyoneRole.setPermissions(BigInt(rSnap.permissions)).catch(() => null);
-        }
-        roleMap.set(rSnap.id, everyoneRole);
-        continue;
-      }
+    const BATCH_SIZE = 5;
 
-      let existingRole = guild.roles.cache.get(rSnap.id) || guild.roles.cache.find((r: any) => r.name === rSnap.name && !r.managed);
-      if (!existingRole) {
-        existingRole = await guild.roles.create({
-          name: rSnap.name,
-          color: rSnap.color,
-          hoist: rSnap.hoist,
-          permissions: BigInt(rSnap.permissions),
-          mentionable: rSnap.mentionable,
-          reason: 'UPM Recovery: Recreating deleted role'
-        }).catch(() => null);
-      } else {
-        const diff = existingRole.color !== rSnap.color ||
-                     existingRole.hoist !== rSnap.hoist ||
-                     existingRole.mentionable !== rSnap.mentionable ||
-                     existingRole.permissions.bitfield.toString() !== rSnap.permissions;
-        if (diff) {
-          await existingRole.edit({
+    for (let i = 0; i < sortedRoles.length; i += BATCH_SIZE) {
+      const batch = sortedRoles.slice(i, i + BATCH_SIZE);
+      await Promise.allSettled(batch.map(async (rSnap) => {
+        if (rSnap.name === '@everyone') {
+          const everyoneRole = guild.roles.everyone;
+          if (everyoneRole && everyoneRole.permissions.bitfield.toString() !== rSnap.permissions) {
+            await everyoneRole.setPermissions(BigInt(rSnap.permissions)).catch(() => null);
+          }
+          roleMap.set(rSnap.id, everyoneRole);
+          return;
+        }
+
+        let existingRole = guild.roles.cache.get(rSnap.id) || guild.roles.cache.find((r: any) => r.name === rSnap.name && !r.managed);
+        if (!existingRole) {
+          existingRole = await guild.roles.create({
+            name: rSnap.name,
             color: rSnap.color,
             hoist: rSnap.hoist,
+            permissions: BigInt(rSnap.permissions),
             mentionable: rSnap.mentionable,
-            permissions: BigInt(rSnap.permissions)
+            reason: 'UPM Recovery: Recreating deleted role'
           }).catch(() => null);
+        } else {
+          const diff = existingRole.color !== rSnap.color ||
+                       existingRole.hoist !== rSnap.hoist ||
+                       existingRole.mentionable !== rSnap.mentionable ||
+                       existingRole.permissions.bitfield.toString() !== rSnap.permissions;
+          if (diff) {
+            await existingRole.edit({
+              color: rSnap.color,
+              hoist: rSnap.hoist,
+              mentionable: rSnap.mentionable,
+              permissions: BigInt(rSnap.permissions)
+            }).catch(() => null);
+          }
         }
-      }
 
-      if (existingRole) {
-        roleMap.set(rSnap.id, existingRole);
-      }
+        if (existingRole) {
+          roleMap.set(rSnap.id, existingRole);
+        }
+      }));
     }
   }
 
-  // Restore Channels
+  // Restore Channels in parallel batches
   if (snap.channels) {
     const categories = snap.channels.filter((c: any) => c.type === 4);
     const otherChannels = snap.channels.filter((c: any) => c.type !== 4);
@@ -542,12 +573,80 @@ export async function restoreFromLiveSnapshot(guild: any, client: any, context: 
       }
     };
 
-    for (const catSnap of categories) {
-      await restoreChannel(catSnap);
+    // Restore Categories in parallel
+    await Promise.allSettled(categories.map((catSnap: any) => restoreChannel(catSnap)));
+
+    // Restore Sub-channels in parallel batches of 5
+    const CH_BATCH_SIZE = 5;
+    for (let i = 0; i < otherChannels.length; i += CH_BATCH_SIZE) {
+      const batch = otherChannels.slice(i, i + CH_BATCH_SIZE);
+      await Promise.allSettled(batch.map((chSnap: any) => {
+        const parentActualId = chSnap.parentId ? channelMap.get(chSnap.parentId)?.id : undefined;
+        return restoreChannel(chSnap, parentActualId);
+      }));
     }
-    for (const chSnap of otherChannels) {
-      const parentActualId = chSnap.parentId ? channelMap.get(chSnap.parentId)?.id : undefined;
-      await restoreChannel(chSnap, parentActualId);
+
+    // RECONCILIATION: Purge ONLY extra channels created during the nuke IF snapshot has valid channels
+    if (snap.channels && snap.channels.length > 0) {
+      const restoredChannelIds = new Set(Array.from(channelMap.values()).map((c: any) => c.id));
+      const snapChannelIds = new Set(snap.channels.map((c: any) => c.id));
+      const snapChannelNames = new Set(snap.channels.map((c: any) => c.name.toLowerCase()));
+      const channelsToDelete: any[] = [];
+
+      for (const [cId, currentChan] of guild.channels.cache) {
+        const isSystemChannel = cId === guild.rulesChannelId || cId === guild.systemChannelId || cId === guild.publicUpdatesChannelId;
+        const isKnown = snapChannelIds.has(cId) || restoredChannelIds.has(cId) || snapChannelNames.has(currentChan.name.toLowerCase());
+
+        if (!isKnown && !isSystemChannel) {
+          channelsToDelete.push(currentChan);
+        }
+      }
+
+      if (channelsToDelete.length > 0) {
+        await Promise.allSettled(channelsToDelete.map(async (currentChan) => {
+          context.logSyncEvent(guildId, `🧹 [UPM Recovery Sweep]: Fast deleting unauthorized channel #${currentChan.name}.`, 'warn');
+          await currentChan.delete('UPM Recovery: Deleting unauthorized channel created during nuke attack').catch(() => {});
+        }));
+      }
+    }
+
+    // RECONCILIATION: Purge ONLY extra roles created during the nuke IF snapshot has valid roles
+    if (snap.roles && snap.roles.length > 0) {
+      const restoredRoleIds = new Set(Array.from(roleMap.values()).map((r: any) => r.id));
+      const snapRoleIds = new Set(snap.roles.map((r: any) => r.id));
+      const snapRoleNames = new Set(snap.roles.map((r: any) => r.name.toLowerCase()));
+      const rolesToDelete: any[] = [];
+
+      for (const [rId, currentRole] of guild.roles.cache) {
+        const isProtected = currentRole.name === '@everyone' || 
+                            currentRole.managed || 
+                            Boolean(currentRole.tags?.botId) || 
+                            Boolean(currentRole.tags?.integrationId) || 
+                            Boolean(currentRole.tags?.premiumSubscriberRole) ||
+                            currentRole.name === '. Quarantine';
+        const isKnownRole = isProtected || snapRoleIds.has(rId) || restoredRoleIds.has(rId) || snapRoleNames.has(currentRole.name.toLowerCase());
+        if (!isKnownRole) {
+          rolesToDelete.push(currentRole);
+        }
+      }
+
+      if (rolesToDelete.length > 0) {
+        await Promise.allSettled(rolesToDelete.map(async (currentRole) => {
+          context.logSyncEvent(guildId, `🧹 [UPM Recovery Sweep]: Fast deleting unauthorized role @${currentRole.name}.`, 'warn');
+          await currentRole.delete('UPM Recovery: Deleting unauthorized role created during nuke attack').catch(() => {});
+        }));
+      }
+    }
+
+    // Restore Emojis if present in snapshot
+    if (snap.emojis && Array.isArray(snap.emojis)) {
+      const existingEmojiNames = new Set(guild.emojis.cache.map((e: any) => e.name));
+      const missingEmojis = snap.emojis.filter((eSnap: any) => !existingEmojiNames.has(eSnap.name) && eSnap.url);
+      if (missingEmojis.length > 0) {
+        await Promise.allSettled(missingEmojis.map(async (eSnap: any) => {
+          await guild.emojis.create({ attachment: eSnap.url, name: eSnap.name, reason: 'UPM Recovery: Recreating deleted emoji' }).catch(() => {});
+        }));
+      }
     }
   }
 
@@ -555,6 +654,21 @@ export async function restoreFromLiveSnapshot(guild: any, client: any, context: 
 }
 
 async function isExecutorBypassed(guild: any, executorId: string, config: any, context?: any, ruleId?: string): Promise<boolean> {
+  if (!guild || !executorId) return false;
+  
+  // 1. Bypass during active server clone / backup load
+  try {
+    const { activeBackupRestorations } = await import('../backups/manifest.js');
+    if (activeBackupRestorations && activeBackupRestorations.has(guild.id)) {
+      return true;
+    }
+  } catch {}
+
+  // 2. Bypass bot self actions
+  if (guild.client?.user && executorId === guild.client.user.id) {
+    return true;
+  }
+
   return checkBypassImmunity(executorId, guild, context, ruleId);
 }
 
@@ -591,6 +705,15 @@ async function punishViolator(client: any, guild: any, executorId: string, execu
   try {
     const member = await guild.members.fetch(executorId).catch(() => null);
     if (!member) return;
+
+    // ZERO TOLERANCE FOR BOTS: If violator is a bot, FORCE BAN INSTANTLY on Action #1!
+    if (member.user.bot) {
+      await guild.members.ban(executorId, { reason: `Anti-Nuke Zero-Trust: Instant Bot Ban (${reason})` }).catch(console.error);
+      context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: INSTANTLY BANNED unauthorized bot ${executorUsername} (${executorId}). Reason: ${reason}`, 'warn');
+      context.logSyncEvent(guild.id, `🔄 [Anti-Nuke Recovery]: Initiating total server state rollback to revert all unauthorized changes made by ${executorUsername}...`, 'info');
+      await restoreFromLiveSnapshot(guild, client, context).catch(console.error);
+      return;
+    }
 
     // BUG FIX: Snapshot original roles BEFORE stripping admin roles so that the
     // quarantine originalRoles list is accurate (includes admin roles that are
@@ -650,6 +773,10 @@ async function punishViolator(client: any, guild: any, executorId: string, execu
       await member.kick(reason).catch(console.error);
       context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Action]: Kicked ${executorUsername}. Reason: ${reason}`, 'warn');
     }
+
+    // AUTOMATED TOTAL RECOVERY: Revert all changes made during the attack by invoking full snapshot restoration
+    context.logSyncEvent(guild.id, `🔄 [Anti-Nuke Recovery]: Initiating total server state rollback to revert all unauthorized changes made by ${executorUsername}...`, 'info');
+    await restoreFromLiveSnapshot(guild, client, context).catch(console.error);
   } catch (err) {
     console.error('Error punishing violator:', err);
   }
@@ -694,6 +821,24 @@ export const SecurityManifest: ModuleManifest = {
           name: 'user',
           type: 6,
           description: 'The member to quarantine',
+          required: false
+        },
+        {
+          name: 'reason',
+          type: 3,
+          description: 'Reason for quarantine isolation',
+          required: false
+        }
+      ]
+    },
+    {
+      name: 'unquarantine',
+      description: 'Release a member from quarantine isolation and restore original roles.',
+      options: [
+        {
+          name: 'user',
+          type: 6,
+          description: 'The member to unquarantine',
           required: true
         }
       ]
@@ -1468,26 +1613,75 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'command_quarantine',
       handler: async (client: any, interaction: any, context: any) => {
-        const member = interaction.options.getMember('user');
-        if (!member) {
-          const embed = new EmbedBuilder()
-            .setTitle('<:wrong:1532390628330307634> Security Center Error')
-            .setColor(0x99CC00)
-            .setDescription('Member not found in this guild.')
-            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
-          return interaction.reply({ embeds: [embed], flags: 64 });
-        }
-
+        let member = interaction.options.getMember('user');
         const modules = context.getModulesState ? context.getModulesState() : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         const config = secModule?.config || {};
         const quarantineRoleId = config.quarantineRoleId;
 
+        // Try extracting raw user input if member is null
+        let rawInput = interaction.options.getUser('user')?.id || interaction.options.getString('user');
+        if (!member && interaction.guild) {
+          if (!rawInput && interaction.parsed?.args && interaction.parsed.args.length > 0) {
+            rawInput = interaction.parsed.args[0];
+          }
+          if (rawInput) {
+            const idMatch = String(rawInput).match(/\d{17,20}/);
+            if (idMatch) {
+              member = interaction.guild.members.cache.get(idMatch[0]) || await interaction.guild.members.fetch(idMatch[0]).catch(() => null);
+            }
+          }
+        }
+
+        // Case 1: No user argument was passed at all (e.g. `r!quarantine`)
+        if (!rawInput && !member) {
+          const list = config.quarantinedUsers || [];
+          if (list.length > 0) {
+            const embed = new EmbedBuilder()
+              .setTitle('<:shield:1532403012751065179> Security Center • Quarantined Members')
+              .setColor(0xF59E0B)
+              .setDescription([
+                `**Currently Quarantined Members (${list.length})**:\n`,
+                ...list.map((u: any, idx: number) => 
+                  `\`${idx + 1}.\` **${u.tag || u.userId}** (<@${u.userId}>) — \`${u.userId}\`\n> └ **Reason**: ${u.reason || 'Manual Quarantine'} • **Date**: ${u.time ? new Date(u.time).toLocaleDateString() : 'Recent'}`
+                ),
+                `\n💡 *Use \`r!unquarantine <@user|id>\` to release a member from isolation.*`
+              ].join('\n'))
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security Engine' })
+              .setTimestamp();
+            return interaction.reply({ embeds: [embed], flags: 64 });
+          }
+
+          const embed = new EmbedBuilder()
+            .setTitle('<:shield:1532403012751065179> Security Center • Member Quarantine Management')
+            .setColor(0x99CC00)
+            .setDescription([
+              `Isolate suspected or malicious members by stripping administrative privileges and assigning the Quarantine isolation role.\n`,
+              `> <:shield:1532403012751065179> **Command Usage**: \`r!quarantine <@user|id> [reason]\``,
+              `> 💡 **Usage Example**: \`r!quarantine @suspicious_user Malicious action\``,
+              `> 🔓 **Release Usage**: \`r!unquarantine <@user|id>\``,
+              `\n<a:approved:1532390590707142956> **Current Status**: 0 members isolated in quarantine.`
+            ].join('\n'))
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security Engine' })
+            .setTimestamp();
+          return interaction.reply({ embeds: [embed], flags: 64 });
+        }
+
+        // Case 2: User input provided but member not found in guild
+        if (!member) {
+          const embed = new EmbedBuilder()
+            .setTitle('<:wrong:1532390628330307634> Security Center Error')
+            .setColor(0xEF4444)
+            .setDescription(`Could not locate member matching **${rawInput}** in this server. Please provide a valid user mention or 18-digit Discord user ID.`)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
+        }
+
         if (!quarantineRoleId) {
           const embed = new EmbedBuilder()
             .setTitle('<:wrong:1532390628330307634> Security Center Error')
-            .setColor(0x99CC00)
-            .setDescription('The Quarantine Isolation Role is not configured. Please bind a quarantine role via the Web Dashboard.')
+            .setColor(0xEF4444)
+            .setDescription('The Quarantine Isolation Role is not configured for this server. Please select a Quarantine Role in the Security Dashboard or via `/security config-rule`.')
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -1501,27 +1695,29 @@ export const SecurityManifest: ModuleManifest = {
             await member.roles.remove(roleId).catch(() => {});
           }
           
-          const quarantinedUsers = config.quarantinedUsers || [];
+          const quarantinedUsers = (config.quarantinedUsers || []).filter((u: any) => u.userId !== member.user.id);
+          const reasonStr = interaction.options.getString('reason') || 'Manual Quarantine Execution';
           quarantinedUsers.push({
             id: `q-${Date.now()}`,
             tag: member.user.username,
             userId: member.user.id,
-            reason: 'Manual Quarantine via Slash Command',
+            reason: reasonStr,
             time: new Date().toISOString(),
             status: 'Quarantined',
             risk: 'danger',
             originalRoles: originalRoleIds
           });
           context.updateModuleConfig('security', { quarantinedUsers });
-          context.logSyncEvent(interaction.guildId, `Manual Quarantine: ${member.user.username} isolated.`, 'warn');
+          context.logSyncEvent(interaction.guildId, `Manual Quarantine: ${member.user.username} isolated. Reason: ${reasonStr}`, 'warn');
           
           const embed = new EmbedBuilder()
             .setTitle('<:shield:1532403012751065179> Security Action: Member Quarantined')
             .setColor(0x99CC00)
             .setDescription(`Successfully quarantined **${member.user.username}** and stripped all administrative/privileged roles to secure the guild.`)
             .addFields(
-              { name: 'Target Member', value: `<@${member.user.id}>`, inline: true },
+              { name: 'Target Member', value: `<@${member.user.id}> (\`${member.user.id}\`)`, inline: true },
               { name: 'Enforcing Admin', value: `<@${interaction.user.id}>`, inline: true },
+              { name: 'Reason', value: reasonStr, inline: false },
               { name: 'Status', value: '<:shield:1532403012751065179> Isolated in Quarantine', inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -1530,8 +1726,99 @@ export const SecurityManifest: ModuleManifest = {
         } catch (err) {
           const embed = new EmbedBuilder()
             .setTitle('<:wrong:1532390628330307634> Security Center Error')
-            .setColor(0x99CC00)
+            .setColor(0xEF4444)
             .setDescription(`Failed to quarantine member: ${err}`)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
+        }
+      }
+    },
+    {
+      name: 'command_unquarantine',
+      handler: async (client: any, interaction: any, context: any) => {
+        let member = interaction.options.getMember('user');
+        const modules = context.getModulesState ? context.getModulesState() : [];
+        const secModule = modules.find((m: any) => m.id === 'security');
+        const config = secModule?.config || {};
+        const quarantineRoleId = config.quarantineRoleId;
+
+        let rawInput = interaction.options.getUser('user')?.id || interaction.options.getString('user');
+        if (!member && interaction.guild) {
+          if (!rawInput && interaction.parsed?.args && interaction.parsed.args.length > 0) {
+            rawInput = interaction.parsed.args[0];
+          }
+          if (rawInput) {
+            const idMatch = String(rawInput).match(/\d{17,20}/);
+            if (idMatch) {
+              member = interaction.guild.members.cache.get(idMatch[0]) || await interaction.guild.members.fetch(idMatch[0]).catch(() => null);
+            }
+          }
+        }
+
+        if (!rawInput && !member) {
+          const list = config.quarantinedUsers || [];
+          const embed = new EmbedBuilder()
+            .setTitle('<:shield:1532403012751065179> Security Center • Release Member from Quarantine')
+            .setColor(0x99CC00)
+            .setDescription([
+              `Release a member from quarantine isolation and restore their previous administrative roles.\n`,
+              `> 🔓 **Usage**: \`r!unquarantine <@user|id>\``,
+              `> 💡 **Example**: \`r!unquarantine @user\``,
+              list.length > 0 
+                ? `\n**Currently Quarantined (${list.length})**:\n${list.map((u: any) => `• <@${u.userId}> (\`${u.userId}\`)`).join('\n')}`
+                : `\n*No members are currently isolated in quarantine.*`
+            ].join('\n'))
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security Engine' })
+            .setTimestamp();
+          return interaction.reply({ embeds: [embed], flags: 64 });
+        }
+
+        const targetUserId = member?.user?.id || (rawInput ? String(rawInput).match(/\d{17,20}/)?.[0] : null);
+        const quarantinedUsers = config.quarantinedUsers || [];
+        const qEntry = quarantinedUsers.find((u: any) => u.userId === targetUserId);
+
+        if (!qEntry && (!member || (quarantineRoleId && !member.roles.cache.has(quarantineRoleId)))) {
+          const embed = new EmbedBuilder()
+            .setTitle('<:wrong:1532390628330307634> Security Center Error')
+            .setColor(0xEF4444)
+            .setDescription(`The specified user is not currently in quarantine.`)
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+          return interaction.reply({ embeds: [embed], flags: 64 });
+        }
+
+        try {
+          if (member) {
+            if (quarantineRoleId && member.roles.cache.has(quarantineRoleId)) {
+              await member.roles.remove(quarantineRoleId).catch(() => {});
+            }
+            if (qEntry && Array.isArray(qEntry.originalRoles)) {
+              for (const rId of qEntry.originalRoles) {
+                await member.roles.add(rId).catch(() => {});
+              }
+            }
+          }
+
+          const updatedUsers = quarantinedUsers.filter((u: any) => u.userId !== targetUserId);
+          context.updateModuleConfig('security', { quarantinedUsers: updatedUsers });
+          context.logSyncEvent(interaction.guildId, `Unquarantine: User ${targetUserId} released from quarantine.`, 'success');
+
+          const embed = new EmbedBuilder()
+            .setTitle('<a:approved:1532390590707142956> Security Action: Member Released from Quarantine')
+            .setColor(0x99CC00)
+            .setDescription(`Successfully released **<@${targetUserId}>** from quarantine and restored original role permissions.`)
+            .addFields(
+              { name: 'Released Member', value: `<@${targetUserId}> (\`${targetUserId}\`)`, inline: true },
+              { name: 'Enforcing Admin', value: `<@${interaction.user.id}>`, inline: true },
+              { name: 'Status', value: '<a:approved:1532390590707142956> Normal Operations Restored', inline: true }
+            )
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+            .setTimestamp();
+          return interaction.reply({ embeds: [embed], flags: 64 });
+        } catch (err) {
+          const embed = new EmbedBuilder()
+            .setTitle('<:wrong:1532390628330307634> Security Center Error')
+            .setColor(0xEF4444)
+            .setDescription(`Failed to unquarantine member: ${err}`)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -1888,7 +2175,7 @@ export const SecurityManifest: ModuleManifest = {
       name: 'channelDelete',
       handler: async (client: any, channel: any, context: any) => {
         console.log(`[Anti-Nuke Debug] [channelDelete] Channel deleted: "#${channel.name}" (${channel.id}) in guild "${channel.guild.name}" (${channel.guild.id})`);
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(channel.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule) {
           console.log(`[Anti-Nuke Debug] [channelDelete] Security module not found`);
@@ -1998,56 +2285,68 @@ export const SecurityManifest: ModuleManifest = {
       name: 'channelCreate',
       handler: async (client: any, channel: any, context: any) => {
         console.log(`[Anti-Nuke Debug] [channelCreate] Channel created: "#${channel.name}" (${channel.id}) in guild "${channel.guild.name}" (${channel.guild.id})`);
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(channel.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
-        if (!secModule) {
-          console.log(`[Anti-Nuke Debug] [channelCreate] Security module not found`);
-          return;
-        }
-        if (secModule.status === 'disabled') return;
+        if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
         if (config.antiNukeEnabled === false) return;
         const rule = getEffectiveRule(config.rules, 'anti_channel_create', config);
-
-        console.log(`[Anti-Nuke Debug] [channelCreate] Rule config:`, rule);
-        if (!rule.enabled) {
-          console.log(`[Anti-Nuke Debug] [channelCreate] Rule is disabled`);
-          return;
-        }
+        if (!rule.enabled) return;
 
         try {
           const guild = channel.guild;
           if (!guild) return;
 
-          const fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.ChannelCreate }).catch((err: any) => {
-            console.error(`[Anti-Nuke Debug] [channelCreate] Failed to fetch audit logs:`, err);
-            return null;
-          });
-          console.log(`[Anti-Nuke Debug] [channelCreate] Fetched ${fetchedLogs?.entries.size || 0} audit log entries`);
-          const logEntry = fetchedLogs?.entries.find((e: any) => {
-            const matches = e.targetId === channel.id && isRecentEntry(e);
-            console.log(`[Anti-Nuke Debug] [channelCreate] Checking entry ${e.id} by ${e.executor?.tag} (targetId: ${e.targetId}, createdTimestamp: ${e.createdTimestamp}): matches target and recent = ${matches}`);
-            return matches;
-          });
+          // FAST-PATH: Fetch audit log entry with retries or immediate fallback
+          let fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.ChannelCreate }).catch(() => null);
+          let logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === channel.id && isRecentEntry(e));
 
+          // If audit log is delayed (common during rapid nukes), retry once quickly
           if (!logEntry) {
-            console.log(`[Anti-Nuke Debug] [channelCreate] No recent audit log entry found for target channel ${channel.id}`);
+            await new Promise((r) => setTimeout(r, 200));
+            fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.ChannelCreate }).catch(() => null);
+            logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === channel.id && isRecentEntry(e));
+          }
+
+          let executor = logEntry?.executor;
+
+          // Fallback: If audit log entry is delayed/missing during high velocity nuke, check for unwhitelisted bots
+          if (!executor) {
+            console.log(`[Anti-Nuke Debug] [channelCreate] Audit log pending for #${channel.name}. Performing zero-trust bot sweep...`);
+            const allMembers = await guild.members.fetch().catch(() => guild.members.cache);
+            const unapprovedBots = allMembers.filter((m: any) => m.user.bot && m.id !== client.user.id && m.id !== (process.env.MUSIC_CLIENT_ID || '1520323151928623125'));
+            
+            for (const [, botMember] of unapprovedBots) {
+              const prebot = await getPrebotEntry(guild.id, botMember.id);
+              const isBypassed = await checkBypassImmunity(botMember.id, guild, context, 'anti_channel_create');
+              if (!prebot && !isBypassed) {
+                context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Emergency Sweep]: Deleting unauthorized channel #${channel.name} & banning rogue bot ${botMember.user.username}.`, 'warn');
+                await channel.delete('Anti-Nuke Emergency: Deleting channel from unapproved bot').catch(() => {});
+                await guild.members.ban(botMember.id, { reason: 'Anti-Nuke Emergency: Instant Ban for Unapproved Bot Channel Creation' }).catch(() => {});
+                await restoreFromLiveSnapshot(client, guild.id, context).catch(() => {});
+                return;
+              }
+            }
             return;
           }
 
-          const executor = logEntry.executor;
-          if (!executor) {
-            console.log(`[Anti-Nuke Debug] [channelCreate] Executor not found in audit log entry`);
-            return;
-          }
-          if (executor.id === client.user.id) {
-            console.log(`[Anti-Nuke Debug] [channelCreate] Executor is the bot itself, ignoring`);
-            return;
+          if (executor.id === client.user.id) return;
+
+          // ZERO-TRUST BOT DEFENSE: Instant permanent ban & channel purge for unwhitelisted bots
+          if (executor.bot) {
+            const prebot = await getPrebotEntry(guild.id, executor.id);
+            const isBypassed = await checkBypassImmunity(executor.id, guild, context, 'anti_channel_create');
+            if (!prebot && !isBypassed) {
+              context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Zero-Trust]: Deleting channel #${channel.name} & banning unwhitelisted bot ${executor.username}.`, 'warn');
+              await channel.delete('Anti-Nuke Zero-Trust: Deleting channel created by unwhitelisted bot').catch(() => {});
+              await guild.members.ban(executor.id, { reason: 'Anti-Nuke Zero-Trust: Instant Permanent Ban on Unwhitelisted Bot' }).catch(() => {});
+              await restoreFromLiveSnapshot(client, guild.id, context).catch(() => {});
+              return;
+            }
           }
 
           const isBypassed = await isExecutorBypassed(guild, executor.id, config, context, 'anti_channel_create');
-          console.log(`[Anti-Nuke Debug] [channelCreate] Executor ${executor.username} bypassed status: ${isBypassed}`);
           if (isBypassed) {
             const { TrustedActorAbuseHandler } = await import('../../core/security/TrustedActorAbuseHandler.js');
             await TrustedActorAbuseHandler.processTrustedActorEvent(guild, executor.id, 'created', 'channel', channel, config);
@@ -2055,17 +2354,14 @@ export const SecurityManifest: ModuleManifest = {
           }
 
           const triggered = checkRateLimit(guild.id, executor.id, 'anti_channel_create', rule.limit, rule.window);
-          console.log(`[Anti-Nuke Debug] [channelCreate] Rate limit check triggered: ${triggered} (limit: ${rule.limit}, window: ${rule.window})`);
           if (!triggered) return;
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized channel creation #${channel.name} by ${executor.username}.`, 'warn');
 
           if (rule.recovery !== false) {
-            console.log(`[Anti-Nuke Debug] [channelCreate] Executing recovery (deleting created channel)`);
             await channel.delete('Anti-Nuke Recovery: Deleting unauthorized channel.').catch(console.error);
           }
 
-          console.log(`[Anti-Nuke Debug] [channelCreate] Punishing violator ${executor.username} with action ${rule.action}`);
           await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Channel Creation (#${channel.name})`, rule.action, config, context, 'anti_channel_create');
         } catch (err) {
           console.error('[Anti-Nuke Debug] [channelCreate] Error in handler:', err);
@@ -2076,7 +2372,7 @@ export const SecurityManifest: ModuleManifest = {
       name: 'channelUpdate',
       handler: async (client: any, oldChannel: any, newChannel: any, context: any) => {
         console.log(`[Anti-Nuke Debug] [channelUpdate] Channel updated: "#${newChannel.name}" (${newChannel.id}) in guild "${newChannel.guild.name}" (${newChannel.guild.id})`);
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(newChannel.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule) {
           console.log(`[Anti-Nuke Debug] [channelUpdate] Security module not found`);
@@ -2163,7 +2459,7 @@ export const SecurityManifest: ModuleManifest = {
       name: 'roleCreate',
       handler: async (client: any, role: any, context: any) => {
         console.log(`[Anti-Nuke Debug] [roleCreate] Role created: "${role.name}" (${role.id}) in guild "${role.guild.name}" (${role.guild.id})`);
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(role.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule) {
           console.log(`[Anti-Nuke Debug] [roleCreate] Security module not found`);
@@ -2241,7 +2537,7 @@ export const SecurityManifest: ModuleManifest = {
       name: 'roleDelete',
       handler: async (client: any, role: any, context: any) => {
         console.log(`[Anti-Nuke Debug] [roleDelete] Role deleted: "${role.name}" (${role.id}) in guild "${role.guild.name}" (${role.guild.id})`);
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(role.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule) {
           console.log(`[Anti-Nuke Debug] [roleDelete] Security module not found`);
@@ -2330,7 +2626,7 @@ export const SecurityManifest: ModuleManifest = {
       name: 'roleUpdate',
       handler: async (client: any, oldRole: any, newRole: any, context: any) => {
         console.log(`[Anti-Nuke Debug] [roleUpdate] Role updated: "${newRole.name}" (${newRole.id}) in guild "${newRole.guild.name}" (${newRole.guild.id})`);
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(newRole.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule) {
           console.log(`[Anti-Nuke Debug] [roleUpdate] Security module not found`);
@@ -2411,7 +2707,7 @@ export const SecurityManifest: ModuleManifest = {
       name: 'guildMemberUpdate',
       handler: async (client: any, oldMember: any, newMember: any, context: any) => {
         console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Member updated: "${newMember.user.username}" (${newMember.id}) in guild "${newMember.guild.name}" (${newMember.guild.id})`);
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(newMember.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule) {
           console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Security module not found`);
@@ -2621,7 +2917,7 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'guildBanAdd',
       handler: async (client: any, ban: any, context: any) => {
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(ban.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule || secModule.status === 'disabled') return;
 
@@ -2661,7 +2957,7 @@ export const SecurityManifest: ModuleManifest = {
     {
       name: 'guildMemberRemove',
       handler: async (client: any, member: any, context: any) => {
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(member.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule || secModule.status === 'disabled') return;
 
@@ -2758,7 +3054,7 @@ export const SecurityManifest: ModuleManifest = {
           return;
         }
 
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(member.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule || secModule.status === 'disabled') return;
 
@@ -2950,7 +3246,7 @@ export const SecurityManifest: ModuleManifest = {
       // 'webhooksUpdate' is the correct Discord.js event that only fires on webhook CRUD operations.
       name: 'webhooksUpdate',
       handler: async (client: any, channel: any, context: any) => {
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(channel.guild?.id) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         if (!secModule || secModule.status === 'disabled') return;
 

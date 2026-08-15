@@ -55,6 +55,8 @@ const UpmEngine = React.lazy(() => import('./pages/UpmEngine').then(m => ({ defa
 const VulnerabilityScan = React.lazy(() => import('./pages/VulnerabilityScan').then(m => ({ default: m.VulnerabilityScan })));
 const SecurityLogs = React.lazy(() => import('./pages/SecurityLogs').then(m => ({ default: m.SecurityLogs })));
 const EnterpriseHealth = React.lazy(() => import('./pages/EnterpriseHealth').then(m => ({ default: m.EnterpriseHealth })));
+const Terms = React.lazy(() => import('./pages/Terms').then(m => ({ default: m.Terms })));
+const Privacy = React.lazy(() => import('./pages/Privacy').then(m => ({ default: m.Privacy })));
 
 
 // Status & Error Pages
@@ -78,6 +80,8 @@ function App() {
   const isPublicRoute = window.location.pathname === '/public';
   const isOAuthCallback = window.location.pathname === '/auth/callback';
   const isDownloadRoute = window.location.pathname === '/download' || window.location.pathname === '/downloads';
+  const isTermsRoute = window.location.pathname === '/terms' || window.location.pathname === '/tos';
+  const isPrivacyRoute = window.location.pathname === '/privacy' || window.location.pathname === '/privacy-policy';
   const { isAuthenticated, user, logout, activeGuildId, setActiveGuildId } = useAuth();
 
   const [activePage, setActivePage] = useState('dashboard');
@@ -524,6 +528,24 @@ function App() {
   // Downloads page
   if (isDownloadRoute) {
     return <Download />;
+  }
+
+  // Terms of Service page (Publicly accessible for Bot Verification)
+  if (isTermsRoute) {
+    return (
+      <React.Suspense fallback={<div className="min-h-screen bg-[#0A0E1A] flex items-center justify-center text-slate-400">Loading Terms...</div>}>
+        <Terms />
+      </React.Suspense>
+    );
+  }
+
+  // Privacy Policy page (Publicly accessible for Bot Verification)
+  if (isPrivacyRoute) {
+    return (
+      <React.Suspense fallback={<div className="min-h-screen bg-[#0A0E1A] flex items-center justify-center text-slate-400">Loading Privacy Policy...</div>}>
+        <Privacy />
+      </React.Suspense>
+    );
   }
 
   // Not authenticated → show landing at /, login at /login

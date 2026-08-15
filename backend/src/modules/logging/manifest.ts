@@ -303,6 +303,9 @@ export const LoggingManifest: ModuleManifest = {
               newConfig[actualCategory].channelId = ch.id;
             }
             
+            if (context.updateModuleConfig) {
+              context.updateModuleConfig('logging', newConfig);
+            }
             context.logSyncEvent(`Logging Center: ${isAllCategory ? 'ALL' : actualCategory} log channel updated to #${ch.name} via slash command.`, 'success');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
@@ -323,6 +326,9 @@ export const LoggingManifest: ModuleManifest = {
               if (!newConfig[actualCategory]) newConfig[actualCategory] = { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
               newConfig[actualCategory].enabled = enabled;
             }
+            if (context.updateModuleConfig) {
+              context.updateModuleConfig('logging', newConfig);
+            }
             context.logSyncEvent(`Logging Center: ${isAllCategory ? 'ALL' : actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
@@ -332,6 +338,17 @@ export const LoggingManifest: ModuleManifest = {
               .setTimestamp();
             await interaction.reply({ embeds: [embed], flags: 64 });
           } else if (subcommand === 'reset') {
+            const newConfig = { ...config };
+            if (isAllCategory) {
+              validCategories.forEach(cat => {
+                newConfig[cat] = { enabled: true, channelId: null, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+              });
+            } else if (actualCategory) {
+              newConfig[actualCategory] = { enabled: true, channelId: null, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+            }
+            if (context.updateModuleConfig) {
+              context.updateModuleConfig('logging', newConfig);
+            }
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
               .setTitle(`<a:approved:1532390590707142956> Category Reset — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
@@ -974,7 +991,7 @@ export function registerLoggingCommands(): void {
         let targetChannel = message.mentions?.channels?.first();
         if (!targetChannel && rawChannelArg && message.guild) {
           const cleanId = rawChannelArg.replace(/[<#@&>]/g, '');
-          targetChannel = message.guild.channels.cache.get(cleanId);
+          targetChannel = message.guild.channels.cache.get(cleanId) || (await message.guild.channels.fetch(cleanId).catch(() => null));
         }
 
         if (!catArg || (!targetChannel && !isDisable)) {

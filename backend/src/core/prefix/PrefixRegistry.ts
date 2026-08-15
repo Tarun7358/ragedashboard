@@ -70,7 +70,9 @@ export class PrefixRegistry {
     'stat': 'stats',
     'ver': 'version',
     'sec': 'security',
-    'log': 'logs'
+    'log': 'logs',
+    'quar': 'quarantine',
+    'unq': 'unquarantine'
   };
 
   // ─────────────────────────────────────────────

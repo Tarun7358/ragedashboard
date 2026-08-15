@@ -23,11 +23,20 @@ export class TrustedActorAbuseHandler {
     if (!guild || !executorId || !targetObj) return false;
     if (config.trustedActorEnabled === false) return false;
 
-    // 0. Sub-millisecond Guild/Bot Owner Immunity check (<0.005ms)
-    const isGuildOwner = executorId === guild.ownerId ||
-                         executorId === process.env.OWNER_ID ||
-                         executorId === guild.client?.application?.owner?.id;
-    if (isGuildOwner) return false;
+    // 0a. Check active backup restoration bypass
+    try {
+      const { activeBackupRestorations } = await import('../../modules/backups/manifest.js');
+      if (activeBackupRestorations && activeBackupRestorations.has(guild.id)) {
+        return false;
+      }
+    } catch {}
+
+    // 0b. Sub-millisecond Guild Owner / Bot Self Immunity check
+    const isImmune = executorId === guild.ownerId ||
+                     executorId === process.env.OWNER_ID ||
+                     executorId === guild.client?.application?.owner?.id ||
+                     executorId === guild.client?.user?.id;
+    if (isImmune) return false;
 
     // 1. Sub-millisecond Trust Level Resolution via O(1) RAM Cache (<0.005ms)
     const cachedExtraOwner = getExtraOwnerFromCache(guild.id, executorId);
@@ -51,7 +60,7 @@ export class TrustedActorAbuseHandler {
     // 3. Ultra-Fast Rate Limit Record (<0.005ms)
     const targetName = targetObj.name || (assetType === 'channel' ? targetObj.id : targetObj.id);
     const actionName = `${assetType}_${action}`;
-    const windowSeconds = config.trustedActorWindow ?? 5;
+    const windowSeconds = config.trustedActorWindow ?? 10;
     const warnAt = config.trustedActorWarnAt ?? 1;
     const punishAt = config.trustedActorPunishAt ?? 2;
 
@@ -63,9 +72,7 @@ export class TrustedActorAbuseHandler {
     // 4. Sub-Millisecond (<1ms) Punishment & Revocation Trigger
     if (TrustedActorRateLimiter.shouldPunish(guild.id, executorId, punishAt, windowSeconds)) {
       // a. Instant RAM revocation of Extra Owner status (<0.001ms)
-      if (trustType === 'extraowner') {
-        removeExtraOwnerFromCache(guild.id, executorId);
-      }
+      removeExtraOwnerFromCache(guild.id, executorId);
 
       // b. Instant activeQuarantines lock registration (<0.001ms)
       const { activeQuarantines } = await import('../../modules/security/manifest.js');
@@ -95,7 +102,7 @@ export class TrustedActorAbuseHandler {
   ): Promise<void> {
     TrustedActorRateLimiter.markWarned(guild.id, member.id);
 
-    const summary = TrustedActorRateLimiter.getSummary(guild.id, member.id, 5);
+    const summary = TrustedActorRateLimiter.getSummary(guild.id, member.id, 10);
 
     // 1. Direct Message Warning with Custom UI & Emojis
     const dmEmbed = new EmbedBuilder()
@@ -106,7 +113,7 @@ export class TrustedActorAbuseHandler {
         `You are registered as a **${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'}** in **${guild.name}**.\n`,
         `> <:shield:1532403012751065179> **Rapid Actions Detected**: Our sub-millisecond behavioral firewall detected rapid operations:`,
         ...summary,
-        `\n<:timer:1532620491662037123> **WARNING**: You are currently at **1/2 events** in the 5-second window.`,
+        `\n<:timer:1532620491662037123> **WARNING**: You are currently at **1/2 events** in the 10-second window.`,
         `If rapid destructive actions continue, your trusted status will be **AUTOMATICALLY REVOKED**, you will be **QUARANTINED**, and all changes will be **REVERSED**.`
       ].join('\n'))
       .setFooter({ text: 'Rage Optimiser • Unbypassable Security Engine' })
@@ -126,7 +133,7 @@ export class TrustedActorAbuseHandler {
           .setDescription([
             `**Actor**: ${member} (\`${member.id}\`)`,
             `**Trust Level**: ${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'}`,
-            `**Status**: 1/2 threshold hit in 5s window — Active sub-ms monitoring.`,
+            `**Status**: 1/2 threshold hit in 10s window — Active sub-ms monitoring.`,
             `\n**Recorded Action(s)**:`,
             ...summary
           ].join('\n'))
@@ -152,13 +159,33 @@ export class TrustedActorAbuseHandler {
       // 1. Get snapshot timeline of all actions
       const timeline = TrustedActorStateSnapshot.getTimeline(guild.id, member.id);
 
-      // 2. STEP 1: REVOKE TRUST (Instant RAM + Async DB)
-      if (trustType === 'extraowner') {
-        removeExtraOwnerFromCache(guild.id, member.id);
-        const db = Database.getDb();
-        if (db) {
-          await db.run('DELETE FROM extra_owners WHERE guildId = ? AND userId = ?', [guild.id, member.id]).catch(() => {});
-        }
+      // 2. STEP 1: REVOKE ALL TRUST & WHITELIST (RAM + Async DB)
+      removeExtraOwnerFromCache(guild.id, member.id);
+      const db = Database.getDb();
+      if (db) {
+        await db.run('DELETE FROM extra_owners WHERE guildId = ? AND userId = ?', [guild.id, member.id]).catch(() => {});
+        try {
+          const row = await db.get<any>('SELECT configJson FROM guild_module_configs WHERE guildId = ? AND moduleId = ?', [guild.id, 'security']);
+          if (row?.configJson) {
+            const secCfg = JSON.parse(row.configJson);
+            if (secCfg.whitelist) {
+              secCfg.whitelist = secCfg.whitelist.filter((w: any) => (typeof w === 'string' ? w !== member.id : w.targetId !== member.id));
+            }
+            if (secCfg.upm?.whitelistUsers) {
+              secCfg.upm.whitelistUsers = secCfg.upm.whitelistUsers.filter((u: string) => u !== member.id);
+            }
+            await db.run('UPDATE guild_module_configs SET configJson = ? WHERE guildId = ? AND moduleId = ?', [JSON.stringify(secCfg), guild.id, 'security']).catch(() => {});
+          }
+
+          const mwRow = await db.get<any>('SELECT configJson FROM guild_module_configs WHERE guildId = ? AND moduleId = ?', [guild.id, 'member_whitelist']);
+          if (mwRow?.configJson) {
+            const mwCfg = JSON.parse(mwRow.configJson);
+            if (mwCfg.members) {
+              mwCfg.members = mwCfg.members.filter((m: any) => (m.userId !== member.id && m.id !== member.id));
+            }
+            await db.run('UPDATE guild_module_configs SET configJson = ? WHERE guildId = ? AND moduleId = ?', [JSON.stringify(mwCfg), guild.id, 'member_whitelist']).catch(() => {});
+          }
+        } catch (e) {}
       }
 
       // 3. STEP 2: QUARANTINE USER
@@ -169,7 +196,6 @@ export class TrustedActorAbuseHandler {
 
       // 5. STEP 4: WRITE AUDIT DB LOG
       const now = Date.now();
-      const db = Database.getDb();
       if (db) {
         await db.run(
           `INSERT INTO trusted_actor_abuse_logs 
@@ -189,7 +215,7 @@ export class TrustedActorAbuseHandler {
       }
 
       // 6. STEP 5: LOG CHANNEL EMBED WITH CUSTOM EMOJIS & UI
-      const summary = TrustedActorRateLimiter.getSummary(guild.id, member.id, 5);
+      const summary = TrustedActorRateLimiter.getSummary(guild.id, member.id, 10);
       const targetChanId = logChannelId || guild.systemChannelId;
 
       const logEmbed = new EmbedBuilder()
@@ -200,7 +226,7 @@ export class TrustedActorAbuseHandler {
           `**Actor**: ${member} (\`${member.id}\`)`,
           `**Trust Level**: ${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'} *(NOW REVOKED)*`,
           `**Punishment**: Quarantined & Revoked`,
-          `\n**TRIGGERING ACTIONS (5s Window)**:`,
+          `\n**TRIGGERING ACTIONS (10s Window)**:`,
           ...summary,
           `\n<a:approved:1532390590707142956> **RESTORATION REPORT (${restoreReport.durationMs}ms)**:`,
           ...(restoreReport.restored.length > 0 ? restoreReport.restored.map(r => `> <a:approved:1532390590707142956> ${r}`) : ['> *No assets required restoration*']),
@@ -224,7 +250,7 @@ export class TrustedActorAbuseHandler {
         .setTitle('<:wrong:1532390628330307634> TRUSTED STATUS REVOKED & QUARANTINED')
         .setDescription([
           `Your **${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted'}** status in **${guild.name}** has been **AUTOMATICALLY REVOKED**.`,
-          `\n**Reason**: Exceeded trusted actor threshold (2+ destructive actions under 5 seconds).`,
+          `\n**Reason**: Exceeded trusted actor threshold (2+ destructive actions under 10 seconds).`,
           `\n<a:approved:1532390590707142956> **Restoration**: All deleted or created channels/roles have been **reversed and restored** to their original state.`
         ].join('\n'))
         .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })

@@ -14,7 +14,7 @@ export class TrustedActorRateLimiter {
     return `${guildId}:${userId}`;
   }
 
-  public static record(guildId: string, userId: string, action: string, targetName: string, windowSeconds = 5): number {
+  public static record(guildId: string, userId: string, action: string, targetName: string, windowSeconds = 10): number {
     const key = this.getKey(guildId, userId);
     if (!this.actionsMap.has(key)) {
       this.actionsMap.set(key, []);
@@ -29,10 +29,15 @@ export class TrustedActorRateLimiter {
     const fresh = list.filter(a => now - a.timestamp <= windowMs);
     this.actionsMap.set(key, fresh);
 
+    // If this is the start of a fresh spree in the window, reset warned status
+    if (fresh.length <= 1) {
+      this.warnedMap.delete(key);
+    }
+
     return fresh.length;
   }
 
-  public static getCount(guildId: string, userId: string, windowSeconds = 5): number {
+  public static getCount(guildId: string, userId: string, windowSeconds = 10): number {
     const key = this.getKey(guildId, userId);
     const list = this.actionsMap.get(key) || [];
     const now = Date.now();
@@ -40,7 +45,7 @@ export class TrustedActorRateLimiter {
     return list.filter(a => now - a.timestamp <= windowMs).length;
   }
 
-  public static shouldWarn(guildId: string, userId: string, warnAt = 1, punishAt = 2, windowSeconds = 5): boolean {
+  public static shouldWarn(guildId: string, userId: string, warnAt = 1, punishAt = 2, windowSeconds = 10): boolean {
     const count = this.getCount(guildId, userId, windowSeconds);
     const key = this.getKey(guildId, userId);
     const alreadyWarned = this.warnedMap.get(key) || false;
@@ -56,12 +61,12 @@ export class TrustedActorRateLimiter {
     this.warnedMap.set(key, true);
   }
 
-  public static shouldPunish(guildId: string, userId: string, punishAt = 2, windowSeconds = 5): boolean {
+  public static shouldPunish(guildId: string, userId: string, punishAt = 2, windowSeconds = 10): boolean {
     const count = this.getCount(guildId, userId, windowSeconds);
     return count >= punishAt;
   }
 
-  public static getSummary(guildId: string, userId: string, windowSeconds = 5): string[] {
+  public static getSummary(guildId: string, userId: string, windowSeconds = 10): string[] {
     const key = this.getKey(guildId, userId);
     const list = this.actionsMap.get(key) || [];
     const now = Date.now();

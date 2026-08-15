@@ -159,6 +159,8 @@ async function createBackupData(guild: any, creatorTag: string): Promise<any> {
   return snapshot;
 }
 
+export const activeBackupRestorations = new Set<string>();
+
 async function executeRestoration(guild: any, snapshot: any, scope: any, context: any) {
   const log = (msg: string, type: 'info' | 'warn' | 'success' = 'info') => {
     context.logSyncEvent(guild.id, `Backup Restore: ${msg}`, type);
@@ -166,6 +168,7 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
   };
 
   log(`Initiating restoration/cloning of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
+  activeBackupRestorations.add(guild.id);
 
   try {
     const rolesScope = scope?.roles !== false;
@@ -173,44 +176,57 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
     const settingsScope = scope?.settings !== false;
     const emojisScope = scope?.expressions !== false;
 
-    // 1. Roles restoration
+    // 1. Roles restoration (Parallel Batched)
     const newRolesMap = new Map<string, any>();
     if (rolesScope && snapshot.data.roles) {
-      log('Restoring server roles hierarchy...', 'info');
+      log('Restoring server roles hierarchy (fast parallel batching)...', 'info');
       const existingRoles = await guild.roles.fetch();
+      const rolesToDelete: any[] = [];
       
-      // Delete old roles (except bot managed roles and @everyone)
       for (const [id, r] of existingRoles) {
-        if (r.name === '@everyone' || r.managed) continue;
+        const isProtectedRole = r.name === '@everyone' || 
+                                r.managed || 
+                                Boolean(r.tags?.botId) || 
+                                Boolean(r.tags?.integrationId) || 
+                                Boolean(r.tags?.premiumSubscriberRole);
+        if (isProtectedRole) continue;
         const highestRole = guild.members.me.roles.highest;
         if (r.position >= highestRole.position) {
           log(`Skipping role "${r.name}" (higher or equal in hierarchy than bot)`, 'info');
           continue;
         }
-        try {
-          await r.delete('Backup restoration - clean rewrite');
-          await new Promise(res => setTimeout(res, 200));
-        } catch (e: any) {
-          log(`Failed to delete role "${r.name}": ${e.message}`, 'warn');
-        }
+        rolesToDelete.push(r);
       }
 
-      // Recreate roles in order of position (ascending)
+      // Fast delete old roles in parallel batches
+      const DELETE_BATCH_SIZE = 8;
+      for (let i = 0; i < rolesToDelete.length; i += DELETE_BATCH_SIZE) {
+        const batch = rolesToDelete.slice(i, i + DELETE_BATCH_SIZE);
+        await Promise.allSettled(batch.map((r: any) => r.delete('Backup restoration - clean rewrite').catch(() => null)));
+      }
+
+      // Recreate roles in order of position (ascending) in batches with rate-limit safety delay
       const sortedRoles = [...snapshot.data.roles].sort((a: any, b: any) => a.position - b.position);
-      for (const roleData of sortedRoles) {
-        try {
-          const created = await guild.roles.create({
-            name: roleData.name,
-            color: roleData.color,
-            hoist: roleData.hoist,
-            mentionable: roleData.mentionable,
-            permissions: roleData.permissions
-          });
-          newRolesMap.set(roleData.name, created);
-          log(`Created role: "${roleData.name}"`, 'info');
-          await new Promise(res => setTimeout(res, 250));
-        } catch (e: any) {
-          log(`Failed to recreate role "${roleData.name}": ${e.message}`, 'warn');
+      const CREATE_ROLE_BATCH_SIZE = 3;
+      for (let i = 0; i < sortedRoles.length; i += CREATE_ROLE_BATCH_SIZE) {
+        const batch = sortedRoles.slice(i, i + CREATE_ROLE_BATCH_SIZE);
+        await Promise.allSettled(batch.map(async (roleData: any) => {
+          try {
+            const created = await guild.roles.create({
+              name: roleData.name,
+              color: roleData.color,
+              hoist: roleData.hoist,
+              mentionable: roleData.mentionable,
+              permissions: BigInt(roleData.permissions || '0')
+            });
+            newRolesMap.set(roleData.name, created);
+            log(`Created role: "${roleData.name}"`, 'info');
+          } catch (e: any) {
+            log(`Failed to recreate role "${roleData.name}": ${e.message}`, 'warn');
+          }
+        }));
+        if (i + CREATE_ROLE_BATCH_SIZE < sortedRoles.length) {
+          await new Promise(r => setTimeout(r, 150));
         }
       }
     }
@@ -230,9 +246,9 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
       }
     }
 
-    // 3. Channels restoration
+    // 3. Channels restoration (Parallel Batched)
     if (channelsScope && snapshot.data.channels) {
-      log('Restoring channel layout structure (this will delete and recreate channels)...', 'info');
+      log('Restoring channel layout structure (fast parallel execution)...', 'info');
       const existingChannels = await guild.channels.fetch();
       
       // Create a temporary progress/logging channel so bot interaction isn't orphaned
@@ -248,61 +264,75 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
         tempChannel = existingChannels.find((c: any) => c && c.type === ChannelType.GuildText);
       }
 
-      // Delete all other existing channels
-      for (const [id, c] of existingChannels) {
-        if (!c || (tempChannel && c.id === tempChannel.id)) continue;
-        try {
-          await c.delete('Backup restoration - clean rewrite');
-          await new Promise(res => setTimeout(res, 300));
-        } catch (e) {}
+      // Fast delete existing channels in parallel batches
+      const channelsToDelete = Array.from(existingChannels.values()).filter((c: any) => c && (!tempChannel || c.id !== tempChannel.id));
+      const CHAN_DELETE_BATCH = 5;
+      for (let i = 0; i < channelsToDelete.length; i += CHAN_DELETE_BATCH) {
+        const batch = channelsToDelete.slice(i, i + CHAN_DELETE_BATCH);
+        await Promise.allSettled(batch.map((c: any) => c.delete('Backup restoration - clean rewrite').catch(() => null)));
+        if (i + CHAN_DELETE_BATCH < channelsToDelete.length) {
+          await new Promise(r => setTimeout(r, 100));
+        }
       }
 
-      // Recreate categories first
+      // Recreate categories in parallel
       const newCategoriesMap = new Map<string, any>();
       const categories = snapshot.data.channels.filter((c: any) => c.type === ChannelType.GuildCategory || c.type === 4);
-      for (const catData of categories) {
-        try {
-          const created = await guild.channels.create({
-            name: catData.name,
-            type: ChannelType.GuildCategory,
-            position: catData.position
-          });
-          newCategoriesMap.set(catData.name, created);
-          log(`Created Category: [${catData.name}]`, 'info');
-          await new Promise(res => setTimeout(res, 350));
-        } catch (e: any) {
-          log(`Failed to create category "${catData.name}": ${e.message}`, 'warn');
+      const CAT_BATCH_SIZE = 3;
+      for (let i = 0; i < categories.length; i += CAT_BATCH_SIZE) {
+        const batch = categories.slice(i, i + CAT_BATCH_SIZE);
+        await Promise.allSettled(batch.map(async (catData: any) => {
+          try {
+            const created = await guild.channels.create({
+              name: catData.name,
+              type: ChannelType.GuildCategory,
+              position: catData.position
+            });
+            newCategoriesMap.set(catData.name, created);
+            log(`Created Category: [${catData.name}]`, 'info');
+          } catch (e: any) {
+            log(`Failed to create category "${catData.name}": ${e.message}`, 'warn');
+          }
+        }));
+        if (i + CAT_BATCH_SIZE < categories.length) {
+          await new Promise(r => setTimeout(r, 120));
         }
       }
 
-      // Recreate text and voice channels
+      // Recreate text and voice channels in parallel batches
       const nonCategories = snapshot.data.channels.filter((c: any) => c.type !== ChannelType.GuildCategory && c.type !== 4);
       const newChannelsList: { created: any; backup: any }[] = [];
+      const CHAN_CREATE_BATCH = 4;
 
-      for (const chanData of nonCategories) {
-        try {
-          const parent = chanData.parentName ? newCategoriesMap.get(chanData.parentName) : null;
-          const type = chanData.type === 2 || chanData.type === ChannelType.GuildVoice ? ChannelType.GuildVoice : ChannelType.GuildText;
-          const created = await guild.channels.create({
-            name: chanData.name,
-            type,
-            parent: parent ? parent.id : null,
-            topic: chanData.topic,
-            nsfw: chanData.nsfw,
-            userLimit: chanData.userLimit,
-            position: chanData.position
-          });
-          newChannelsList.push({ created, backup: chanData });
-          log(`Created Channel: #${chanData.name}`, 'info');
-          await new Promise(res => setTimeout(res, 350));
-        } catch (e: any) {
-          log(`Failed to create channel "#${chanData.name}": ${e.message}`, 'warn');
+      for (let i = 0; i < nonCategories.length; i += CHAN_CREATE_BATCH) {
+        const batch = nonCategories.slice(i, i + CHAN_CREATE_BATCH);
+        await Promise.allSettled(batch.map(async (chanData: any) => {
+          try {
+            const parent = chanData.parentName ? newCategoriesMap.get(chanData.parentName) : null;
+            const type = chanData.type === 2 || chanData.type === ChannelType.GuildVoice ? ChannelType.GuildVoice : ChannelType.GuildText;
+            const created = await guild.channels.create({
+              name: chanData.name,
+              type,
+              parent: parent ? parent.id : null,
+              topic: chanData.topic,
+              nsfw: chanData.nsfw,
+              userLimit: chanData.userLimit,
+              position: chanData.position
+            });
+            newChannelsList.push({ created, backup: chanData });
+            log(`Created Channel: #${chanData.name}`, 'info');
+          } catch (e: any) {
+            log(`Failed to create channel "#${chanData.name}": ${e.message}`, 'warn');
+          }
+        }));
+        if (i + CHAN_CREATE_BATCH < nonCategories.length) {
+          await new Promise(r => setTimeout(r, 120));
         }
       }
 
-      // Apply permission overwrites
+      // Apply permission overwrites in parallel
       log('Synchronizing permission overrides across all channels...', 'info');
-      for (const item of newChannelsList) {
+      await Promise.allSettled(newChannelsList.map(async (item) => {
         const { created, backup } = item;
         const overwrites: any[] = [];
 
@@ -331,48 +361,40 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
         }
 
         if (overwrites.length > 0) {
-          try {
-            await created.permissionOverwrites.set(overwrites);
-            await new Promise(res => setTimeout(res, 200));
-          } catch (e: any) {
-            log(`Failed to apply overwrites on channel #${backup.name}: ${e.message}`, 'warn');
-          }
+          await created.permissionOverwrites.set(overwrites).catch(() => null);
         }
-      }
+      }));
 
       // Delete progress channel at end
       if (tempChannel) {
-        try {
-          await tempChannel.delete('Restoration complete');
-        } catch (e) {}
+        await tempChannel.delete('Restoration complete').catch(() => null);
       }
     }
 
-    // 4. Emojis restoration
+    // 4. Emojis restoration in parallel
     if (emojisScope && snapshot.data.emojis && snapshot.data.emojis.length > 0) {
       log('Restoring custom server emojis...', 'info');
       const existingEmojis = await guild.emojis.fetch().catch(() => new Map());
-      for (const [id, e] of existingEmojis) {
-        try {
-          await e.delete();
-          await new Promise(res => setTimeout(res, 200));
-        } catch (err) {}
-      }
+      await Promise.allSettled(Array.from(existingEmojis.values()).map((e: any) => e.delete().catch(() => null)));
 
-      for (const emoji of snapshot.data.emojis) {
+      await Promise.allSettled(snapshot.data.emojis.map(async (emoji: any) => {
         try {
           await guild.emojis.create({ attachment: emoji.url, name: emoji.name });
           log(`Restored emoji: :${emoji.name}:`, 'info');
-          await new Promise(res => setTimeout(res, 300));
         } catch (e: any) {
           log(`Failed to create emoji :${emoji.name}: ${e.message}`, 'warn');
         }
-      }
+      }));
     }
 
     log(`Restoration of snapshot "${snapshot.id}" completed successfully!`, 'success');
   } catch (err: any) {
     log(`Restoration failed: ${err.message}`, 'warn');
+  } finally {
+    // Keep active restoration bypass flag for an additional 10 seconds to allow all Discord gateway events to settle
+    setTimeout(() => {
+      activeBackupRestorations.delete(guild.id);
+    }, 10000);
   }
 }
 
