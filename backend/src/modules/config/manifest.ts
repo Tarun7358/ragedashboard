@@ -6,6 +6,8 @@ import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { PrefixResolver } from '../../core/prefix/PrefixResolver.js';
 import { SocialSubscriptionRepository } from '../social-updates/SocialSubscriptionRepository.js';
 import { SubscriptionManager } from '../social-updates/SubscriptionManager.js';
+import { resetLinkViolations, getLinkViolations } from '../automod/manifest.js';
+import { resetRateLimit } from '../security/manifest.js';
 
 const APPROVED_ICON = '<a:approved:1532390590707142956>';
 const WRONG_EMOJI = '<:wrong:1532390628330307634>';
@@ -13,32 +15,33 @@ const CONFIG_EMOJI = '<:config:1532425712844144701>';
 const SHIELD_EMOJI = '<:shield:1532403012751065179>';
 
 export const DEFAULT_SECURITY_RULES: Record<string, { enabled: boolean; limit: number; window: number; action: string; recovery: boolean }> = {
-  anti_role_grant: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_role_remove: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_role_update: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_role_create: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_role_grant: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_role_remove: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_role_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_role_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_role_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_channel_create: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_channel_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_channel_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_channel_update: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_ban: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_kick: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_timeout: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_channel_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_ban: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_kick: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_timeout: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_bot_add: { enabled: true, limit: 1, window: 10, action: 'ban', recovery: true },
   anti_bot_remove: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_webhook_create: { enabled: true, limit: 2, window: 10, action: 'quarantine', recovery: true },
-  anti_webhook_delete: { enabled: true, limit: 2, window: 10, action: 'quarantine', recovery: true },
-  anti_webhook_update: { enabled: true, limit: 2, window: 10, action: 'quarantine', recovery: true },
+  anti_webhook_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_webhook_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_webhook_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_guild_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_prune: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_emoji_create: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_emoji_delete: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_emoji_update: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_sticker_create: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_sticker_delete: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
-  anti_sticker_update: { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true },
+  anti_emoji_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_emoji_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_emoji_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_sticker_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_sticker_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_sticker_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
   anti_everyone_here: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_link: { enabled: true, limit: 3, window: 10, action: 'warn', recovery: false }
+  anti_invite_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_link: { enabled: true, limit: 5, window: 10, action: 'warn', recovery: false }
 };
 
 const RULE_ALIAS_MAP: Record<string, string> = {
@@ -94,6 +97,10 @@ const RULE_ALIAS_MAP: Record<string, string> = {
   'massping': 'anti_everyone_here',
   'anti_everyone': 'anti_everyone_here',
   'anti_here': 'anti_everyone_here',
+  'invite_create': 'anti_invite_create',
+  'invitecreate': 'anti_invite_create',
+  'invite': 'anti_invite_create',
+  'anti_invite': 'anti_invite_create',
   'link': 'anti_link',
   'antilink': 'anti_link'
 };
@@ -162,7 +169,7 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
     group_server: {
       label: 'SERVER & WEBHOOK PROTECTIONS',
       title: '<:config:1532425712844144701> SERVER & WEBHOOK MODULES',
-      keys: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_link']
+      keys: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_invite_create', 'anti_link']
     }
   };
 
@@ -195,8 +202,8 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
   const overviewCard = buildLimeOverviewCard({
     title: isFiltered ? `ANTI-NUKE CATEGORY INSPECTION MATRIX` : 'ANTI-NUKE MODULE CONFIGURATION MATRIX',
     subtitle: isMasterEnabled
-      ? (isFiltered ? `INSPECTING: ${groupLabel}` : 'MASTER STATUS: 🟢 ENABLED (ACTIVE)')
-      : 'MASTER STATUS: 🔴 DISABLED (INACTIVE — ALL PROTECTIONS PAUSED)',
+      ? (isFiltered ? `INSPECTING: ${groupLabel}` : 'MASTER STATUS: ENABLED (ACTIVE)')
+      : 'MASTER STATUS: DISABLED (INACTIVE — PROTECTIONS PAUSED)',
     color: isMasterEnabled ? Colors.BRAND : Colors.DANGER,
     sections: formattedSections,
     footerText: 'Rage Optimiser Enterprise • Security Configuration'
@@ -1126,32 +1133,96 @@ export function registerConfigCommands(): void {
 
         if (action === 'antilink') {
           const toggle = effectiveArgs[2]?.toLowerCase();
-          const invitesOpt = effectiveArgs[3]?.toLowerCase();
-          const pAction = effectiveArgs[4]?.toLowerCase();
+          const limitOrInvites = effectiveArgs[3]?.toLowerCase();
+          const invitesOrAction = effectiveArgs[4]?.toLowerCase();
+          const pAction = effectiveArgs[5]?.toLowerCase() || (['delete', 'warn', 'mute', 'kick', 'ban'].includes(invitesOrAction) ? invitesOrAction : undefined);
 
           if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
             return message.reply({
               embeds: [createLimeEmbed({
                 title: 'Anti-Link Configuration Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config automod antilink <on|off> [allow_invites_on_off] [action]\`\nExample: \`r!config automod antilink on off delete\``
+                description: `${WRONG_EMOJI} **Syntax**: \`r!config automod antilink <on|off> [limit] [allow_invites] [action]\`\n` +
+                             `• **Example**: \`r!config automod antilink on 5 off mute\` (Enable, limit 5, no invites, mute on limit)\n` +
+                             `• **Example**: \`r!config automod antilink on 5\` (Enable with default 5 limit)`
               })]
             });
           }
 
           const isEnabled = ['on', 'enable'].includes(toggle);
           const updates: Record<string, any> = { antiLinkEnabled: isEnabled, blockLinks: isEnabled };
-          if (invitesOpt) updates.allowDiscordInvites = ['on', 'true', 'allow'].includes(invitesOpt);
-          if (pAction && ['delete', 'warn', 'mute'].includes(pAction)) {
+          
+          let numLimit = parseInt(limitOrInvites, 10);
+          if (!isNaN(numLimit) && numLimit > 0) {
+            updates.antiLinkLimit = numLimit;
+            updates.limit = numLimit;
+            if (invitesOrAction) updates.allowDiscordInvites = ['on', 'true', 'allow'].includes(invitesOrAction);
+          } else if (limitOrInvites) {
+            updates.allowDiscordInvites = ['on', 'true', 'allow'].includes(limitOrInvites);
+          }
+
+          if (pAction && ['delete', 'warn', 'mute', 'kick', 'ban'].includes(pAction)) {
             updates.linkAction = pAction;
             updates.punishment = pAction;
           }
 
           updateAmConfig(updates);
 
+          const finalLimit = updates.antiLinkLimit || amConfig.antiLinkLimit || amConfig.limit || 5;
+          const finalPunish = updates.punishment || amConfig.punishment || 'mute';
+
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Anti-Link Settings Saved',
-              description: `${APPROVED_ICON} Anti-Link filter is now **\`${isEnabled ? 'ENABLED' : 'DISABLED'}\`**.`
+              description: [
+                `${APPROVED_ICON} Anti-Link filter is now **\`${isEnabled ? 'ENABLED' : 'DISABLED'}\`**.`,
+                `• **Violation Limit**: \`${finalLimit}\` unauthorized link(s) before punishment`,
+                `• **Punishment Action**: \`${finalPunish.toUpperCase()}\``
+              ].join('\n')
+            })]
+          });
+        }
+
+        if (action === 'clearwarns' || action === 'clearwarn' || action === 'resetwarns') {
+          const targetUser = message.mentions.users.first();
+          if (!targetUser) {
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Clear Warnings Syntax',
+                description: `${WRONG_EMOJI} **Syntax**: \`r!config automod clearwarns @user\`\n• **Example**: \`r!config automod clearwarns @Username\``
+              })]
+            });
+          }
+
+          resetLinkViolations(message.guild!.id, targetUser.id);
+          resetRateLimit(message.guild!.id, targetUser.id, 'anti_link');
+
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Violation Warnings Cleared',
+              description: `${APPROVED_ICON} Successfully cleared all Anti-Link violation warnings for ${targetUser} (\`${targetUser.id}\`).\n\n• **Current Violations**: \`0/5\``
+            })]
+          });
+        }
+
+        if (action === 'warnings' || action === 'warns') {
+          const targetUser = message.mentions.users.first() || message.author;
+          const maxLimit = typeof amConfig.antiLinkLimit === 'number' && amConfig.antiLinkLimit > 0
+            ? amConfig.antiLinkLimit
+            : (typeof amConfig.limit === 'number' && amConfig.limit > 0 ? amConfig.limit : 5);
+
+          const currentCount = getLinkViolations(message.guild!.id, targetUser.id);
+          const punishAction = (amConfig.punishment || 'mute').toUpperCase();
+
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: `<:shield:1532403012751065179> User Violation Warnings Matrix`,
+              description: [
+                `> **Member**: ${targetUser} (\`${targetUser.username}\` • \`ID: ${targetUser.id}\`)`,
+                ``,
+                `• **Anti-Link Violations**: \`${currentCount} / ${maxLimit}\``,
+                `• **Violation Status**: ${currentCount > 0 ? `${WRONG_EMOJI} **${currentCount} Active Warning(s)**` : `${APPROVED_ICON} **No Active Warnings**`}`,
+                `• **Punishment Threshold**: Reaching \`${maxLimit}\` violations triggers **\`${punishAction}\`**`
+              ].join('\n')
             })]
           });
         }

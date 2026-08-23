@@ -67,9 +67,19 @@ export class PayloadFormatter {
 
     const copy: any = { ...options };
 
-    // Strip ephemeral flags — prefix commands are always public
-    delete copy.flags;
-    delete copy.ephemeral;
+    // Preserve ephemeral flags if specified (for buttons, slash commands, modal submits)
+    const isEphemeral = Boolean(
+      options?.flags === 64 ||
+      options?.flags === 64n ||
+      options?.ephemeral === true ||
+      (typeof options?.flags === 'number' && (options.flags & 64) === 64)
+    );
+    if (isEphemeral) {
+      copy.flags = 64;
+    } else {
+      delete copy.flags;
+      delete copy.ephemeral;
+    }
 
     // Filter out any invalid component entries (non-ActionRow objects, e.g. bare Embeds)
     if (Array.isArray(copy.components)) {

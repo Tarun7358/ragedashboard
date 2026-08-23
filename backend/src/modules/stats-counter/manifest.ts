@@ -245,7 +245,80 @@ export const StatsCounterManifest: ModuleManifest = {
         const mod = modules.find((m: any) => m.id === 'stats-counter');
         const config = mod?.config || {};
 
-        // 1. STATUS
+        // 1. ENABLE / DISABLE
+        if (rawSub === 'enable' || rawSub === 'on' || rawSub === 'active') {
+          await interaction.deferReply({ flags: 64 });
+          const totalMembers = guild.memberCount || guild.members.cache.size;
+          let activeVoice = 0;
+          guild.channels.cache.forEach((ch: any) => {
+            if (ch.isVoiceBased?.()) activeVoice += ch.members.size;
+          });
+
+          let targetChannel: any = config.memberChannelId ? guild.channels.cache.get(config.memberChannelId) : null;
+          let createdNew = false;
+
+          if (!targetChannel && !config.ytChannelId) {
+            // Auto setup member channel if no counters exist yet
+            let category = config.memberCategoryId ? guild.channels.cache.get(config.memberCategoryId) : null;
+            if (!category) {
+              category = await guild.channels.create({
+                name: '.  Rage . GG',
+                type: ChannelType.GuildCategory
+              }).catch(() => null);
+            }
+
+            targetChannel = await guild.channels.create({
+              name: '🔒 . Rage . Server',
+              type: ChannelType.GuildVoice,
+              parent: category ? category.id : undefined,
+              permissionOverwrites: [
+                {
+                  id: guild.roles.everyone.id,
+                  allow: [PermissionFlagsBits.ViewChannel],
+                  deny: [PermissionFlagsBits.Connect]
+                }
+              ]
+            });
+            createdNew = true;
+          }
+
+          const updatedConfig = {
+            ...config,
+            enabled: true,
+            ...(targetChannel ? {
+              memberChannelId: targetChannel.id,
+              memberCategoryId: targetChannel.parentId || config.memberCategoryId || null
+            } : {})
+          };
+
+          await context.updateModuleConfig('stats-counter', updatedConfig);
+          await syncGuildStatCounters(guild, updatedConfig, context);
+
+          const embed = buildMinimalAction({
+            user: interaction.user,
+            action: createdNew
+              ? 'enabled Stats Counter Engine & configured live Member Counter channel'
+              : 'enabled Stats Counter Engine & force-synced live counter channels',
+            ...(targetChannel ? { target: targetChannel } : {})
+          });
+
+          return interaction.editReply({ embeds: [embed] });
+        }
+
+        if (rawSub === 'disable' || rawSub === 'off' || rawSub === 'deactivate') {
+          await interaction.deferReply({ flags: 64 });
+          const updatedConfig = { ...config, enabled: false };
+          await context.updateModuleConfig('stats-counter', updatedConfig);
+
+          const embed = buildMinimalAction({
+            user: interaction.user,
+            action: 'disabled Stats Counter Engine'
+          });
+
+          return interaction.editReply({ embeds: [embed] });
+        }
+
+        // 2. STATUS
         if (rawSub === 'status' || (rawSub === 'setup' && !mode)) {
           const totalMembers = guild.memberCount || guild.members.cache.size;
           let activeVoice = 0;
@@ -275,9 +348,10 @@ export const StatsCounterManifest: ModuleManifest = {
           return interaction.reply({ embeds: [overviewCard], flags: 64 });
         }
 
-        // 2. SETUP / SETCHANNEL MEMBERS
-        if ((rawSub === 'setup' || rawSub === 'setchannel' || rawSub === 'set') && (mode === 'members' || mode === 'server')) {
-          const targetInput = args[2] || (rawSub === 'set' && args[1] === 'channel' ? args[3] : undefined) || interaction.options?.getChannel?.('channel')?.id || interaction.options?.getString?.('channel');
+        // 3. SETUP / SETCHANNEL MEMBERS
+        if (rawSub === 'members' || rawSub === 'server' || ((rawSub === 'setup' || rawSub === 'setchannel' || rawSub === 'set') && (mode === 'members' || mode === 'server'))) {
+          const isDirect = (rawSub === 'members' || rawSub === 'server');
+          const targetInput = isDirect ? args[1] : (args[2] || (rawSub === 'set' && args[1] === 'channel' ? args[3] : undefined) || interaction.options?.getChannel?.('channel')?.id || interaction.options?.getString?.('channel'));
           await interaction.deferReply({ flags: 64 });
 
           const totalMembers = guild.memberCount || guild.members.cache.size;
@@ -339,22 +413,23 @@ export const StatsCounterManifest: ModuleManifest = {
           return interaction.editReply({ embeds: [embed] });
         }
 
-        // 3. SETUP / SETCHANNEL YOUTUBE
-        if ((rawSub === 'setup' || rawSub === 'setchannel' || rawSub === 'set') && (mode === 'youtube' || mode === 'yt')) {
-          const handle = args[2] || interaction.options?.getString?.('handle');
+        // 4. SETUP / SETCHANNEL YOUTUBE
+        const isYtDirect = (rawSub === 'youtube' || rawSub === 'yt');
+        if (isYtDirect || ((rawSub === 'setup' || rawSub === 'setchannel' || rawSub === 'set') && (mode === 'youtube' || mode === 'yt'))) {
+          const handle = isYtDirect ? args[1] : (args[2] || interaction.options?.getString?.('handle'));
           if (!handle) {
             return interaction.reply({
               embeds: [
                 createLimeEmbed({
                   title: 'Syntax Error',
-                  description: `${WRONG_ICON} Please specify a valid YouTube handle or URL.\n\n**Example**: \`r!counter setup youtube @MrBeast [#channel]\``
+                  description: `${WRONG_ICON} Please specify a valid YouTube handle or URL.\n\n**Example**: \`r!counter setup youtube @MrBeast [#channel]\` or \`r!counter youtube @MrBeast\``
                 })
               ],
               flags: 64
             });
           }
 
-          const targetInput = args[3] || (rawSub === 'set' && args[1] === 'channel' ? args[4] : undefined) || interaction.options?.getChannel?.('channel')?.id || interaction.options?.getString?.('channel');
+          const targetInput = isYtDirect ? args[2] : (args[3] || (rawSub === 'set' && args[1] === 'channel' ? args[4] : undefined) || interaction.options?.getChannel?.('channel')?.id || interaction.options?.getString?.('channel'));
           await interaction.deferReply({ flags: 64 });
 
           const ytData = await fetchYouTubeSubscribers(handle);
@@ -413,7 +488,7 @@ export const StatsCounterManifest: ModuleManifest = {
           return interaction.editReply({ embeds: [embed] });
         }
 
-        // 4. UPDATE / SYNC
+        // 5. UPDATE / SYNC
         if (rawSub === 'update' || rawSub === 'sync') {
           await interaction.deferReply({ flags: 64 });
           await syncGuildStatCounters(guild, config, context);
@@ -426,7 +501,7 @@ export const StatsCounterManifest: ModuleManifest = {
           return interaction.editReply({ embeds: [embed] });
         }
 
-        // 5. RESET / DELETE
+        // 6. RESET / DELETE
         if (rawSub === 'reset' || rawSub === 'delete') {
           await interaction.deferReply({ flags: 64 });
 
@@ -455,6 +530,34 @@ export const StatsCounterManifest: ModuleManifest = {
 
           return interaction.editReply({ embeds: [embed] });
         }
+
+        // Fallback: Overview Status Card
+        const totalMembers = guild.memberCount || guild.members.cache.size;
+        let activeVoice = 0;
+        guild.channels.cache.forEach((ch: any) => {
+          if (ch.isVoiceBased?.()) activeVoice += ch.members.size;
+        });
+
+        const overviewCard = buildLimeOverviewCard({
+          title: 'SERVER & SOCIAL STATS COUNTER MATRIX',
+          subtitle: 'LIVE AUTOMATED DISPLAY-ONLY VOICE CHANNELS',
+          sections: [
+            {
+              title: `${CONFIG_ICON} OPERATIONAL PARAMETERS`,
+              items: [
+                `• **Module Status**: ${config.enabled ? '`ACTIVE`' : '`OFFLINE`'}`,
+                `• **Member Stat Channel**: ${config.memberChannelId ? `<#${config.memberChannelId}>` : '`Not Setup`'}`,
+                `• **YouTube Stat Channel**: ${config.ytChannelId ? `<#${config.ytChannelId}>` : '`Not Setup`'}`,
+                `• **Connected YouTube**: ${config.ytHandle ? `\`${config.ytHandle}\`` : '`None`'}`,
+                `• **Live Guild Members**: \`${totalMembers}\``,
+                `• **Live Active VC Members**: \`${activeVoice}\``
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser • Stats Counter Engine'
+        });
+
+        return interaction.reply({ embeds: [overviewCard], flags: 64 });
       }
     }
   ]
@@ -465,10 +568,12 @@ export function registerStatsCounterCommands(): void {
     name: 'counter',
     category: 'Community',
     description: '📊 Manage display-only Server & YouTube live statistics channels.',
-    usage: 'r!counter <setup | status | update | reset> [members | youtube <handle>] [#channel|channelId|channelName]',
+    usage: 'r!counter <enable | disable | setup | status | update | reset> [members | youtube <handle>] [#channel|channelId|channelName]',
     aliases: ['statscounter', 'serverstats', 'ytcounter'],
     cooldownSeconds: 3,
     examples: [
+      'r!counter enable',
+      'r!counter disable',
       'r!counter setup members',
       'r!counter setup members #stats-channel',
       'r!counter setup members 123456789012345678',
@@ -482,6 +587,20 @@ export function registerStatsCounterCommands(): void {
     moduleOwnerId: 'stats-counter',
     dangerLevel: 'Low',
     subcommands: [
+      {
+        name: 'enable',
+        description: 'Enable the Stats Counter Engine and force-sync or setup live statistics channels.',
+        usage: 'r!counter enable',
+        examples: ['r!counter enable'],
+        userPermissions: ['ManageGuild']
+      },
+      {
+        name: 'disable',
+        description: 'Disable the Stats Counter Engine without deleting configured channels.',
+        usage: 'r!counter disable',
+        examples: ['r!counter disable'],
+        userPermissions: ['ManageGuild']
+      },
       {
         name: 'setup members',
         description: 'Set or create locked Voice Channel displaying live Member Count & Active VC Chat.',

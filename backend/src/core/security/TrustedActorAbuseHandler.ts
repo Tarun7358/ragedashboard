@@ -23,10 +23,9 @@ export class TrustedActorAbuseHandler {
     if (!guild || !executorId || !targetObj) return false;
     if (config.trustedActorEnabled === false) return false;
 
-    // 0. Trusted Actor Abuse Monitor is strictly for HUMAN USERS only.
-    // Bots are processed directly by instant Zero-Trust Anti-Nuke enforcement.
+    // 0. Resolve member for behavioral abuse tracking
     const member = guild.members.cache.get(executorId) || await guild.members.fetch(executorId).catch(() => null);
-    if (!member || member.user?.bot) return false;
+    if (!member) return false;
 
     // 0a. Check active backup restoration bypass
     try {
@@ -84,10 +83,11 @@ export class TrustedActorAbuseHandler {
       // a. Instant RAM revocation of Extra Owner status (<0.001ms)
       removeExtraOwnerFromCache(guild.id, executorId);
 
-      // b. Instant activeQuarantines lock registration (<0.001ms)
+      // b. Instant activeQuarantines lock registration (<0.001ms) with auto-expiry
       const { activeQuarantines } = await import('../../modules/security/manifest.js');
       const quarantineKey = `${guild.id}_${executorId}`;
       activeQuarantines.add(quarantineKey);
+      setTimeout(() => activeQuarantines.delete(quarantineKey), 15000);
 
       // c. Fire heavy network restoration & Discord API calls in non-blocking background queue
       setImmediate(() => {
@@ -98,7 +98,7 @@ export class TrustedActorAbuseHandler {
     }
 
     if (TrustedActorRateLimiter.shouldWarn(guild.id, executorId, warnAt, punishAt, windowSeconds)) {
-      await this.handleWarning(guild, member, trustType, config.logChannelId);
+      await this.handleWarning(guild, member, trustType, config.logChannelId, { warnAt, punishAt, windowSeconds });
     }
 
     return false;
@@ -108,11 +108,15 @@ export class TrustedActorAbuseHandler {
     guild: Guild,
     member: GuildMember,
     trustType: 'whitelist' | 'extraowner',
-    logChannelId?: string
+    logChannelId?: string,
+    limits: { warnAt?: number; punishAt?: number; windowSeconds?: number } = {}
   ): Promise<void> {
     TrustedActorRateLimiter.markWarned(guild.id, member.id);
 
-    const summary = TrustedActorRateLimiter.getSummary(guild.id, member.id, 10);
+    const winSec = limits.windowSeconds ?? 10;
+    const warnCount = limits.warnAt ?? 1;
+    const punishCount = limits.punishAt ?? 2;
+    const summary = TrustedActorRateLimiter.getSummary(guild.id, member.id, winSec);
 
     // 1. Direct Message Warning with Custom UI & Emojis
     const dmEmbed = new EmbedBuilder()
@@ -123,7 +127,7 @@ export class TrustedActorAbuseHandler {
         `You are registered as a **${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'}** in **${guild.name}**.\n`,
         `> <:shield:1532403012751065179> **Rapid Actions Detected**: Our sub-millisecond behavioral firewall detected rapid operations:`,
         ...summary,
-        `\n<:timer:1532620491662037123> **WARNING**: You are currently at **1/2 events** in the 10-second window.`,
+        `\n<:timer:1532620491662037123> **WARNING**: You are currently at **${warnCount}/${punishCount} events** in the ${winSec}-second window.`,
         `If rapid destructive actions continue, your trusted status will be **AUTOMATICALLY REVOKED**, you will be **QUARANTINED**, and all changes will be **REVERSED**.`
       ].join('\n'))
       .setFooter({ text: 'Rage Optimiser • Unbypassable Security Engine' })
@@ -143,7 +147,7 @@ export class TrustedActorAbuseHandler {
           .setDescription([
             `**Actor**: ${member} (\`${member.id}\`)`,
             `**Trust Level**: ${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'}`,
-            `**Status**: 1/2 threshold hit in 10s window — Active sub-ms monitoring.`,
+            `**Status**: ${warnCount}/${punishCount} threshold hit in ${winSec}s window — Active sub-ms monitoring.`,
             `\n**Recorded Action(s)**:`,
             ...summary
           ].join('\n'))
@@ -336,12 +340,14 @@ export class TrustedActorAbuseHandler {
       }
 
       if (qRole && member.manageable) {
-        // Strip other roles and apply Quarantine
-        const rolesToRemove = member.roles.cache.filter(r => r.id !== guild.id && r.id !== qRole!.id);
-        if (rolesToRemove.size > 0) {
-          await member.roles.remove(rolesToRemove, 'Trusted Actor Abuse — Automated Quarantine').catch(() => {});
-        }
-        await member.roles.add(qRole, 'Trusted Actor Abuse — Automated Quarantine').catch(() => {});
+        // Atomic role reset: replace all assignable roles with Quarantine role
+        await member.roles.set([qRole.id], 'Trusted Actor Abuse — Automated Quarantine').catch(async () => {
+          const rolesToRemove = member.roles.cache.filter(r => r.id !== guild.id && r.id !== qRole!.id);
+          if (rolesToRemove.size > 0) {
+            await member.roles.remove(rolesToRemove, 'Trusted Actor Abuse — Automated Quarantine').catch(() => {});
+          }
+          await member.roles.add(qRole, 'Trusted Actor Abuse — Automated Quarantine').catch(() => {});
+        });
       }
     } catch (e) {
       // Non-fatal if bot hierarchy permissions restricted

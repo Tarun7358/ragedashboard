@@ -1,8 +1,11 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { PermissionFlagsBits, MessageFlags } from 'discord.js';
+import { Database } from '../../core/Database.js';
+import { DashboardSyncService } from '../../services/DashboardSyncService.js';
 import { Embeds, Colors, buildStatusCard, createLimeEmbed, buildLimeOverviewCard, buildMinimalAction, buildLimeWarnCard, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, GAVEL_ICON, LINK_ICON, INFO_ICON, CONFIG_ICON, VIP_ICON, BOT_ICON } from '../../core/UIFactory.js';
 import { checkWhitelistPermission } from '../../utils/whitelistCheck.js';
 import { isUrlCommandBypass, isMessageAntiLinkHandled, markMessageAntiLinkHandled } from '../../utils/antiLinkBypass.js';
+import { resetRateLimit } from '../security/manifest.js';
 
 function userTag(user: any): string {
   return user?.globalName ?? user?.username ?? user?.tag ?? user?.id ?? 'Unknown';
@@ -116,6 +119,38 @@ export class SlidingWindowSpamDetector {
   }
 }
 
+const userLinkViolations = new Map<string, Map<string, { count: number; lastTime: number }>>();
+
+export function incrementLinkViolations(guildId: string, userId: string): number {
+  const now = Date.now();
+  if (!userLinkViolations.has(guildId)) {
+    userLinkViolations.set(guildId, new Map());
+  }
+  const guildMap = userLinkViolations.get(guildId)!;
+  const userRecord = guildMap.get(userId) || { count: 0, lastTime: now };
+
+  if (now - userRecord.lastTime > 24 * 60 * 60 * 1000) {
+    userRecord.count = 0;
+  }
+
+  userRecord.count += 1;
+  userRecord.lastTime = now;
+  guildMap.set(userId, userRecord);
+  return userRecord.count;
+}
+
+export function resetLinkViolations(guildId: string, userId: string): void {
+  const guildMap = userLinkViolations.get(guildId);
+  if (guildMap) {
+    guildMap.delete(userId);
+  }
+}
+
+export function getLinkViolations(guildId: string, userId: string): number {
+  const guildMap = userLinkViolations.get(guildId);
+  return guildMap?.get(userId)?.count || 0;
+}
+
 export const AutomodManifest: ModuleManifest = {
   id: 'automod',
   name: 'AI Automod',
@@ -153,7 +188,7 @@ export const AutomodManifest: ModuleManifest = {
         },
         {
           name: 'antilink',
-          description: 'Configure Anti-Link filter, punishments, invite rules & bypass domains',
+          description: 'Configure Anti-Link filter, violation limit, punishments & bypass domains',
           type: 1,
           options: [
             {
@@ -163,14 +198,22 @@ export const AutomodManifest: ModuleManifest = {
               required: false
             },
             {
+              name: 'limit',
+              type: 4,
+              description: 'Number of link violations before punishment (default: 5)',
+              required: false
+            },
+            {
               name: 'action',
               type: 3,
-              description: 'Punishment action on link detection',
+              description: 'Punishment action when violation limit is reached',
               required: false,
               choices: [
                 { name: 'Delete Message Only', value: 'delete' },
                 { name: 'Warn & Delete Message', value: 'warn' },
-                { name: 'Mute Member & Delete', value: 'mute' }
+                { name: 'Mute Member', value: 'mute' },
+                { name: 'Kick Member', value: 'kick' },
+                { name: 'Ban Member', value: 'ban' }
               ]
             },
             {
@@ -183,6 +226,32 @@ export const AutomodManifest: ModuleManifest = {
               name: 'ignored_domains',
               type: 3,
               description: 'Comma-separated bypass domains (e.g. spotify.com, youtube.com)',
+              required: false
+            }
+          ]
+        },
+        {
+          name: 'clearwarns',
+          description: 'Clear/reset Anti-Link and AutoMod violation warnings for a specific member',
+          type: 1,
+          options: [
+            {
+              name: 'user',
+              type: 6,
+              description: 'Target member to clear violation warnings for',
+              required: true
+            }
+          ]
+        },
+        {
+          name: 'warnings',
+          description: 'View active Anti-Link and AutoMod violation warnings for a specific member',
+          type: 1,
+          options: [
+            {
+              name: 'user',
+              type: 6,
+              description: 'Target member to view violation warnings for (defaults to yourself)',
               required: false
             }
           ]
@@ -432,6 +501,7 @@ export const AutomodManifest: ModuleManifest = {
         // ANTILINK ENABLE / DISABLE / FULL CONFIG
         if (sub === 'antilink' || interaction.parsed?.args?.[0] === 'antilink') {
           const enableOpt = interaction.options?.getBoolean?.('enable');
+          const limitOpt = interaction.options?.getInteger?.('limit');
           const actionOpt = interaction.options?.getString?.('action') || actionArg || interaction.parsed?.args?.[1]?.toLowerCase();
           const allowInvitesOpt = interaction.options?.getBoolean?.('allow_invites');
           const ignoredDomainsOpt = interaction.options?.getString?.('ignored_domains');
@@ -445,7 +515,25 @@ export const AutomodManifest: ModuleManifest = {
             updatedConfig.blockLinks = false;
           }
 
-          if (actionOpt && ['delete', 'warn', 'mute'].includes(actionOpt)) {
+          // Parse limit from limitOpt or positional args (e.g. `r!automod antilink 5` or `r!antilink limit 5`)
+          const args = interaction.parsed?.args || [];
+          let parsedLimit = limitOpt;
+          if (!parsedLimit) {
+            for (const arg of args) {
+              const num = parseInt(arg, 10);
+              if (!isNaN(num) && num > 0 && num <= 100) {
+                parsedLimit = num;
+                break;
+              }
+            }
+          }
+
+          if (parsedLimit) {
+            updatedConfig.antiLinkLimit = parsedLimit;
+            updatedConfig.limit = parsedLimit;
+          }
+
+          if (actionOpt && ['delete', 'warn', 'mute', 'kick', 'ban'].includes(actionOpt)) {
             updatedConfig.punishment = actionOpt;
           }
           if (allowInvitesOpt !== null && allowInvitesOpt !== undefined) {
@@ -456,17 +544,70 @@ export const AutomodManifest: ModuleManifest = {
           }
 
           context.updateModuleConfig('automod', updatedConfig);
-          context.logSyncEvent(`AutoMod: Updated AntiLink config (blockLinks=${updatedConfig.blockLinks}, punishment=${updatedConfig.punishment})`, 'info');
+          context.logSyncEvent(`AutoMod: Updated AntiLink config (blockLinks=${updatedConfig.blockLinks}, limit=${updatedConfig.antiLinkLimit || 5}, punishment=${updatedConfig.punishment})`, 'info');
 
+          const finalLimit = updatedConfig.antiLinkLimit || updatedConfig.limit || 5;
           const embed = createLimeEmbed({
             title: '<:link:1532620952087826602> Anti-Link Protection Settings Updated',
             description: [
               `• **Anti-Link Filter**: ${updatedConfig.blockLinks !== false ? '<a:approved:1532390590707142956> **Enabled**' : '<:wrong:1532390628330307634> **Disabled**'}`,
-              `• **Punishment Mode**: \`${updatedConfig.punishment || 'warn'}\``,
+              `• **Violation Limit**: \`${finalLimit}\` unauthorized link(s) before punishment`,
+              `• **Punishment Mode**: \`${(updatedConfig.punishment || 'mute').toUpperCase()}\``,
               `• **Allow Discord Invites**: ${updatedConfig.allowInvites ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No'}`,
               `• **Ignored Bypass Domains**: ${updatedConfig.ignoredDomains?.length ? updatedConfig.ignoredDomains.map((d: string) => `\`${d}\``).join(', ') : '*None*'}`
             ].join('\n')
           });
+          return interaction.reply({ embeds: [embed] });
+        }
+
+        // CLEAR WARNS / RESET WARNS FOR SPECIFIC MEMBER
+        if (sub === 'clearwarns' || sub === 'clear-warns' || sub === 'resetwarns' || sub === 'clearwarn' || interaction.parsed?.args?.[0] === 'clearwarns' || interaction.parsed?.args?.[0] === 'clearwarn' || interaction.parsed?.args?.[0] === 'resetwarns') {
+          const targetUser = interaction.options?.getUser?.('user') || interaction.parsed?.mentions?.users?.first?.() || (interaction as any)?.message?.mentions?.users?.first?.();
+
+          if (!targetUser) {
+            return interaction.reply({
+              embeds: [createLimeEmbed({
+                title: 'Clear Warnings Syntax',
+                description: `<:wrong:1532390628330307634> **Syntax**: \`r!automod clearwarns @user\` or \`/automod clearwarns user:@user\`\n• **Example**: \`r!automod clearwarns @Username\``
+              })]
+            });
+          }
+
+          resetLinkViolations(interaction.guild.id, targetUser.id);
+          resetRateLimit(interaction.guild.id, targetUser.id, 'anti_link');
+
+          context.logSyncEvent(`AutoMod: Cleared link violation warnings for ${targetUser.username} (${targetUser.id})`, 'info');
+
+          return interaction.reply({
+            embeds: [createLimeEmbed({
+              title: 'Violation Warnings Cleared',
+              description: `<a:approved:1532390590707142956> Successfully cleared all Anti-Link violation warnings for ${targetUser} (\`${targetUser.id}\`).\n\n• **Current Violations**: \`0/5\``
+            })]
+          });
+        }
+
+        // VIEW WARNINGS FOR MEMBER
+        if (sub === 'warnings' || sub === 'warns' || interaction.parsed?.args?.[0] === 'warnings' || interaction.parsed?.args?.[0] === 'warns') {
+          const targetUser = interaction.options?.getUser?.('user') || interaction.parsed?.mentions?.users?.first?.() || (interaction as any)?.message?.mentions?.users?.first?.() || interaction.user || (interaction as any)?.author;
+
+          const maxLimit = typeof config.antiLinkLimit === 'number' && config.antiLinkLimit > 0
+            ? config.antiLinkLimit
+            : (typeof config.limit === 'number' && config.limit > 0 ? config.limit : 5);
+
+          const currentCount = getLinkViolations(interaction.guild.id, targetUser.id);
+          const punishAction = (config.punishment || 'mute').toUpperCase();
+
+          const embed = createLimeEmbed({
+            title: `<:shield:1532403012751065179> User Violation Warnings Matrix`,
+            description: [
+              `> **Member**: ${targetUser} (\`${userTag(targetUser)}\` • \`ID: ${targetUser.id}\`)`,
+              ``,
+              `• **Anti-Link Violations**: \`${currentCount} / ${maxLimit}\``,
+              `• **Violation Status**: ${currentCount > 0 ? `<:wrong:1532390628330307634> **${currentCount} Active Warning(s)**` : '<a:approved:1532390590707142956> **No Active Warnings**'}`,
+              `• **Punishment Threshold**: Reaching \`${maxLimit}\` violations triggers **\`${punishAction}\`**`
+            ].join('\n')
+          });
+
           return interaction.reply({ embeds: [embed] });
         }
 
@@ -729,16 +870,71 @@ export const AutomodManifest: ModuleManifest = {
 
             if (reason === 'Posting unauthorized links') {
               (message as any)._antiLinkHandled = true;
-              const warnCard = buildLimeWarnCard({
-                category: 'Unauthorized Link',
-                user: message.author,
-                reason: 'Posting unauthorized links',
-                currentLimit: 1,
-                maxLimit: 5,
-                thumbnailUrl: message.author.displayAvatarURL?.()
-              });
-              await message.channel.send({ embeds: [warnCard] })
-                .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 6000));
+
+              const maxLimit = typeof config.antiLinkLimit === 'number' && config.antiLinkLimit > 0
+                ? config.antiLinkLimit
+                : (typeof config.limit === 'number' && config.limit > 0 ? config.limit : 5);
+
+              const currentCount = incrementLinkViolations(message.guild.id, message.author.id);
+
+              if (currentCount < maxLimit) {
+                // Send warning card in channel displaying current count vs max limit
+                const warnCard = buildLimeWarnCard({
+                  category: 'Unauthorized Link',
+                  user: message.author,
+                  reason: 'Posting unauthorized links',
+                  currentLimit: currentCount,
+                  maxLimit: maxLimit,
+                  thumbnailUrl: message.author.displayAvatarURL?.()
+                });
+                await message.channel.send({ embeds: [warnCard] })
+                  .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 6000));
+
+                // Send DM warning notification
+                const dmEmbed = Embeds.warn(
+                  `<:wrong:1532390628330307634> Anti-Link Warning (${currentCount}/${maxLimit}) — ${message.guild.name}`,
+                  `Your message in **#${message.channel.name || 'channel'}** was **deleted by default** because it contained an unauthorized link.\n\n**Violation Count**: ${currentCount}/${maxLimit}\nReaching ${maxLimit} link violations will trigger server punishment.`,
+                  { module: 'automod', footer: `${message.guild.name} • Anti-Link Protection` }
+                );
+                await message.member?.send({ embeds: [dmEmbed] }).catch(() => {});
+              } else {
+                // Violation limit reached! Send punishment notification & execute punishment
+                const punishAction = (config.punishment || 'mute').toLowerCase();
+
+                const punishEmbed = createLimeEmbed({
+                  title: `<:shield:1532403012751065179> Anti-Link Punishment Enforced (${currentCount}/${maxLimit})`,
+                  description: [
+                    `> ${message.author} has reached the maximum Anti-Link limit (**${currentCount}/${maxLimit}**) and has been **${punishAction.toUpperCase()}D**.`,
+                    ``,
+                    `• **Offender**: ${userTag(message.author)} (\`${message.author.id}\`)`,
+                    `• **Channel**: <#${message.channel.id}>`,
+                    `• **Action Enforced**: \`${punishAction.toUpperCase()}\``
+                  ].join('\n'),
+                  color: Colors.DANGER
+                });
+                await message.channel.send({ embeds: [punishEmbed] })
+                  .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 8000));
+
+                // Execute punishment action
+                if (punishAction === 'mute' || punishAction === 'timeout') {
+                  await message.member?.timeout(10 * 60 * 1000, 'Anti-Link: Maximum link violation limit exceeded').catch(() => {});
+                } else if (punishAction === 'kick') {
+                  await message.member?.kick('Anti-Link: Maximum link violation limit exceeded').catch(() => {});
+                } else if (punishAction === 'ban') {
+                  await message.member?.ban({ reason: 'Anti-Link: Maximum link violation limit exceeded' }).catch(() => {});
+                }
+
+                // Send DM notification of punishment
+                const dmEmbed = Embeds.error(
+                  `<:gavel:1532621057318584380> Anti-Link Limit Reached — ${message.guild.name}`,
+                  `You have reached the maximum Anti-Link violation limit (**${currentCount}/${maxLimit}**) in **${message.guild.name}**.\n\n**Action Enforced**: ${punishAction.toUpperCase()}\n**Reason**: Repeated unauthorized link sharing.`,
+                  { module: 'automod', footer: `${message.guild.name} • Anti-Link Enforcement` }
+                );
+                await message.member?.send({ embeds: [dmEmbed] }).catch(() => {});
+
+                // Reset violation count after punishment
+                resetLinkViolations(message.guild.id, message.author.id);
+              }
             } else {
               const categoryName = reason.includes('words') ? 'Swear Words' : (reason.includes('caps') ? 'Caps' : 'Spam');
               const warnCard = buildLimeWarnCard({
@@ -751,10 +947,41 @@ export const AutomodManifest: ModuleManifest = {
               });
               await message.channel.send({ embeds: [warnCard] })
                 .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 6000));
+
+              // Handle non-link punishments if configured
+              if (config.punishment === 'warn') {
+                const dmEmbed = Embeds.warn(
+                  `<:wrong:1532390628330307634> AutoMod Warning — ${message.guild.name}`,
+                  `Your message in **#${message.channel.name || 'channel'}** was removed by AutoMod.\n\n**Server**: ${message.guild.name}\n**Reason**: ${reason}`,
+                  { module: 'automod', footer: `${message.guild.name}  •  AutoMod Protection` }
+                );
+                await message.member?.send({ embeds: [dmEmbed] }).catch(() => {});
+              } else if (config.punishment === 'timeout') {
+                await message.member?.timeout(5 * 60 * 1000, 'AutoMod Timeout').catch(() => {});
+              } else if (config.punishment === 'kick') {
+                await message.member?.kick('AutoMod Kick').catch(() => {});
+              }
             }
             
             context.logSyncEvent(`AutoMod: Removed message from ${userTag(message.author)} in #${message.channel.name} (${reason})`, 'warn');
             
+            // Persist to SQLite server_audit_logs & refresh live dashboard
+            Database.saveAuditLog({
+              guildId: message.guild.id,
+              action: reason === 'Posting unauthorized links' ? 'AUTOMOD_LINK' : 'AUTOMOD_FILTER',
+              targetId: message.author.id,
+              targetType: 'User',
+              targetName: userTag(message.author),
+              executorId: client?.user?.id || 'bot',
+              executorTag: 'AutoMod Core',
+              reason: reason || 'AutoMod Policy Violation',
+              details: { channel: message.channel.id, content: message.content.slice(0, 100) },
+              type: 'warn',
+              timestamp: Date.now()
+            }).catch(() => {});
+
+            DashboardSyncService.triggerSync(message.guild.id);
+
             // Log to discord channel
             if (config.logChannelId) {
               const logChannel = message.guild.channels.cache.get(config.logChannelId);
@@ -766,20 +993,6 @@ export const AutomodManifest: ModuleManifest = {
                 );
                 await logChannel.send({ embeds: [embed] });
               }
-            }
-
-            // Handle punishment
-            if (config.punishment === 'warn') {
-              const dmEmbed = Embeds.warn(
-                `<:wrong:1532390628330307634> AutoMod Warning — ${message.guild.name}`,
-                `Your message in **#${message.channel.name || 'channel'}** was removed by AutoMod.\n\n**Server**: ${message.guild.name}\n**Reason**: ${reason}`,
-                { module: 'automod', footer: `${message.guild.name}  •  AutoMod Protection` }
-              );
-              await message.member.send({ embeds: [dmEmbed] }).catch(() => {});
-            } else if (config.punishment === 'timeout') {
-              await message.member.timeout(5 * 60 * 1000, 'AutoMod Timeout').catch(() => {});
-            } else if (config.punishment === 'kick') {
-              await message.member.kick('AutoMod Kick').catch(() => {});
             }
 
           } catch (e) {

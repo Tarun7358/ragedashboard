@@ -25,6 +25,7 @@ export const AutomationManifest: ModuleManifest = {
     {
       name: 'automation',
       description: 'View and manage Automation Studio rules.',
+      aliases: ['automations', 'auto'],
       options: [
         { name: 'action', type: 3, description: 'Action: list, status', required: true }
       ]
@@ -40,7 +41,7 @@ export const AutomationManifest: ModuleManifest = {
         if (!isOwner) return interaction.reply({ content: '<:wrong:1532390628330307634> Requires Administrator.', flags: 64 });
         const modules = context.getModulesState();
         const autoMod = modules.find((m: any) => m.id === 'automation');
-        if (action === 'status' || action === 'list') {
+        if (!action || action === 'status' || action === 'list') {
           const roleId = autoMod?.config?.roleId;
           const lines = [
             `<:config:1532425712844144701> **Automation Studio Status**`,

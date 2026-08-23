@@ -70,3 +70,6 @@ clutch-music/src/verifications.json
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Scratch files
+backend/scratch/

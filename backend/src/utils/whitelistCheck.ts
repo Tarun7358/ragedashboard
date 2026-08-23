@@ -228,8 +228,14 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
       return true;
     }
 
-    // Exception roles & UPM roles grant Anti-Nuke immunity, not Anti-Link (unless no ruleId specified)
-    if (!ruleId || (ruleId !== 'anti_link' && ruleId !== 'automod')) {
+    // Exception roles grant Anti-Spam immunity ONLY (everyone/here ping, role ping).
+    // They do NOT bypass Anti-Nuke rules (role grant/delete/create, channel delete, etc.)
+    // This prevents attackers from self-assigning an exception role below the rate-limit threshold
+    // and then gaining permanent anti-nuke bypass.
+    const antiSpamOnlyRules = ['anti_everyone_ping', 'anti_role_ping', 'anti_link', 'automod', 'anti_spam'];
+    const isAntiSpamOnlyRule = ruleId ? antiSpamOnlyRules.includes(ruleId) : false;
+
+    if (isAntiSpamOnlyRule || !ruleId) {
       const exceptionRoleIds: string[] = secConfig.exceptionRoleIds || secConfig.whitelistRoles || [];
       if (exceptionRoleIds.length > 0 && member.roles?.cache?.some((r: any) => r && exceptionRoleIds.includes(r.id))) {
         return true;
@@ -291,9 +297,8 @@ export async function checkBypassImmunity(
     return true;
   }
 
-  // 2. Sibling Music Bot & System Bot always bypass
-  const musicClientId = process.env.MUSIC_CLIENT_ID || '1520323151928623125';
-  if (userId === musicClientId || (guild.client?.user && userId === guild.client.user.id)) {
+  // 2. Rage Optimiser bot itself always bypasses (system bot self-actions only)
+  if (guild.client?.user && userId === guild.client.user.id) {
     return true;
   }
 

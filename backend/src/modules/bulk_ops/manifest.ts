@@ -149,6 +149,18 @@ export const BulkOpsManifest: ModuleManifest = {
           return interaction.reply({ content: '<:wrong:1532390628330307634> Bulk commands must be run inside a server.', flags: 64 });
         }
 
+        if (sub && (sub === 'role-add' || sub === 'role-remove' || sub === 'role-purge')) {
+          const { isOwnerOrExtraOwner, checkWhitelistPermission } = await import('../../utils/whitelistCheck.js');
+          const isOwner = await isOwnerOrExtraOwner(interaction.user.id, guild);
+          const isWhitelisted = await checkWhitelistPermission(interaction.user.id, guild, context, sub === 'role-add' ? 'anti_role_grant' : 'anti_role_remove');
+          if (!isOwner && !isWhitelisted) {
+            return interaction.reply({
+              content: '<:wrong:1532390628330307634> 🔒 **Access Denied**: Bulk role operations can only be executed by the **Server Owner**, **Extra Owners**, and **Whitelisted Members**.\nNormal Administrator permissions are not sufficient.',
+              flags: 64
+            });
+          }
+        }
+
         if (!sub) {
           const embed = new EmbedBuilder()
             .setTitle('<:config:1532425712844144701> Bulk Operations Manager')

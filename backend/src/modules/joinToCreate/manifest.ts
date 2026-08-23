@@ -1,6 +1,7 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { IJoinToCreate } from '../../models/index.js';
+import { buildLimeOverviewCard, Colors } from '../../core/UIFactory.js';
 
 // ─── Privacy helper ──────────────────────────────────────────────────────────
 // Builds Discord permissionOverwrites for each privacy mode:
@@ -386,29 +387,46 @@ export const JoinToCreateManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
 
-        if (sub === 'list' || sub === 'triggers') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-            return interaction.reply({ content: '<:wrong:1532390628330307634> Manage Server permission required.', flags: 64 });
-          }
-
+        if (!sub || sub === 'list' || sub === 'triggers' || sub === 'help' || sub === 'status') {
           const triggers: any[] = config.triggers || [];
           const triggerLines = triggers.length > 0 
-            ? triggers.map((t: any, i: number) => `**${i + 1}.** <#${t.triggerChannelId}> — Label: \`${t.label || 'Default'}\` (Privacy: \`${t.privacy || 'public'}\`)`).join('\n')
-            : (config.triggerChannelId ? `**1.** <#${config.triggerChannelId}> — Legacy Trigger` : '*No JTC triggers set up yet. Use `r!jtc setup <#voice_channel>` to add one.*');
+            ? triggers.map((t: any, i: number) => `• <#${t.triggerChannelId}> — Label: \`${t.label || 'Default'}\` | Privacy: \`${t.privacy || 'public'}\``)
+            : [config.triggerChannelId ? `• <#${config.triggerChannelId}> — Legacy Trigger` : '*No JTC triggers set up yet. Use `r!jtc setup <#channel>` to add one.*'];
 
           const activeLines = activeChannels.length > 0
-            ? activeChannels.map((c: any, i: number) => `**${i + 1}.** <#${c.channelId}> — Owner: <@${c.ownerId}> ${c.locked ? '[Locked]' : '[Open]'}`).join('\n')
-            : '*No active spawned JTC channels currently.*';
+            ? activeChannels.map((c: any, i: number) => `• <#${c.channelId}> — Owner: <@${c.ownerId}> ${c.locked ? '[Locked]' : '[Open]'}`)
+            : ['*No active spawned JTC channels currently.*'];
 
-          const embed = new EmbedBuilder()
-            .setTitle('<:voicechannelgreen:1532425750278438962> Join To Create (JTC) Configuration')
-            .setColor('#4f8cff')
-            .addFields(
-              { name: '🔊 Configured Trigger Channels (Setup)', value: triggerLines, inline: false },
-              { name: '🎙️ Active Spawned Channels', value: activeLines, inline: false }
-            )
-            .setFooter({ text: 'Rage Optimiser • Voice Engine' })
-            .setTimestamp();
+          const embed = buildLimeOverviewCard({
+            title: 'JOIN TO CREATE (JTC) SYSTEM',
+            subtitle: 'AUTOMATED TEMPORARY VOICE CHANNELS',
+            color: Colors.LIME,
+            sections: [
+              {
+                title: '🔊 CONFIGURATIONS & TRIGGERS',
+                items: triggerLines
+              },
+              {
+                title: '🎙️ ACTIVE SPAWNED CHANNELS',
+                items: activeLines
+              },
+              {
+                title: '⚙️ COMMANDS & CONTROLS',
+                items: [
+                  '`r!jtc setup <#channel>` — Register a voice channel trigger',
+                  '`r!jtc remove <#channel>` — Unregister a voice trigger',
+                  '`r!jtc name <name>` — Rename your active channel',
+                  '`r!jtc limit <count>` — Set user limit (0 = unlimited)',
+                  '`r!jtc lock` / `r!jtc unlock` — Toggle channel lock',
+                  '`r!jtc hide` / `r!jtc unhide` — Toggle channel visibility',
+                  '`r!jtc invite @user` / `r!jtc kick @user` — Manage member access',
+                  '`r!jtc permit @user` / `r!jtc reject @user` — Manage channel permissions',
+                  '`r!jtc claim` — Claim channel if owner left'
+                ]
+              }
+            ],
+            footerText: 'Rage Optimiser Enterprise • Voice Security Engine'
+          });
 
           return interaction.reply({ embeds: [embed] });
         }

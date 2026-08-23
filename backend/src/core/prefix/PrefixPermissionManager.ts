@@ -25,14 +25,6 @@ export class PrefixPermissionManager {
       return { allowed: true };
     }
 
-    // 2. Check Module State
-    if (moduleState && moduleState.status === 'disabled') {
-      return {
-        allowed: false,
-        reason: `Module **${moduleState.name || commandMeta.category}** is currently disabled in this server.`
-      };
-    }
-
     // 3. Check Required User Permissions
     if (commandMeta.userPermissions && commandMeta.userPermissions.length > 0 && message.member) {
       if (message.member.permissions.has(PermissionFlagsBits.Administrator)) {

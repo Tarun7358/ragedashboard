@@ -509,7 +509,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           }
           await member.voice.disconnect(reason).catch(() => {});
           logVoiceAction('Disconnect', `Disconnected ${user.username} from voice`);
-          return interaction.editReply({ content: `<a:approved:1532390590707142956> Disconnected ${user} from voice.` });
+          return interaction.reply({ content: `<a:approved:1532390590707142956> Disconnected ${user} from voice.`, flags: 64 });
         }
 
         // CLEAN
@@ -547,6 +547,12 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'history') {
           return interaction.reply({ content: '<a:lovemail:1527647157371535420> **Voice Connections History**:\nNo historical connection data has been recorded in the local log stream.', flags: 64 });
         }
+
+        // DEFAULT FALLBACK
+        return interaction.reply({
+          content: `<:config:1532425712844144701> **Voice Management Hub**\nUse \`r!voice status\`, \`r!voice info\`, \`r!voice cleanup\`, \`r!voice lock\`, or \`r!voice mass-drag\`.`,
+          flags: 64
+        });
       }
     }
   ]

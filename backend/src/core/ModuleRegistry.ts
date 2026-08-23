@@ -66,12 +66,40 @@ export class ModuleRegistry {
           // sync_logs table may not exist on older installs — safe to ignore
         }
 
+        // Hydrate persisted audit logs from server_audit_logs table
+        let persistedWhitelistAudit: any[] = [];
+        try {
+          const auditRows = await db.all(
+            'SELECT * FROM server_audit_logs WHERE guildId = ? ORDER BY timestamp DESC, id DESC LIMIT 100',
+            [guildId]
+          );
+          persistedWhitelistAudit = auditRows.map((r: any) => {
+            let parsedDetails = null;
+            try { parsedDetails = r.details ? JSON.parse(r.details) : null; } catch { parsedDetails = r.details; }
+            return {
+              id: r.id.toString(),
+              action: r.action,
+              target: r.targetName || r.targetId || 'Unknown',
+              targetType: r.targetType || 'User',
+              targetId: r.targetId,
+              executor: r.executorTag || r.executorId || 'System',
+              executorId: r.executorId,
+              timestamp: new Date(r.timestamp).toLocaleString(),
+              status: r.type === 'danger' ? 'Suspicious' : (r.type === 'warn' ? 'Pending' : 'Approved'),
+              reason: r.reason,
+              details: parsedDetails
+            };
+          });
+        } catch {
+          // server_audit_logs table may not exist on older installs — safe to ignore
+        }
+
         const state = {
           modules,
           registry: this.getDefaultRegistry(),
           syncLogs: persistedLogs,
           globalSettings,
-          whitelistAudit: [],
+          whitelistAudit: persistedWhitelistAudit,
           whitelistActivity: []
         };
         this.guildStates.set(guildId, state);
@@ -296,6 +324,43 @@ export class ModuleRegistry {
     if (!state.whitelistAudit) state.whitelistAudit = [];
     state.whitelistAudit.unshift(audit);
     if (state.whitelistAudit.length > 200) state.whitelistAudit.pop();
+
+    // Persist to SQLite server_audit_logs table
+    const db = Database.getDb();
+    if (db && id !== 'default_guild') {
+      Database.saveAuditLog({
+        guildId: id,
+        action: audit.action || 'WHITELIST_CHANGE',
+        targetId: audit.targetId || null,
+        targetType: audit.targetType || (audit.isRole ? 'Role' : 'User'),
+        targetName: audit.target || audit.targetName || null,
+        executorId: audit.executorId || null,
+        executorTag: audit.executor || audit.executorTag || null,
+        reason: audit.reason || null,
+        details: audit.details || audit.changes || audit,
+        type: audit.status === 'Suspicious' ? 'danger' : (audit.status === 'Pending' ? 'warn' : 'success'),
+        timestamp: audit.rawTimestamp || Date.now()
+      }).catch(() => {});
+    }
+  }
+
+  public async logServerAudit(guildId: string | undefined, audit: any) {
+    const id = guildId || process.env.GUILD_ID || 'default_guild';
+    if (id !== 'default_guild') {
+      await Database.saveAuditLog({
+        guildId: id,
+        action: audit.action || 'SERVER_AUDIT',
+        targetId: audit.targetId || null,
+        targetType: audit.targetType || null,
+        targetName: audit.targetName || audit.target || null,
+        executorId: audit.executorId || null,
+        executorTag: audit.executorTag || audit.executor || null,
+        reason: audit.reason || null,
+        details: audit.details || null,
+        type: audit.type || 'info',
+        timestamp: audit.timestamp || Date.now()
+      }).catch(() => {});
+    }
   }
 
   public logWhitelistActivity(guildId: string | undefined, activity: any) {
@@ -436,7 +501,7 @@ export class ModuleRegistry {
 
   private createDefaultModulesState(): ModuleState[] {
     const states: ModuleState[] = [];
-    const alwaysEnabledCore = ['config', 'diagnostics', 'bulk_ops', 'rage-enterprise', 'botstats', 'discord-dashboard', 'brain'];
+    const alwaysEnabledCore = ['config', 'diagnostics', 'bulk_ops', 'rage-enterprise', 'botstats', 'discord-dashboard', 'brain', 'backups', 'join_role_guard'];
     this.manifests.forEach(manifest => {
       const isCore = alwaysEnabledCore.includes(manifest.id);
       states.push({

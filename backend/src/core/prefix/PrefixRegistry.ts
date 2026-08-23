@@ -94,8 +94,11 @@ export class PrefixRegistry {
     'bs': 'botstats',
     'gw': 'giveaway',
     'rr': 'reactionrole',
-    'vc': 'voicemaster',
-    'jtc': 'joinToCreate',
+    'vc': 'voice',
+    'jointocreate': 'jtc',
+    'j2c': 'jtc',
+    'automations': 'automation',
+    'auto': 'automation',
 
     // Informational & System
     'h': 'help',
@@ -409,6 +412,8 @@ export class PrefixRegistry {
       'social-updates': 'Social Updates',
       jtc: 'Voice',
       voiceprotection: 'Voice',
+      automation: 'Automations',
+      automations: 'Automations',
       logging: 'Logging',
       notes: 'Moderation',
       autorole: 'Community',

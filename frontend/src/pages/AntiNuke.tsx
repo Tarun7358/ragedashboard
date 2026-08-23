@@ -132,11 +132,11 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
       {/* Header Banner */}
       <div 
         style={{
-          background: 'linear-gradient(135deg, rgba(26, 31, 56, 0.95) 0%, rgba(15, 17, 32, 0.98) 100%)',
+          background: 'linear-gradient(135deg, rgba(17, 23, 36, 0.95) 0%, rgba(10, 14, 22, 0.98) 100%)',
           padding: '26px',
           borderRadius: '16px',
-          border: '1px solid rgba(124, 92, 252, 0.35)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          border: '1px solid rgba(153, 204, 0, 0.3)',
+          boxShadow: '0 12px 36px rgba(0, 0, 0, 0.5), 0 0 24px rgba(153, 204, 0, 0.1)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -149,17 +149,17 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
             width: '54px',
             height: '54px',
             borderRadius: '16px',
-            background: 'radial-gradient(circle, rgba(124,92,252,0.3) 0%, rgba(124,92,252,0.1) 100%)',
-            border: '2px solid #7c5cfc',
+            background: 'radial-gradient(circle, rgba(153,204,0,0.25) 0%, rgba(16,185,129,0.1) 100%)',
+            border: '2px solid #99CC00',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(124,92,252,0.4)'
+            boxShadow: '0 0 24px rgba(153,204,0,0.35)'
           }}>
-            <Shield size={28} color="#7c5cfc" />
+            <Shield size={28} color="#99CC00" />
           </div>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: 0 }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#F8FAFC', letterSpacing: '-0.02em', margin: 0 }}>
               Anti-Nuke & Threat Protection Rules
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px', margin: 0 }}>
@@ -168,8 +168,8 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
           </div>
         </div>
 
-        <button className="btn btn-primary" onClick={() => onSaveConfig('Anti-Nuke settings saved.')} style={{ padding: '10px 18px', fontWeight: 800 }}>
-          <Save size={15} />
+        <button className="btn btn-primary" onClick={() => onSaveConfig('Anti-Nuke settings saved.')} style={{ padding: '10px 20px', fontWeight: 800 }}>
+          <Save size={16} />
           <span>Save Changes</span>
         </button>
       </div>

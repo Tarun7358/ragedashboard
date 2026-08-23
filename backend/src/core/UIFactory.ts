@@ -1,11 +1,8 @@
 /**
  * UIFactory — Rage Optimiser Enterprise Design System
  *
- * Centralized factory for all Discord Components V2 and enhanced embeds.
- * All modules must import from here instead of creating ad-hoc embeds.
- *
- * Components V2 requires MessageFlags.IsComponentsV2 when sending.
- * Classic embeds (EmbedBuilder) remain supported for webhook contexts.
+ * Centralized factory for all Discord Components V2, enhanced embeds, cards,
+ * and command interactive UI. Built with the UI/UX Pro Max design system.
  */
 
 import {
@@ -25,6 +22,9 @@ import {
   type AnyComponentBuilder,
 } from 'discord.js';
 
+// ─────────────────────────────────────────────
+// CUSTOM SERVER ICONS & STATUS BADGES
+// ─────────────────────────────────────────────
 export const VERIFIED_ICON = '<a:approved:1532390590707142956>';
 export const SQUARE_TICK_ICON = '<:ticks:1532620580266836148>';
 export const WRONG_ICON = '<:wrong:1532390628330307634>';
@@ -45,7 +45,7 @@ export const VOICE_ICON = '<:voicechannelgreen:1532425750278438962>';
 export const STATS_ICON = '<:stats:1532429110775779459>';
 export const CART_ICON = '<:cart:1532621146208473115>';
 
-// ─── Server Custom Emojis (Bot 1266048940101599293 Guilds) ───
+// Server Custom Emojis
 export const YOUTUBE_ICON = '<:9100youtube:1538152286839373905>';
 export const DISCORD_ICON = '<:discord:1538152301322174534>';
 export const INSTAGRAM_ICON = '<:instagram:1538152297845231736>';
@@ -76,24 +76,68 @@ export const ANIMATED_PINK_ARROW = '<a:pinkarrow:1527647307955310722>';
 export const ANIMATED_WHITE_ARROW = '<a:animatedarrowwhite:1527647357473132554>';
 export const BLACK_BUTTERFLY_ICON = '<a:1941blackbutterfly2:1527646894904578110>';
 
-
 // ─────────────────────────────────────────────
-// DESIGN TOKENS (Matching Lime.gg visual design with Rage Optimiser branding)
+// DESIGN TOKENS (UI/UX Pro Max Cyber Palette)
 // ─────────────────────────────────────────────
 export const Colors = {
-  BRAND: 0x99CC00,  // Lime Green primary (#99CC00 / #BEF264)
-  LIME: 0x99CC00,  // Accent primary lime
-  SUCCESS: 0x10B981,  // Emerald Green
-  WARN: 0xF59E0B,  // Amber
-  DANGER: 0xEF4444,  // Red
-  GOLD: 0xD4AF37,  // Premium gold
-  MUTED: 0x5C6370,  // Disabled/neutral
-  TICKET: 0x4F8CFF,  // Ticket system
-  VOICE: 0x3B82F6,  // Voice accent
-  MUSIC: 0xA855F7,  // Music accent
-  INFO: 0x06B6D4,  // Cyan info
-  BOOST: 0xF47FFF,  // Server boost pink
+  BRAND: 0x99CC00,    // Cyber Lime Primary (#99CC00 / #BEF264)
+  LIME: 0x99CC00,     // Primary Accent Lime
+  SUCCESS: 0x10B981,  // Emerald Green (#10B981)
+  WARN: 0xF59E0B,     // Amber Warning (#F59E0B)
+  DANGER: 0xEF4444,   // Crimson Red (#EF4444)
+  GOLD: 0xD4AF37,     // Premium Gold (#D4AF37)
+  MUTED: 0x64748B,    // Slate Neutral (#64748B)
+  TICKET: 0x3B82F6,   // Electric Blue (#3B82F6)
+  VOICE: 0x10B981,    // Voice Emerald (#10B981)
+  MUSIC: 0x8B5CF6,    // Cyber Purple (#8B5CF6)
+  INFO: 0x06B6D4,     // Neon Cyan (#06B6D4)
+  BOOST: 0xF47FFF,    // Nitro Pink (#F47FFF)
 } as const;
+
+export const BRAND_FOOTER = 'Rage Optimiser Enterprise • Unbypassable Security';
+
+// ─────────────────────────────────────────────
+// MODULE IDENTITIES
+// ─────────────────────────────────────────────
+export const ModuleMeta = {
+  leveling: { icon: VIP_ICON, name: 'Leveling & Economy', color: Colors.GOLD },
+  giveaway: { icon: CART_ICON, name: 'Giveaway Manager', color: Colors.GOLD },
+  tickets: { icon: TICKET_ICON, name: 'Ticket System', color: Colors.TICKET },
+  announcements: { icon: INFO_ICON, name: 'Announcements', color: Colors.INFO },
+  welcome: { icon: MEMBER_ICON, name: 'Welcome System', color: Colors.BRAND },
+  voice: { icon: VOICE_ICON, name: 'Voice Manager', color: Colors.VOICE },
+  automod: { icon: GAVEL_ICON, name: 'AutoMod Protection', color: Colors.WARN },
+  security: { icon: SHIELD_ICON, name: 'Anti-Nuke Security', color: Colors.DANGER },
+  analytics: { icon: STATS_ICON, name: 'Analytics & SOC', color: Colors.BRAND },
+  music: { icon: VOICE_ICON, name: 'Music Suite', color: Colors.MUSIC },
+  help: { icon: CONFIG_ICON, name: 'Command Hub', color: Colors.BRAND },
+  prebot_whitelist: { icon: BOT_ICON, name: 'PreBot Whitelist', color: Colors.INFO },
+  system: { icon: BOT_ICON, name: 'System Engine', color: Colors.MUTED },
+} as const;
+
+export type ModuleKey = keyof typeof ModuleMeta;
+
+function moduleFooterText(module?: ModuleKey | string): string {
+  if (!module) return BRAND_FOOTER;
+  const meta = ModuleMeta[module as ModuleKey];
+  return `${BRAND_FOOTER} | ${meta ? meta.name : module}`;
+}
+
+// ─────────────────────────────────────────────
+// CORE EMBED BUILDERS
+// ─────────────────────────────────────────────
+
+export interface EmbedOptions {
+  module?: ModuleKey | string;
+  thumbnail?: string | null;
+  image?: string | null;
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  authorIcon?: string | null;
+  footerIcon?: string | null;
+  timestamp?: boolean;
+  footer?: string;
+  client?: any;
+}
 
 export function createLimeEmbed(options: {
   author?: string;
@@ -108,14 +152,14 @@ export function createLimeEmbed(options: {
 }): EmbedBuilder {
   const colorVal = typeof options.color === 'number'
     ? options.color
-    : (options.color || 0x99CC00);
+    : (options.color || Colors.BRAND);
 
   const embed = new EmbedBuilder()
-    .setAuthor({ name: options.author || 'Rage Optimiser Enterprise - Core Security Engine' })
+    .setAuthor({ name: options.author || 'Rage Optimiser Enterprise • Security Engine' })
     .setTitle(options.title)
     .setColor(colorVal as any)
     .setFooter({
-      text: options.footerText || `Rage Optimiser • Unbypassable Security`,
+      text: options.footerText || BRAND_FOOTER,
       iconURL: options.client?.user?.displayAvatarURL?.()
     })
     .setTimestamp();
@@ -130,7 +174,7 @@ export function createLimeEmbed(options: {
 
   if (options.commandBox) {
     embed.addFields({
-      name: `${INFO_ICON} System Command`,
+      name: `${INFO_ICON} Syntax / Usage`,
       value: `\`\`\`${options.commandBox}\`\`\``,
       inline: false
     });
@@ -142,93 +186,6 @@ export function createLimeEmbed(options: {
 
   return embed;
 }
-
-// ─────────────────────────────────────────────
-// MODULE IDENTITIES
-// ─────────────────────────────────────────────
-export const ModuleMeta = {
-  leveling: { icon: VIP_ICON, name: 'Leveling & Economy', color: Colors.GOLD },
-  giveaway: { icon: CART_ICON, name: 'Giveaway Manager', color: Colors.GOLD },
-  tickets: { icon: TICKET_ICON, name: 'Ticket System', color: Colors.TICKET },
-  announcements: { icon: INFO_ICON, name: 'Announcements', color: Colors.INFO },
-  welcome: { icon: MEMBER_ICON, name: 'Welcome System', color: Colors.BRAND },
-  voice: { icon: VOICE_ICON, name: 'Voice Manager', color: Colors.VOICE },
-  automod: { icon: GAVEL_ICON, name: 'AutoMod', color: Colors.WARN },
-  security: { icon: SHIELD_ICON, name: 'Security', color: Colors.DANGER },
-  analytics: { icon: STATS_ICON, name: 'Analytics', color: Colors.BRAND },
-  music: { icon: VOICE_ICON, name: 'Music', color: Colors.MUSIC },
-  help: { icon: CONFIG_ICON, name: 'Command Hub', color: Colors.BRAND },
-  prebot_whitelist: { icon: BOT_ICON, name: 'PreBot Whitelist', color: Colors.INFO },
-  system: { icon: BOT_ICON, name: 'System', color: Colors.MUTED },
-} as const;
-
-export type ModuleKey = keyof typeof ModuleMeta;
-
-// ─────────────────────────────────────────────
-// FOOTER & AUTHOR HELPERS
-// ─────────────────────────────────────────────
-const BRAND_FOOTER = `Rage Optimiser • Unbypassable Security`;
-
-function moduleFooterText(module?: ModuleKey | string): string {
-  if (!module) return BRAND_FOOTER;
-  const meta = ModuleMeta[module as ModuleKey];
-  return `${BRAND_FOOTER}\n${meta ? meta.name : module}`;
-}
-
-// ─────────────────────────────────────────────
-// EMBED FACTORY (EmbedBuilder wrappers)
-// Used where Components V2 is unsuitable (webhooks, DMs, etc.)
-// ─────────────────────────────────────────────
-export interface EmbedOptions {
-  module?: ModuleKey | string;
-  thumbnail?: string | null;
-  image?: string | null;
-  fields?: Array<{ name: string; value: string; inline?: boolean }>;
-  authorIcon?: string | null;
-  footerIcon?: string | null;
-  timestamp?: boolean;
-  footer?: string;
-}
-
-function stripLeadingEmoji(text: string): string {
-  if (!text) return '';
-  return text.replace(/^[❌✅🔒⚠️🧊🌡️🔓🧹🔨✏️⏱️🔕👁️📋📜📈📝🔗🏓🪙🎲😂☀️💡🛡️✨💬👟🤖⚙️🪄🎨🎟️⏳🔊\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]+\s*/u, '').trim();
-}
-
-export const Embeds = {
-  info(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    const cleanTitle = stripLeadingEmoji(title);
-    return buildBaseEmbed(Colors.BRAND, title, description, opts);
-  },
-
-  success(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.SUCCESS, title, description, opts);
-  },
-
-  warn(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.WARN, title, description, opts);
-  },
-
-  error(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.DANGER, title, description, opts);
-  },
-
-  premium(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.GOLD, title, description, opts);
-  },
-
-  module(mod: ModuleKey | string, title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.BRAND, title, description, { ...opts, module: mod });
-  },
-
-  denied(reason: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.DANGER, '<:shield:1532403012751065179> Access Denied', reason, opts);
-  },
-
-  permError(permission: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.DANGER, '<:shield:1532403012751065179> Permission Required', `You require the **${permission}** permission to execute this operation.`, opts);
-  },
-};
 
 function buildBaseEmbed(
   color: number,
@@ -243,7 +200,7 @@ function buildBaseEmbed(
     .setTimestamp()
     .setFooter({
       text: opts.footer ?? moduleFooterText(opts.module),
-      iconURL: opts.footerIcon ?? undefined,
+      iconURL: opts.footerIcon ?? opts.client?.user?.displayAvatarURL?.() ?? undefined,
     });
 
   if (opts.thumbnail) embed.setThumbnail(opts.thumbnail);
@@ -253,13 +210,51 @@ function buildBaseEmbed(
   }
   if (opts.authorIcon && title) {
     embed.setAuthor({ name: title, iconURL: opts.authorIcon });
-    embed.setTitle(''); // avoid duplicating title in author
+    embed.setTitle('');
   } else {
-    embed.setAuthor({ name: 'Rage Optimiser Enterprise - Core Security Engine' });
+    embed.setAuthor({ name: 'Rage Optimiser Enterprise • Core Security Engine' });
   }
 
   return embed;
 }
+
+export const Embeds = {
+  info(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
+    return buildBaseEmbed(Colors.BRAND, `${INFO_ICON} ${title}`, description, opts);
+  },
+
+  success(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
+    return buildBaseEmbed(Colors.SUCCESS, `${VERIFIED_ICON} ${title}`, description, opts);
+  },
+
+  warn(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
+    return buildBaseEmbed(Colors.WARN, `${TIMER_ICON} ${title}`, description, opts);
+  },
+
+  error(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
+    return buildBaseEmbed(Colors.DANGER, `${WRONG_ICON} ${title}`, description, opts);
+  },
+
+  premium(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
+    return buildBaseEmbed(Colors.GOLD, `${GOLD_CROWN_ICON} ${title}`, description, opts);
+  },
+
+  module(mod: ModuleKey | string, title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
+    return buildBaseEmbed(Colors.BRAND, title, description, { ...opts, module: mod });
+  },
+
+  denied(reason: string, opts: EmbedOptions = {}): EmbedBuilder {
+    return buildBaseEmbed(Colors.DANGER, `${SHIELD_ICON} Access Denied`, reason, opts);
+  },
+
+  permError(permission: string, opts: EmbedOptions = {}): EmbedBuilder {
+    return buildBaseEmbed(Colors.DANGER, `${SHIELD_ICON} Permission Required`, `You require the **${permission}** permission to execute this operation.`, opts);
+  },
+};
+
+// ─────────────────────────────────────────────
+// ACTION & AUDIT CARD BUILDERS
+// ─────────────────────────────────────────────
 
 export function buildMinimalAction(opts: {
   user: any;
@@ -290,7 +285,8 @@ export function buildMinimalAction(opts: {
   return new EmbedBuilder()
     .setColor(color)
     .setDescription(text)
-    .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+    .setFooter({ text: BRAND_FOOTER })
+    .setTimestamp();
 }
 
 export function buildLimeActionCard(opts: {
@@ -305,7 +301,8 @@ export function buildLimeActionCard(opts: {
     .setColor(opts.color ?? Colors.LIME)
     .setTitle(opts.title)
     .setDescription(opts.description)
-    .setFooter({ text: opts.footerText ?? 'Rage Optimiser • Unbypassable Security' });
+    .setFooter({ text: opts.footerText ?? BRAND_FOOTER })
+    .setTimestamp();
 
   if (opts.fields && opts.fields.length > 0) {
     embed.addFields(opts.fields);
@@ -327,19 +324,24 @@ export function buildLimeWarnCard(opts: {
 }): EmbedBuilder {
   const current = opts.currentLimit ?? 1;
   const max = opts.maxLimit ?? 5;
-  const color = opts.color ?? Colors.LIME;
+  const color = opts.color ?? Colors.WARN;
+
+  const reasonText = opts.reason.startsWith('Used blacklisted word') || opts.reason.startsWith('Posting')
+    ? opts.reason
+    : `Reason: ${opts.reason}`;
 
   const desc = [
-    `> **Reason**: . ${opts.user} . , **Used blacklisted word: "${opts.reason}"**`,
+    `> ${opts.user} was warned for **${reasonText}** *(Message Deleted)*`,
     `> `,
-    `> has been warned " Your Limit is ${current}/${max} " Exceeding the limits will lead to punishments ,`
+    `> **Violation Progress**: \`${current}/${max}\` — Exceeding the threshold triggers automatic quarantine / punishment.`
   ].join('\n');
 
   const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`Warned ${opts.category} | ${VERIFIED_ICON}`)
     .setDescription(desc)
-    .setFooter({ text: 'Rage Optimiser • AutoMod Protection' });
+    .setFooter({ text: 'Rage Optimiser • AutoMod & Anti-Nuke Protection' })
+    .setTimestamp();
 
   if (opts.thumbnailUrl) {
     embed.setThumbnail(opts.thumbnailUrl);
@@ -348,6 +350,9 @@ export function buildLimeWarnCard(opts: {
   return embed;
 }
 
+/**
+ * Master Overview Card (High-Impact Discord Markdown Structure)
+ */
 export function buildLimeOverviewCard(opts: {
   title: string;
   subtitle?: string;
@@ -361,14 +366,13 @@ export function buildLimeOverviewCard(opts: {
 }): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setColor(opts.color ?? Colors.LIME)
-    .setFooter({ text: opts.footerText ?? 'Rage Optimiser Unbypassable Security | Menu Expried Resue it' });
+    .setFooter({ text: opts.footerText ?? BRAND_FOOTER })
+    .setTimestamp();
 
-  const hasEmoji = opts.title.trim().startsWith('<a:') || opts.title.trim().startsWith('<:');
   const titleText = opts.title.trim();
-  const displayTitle = hasEmoji ? titleText : `${VERIFIED_ICON} ${titleText.toUpperCase()}`;
-  const subText = opts.subtitle ? opts.subtitle : 'Rage Optimiser - IS GLOBAL';
+  const subText = opts.subtitle ? opts.subtitle : 'Rage Optimiser Enterprise • Active Protection';
 
-  let desc = `## ${displayTitle}\n**${subText}**\n\n`;
+  let desc = `## ${titleText}\n**${subText}**\n\n`;
 
   for (const sec of opts.sections) {
     if (sec.title) {
@@ -390,6 +394,43 @@ export function buildLimeOverviewCard(opts: {
   return embed;
 }
 
+/**
+ * Rich Command Guide Card with syntax, examples, permissions, and cooldown indicators
+ */
+export function buildCommandCard(opts: {
+  name: string;
+  category: string;
+  description: string;
+  usage: string;
+  aliases?: string[];
+  permissions?: string[];
+  cooldownSeconds?: number;
+  examples?: string[];
+}): EmbedBuilder {
+  const embed = new EmbedBuilder()
+    .setColor(Colors.BRAND)
+    .setTitle(`${CONFIG_ICON} Command Guide: \`r!${opts.name}\``)
+    .setDescription(`> ${opts.description}\n`)
+    .addFields([
+      { name: 'Usage Syntax', value: `\`\`\`${opts.usage}\`\`\``, inline: false },
+      { name: 'Category', value: `\`${opts.category}\``, inline: true },
+      { name: 'Cooldown', value: `\`${opts.cooldownSeconds || 3}s\``, inline: true },
+      { name: 'Required Permissions', value: `\`${(opts.permissions || ['None']).join(', ')}\``, inline: true }
+    ])
+    .setFooter({ text: BRAND_FOOTER })
+    .setTimestamp();
+
+  if (opts.aliases && opts.aliases.length > 0) {
+    embed.addFields({ name: 'Aliases', value: opts.aliases.map(a => `\`r!${a}\``).join(' • '), inline: false });
+  }
+
+  if (opts.examples && opts.examples.length > 0) {
+    embed.addFields({ name: 'Practical Examples', value: opts.examples.map(ex => `• \`${ex}\``).join('\n'), inline: false });
+  }
+
+  return embed;
+}
+
 export function buildTicketPanelEmbed(opts: {
   serverName: string;
   statusText?: string;
@@ -399,52 +440,34 @@ export function buildTicketPanelEmbed(opts: {
 }): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setColor(Colors.LIME)
-    .setTitle('Rage Supports| Queries')
+    .setTitle(`${TICKET_ICON} Rage Optimiser • Support & Inquiries`)
     .setThumbnail(opts.thumbnailUrl || DEFAULT_BRAND_IMAGE_URL)
     .setImage(opts.bannerUrl || DEFAULT_BRAND_IMAGE_URL)
-    .setFooter({ text: 'Rage Optimiser Enterprise • Support Desk' });
+    .setFooter({ text: 'Rage Optimiser Enterprise • Support Desk' })
+    .setTimestamp();
 
   const fieldsText = [
     `**Server:** ${opts.serverName}`,
-    `**Status:** ${opts.statusText || 'Active Support Panel'}`,
-    `**Description:** ${opts.description || 'Create a ticket if you face any issues , faq on Rage Optimiser we are ready to support you always'}`
+    `**Status:** ${opts.statusText || 'Active Support Desk'}`,
+    `**Description:** ${opts.description || 'Open a ticket for instant help, anti-nuke queries, or technical assistance.'}`
   ].join('\n');
 
   const bulletsText = [
-    `• Give your details when creating a ticket , reasons & questions`,
-    ``,
-    `• Response time will be within 24 hours & issues will be resolved in 48 hours`,
-    `• If you face any issues in Antinuke , Automods or Any modules please don't hesitate even for 1 minute to our Rage Optimiser official support each and every ticket is 100 % validated and reviews are very strictly updated 100 % conversation will be there with us`,
-    ``,
-    `• If you face any down time in bot or modules please let us know the event by sharing the images on ticket channels`,
-    ``,
-    `• Don't leave the queries and questions blank so that we can't address you please consider filling the details`,
-    ``,
-    `• Ticket data will always be available with us and your dm so any time you can request for getting transcript`
+    `• Provide full details when opening a ticket (reasons, context, screenshots)`,
+    `• Guaranteed staff response within **24 hours** with issues resolved promptly`,
+    `• All interactions are encrypted, audit-logged, and available in your transcript DM`,
+    `• **Strict Notice**: Abuse or opening tickets for fun will result in automated blacklisting`
   ].join('\n');
 
-  const cautionText = `Please Don't Create Tickets for Fun! , The impact will be more dangerous!`;
-
-  embed.setDescription(`${fieldsText}\n\n${bulletsText}\n\n${cautionText}`);
+  embed.setDescription(`${fieldsText}\n\n>>> **Guidelines & Protocols**\n${bulletsText}`);
 
   return embed;
 }
 
 // ─────────────────────────────────────────────
-// COMPONENTS V2 FACTORY
-// Produces ContainerBuilder messages with IsComponentsV2 flag
+// QUICK STATUS REPLIES
 // ─────────────────────────────────────────────
 
-export interface CV2Options {
-  accentColor?: number;
-  /** Extra text-display sections to append */
-  extraSections?: string[];
-}
-
-/**
- * Build a standard enterprise status card embed.
- * Returns { embeds, components, flags } ready to spread into interaction.reply()
- */
 export function buildStatusCard(opts: {
   emoji: string;
   title: string;
@@ -458,8 +481,8 @@ export function buildStatusCard(opts: {
   const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`${opts.emoji} ${opts.title}`.trim())
-    .setDescription(opts.body)
-    .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+    .setDescription(`> ${opts.body}`)
+    .setFooter({ text: BRAND_FOOTER })
     .setTimestamp();
 
   if (opts.thumbnailUrl) {
@@ -477,10 +500,7 @@ export function buildStatusCard(opts: {
   };
 }
 
-/**
- * Quick reply helper for standard error responses
- */
-export function buildErrorCard(text: string, title = 'Error'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
+export function buildErrorCard(text: string, title = 'Operation Failed'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   return buildStatusCard({
     emoji: WRONG_ICON,
     title,
@@ -489,10 +509,7 @@ export function buildErrorCard(text: string, title = 'Error'): { embeds: EmbedBu
   });
 }
 
-/**
- * Quick reply helper for standard success responses
- */
-export function buildSuccessCard(text: string, title = 'Success'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
+export function buildSuccessCard(text: string, title = 'Operation Successful'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   return buildStatusCard({
     emoji: VERIFIED_ICON,
     title,
@@ -501,10 +518,7 @@ export function buildSuccessCard(text: string, title = 'Success'): { embeds: Emb
   });
 }
 
-/**
- * Quick reply helper for warning responses
- */
-export function buildWarnCard(text: string, title = 'Warning'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
+export function buildWarnCard(text: string, title = 'Security Notice'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   return buildStatusCard({
     emoji: TIMER_ICON,
     title,
@@ -513,21 +527,15 @@ export function buildWarnCard(text: string, title = 'Warning'): { embeds: EmbedB
   });
 }
 
-/**
- * Quick reply helper for permission error responses
- */
 export function buildPermCard(permission: string): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   return buildStatusCard({
     emoji: SHIELD_ICON,
     title: 'Access Denied',
-    body: `You need the **${permission}** permission to execute this operation.`,
+    body: `You require the **${permission}** permission to execute this operation.`,
     accentColor: Colors.DANGER,
   });
 }
 
-/**
- * Build an enterprise leaderboard / multi-entry list card embed.
- */
 export function buildListCard(opts: {
   emoji: string;
   title: string;
@@ -537,13 +545,13 @@ export function buildListCard(opts: {
   thumbnailUrl?: string;
 }): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   const color = opts.accentColor ?? Colors.BRAND;
-  const listText = opts.entries.join('\n') || '*No entries found.*';
+  const listText = opts.entries.join('\n') || '*No records found.*';
 
   const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`${opts.emoji} ${opts.title}`.trim())
-    .setDescription((opts.subtitle ? `*${opts.subtitle}*\n\n` : '') + listText)
-    .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+    .setDescription((opts.subtitle ? `*${opts.subtitle}*\n\n` : '') + `>>> ${listText}`)
+    .setFooter({ text: BRAND_FOOTER })
     .setTimestamp();
 
   if (opts.thumbnailUrl) {
@@ -557,9 +565,6 @@ export function buildListCard(opts: {
   };
 }
 
-/**
- * Build a full-featured enterprise card embed with header, fields, and footer.
- */
 export function buildRichCard(opts: {
   emoji: string;
   title: string;
@@ -575,11 +580,11 @@ export function buildRichCard(opts: {
   const embed = new EmbedBuilder()
     .setColor(color)
     .setTitle(`${opts.emoji} ${opts.title}`.trim())
-    .setFooter({ text: opts.footerNote || 'Rage Optimiser • Unbypassable Security' })
+    .setFooter({ text: opts.footerNote || BRAND_FOOTER })
     .setTimestamp();
 
   if (opts.description) {
-    embed.setDescription(opts.description);
+    embed.setDescription(`> ${opts.description}`);
   }
 
   if (opts.thumbnailUrl) {
@@ -606,15 +611,12 @@ export function buildRichCard(opts: {
 // COMPONENT ROW FACTORY
 // ─────────────────────────────────────────────
 export const Components = {
-  /**
-   * Confirm (Danger) + Cancel (Secondary) row
-   */
   confirmRow(confirmId: string, cancelId: string, labels?: { confirm?: string; cancel?: string }): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(confirmId)
-        .setLabel(labels?.confirm ?? 'Confirm')
-        .setStyle(ButtonStyle.Danger)
+        .setLabel(labels?.confirm ?? 'Confirm Action')
+        .setStyle(ButtonStyle.Success)
         .setEmoji(VERIFIED_ICON),
       new ButtonBuilder()
         .setCustomId(cancelId)
@@ -624,9 +626,6 @@ export const Components = {
     );
   },
 
-  /**
-   * Row of link buttons
-   */
   linkRow(buttons: Array<{ label: string; url: string; emoji?: string }>): ActionRowBuilder<ButtonBuilder> {
     const btns = buttons.slice(0, 5).map(b => {
       const btn = new ButtonBuilder()
@@ -639,9 +638,6 @@ export const Components = {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(btns);
   },
 
-  /**
-   * Pagination nav: Previous / Page X/Y / Next
-   */
   navRow(prevId: string, nextId: string, page: number, total: number): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -662,9 +658,6 @@ export const Components = {
     );
   },
 
-  /**
-   * Single action button row (primary)
-   */
   primaryButton(id: string, label: string, emoji?: string): ActionRowBuilder<ButtonBuilder> {
     const btn = new ButtonBuilder()
       .setCustomId(id)
@@ -674,9 +667,6 @@ export const Components = {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(btn);
   },
 
-  /**
-   * Success + Danger button row (claim/close, start/cancel patterns)
-   */
   actionPair(
     successId: string, successLabel: string, successEmoji: string,
     dangerID: string, dangerLabel: string, dangerEmoji: string
@@ -687,9 +677,6 @@ export const Components = {
     );
   },
 
-  /**
-   * Jump-to-message link button
-   */
   jumpButton(url: string, label = 'Jump to Message'): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setLabel(label).setStyle(ButtonStyle.Link).setURL(url).setEmoji('↗️')
@@ -698,15 +685,8 @@ export const Components = {
 };
 
 // ─────────────────────────────────────────────
-// XP / PROGRESS BAR HELPER
+// PROGRESS BAR & FORMATTING HELPERS
 // ─────────────────────────────────────────────
-
-/**
- * Render a Unicode block-style progress bar.
- * @param current Current value
- * @param max Max value
- * @param size Bar width in blocks (default 12)
- */
 export function progressBar(current: number, max: number, size = 12): string {
   const ratio = max > 0 ? Math.min(current / max, 1) : 0;
   const filled = Math.round(ratio * size);
@@ -714,16 +694,10 @@ export function progressBar(current: number, max: number, size = 12): string {
   return '█'.repeat(filled) + '░'.repeat(empty) + ` \`${Math.round(ratio * 100)}%\``;
 }
 
-/**
- * Format a large number with commas.
- */
 export function fmt(n: number): string {
   return n.toLocaleString('en-US');
 }
 
-/**
- * Discord timestamp for a Date or Unix seconds.
- */
 export function ts(dateOrSec: Date | number, style: 'R' | 'F' | 'f' | 'D' | 'd' | 'T' | 't' = 'R'): string {
   const sec = typeof dateOrSec === 'number' ? dateOrSec : Math.floor(dateOrSec.getTime() / 1000);
   return `<t:${sec}:${style}>`;

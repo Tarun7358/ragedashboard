@@ -192,7 +192,8 @@ async function bootstrap() {
       (guildId) => registry.getModulesState(guildId),
       (guildId) => registry.getGlobalSettings(guildId),
       null as any,
-      (guildId, id, config) => registry.updateModuleConfig(guildId, id, config)
+      (guildId, id, config) => registry.updateModuleConfig(guildId, id, config),
+      (guildId, id, enabledOverride) => registry.toggleModule(guildId, id, enabledOverride)
     );
     registry.client = gateway.client;
 

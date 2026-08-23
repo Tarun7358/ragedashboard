@@ -95,6 +95,20 @@ export function registerTempRoleCommands(): void {
     botPermissions: ['ManageRoles'],
     execute: async (message: Message, args: string[]) => {
       const sub = args[0]?.toLowerCase();
+      if (message.guild && (sub === 'add' || sub === 'remove')) {
+        const { isOwnerOrExtraOwner, checkWhitelistPermission } = await import('../../utils/whitelistCheck.js');
+        const isOwner = await isOwnerOrExtraOwner(message.author.id, message.guild);
+        const isWhitelisted = await checkWhitelistPermission(message.author.id, message.guild, {}, sub === 'add' ? 'anti_role_grant' : 'anti_role_remove');
+        if (!isOwner && !isWhitelisted) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Access Denied',
+              description: `${WRONG_EMOJI} 🔒 **Restricted Command**: Temporary role commands can only be executed by the **Server Owner**, **Extra Owners**, and **Whitelisted Members**.\nNormal Administrator permissions are not sufficient.`
+            })]
+          });
+        }
+      }
+
       const db = Database.getDb();
 
       if (!db) {

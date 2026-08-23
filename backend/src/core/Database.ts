@@ -20,6 +20,22 @@ function resolveBackupDir(): string {
   return path.resolve(path.dirname(resolveDatabasePath()), 'db_backups');
 }
 
+export interface ServerAuditLogEntry {
+  id?: number;
+  guildId: string;
+  action: string;
+  targetId?: string | null;
+  targetType?: string | null;
+  targetName?: string | null;
+  executorId?: string | null;
+  executorTag?: string | null;
+  reason?: string | null;
+  details?: any;
+  type?: 'info' | 'warn' | 'success' | 'danger';
+  timestamp?: number;
+  createdAt?: number;
+}
+
 export class Database {
   private static isConnected = false;
   private static dbInstance: sqlite3.Database | null = null;
@@ -204,7 +220,7 @@ export class Database {
       'guild_xp', 'guild_economy', 'discord_sessions', 'public_feed',
       'sync_logs', 'schema_migrations', 'tickets', 'ticket_messages',
       'ticket_panels', 'moderation_cases', 'persistent_music_queues', 'prebot_whitelist',
-      'guild_custom_embeds', 'trusted_actor_abuse_logs'
+      'guild_custom_embeds', 'trusted_actor_abuse_logs', 'server_audit_logs'
     ];
 
     const rows = await this.all<{ name: string }>(
@@ -297,6 +313,127 @@ export class Database {
         else resolve((rows || []) as T[]);
       });
     });
+  }
+
+  public static async saveAuditLog(entry: ServerAuditLogEntry): Promise<{ lastID: number; changes: number }> {
+    if (!this.isConnected || !this.dbInstance) {
+      throw new Error('Database not connected');
+    }
+    const detailsStr = typeof entry.details === 'object' && entry.details !== null ? JSON.stringify(entry.details) : (entry.details || null);
+    const ts = entry.timestamp || Date.now();
+    const logType = entry.type || 'info';
+
+    const result = await this.run(
+      `INSERT INTO server_audit_logs 
+       (guildId, action, targetId, targetType, targetName, executorId, executorTag, reason, details, type, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entry.guildId,
+        entry.action,
+        entry.targetId || null,
+        entry.targetType || null,
+        entry.targetName || null,
+        entry.executorId || null,
+        entry.executorTag || null,
+        entry.reason || null,
+        detailsStr,
+        logType,
+        ts
+      ]
+    );
+
+    // Retention policy: Retain latest 5,000 logs per guild
+    this.run(
+      `DELETE FROM server_audit_logs WHERE guildId = ? AND id NOT IN (
+        SELECT id FROM server_audit_logs WHERE guildId = ? ORDER BY id DESC LIMIT 5000
+      )`,
+      [entry.guildId, entry.guildId]
+    ).catch(() => {});
+
+    return result;
+  }
+
+  public static async registerDashboard(guildId: string, channelId: string, messageId: string): Promise<void> {
+    if (!this.isConnected || !this.dbInstance) return;
+    const now = Math.floor(Date.now() / 1000);
+    await this.run(
+      `INSERT INTO guild_dashboards (guildId, channelId, messageId, updatedAt)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(guildId) DO UPDATE SET
+         channelId = excluded.channelId,
+         messageId = excluded.messageId,
+         updatedAt = excluded.updatedAt;`,
+      [guildId, channelId, messageId, now]
+    );
+  }
+
+  public static async getDashboard(guildId: string): Promise<{ guildId: string; channelId: string; messageId: string; updatedAt: number } | null> {
+    if (!this.isConnected || !this.dbInstance) return null;
+    return this.get<any>(`SELECT * FROM guild_dashboards WHERE guildId = ?;`, [guildId]);
+  }
+
+  public static async getAllDashboards(): Promise<Array<{ guildId: string; channelId: string; messageId: string; updatedAt: number }>> {
+    if (!this.isConnected || !this.dbInstance) return [];
+    return this.all<any>(`SELECT * FROM guild_dashboards;`);
+  }
+
+  public static async removeDashboard(guildId: string): Promise<void> {
+    if (!this.isConnected || !this.dbInstance) return;
+    await this.run(`DELETE FROM guild_dashboards WHERE guildId = ?;`, [guildId]);
+  }
+
+  public static async getAuditLogs(
+    guildId: string,
+    options: {
+      limit?: number;
+      offset?: number;
+      action?: string;
+      type?: string;
+      search?: string;
+    } = {}
+  ): Promise<{ logs: ServerAuditLogEntry[]; total: number }> {
+    if (!this.isConnected || !this.dbInstance) {
+      return { logs: [], total: 0 };
+    }
+
+    const limit = Math.min(Math.max(options.limit || 50, 1), 200);
+    const offset = Math.max(options.offset || 0, 0);
+
+    let whereClause = 'WHERE guildId = ?';
+    const params: any[] = [guildId];
+
+    if (options.action) {
+      whereClause += ' AND action = ?';
+      params.push(options.action);
+    }
+    if (options.type) {
+      whereClause += ' AND type = ?';
+      params.push(options.type);
+    }
+    if (options.search) {
+      whereClause += ' AND (action LIKE ? OR targetName LIKE ? OR executorTag LIKE ? OR reason LIKE ?)';
+      const s = `%${options.search}%`;
+      params.push(s, s, s, s);
+    }
+
+    const countRow = await this.get<{ total: number }>(
+      `SELECT COUNT(*) as total FROM server_audit_logs ${whereClause}`,
+      params
+    );
+    const total = countRow?.total || 0;
+
+    const queryParams = [...params, limit, offset];
+    const rows = await this.all<any>(
+      `SELECT * FROM server_audit_logs ${whereClause} ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?`,
+      queryParams
+    );
+
+    const logs: ServerAuditLogEntry[] = rows.map(r => ({
+      ...r,
+      details: r.details ? (() => { try { return JSON.parse(r.details); } catch { return r.details; } })() : null
+    }));
+
+    return { logs, total };
   }
 
   public static exec(sql: string): Promise<void> {
@@ -639,6 +776,24 @@ export class Database {
         createdAt INTEGER DEFAULT (strftime('%s', 'now'))
       );`,
       `CREATE INDEX IF NOT EXISTS idx_trusted_actor_logs ON trusted_actor_abuse_logs (guildId, id DESC);`,
+      `CREATE TABLE IF NOT EXISTS server_audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        action TEXT NOT NULL,
+        targetId TEXT,
+        targetType TEXT,
+        targetName TEXT,
+        executorId TEXT,
+        executorTag TEXT,
+        reason TEXT,
+        details TEXT,
+        type TEXT NOT NULL DEFAULT 'info',
+        timestamp INTEGER NOT NULL,
+        createdAt INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_server_audit_logs_guild ON server_audit_logs (guildId, id DESC);`,
+      `CREATE INDEX IF NOT EXISTS idx_server_audit_logs_time ON server_audit_logs (guildId, timestamp DESC);`,
+      `CREATE INDEX IF NOT EXISTS idx_server_audit_logs_action ON server_audit_logs (guildId, action);`
     ];
 
     for (const schema of schemas) {

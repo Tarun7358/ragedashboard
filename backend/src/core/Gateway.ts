@@ -22,6 +22,17 @@ import { PayloadFormatter } from './PayloadFormatter.js';
 import { BrainEventInterceptor } from '../brain/BrainEventInterceptor.js';
 import { OAuthService } from './OAuthService.js';
 import { ensureAntiNukeBackupRoles } from '../modules/security/enable.js';
+import { DashboardSyncService } from '../services/DashboardSyncService.js';
+import {
+  AdvancedSecurityService,
+  handleThreadCreate,
+  handleThreadDelete,
+  handleMemberJoinRaidCheck,
+  handleNicknameChange,
+  handleAutoModRuleDelete,
+  handleScheduledEventCreate,
+  handleCommandPermissionsUpdate
+} from '../services/AdvancedSecurityService.js';
 
 /**
  * transformContentToLimeCard — now a thin passthrough to PayloadFormatter.normalize().
@@ -232,7 +243,8 @@ export class Gateway {
     private getModulesState: (guildId?: string) => ModuleState[],
     private getGlobalSettings: (guildId?: string) => Record<string, any>,
     private publicFeed: PublicFeedManager,
-    private updateModuleConfig: (guildId: string | undefined, id: string, config: Record<string, any>) => ModuleState | null
+    private updateModuleConfig: (guildId: string | undefined, id: string, config: Record<string, any>) => ModuleState | null,
+    public toggleModule?: (guildId: string | undefined, id: string, enabledOverride?: boolean) => ModuleState | null
   ) {
     this.client = new Client({
       intents: [
@@ -370,9 +382,17 @@ export class Gateway {
         const g = this.client.guilds.cache.get(gId);
         if (g) {
           ensureAntiNukeBackupRoles(g).catch(() => { });
+          import('../modules/backups/manifest.js').then(m => m.ensureRageRoleAtTop(g)).catch(() => {});
+          import('../modules/security/enable.js').then(m => {
+            m.repairRageBotAdminPermissions(g).catch(() => {});
+            m.deploySecurityDashboardToChannel(g).catch(() => {});
+          }).catch(() => {});
         }
         this.dispatchEventForGuild('ready', gId);
       }
+
+      DashboardSyncService.init(this.client);
+      AdvancedSecurityService.init(this.client);
 
       setInterval(() => this.syncRegistry(), 30000);
       setInterval(() => this.checkVoicePresence(), 10000);
@@ -391,13 +411,22 @@ export class Gateway {
           uptime: metrics.uptime
         });
       }, 5000);
+
+      this.publicFeed?.addEvent('Server', 'Bot connected to Discord Gateway successfully');
+      this.syncRegistry();
     });
 
     this.client.on('guildCreate', async (guild) => {
       this.logSyncEvent(`Discord Event: Bot joined new guild "${guild.name}" (${guild.id}).`, 'success');
 
-      // Auto-provision backup administrative security roles on bot join
-      const backupRoles = await ensureAntiNukeBackupRoles(guild).catch((err) => {
+      // 1. Position Rage Role at absolute top of manageable hierarchy & repair Administrator permissions
+      try {
+        const { repairRageBotAdminPermissions } = await import('../modules/security/enable.js');
+        await repairRageBotAdminPermissions(guild).catch(() => {});
+      } catch {}
+
+      // 2. Auto-provision backup administrative security roles on bot join
+      await ensureAntiNukeBackupRoles(guild).catch((err) => {
         console.error(`[Gateway] Error provisioning backup roles for new guild "${guild.name}":`, err);
         return [];
       });
@@ -447,16 +476,29 @@ export class Gateway {
               ]
             },
             {
-              title: `⚡ QUICK ACTIVATION & MODULE CONTROLS (OFF BY DEFAULT)`,
+              title: `⚡ MASTER 1-CLICK SECURITY ACTIVATION (OFF BY DEFAULT)`,
               items: [
                 'For maximum setup safety, **all protection modules start OFF by default** in new servers.',
                 'Use the commands below to turn on security modules with optimal default values:',
                 '',
-                '• `r!enable antinuke` — Enable all Anti-Nuke, Anti-Bot & Protection modules',
-                '• `r!enable automod` — Enable Anti-Link, Anti-Spam & Chat Filters',
+                '• `r!enable all` — **Master 1-Click Activation**: Enable Anti-Nuke, AutoMod, Voice, Join-Role Guard, Logging & Backups instantly',
+                '• `r!enable antinuke` — Enable 24 Anti-Nuke & Unbypassable protection rules',
+                '• `r!enable automod` — Enable AI AutoMod, Anti-Link filter & rate limiters',
                 '• `r!enable voice` — Enable Voice Safeguards & Join-To-Create',
-                '• `r!enable all` — Enable complete enterprise security suite instantly',
+                '• `r!whitelist enable` — Enable Member & Role Whitelist engine',
                 '• `r!config` or `/config` — Access full interactive server dashboard'
+              ]
+            },
+            {
+              title: `📊 FEATURE & COMMUNITY MODULE ACTIVATION`,
+              items: [
+                '• `r!counter enable` — Enable Live Member & VC Stats Counter voice channels',
+                '• `r!counter setup youtube @handle` — Create live YouTube Subscriber & View counter',
+                '• `r!verify setup` — Initialize Server Verification Gate',
+                '• `r!welcome setup` — Initialize Member Welcome Cards & Auto-Roles',
+                '• `r!selfroles setup` — Create interactive Self-Assignable Role panels',
+                '• `r!ticket setup` — Initialize Support Ticket panels',
+                '• `r!logging enable` — Enable server audit logging engine'
               ]
             },
             {
@@ -515,9 +557,10 @@ export class Gateway {
               {
                 title: `⚡ ONE-CLICK ACTIVATION COMMANDS`,
                 items: [
+                  '• `r!enable all` — Activate full enterprise protection suite (Anti-Nuke, AutoMod, Voice, Logging)',
                   '• `r!enable antinuke` — Activate all Anti-Nuke protections with standard limits',
                   '• `r!enable automod` — Activate Anti-Link & Anti-Spam filters',
-                  '• `r!enable all` — Activate full enterprise protection suite',
+                  '• `r!counter enable` — Activate live Member Stats Counter voice channels',
                   '• `r!config` or `/config` — Open interactive server control dashboard'
                 ]
               }
@@ -576,6 +619,7 @@ export class Gateway {
     this.client.on('roleCreate', (role) => {
       const guildId = role.guild.id;
       this.syncRegistry(guildId);
+      DashboardSyncService.triggerSync(guildId);
       this.dispatchEvent('roleCreate', role);
     });
 
@@ -587,6 +631,7 @@ export class Gateway {
       this.setRegistry(guildId, reg);
       this.reevaluateModules(guildId);
       this.broadcast({ type: 'STATE_UPDATE', modules: this.getModulesState(guildId), registry: reg, guildId });
+      DashboardSyncService.triggerSync(guildId);
 
       // Dispatch to modules
       this.dispatchEvent('roleDelete', role);
@@ -597,6 +642,7 @@ export class Gateway {
       if (oldRole.name !== newRole.name || oldRole.color !== newRole.color) {
         this.syncRegistry(guildId);
       }
+      DashboardSyncService.triggerSync(guildId);
       this.dispatchEvent('roleUpdate', oldRole, newRole);
     });
 
@@ -609,6 +655,7 @@ export class Gateway {
       this.setRegistry(guildId, reg);
       this.reevaluateModules(guildId);
       this.broadcast({ type: 'STATE_UPDATE', modules: this.getModulesState(guildId), registry: reg, guildId });
+      DashboardSyncService.triggerSync(guildId);
 
       // Dispatch to modules
       this.dispatchEvent('channelDelete', channel);
@@ -623,6 +670,7 @@ export class Gateway {
       const guildId = (channel as any).guild?.id;
       if (!guildId) return;
       this.syncRegistry(guildId);
+      DashboardSyncService.triggerSync(guildId);
       this.dispatchEvent('channelCreate', channel);
 
       const isPublic = (ch: any) => ch.permissionsFor?.(ch.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel);
@@ -638,26 +686,39 @@ export class Gateway {
         this.logSyncEvent(guildId, `Discord Event: Channel renamed from #${(oldChannel as any).name} to #${(newChannel as any).name}.`, 'info');
         this.syncRegistry(guildId);
       }
+      DashboardSyncService.triggerSync(guildId);
       this.dispatchEvent('channelUpdate', oldChannel, newChannel);
     });
 
     this.client.on('guildMemberUpdate', (oldMember, newMember) => {
+      if (newMember.guild?.id) DashboardSyncService.triggerSync(newMember.guild.id);
       this.dispatchEvent('guildMemberUpdate', oldMember, newMember);
+      // AdvSec: Mass nickname change detection
+      handleNicknameChange(this.client, oldMember as any, newMember as any, this).catch(() => {});
+    });
+
+    this.client.on('guildUpdate', (oldGuild, newGuild) => {
+      if (newGuild.id) DashboardSyncService.triggerSync(newGuild.id);
+      this.dispatchEvent('guildUpdate', oldGuild, newGuild);
     });
 
     this.client.on('guildMemberAdd', (member) => {
       const guildId = member.guild.id;
       this.logSyncEvent(guildId, `Discord Event: User "${member.user.username}" joined guild.`, 'info');
       this.syncRegistry(guildId);
+      DashboardSyncService.triggerSync(guildId);
       this.dispatchEvent('guildMemberAdd', member);
       this.publicFeed?.addEvent('Members', `**${member.user.username}** joined the server`);
       AnalyticsService.incrementMetric(guildId, 'joins').catch(() => { });
+      // AdvSec: Raid wave detection
+      handleMemberJoinRaidCheck(this.client, member as any, this).catch(() => {});
     });
 
     this.client.on('guildMemberRemove', (member) => {
       const guildId = member.guild.id;
       this.logSyncEvent(guildId, `Discord Event: User "${member.user.username}" left guild.`, 'info');
       this.syncRegistry(guildId);
+      DashboardSyncService.triggerSync(guildId);
       this.dispatchEvent('guildMemberRemove', member);
       this.publicFeed?.addEvent('Members', `**${member.user.username}** left the server`);
       AnalyticsService.incrementMetric(guildId, 'leaves').catch(() => { });
@@ -669,6 +730,30 @@ export class Gateway {
 
     this.client.on('messageUpdate', (oldMessage, newMessage) => {
       this.dispatchEvent('messageUpdate', { oldMessage, newMessage });
+    });
+
+    // AdvSec: Thread spam / mass thread delete protection
+    this.client.on('threadCreate', (thread) => {
+      handleThreadCreate(this.client, thread, this).catch(() => {});
+    });
+
+    this.client.on('threadDelete', (thread) => {
+      handleThreadDelete(this.client, thread, this).catch(() => {});
+    });
+
+    // AdvSec: AutoMod rule deletion protection
+    this.client.on('autoModerationRuleDelete' as any, (rule: any) => {
+      handleAutoModRuleDelete(this.client, rule, this).catch(() => {});
+    });
+
+    // AdvSec: Scheduled event spam protection
+    this.client.on('guildScheduledEventCreate', (event) => {
+      handleScheduledEventCreate(this.client, event, this).catch(() => {});
+    });
+
+    // AdvSec: Slash command permission override alert
+    this.client.on('applicationCommandPermissionsUpdate' as any, (data: any) => {
+      handleCommandPermissionsUpdate(this.client, data, this).catch(() => {});
     });
 
     // ── Single interactionCreate listener via InteractionRouter ─────────────
@@ -684,6 +769,7 @@ export class Gateway {
       getRegistry: (gId?: string) => this.getRegistry(gId),
       getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId),
       updateModuleConfig: (gId: string | undefined, id: string, config: Record<string, any>) => this.updateModuleConfig(gId, id, config),
+      toggleModule: (gId: string | undefined, id: string, enabledOverride?: boolean) => this.toggleModule ? this.toggleModule(gId, id, enabledOverride) : null
     });
     this.client.on('interactionCreate', (raw) => this.router.route(raw));
 
@@ -912,6 +998,10 @@ export class Gateway {
         const roundTrip = sentMsg ? Math.max(1, sentMsg.createdTimestamp - message.createdTimestamp) : 10;
         const pingColor = wsPing < 150 ? Colors.LIME : wsPing < 300 ? Colors.WARN : Colors.DANGER;
 
+        const shardId = this.client.shard?.ids[0] ?? 0;
+        const totalShards = this.client.shard?.count ?? 1;
+        const shardStr = this.client.shard ? `#${shardId}/${totalShards} ONLINE` : `#0 ONLINE`;
+
         const embed = buildLimeOverviewCard({
           title: 'LATENCY & SPEED MONITOR',
           subtitle: 'LIVE SYSTEM PERFORMANCE',
@@ -929,7 +1019,7 @@ export class Gateway {
               title: `${CONFIG_ICON} HARDWARE & NODE ENVIRONMENT`,
               items: [
                 `RAM Heap: \`${heapMb} MB\``,
-                `Shard: \`#0 ONLINE\``,
+                `Shard: \`${shardStr}\``,
                 `Runtime: \`Node.js ${process.version}\``
               ]
             }
@@ -980,6 +1070,7 @@ export class Gateway {
         getRegistry: () => this.getRegistry(cmdGuildId),
         getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId || cmdGuildId),
         updateModuleConfig: (id: string, config: Record<string, any>) => this.updateModuleConfig(cmdGuildId, id, config),
+        toggleModule: (id: string, enabledOverride?: boolean) => this.toggleModule ? this.toggleModule(cmdGuildId, id, enabledOverride) : null,
         registry: {
           logWhitelistAudit: (gId: string | undefined, audit: any) => {
             this.logSyncEvent(gId || cmdGuildId, `[Audit] ${audit.action || 'whitelist change'}`, 'info');

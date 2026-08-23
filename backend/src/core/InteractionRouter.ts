@@ -38,6 +38,7 @@ export interface RouterContext {
   getRegistry: (guildId?: string) => any;
   getGlobalSettings: (guildId?: string) => Record<string, any>;
   updateModuleConfig: (guildId: string | undefined, id: string, config: Record<string, any>) => any;
+  toggleModule?: (guildId: string | undefined, id: string, enabledOverride?: boolean) => any;
 }
 
 export class InteractionRouter {
@@ -152,6 +153,26 @@ export class InteractionRouter {
           if (interaction.isRepliable()) {
             await interaction.reply({
               content: '❌ **Access Denied**: Only the Guild Owner and Extra Owners can access Anti-Nuke and AutoMod features.',
+              flags: 64
+            }).catch(() => {});
+          }
+          return;
+        }
+      }
+
+      // 1b. Role Management Commands Security Gate (addrole, removerole, temprole, role)
+      const isRoleCommand = ['addrole', 'removerole', 'temprole'].includes(commandName) ||
+        (commandName === 'role' && ['add', 'remove', 'create', 'delete', 'grant'].includes(subCmd.toLowerCase())) ||
+        (commandName === 'bulk' && ['role-add', 'role-remove', 'role-purge'].includes(subCmd.toLowerCase()));
+
+      if (isRoleCommand && interaction.guild) {
+        const { isOwnerOrExtraOwner, checkWhitelistPermission } = await import('../utils/whitelistCheck.js');
+        const isOwner = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+        const isWhitelisted = await checkWhitelistPermission(interaction.user.id, interaction.guild, this.buildExtraContext(cmdGuildId), 'anti_role_grant');
+        if (!isOwner && !isWhitelisted) {
+          if (interaction.isRepliable()) {
+            await interaction.reply({
+              content: '🔒 **Access Denied**: Role management commands can only be executed by the **Server Owner**, **Extra Owners**, and **Whitelisted Members**.\nNormal Administrator permissions are not sufficient.',
               flags: 64
             }).catch(() => {});
           }
@@ -368,6 +389,7 @@ export class InteractionRouter {
       getRegistry: () => this.ctx.getRegistry(cmdGuildId),
       getGlobalSettings: (gId?: string) => this.ctx.getGlobalSettings(gId || cmdGuildId),
       updateModuleConfig: (id: string, config: Record<string, any>) => this.ctx.updateModuleConfig(cmdGuildId, id, config),
+      toggleModule: (id: string, enabledOverride?: boolean) => this.ctx.toggleModule ? this.ctx.toggleModule(cmdGuildId, id, enabledOverride) : null,
       registry: {
         logWhitelistAudit: (guildId: string | undefined, audit: any) => {
           this.ctx.logSyncEvent(`[Audit] ${audit.action || 'whitelist change'} (guild: ${guildId || cmdGuildId})`, 'info');

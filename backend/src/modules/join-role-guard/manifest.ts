@@ -8,10 +8,13 @@ export async function checkRoleAssignment(
   addedRoles: any,
   context: any
 ): Promise<'ALLOW_CHECK' | 'IGNORE_EVENT'> {
-  const modules = context.getModulesState ? context.getModulesState() : [];
-  const guardModule = modules.find((m: any) => m.id === 'join_role_guard');
+  const guild = newMember.guild;
+  if (!guild) return 'ALLOW_CHECK';
 
-  if (!guardModule || guardModule.status !== 'enabled' || guardModule.config?.enableJoinGuard === false) {
+  const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
+  const guardModule = modules.find((m: any) => m.id === 'join_role_guard' || m.id === 'join-role-guard');
+
+  if (!guardModule || guardModule.status === 'disabled' || guardModule.config?.enableJoinGuard === false) {
     return 'ALLOW_CHECK';
   }
 
@@ -56,7 +59,6 @@ export async function checkRoleAssignment(
     );
   });
 
-  const guild = newMember.guild;
   const fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.MemberRoleUpdate }).catch((err: any) => {
     if (debugMode) {
       console.error(`[JoinGuard Debug] [Guild ${guild.id}] Failed to fetch audit logs:`, err);
@@ -115,9 +117,16 @@ export async function checkRoleAssignment(
     return 'IGNORE_EVENT';
   }
 
-  // 4. Trusted Bot check
+  // 4. Trusted Bot check (Whitelist + PreBot)
   if (executor.bot) {
-    const isTrusted = await checkBypassImmunity(executor.id, guild, context, 'anti_role_grant');
+    let isPrebotAuth = false;
+    try {
+      const { isPrebotAuthorizedForRule } = await import('../security/manifest.js');
+      if (typeof isPrebotAuthorizedForRule === 'function') {
+        isPrebotAuth = await isPrebotAuthorizedForRule(guild.id, executor.id, 'anti_role_grant');
+      }
+    } catch {}
+    const isTrusted = (await checkBypassImmunity(executor.id, guild, context || {}, 'anti_role_grant')) || isPrebotAuth;
     if (isTrusted && ignoreTrustedBots) {
       if (hasDangerousPerms) {
         if (debugMode) {
@@ -139,7 +148,7 @@ export async function checkRoleAssignment(
 
   // 6. Whitelisted Executor
   // Whitelisted executors are humans here, we return ALLOW_CHECK so existing anti-nuke whitelisting handles it.
-  const isWhitelisted = await checkBypassImmunity(executor.id, guild, context, 'anti_role_grant');
+  const isWhitelisted = await checkBypassImmunity(executor.id, guild, context || {}, 'anti_role_grant');
   if (isWhitelisted) {
     if (debugMode) {
       console.log(`[JoinGuard Debug] [Guild ${guild.id}] Executor is whitelisted user ${executor.username}. Allowing check.`);

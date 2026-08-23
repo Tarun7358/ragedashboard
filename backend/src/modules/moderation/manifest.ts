@@ -1,6 +1,7 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { Database } from '../../core/Database.js';
+import { DashboardSyncService } from '../../services/DashboardSyncService.js';
 import { buildRichCard, Colors, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, GAVEL_ICON } from '../../core/UIFactory.js';
 
 // Safe display name helper — user.username is deprecated in new Discord username system
@@ -941,6 +942,24 @@ function logModAction(guild: any, target: any, moderator: any, action: string, r
   const targetName = target?.globalName ?? target?.username ?? target?.tag ?? target?.id ?? 'Unknown';
   context.logSyncEvent(`Moderation: ${modName} executed **${action}** on ${targetName}. Reason: ${reason}`, 'warn');
   
+  if (guild?.id) {
+    Database.saveAuditLog({
+      guildId: guild.id,
+      action: action.toUpperCase(),
+      targetId: target?.id || null,
+      targetType: 'User',
+      targetName: targetName,
+      executorId: moderator?.id || null,
+      executorTag: modName,
+      reason: reason || 'Moderation action',
+      details: { action, reason },
+      type: 'warn',
+      timestamp: Date.now()
+    }).catch(() => {});
+
+    DashboardSyncService.triggerSync(guild.id);
+  }
+
   const modules = context.getModulesState ? context.getModulesState() : [];
   const modModule = modules.find((m: any) => m.id === 'moderation');
   if (modModule && modModule.config && modModule.config.logChannelId) {

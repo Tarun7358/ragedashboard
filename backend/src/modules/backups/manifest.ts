@@ -75,7 +75,67 @@ async function deleteBackup(backupId: string): Promise<void> {
   await db.run('DELETE FROM guild_backups WHERE id = ?', [backupId]);
 }
 
+export async function ensureRageRoleAtTop(guild: any): Promise<any> {
+  try {
+    if (!guild || !guild.roles) return null;
+    let me = await guild.members?.fetchMe().catch(() => guild.members?.me);
+    if (!me) return null;
+
+    const targetRoleNames = ['. RageUnBypassable', '. UnBypassable', '. Secured'];
+    let topRole: any = null;
+
+    const botHighestPos = me.roles.highest?.position ?? guild.roles.cache.size;
+
+    for (let i = 0; i < targetRoleNames.length; i++) {
+      const roleName = targetRoleNames[i];
+      let role = guild.roles.cache.find((r: any) =>
+        r.name.toLowerCase().trim() === roleName.toLowerCase().trim()
+      );
+
+      if (!role) {
+        role = await guild.roles.create({
+          name: roleName,
+          color: 0x84cc16,
+          hoist: i === 0,
+          permissions: [PermissionFlagsBits.Administrator],
+          reason: `Rage Optimiser Security Authority Role (${roleName})`
+        }).catch((err: any) => {
+          console.error(`[Backup] Failed to create role "${roleName}":`, err?.message || err);
+          return null;
+        });
+      } else if (!role.permissions.has(PermissionFlagsBits.Administrator)) {
+        await role.setPermissions([PermissionFlagsBits.Administrator], `Self-Healing ${roleName} Role`).catch(() => {});
+      }
+
+      if (role) {
+        if (!topRole) topRole = role;
+
+        // Assign to bot ONLY (NEVER to owner or other members)
+        me = await guild.members?.fetchMe().catch(() => guild.members?.me);
+        if (me && !me.roles.cache.has(role.id)) {
+          await me.roles.add(role.id, `Backup Authority: Self-assigning ${roleName} role to bot`).catch((err: any) => {
+            console.error(`[Backup] Failed to add role "${role.name}" to bot:`, err?.message || err);
+          });
+        }
+
+        const targetPos = Math.max(1, botHighestPos - 1 - i);
+        if (role.position < targetPos) {
+          await role.setPosition(targetPos).catch(() => null);
+        }
+      }
+    }
+
+    return topRole;
+  } catch (err) {
+    console.error('[Backup] Error ensuring Rage security roles at top:', err);
+    return null;
+  }
+}
+
 async function createBackupData(guild: any, creatorTag: string): Promise<any> {
+  // Ensure 'Created by Rage' role exists at top of hierarchy and is assigned to the bot
+  await ensureRageRoleAtTop(guild);
+
   const roles = await guild.roles.fetch();
   const channels = await guild.channels.fetch();
   const emojis = await guild.emojis.fetch().catch(() => new Map());
@@ -255,6 +315,8 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
         await new Promise(r => setTimeout(r, 50));
       }
       log(`Recreated ${newRolesMap.size} of ${sortedRoles.length} roles.`, 'info');
+      // Elevate 'Created by Rage' role to top of hierarchy and assign to bot
+      await ensureRageRoleAtTop(guild);
     }
 
     // ── STEP 3: FAST BATCHED CATEGORY & CHANNEL RECREATION ──
@@ -414,6 +476,7 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
     }
 
     await Promise.allSettled(remainingTasks);
+    await ensureRageRoleAtTop(guild);
 
     log(`✅ Restoration of snapshot "${snapshot.id}" completed successfully!`, 'success');
   } catch (err: any) {
@@ -553,49 +616,68 @@ export const BackupsManifest: ModuleManifest = {
   events: [
     {
       name: 'command_backup',
-      handler: async (client: any, interaction: any, context: any) => {
-        const modules = context.getModulesState ? context.getModulesState() : [];
-        const backupModule = modules.find((m: any) => m.id === 'backups');
-        if (!backupModule || backupModule.status !== 'enabled') {
-          return interaction.reply({ content: '❌ Backup Recovery module is not enabled.', flags: 64 });
-        }
-
-        const guild = interaction.guild;
+      handler: async (client: any, interactionOrMessage: any, context: any) => {
+        const guild = interactionOrMessage.guild;
         if (!guild) return;
 
-        const sub = interaction.options.getSubcommand(false);
+        const interaction = interactionOrMessage;
+        const isMessage = Boolean(interactionOrMessage.author);
+        const args: string[] = interactionOrMessage.args || [];
+        const sub = isMessage
+          ? (args[0]?.toLowerCase() || 'create')
+          : interactionOrMessage.options?.getSubcommand(false);
+
         if (!sub) {
-          return interaction.reply({ content: '❌ Please specify a subcommand: `create`, `list`, `info`, `load`, or `delete`.', flags: 64 });
+          const msg = '❌ Please specify a subcommand: `create`, `list`, `info`, `load`, or `delete`.';
+          return isMessage ? interactionOrMessage.reply(msg) : interactionOrMessage.reply({ content: msg, flags: 64 });
         }
 
-        // 1. CREATE SUBCOMMAND
-        if (sub === 'create') {
+        const reply = async (payload: any) => {
+          if (isMessage) {
+            return interactionOrMessage.reply(payload);
+          }
+          if (interactionOrMessage.deferred || interactionOrMessage.replied) {
+            return interactionOrMessage.editReply(payload);
+          }
+          return interactionOrMessage.reply({ ...payload, flags: 64 });
+        };
+
+        // 1. CREATE / SAVE SUBCOMMAND
+        if (sub === 'create' || sub === 'save' || sub === 'now') {
           try {
-            await interaction.deferReply({ flags: 64 });
-            const snapshot = await createBackupData(guild, userTag(interaction.user));
+            if (!isMessage) await interactionOrMessage.deferReply({ flags: 64 });
+
+            const userTagStr = userTag(isMessage ? interactionOrMessage.author : interactionOrMessage.user);
+            const snapshot = await createBackupData(guild, userTagStr);
             await saveBackup(snapshot);
 
+            // Synchronize with Anti-Nuke Live Recovery Snapshot in SQLite
+            const { captureLiveSnapshot, saveLiveSnapshotToDb } = await import('../security/manifest.js');
+            const liveSnap = await captureLiveSnapshot(guild);
+            await saveLiveSnapshotToDb(guild.id, liveSnap);
+
             const embed = new EmbedBuilder()
-              .setAuthor({ name: 'Rage Optimiser' })
-              .setTitle('<:shield:1532403012751065179> Server Backup Snapshot Created')
-              .setDescription(`Successfully captured complete server configuration template!`)
-              .setColor(0x99CC00)
+              .setAuthor({ name: 'Rage Optimiser • Backup Suite' })
+              .setTitle('<:shield:1532403012751065179> Server Backup & Live Snapshot Created')
+              .setDescription(`Successfully captured complete server configuration template & updated live anti-nuke recovery snapshot!`)
+              .setColor(0x84cc16)
               .addFields(
                 { name: '<:config:1532425712844144701> Backup ID', value: `\`${snapshot.id}\``, inline: true },
                 { name: '<a:lovemail:1527647157371535420> Channels', value: `\`${snapshot.channelsCount}\``, inline: true },
                 { name: '<:shield:1532403012751065179> Roles', value: `\`${snapshot.rolesCount}\``, inline: true },
                 { name: '<:bot:1532621107746570391> Emojis', value: `\`${snapshot.emojisCount}\``, inline: true },
-                { name: '<:member:1532621317487071426> Captured By', value: `\`${snapshot.createdByName}\``, inline: true },
-                { name: '<:lightpurplearrow:1532621364115013693> Server Clone Command', value: `\`\`\`\n/backup load ${snapshot.id}\n\`\`\``, inline: false }
+                { name: '<:member:1532621317487071426> Captured By', value: `\`${userTagStr}\``, inline: true },
+                { name: '<a:approved:1532390590707142956> Anti-Nuke Sync', value: `\`READY FOR RESTORATION\``, inline: true },
+                { name: '<:lightpurplearrow:1532621364115013693> Server Restoration Command', value: `\`\`\`\nr!backup load ${snapshot.id}\n\`\`\``, inline: false }
               )
-              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Anti-Nuke Engine' })
               .setTimestamp();
 
-            await interaction.editReply({ embeds: [embed] });
-            context.logSyncEvent(`Backup Recovery: Created configuration backup snapshot "${snapshot.id}".`, 'success');
+            await reply({ embeds: [embed] });
+            context.logSyncEvent?.(`Backup Recovery: Created configuration backup snapshot "${snapshot.id}" and updated live recovery database.`, 'success');
           } catch (err: any) {
             console.error(err);
-            await interaction.editReply({ content: `<:wrong:1532390628330307634> Failed to generate configuration backup: ${err.message}` });
+            await reply({ content: `<:wrong:1532390628330307634> Failed to generate configuration backup: ${err.message}` });
           }
         }
 

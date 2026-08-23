@@ -405,6 +405,106 @@ export class WebServer {
       res.json(result);
     });
 
+    // Server Audit Logs endpoints (SQLite persistent per-server space)
+    this.app.get('/api/whitelist/audit', authenticateToken, async (req: Request, res: Response) => {
+      try {
+        const guildId = (req.query.guildId as string) || process.env.GUILD_ID || 'default_guild';
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const search = req.query.search as string;
+
+        const dbResult = await Database.getAuditLogs(guildId, {
+          limit,
+          offset: (page - 1) * limit,
+          search
+        });
+
+        const formatted = dbResult.logs.map(log => ({
+          id: log.id?.toString() || Math.random().toString(),
+          action: log.action,
+          target: log.targetName || log.targetId || 'Unknown',
+          targetType: log.targetType || 'User',
+          targetId: log.targetId || undefined,
+          executor: log.executorTag || log.executorId || 'System',
+          executorId: log.executorId || undefined,
+          timestamp: log.timestamp ? new Date(log.timestamp).toLocaleString() : new Date().toLocaleString(),
+          status: log.type === 'danger' ? 'Suspicious' : (log.type === 'warn' ? 'Pending' : 'Approved'),
+          reason: log.reason || undefined,
+          details: log.details
+        }));
+
+        res.json({
+          entries: formatted,
+          total: dbResult.total,
+          page,
+          limit
+        });
+      } catch (err: any) {
+        console.error('[WebServer] /api/whitelist/audit error:', err);
+        res.status(500).json({ error: 'Failed to fetch audit logs' });
+      }
+    });
+
+    this.app.get('/api/guilds/:guildId/audit-logs', authenticateToken, async (req: Request, res: Response) => {
+      try {
+        const { guildId } = req.params;
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const action = req.query.action as string;
+        const type = req.query.type as string;
+        const search = req.query.search as string;
+
+        const dbResult = await Database.getAuditLogs(guildId, {
+          limit,
+          offset: (page - 1) * limit,
+          action,
+          type,
+          search
+        });
+
+        res.json({
+          guildId,
+          logs: dbResult.logs,
+          total: dbResult.total,
+          page,
+          limit
+        });
+      } catch (err: any) {
+        console.error('[WebServer] /api/guilds/:guildId/audit-logs error:', err);
+        res.status(500).json({ error: 'Failed to fetch server audit logs' });
+      }
+    });
+
+    this.app.get('/api/audit-logs', authenticateToken, async (req: Request, res: Response) => {
+      try {
+        const guildId = (req.query.guildId as string) || process.env.GUILD_ID || 'default_guild';
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const action = req.query.action as string;
+        const type = req.query.type as string;
+        const search = req.query.search as string;
+
+        const dbResult = await Database.getAuditLogs(guildId, {
+          limit,
+          offset: (page - 1) * limit,
+          action,
+          type,
+          search
+        });
+
+        res.json({
+          guildId,
+          logs: dbResult.logs,
+          total: dbResult.total,
+          page,
+          limit
+        });
+      } catch (err: any) {
+        console.error('[WebServer] /api/audit-logs error:', err);
+        res.status(500).json({ error: 'Failed to fetch audit logs' });
+      }
+    });
+
     // Command sync endpoint
     this.app.post('/api/commands/sync', authenticateToken, async (req: Request, res: Response) => {
       if (this.deployCommandsCallback) {

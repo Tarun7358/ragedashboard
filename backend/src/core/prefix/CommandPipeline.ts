@@ -68,11 +68,24 @@ export class CommandPipeline {
       const modules = ctx.get('getModulesState') ? ctx.get('getModulesState')() : [];
       const modState = modules.find((m: any) => m.id === cmdMeta.moduleOwnerId);
       
-      const isManagementCmd = ['setup', 'enable', 'config', 'settings', 'profile', 'role', 'branding', 'preset'].includes(parsed.subcommand || '') ||
-        ['setup-tickets', 'setup-discord-dashboard', 'security', 'logs', 'backup', 'audit', 'diagnostics', 'automod', 'automation'].includes(cmdMeta.name);
+      const managementCmdNames = [
+        'enable', 'disable', 'on', 'off', 'activate', 'deactivate',
+        'setup', 'config', 'settings', 'module', 'modules',
+        'setup-tickets', 'setup-discord-dashboard', 'security', 'logs',
+        'backup', 'audit', 'diagnostics', 'automod', 'automation', 'automations', 'auto'
+      ];
+
+      const managementSubCmds = [
+        'setup', 'enable', 'disable', 'config', 'settings', 'profile',
+        'role', 'branding', 'preset', 'on', 'off', 'activate', 'deactivate', 'status'
+      ];
+
+      const isManagementCmd =
+        managementCmdNames.includes(cmdMeta.name) ||
+        managementSubCmds.includes(parsed.subcommand || '');
 
       if (cmdMeta.moduleOwnerId !== 'core' && !isManagementCmd && (!modState || modState.status !== 'enabled')) {
-        return this.sendError(ctx, `The backing module **\`${cmdMeta.moduleOwnerId}\`** is currently disabled on this server. Run \`r!${cmdMeta.name} enable\` or use setup commands to activate it.`);
+        return this.sendError(ctx, `The backing module **\`${cmdMeta.moduleOwnerId}\`** is currently disabled on this server. Run \`r!enable ${cmdMeta.moduleOwnerId}\` or \`r!enable all\` to activate it.`);
       }
 
       // 3. Permission Validation
@@ -89,6 +102,21 @@ export class CommandPipeline {
         if (!allowed) {
           PrefixAnalytics.trackFailure('permission');
           return this.sendError(ctx, 'Access Denied: Only the Guild Owner and Extra Owners can access Anti-Nuke and AutoMod features.');
+        }
+      }
+
+      // Role Management Commands Gate (addrole, removerole, temprole, tr, role, etc.)
+      const isRoleCommand = ['addrole', 'removerole', 'temprole', 'tr', 'trole', 'temp-role'].includes(cmdMeta.name) ||
+        (cmdMeta.name === 'role' && ['add', 'remove', 'create', 'delete', 'grant'].includes(ctx.args[0]?.toLowerCase()));
+
+      if (isRoleCommand && ctx.guild) {
+        const { isOwnerOrExtraOwner, checkWhitelistPermission } = await import('../../utils/whitelistCheck.js');
+        const isOwner = await isOwnerOrExtraOwner(ctx.executor.id, ctx.guild);
+        const getModules = ctx.get('getModulesState');
+        const isWhitelisted = await checkWhitelistPermission(ctx.executor.id, ctx.guild, { getModulesState: getModules ? () => getModules() : () => [] }, 'anti_role_grant');
+        if (!isOwner && !isWhitelisted) {
+          PrefixAnalytics.trackFailure('permission');
+          return this.sendError(ctx, '🔒 Access Denied: Role management commands can only be executed by the Server Owner, Extra Owners, and Whitelisted Members. Normal Administrators cannot use role commands.');
         }
       }
 
