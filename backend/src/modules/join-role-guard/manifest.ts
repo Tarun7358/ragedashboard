@@ -1,4 +1,4 @@
-import { AuditLogEvent, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+﻿import { AuditLogEvent, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { checkBypassImmunity } from '../../utils/whitelistCheck.js';
 
@@ -250,18 +250,18 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
       name: 'command_joinguard',
       handler: async (client: any, interaction: any, context: any) => {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-          return interaction.reply({ content: '<:shield:1532403012751065179> Administrator permissions required.', flags: 64 });
+          return interaction.reply({ content: '<:security:1546142576984203336> Administrator permissions required.', flags: 64 });
         }
 
         const modules = context.getModulesState ? context.getModulesState() : [];
         const mod = modules.find((m: any) => m.id === 'join_role_guard');
         if (!mod) {
-          return interaction.reply({ content: '<:wrong:1532390628330307634> Join Guard module not found.', flags: 64 });
+          return interaction.reply({ content: '<a:wrong:1546155193303957504> Join Guard module not found.', flags: 64 });
         }
 
         const sub = interaction.options.getSubcommand(false);
         if (!sub) {
-          return interaction.reply({ content: '<:wrong:1532390628330307634> Please specify a subcommand (status, config, or view).', flags: 64 });
+          return interaction.reply({ content: '<a:wrong:1546155193303957504> Please specify a subcommand (status, config, or view).', flags: 64 });
         }
         const config = mod.config || {};
 
@@ -297,15 +297,15 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
 
         if (sub === 'view') {
           const embed = new EmbedBuilder()
-            .setTitle('<:shield:1532403012751065179> Join Role Guard Configuration')
+            .setTitle('<:security:1546142576984203336> Join Role Guard Configuration')
             .setColor(0x99CC00)
             .addFields(
-              { name: 'Status', value: config.enableJoinGuard !== false ? '<a:approved:1532390590707142956> Enabled' : '<:wrong:1532390628330307634> Disabled', inline: true },
+              { name: 'Status', value: config.enableJoinGuard !== false ? '<a:approved:1532390590707142956> Enabled' : '<a:wrong:1546155193303957504> Disabled', inline: true },
               { name: 'Grace Period', value: `\`${config.joinGracePeriod ?? 20} seconds\``, inline: true },
-              { name: 'Ignore Onboarding', value: config.ignoreOnboarding !== false ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No', inline: true },
-              { name: 'Ignore Screening', value: config.ignoreScreening !== false ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No', inline: true },
-              { name: 'Ignore Trusted Bots', value: config.ignoreTrustedBots !== false ? '<a:approved:1532390590707142956> Yes' : '<:wrong:1532390628330307634> No', inline: true },
-              { name: 'Debug Mode', value: config.debugMode ? '<a:approved:1532390590707142956> Enabled' : '<:wrong:1532390628330307634> Disabled', inline: true }
+              { name: 'Ignore Onboarding', value: config.ignoreOnboarding !== false ? '<a:approved:1532390590707142956> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
+              { name: 'Ignore Screening', value: config.ignoreScreening !== false ? '<a:approved:1532390590707142956> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
+              { name: 'Ignore Trusted Bots', value: config.ignoreTrustedBots !== false ? '<a:approved:1532390590707142956> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
+              { name: 'Debug Mode', value: config.debugMode ? '<a:approved:1532390590707142956> Enabled' : '<a:wrong:1546155193303957504> Disabled', inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();

@@ -1,4 +1,15 @@
-import { EmbedBuilder, Message, PermissionFlagsBits } from 'discord.js';
+﻿import {
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  Message,
+  PermissionFlagsBits
+} from 'discord.js';
 import { ModuleManifest } from '../../core/types.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { SocialSubscriptionRepository } from './SocialSubscriptionRepository.js';
@@ -9,6 +20,21 @@ import { Scheduler } from './Scheduler.js';
 import { SubscriptionManager } from './SubscriptionManager.js';
 import { InstagramFetcher } from './providers/InstagramFetcher.js';
 import { NotificationQueue } from './NotificationQueue.js';
+import {
+  Colors,
+  BRAND_FOOTER,
+  VERIFIED_ICON,
+  WRONG_ICON,
+  YOUTUBE_ICON,
+  INSTAGRAM_ICON,
+  ARROW_ICON,
+  STATS_ICON,
+  CONFIG_ICON,
+  SHIELD_ICON,
+  SQUARE_TICK_ICON,
+  SPIN_ANIMATED_ICON
+} from '../../core/UIFactory.js';
+import { isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 
 let _scheduler: Scheduler | null = null;
 
@@ -20,6 +46,116 @@ function getScheduler(client: any, logFn?: (msg: string, type: any) => void): Sc
     _scheduler.updateClient(client);
   }
   return _scheduler;
+}
+
+export async function buildSocialDashboardGUI(guild: any) {
+  const guildId = guild?.id;
+  await SocialSubscriptionRepository.ensureTable().catch(() => {});
+  const subs = await SocialSubscriptionRepository.findAll(guildId).catch(() => []);
+  const analytics = await SocialSubscriptionRepository.getAnalytics(guildId).catch(() => ({
+    totalSubscriptions: subs.length,
+    activeSubscriptions: subs.filter((s: any) => s.enabled).length,
+    totalNotificationsSent: 0,
+    totalFailedAttempts: 0,
+    avgDeliveryTimeMs: 120
+  }));
+
+  const ytSubs = subs.filter((s: any) => s.provider === 'youtube');
+  const igSubs = subs.filter((s: any) => s.provider === 'instagram');
+  const activeCount = subs.filter((s: any) => s.enabled).length;
+
+  const ytList = ytSubs.length > 0
+    ? ytSubs.map((s: any) => `> ${ARROW_ICON} ${YOUTUBE_ICON} **${s.sourceName}** → <#${s.discordChannelId}> **[${s.enabled ? 'ACTIVE' : 'PAUSED'}]** (ID: \`${s.id}\`)`).join('\n')
+    : `> ${ARROW_ICON} *No YouTube channels subscribed.*`;
+
+  const igList = igSubs.length > 0
+    ? igSubs.map((s: any) => `> ${ARROW_ICON} ${INSTAGRAM_ICON} **@${s.sourceName}** → <#${s.discordChannelId}> **[${s.enabled ? 'ACTIVE' : 'PAUSED'}]** (ID: \`${s.id}\`)`).join('\n')
+    : `> ${ARROW_ICON} *No Instagram accounts subscribed.*`;
+
+  const embed = new EmbedBuilder()
+    .setTitle('Rage Optimiser • Social Alerts & Feeds Sentinel')
+    .setColor(Colors.BRAND)
+    .setDescription([
+      `> **Autonomous Social Content Broadcaster**\n`,
+      `**Real-time YouTube channel upload & Instagram post detection engine. Automatically broadcasts new videos, shorts, streams, and posts directly to your Discord server.**\n`,
+      `**Live System Status:** ${VERIFIED_ICON} \`OPERATIONAL\` • **Polling Interval:** \`15s - 60s\``,
+      `**Subscribed Feeds (${subs.length}):** **\`${activeCount} Active\`** | **\`${subs.length - activeCount} Paused\`**\n`,
+      `${YOUTUBE_ICON} **YouTube Feeds (${ytSubs.length}):**\n${ytList}\n`,
+      `${INSTAGRAM_ICON} **Instagram Feeds (${igSubs.length}):**\n${igList}\n`,
+      `${STATS_ICON} **Delivery Telemetry:**`,
+      `> ${ARROW_ICON} **Total Dispatches Sent:** **\`${analytics.totalNotificationsSent || 0}\`**`,
+      `> ${ARROW_ICON} **Failed Attempts:** **\`${analytics.totalFailedAttempts || 0}\`**`,
+      `> ${ARROW_ICON} **Average Delivery Latency:** **\`${analytics.avgDeliveryTimeMs || 120}ms\`**`,
+      `\n*Use the buttons below to subscribe feeds or manage active alert pipelines.*`
+    ].join('\n'))
+    .setThumbnail(guild?.iconURL({ size: 256 }) || undefined)
+    .setFooter({ text: BRAND_FOOTER })
+    .setTimestamp();
+
+  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('btn_social_add_yt')
+      .setLabel('Add YouTube Feed')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('1538152286839373905'),
+    new ButtonBuilder()
+      .setCustomId('btn_social_add_ig')
+      .setLabel('Add Instagram Feed')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('1538152297845231736'),
+    new ButtonBuilder()
+      .setCustomId('btn_social_force_scan')
+      .setLabel('Force Scan Now')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('1546142576984203336'),
+    new ButtonBuilder()
+      .setCustomId('btn_social_refresh')
+      .setLabel('Refresh')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('1532425712844144701')
+  );
+
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('btn_social_pause_all')
+      .setLabel('Pause All')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('1546155193303957504'),
+    new ButtonBuilder()
+      .setCustomId('btn_social_resume_all')
+      .setLabel('Resume All')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('1532390590707142956'),
+    new ButtonBuilder()
+      .setCustomId('btn_social_stats')
+      .setLabel('Analytics')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('1532429110775779459'),
+    new ButtonBuilder()
+      .setCustomId('btn_social_help')
+      .setLabel('CLI Help')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('1527647157371535420')
+  );
+
+  const components: any[] = [row1, row2];
+
+  if (subs.length > 0) {
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId('select_social_manage_feed')
+      .setPlaceholder('Select a feed to toggle, test, or delete...')
+      .addOptions(
+        subs.slice(0, 25).map((s: any) => ({
+          label: `${s.provider.toUpperCase()}: ${s.sourceName}`.slice(0, 50),
+          value: `sub_${s.id}`,
+          description: `Target: #${s.discordChannelId} • Status: ${s.enabled ? 'Active' : 'Paused'}`.slice(0, 50),
+          emoji: s.provider === 'youtube' ? '1538152286839373905' : '1538152297845231736'
+        }))
+      );
+    components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
+  }
+
+  return { embeds: [embed], components };
 }
 
 export const SocialUpdatesManifest: ModuleManifest = {
@@ -96,7 +232,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           interaction.guild?.ownerId === interaction.user?.id;
         if (!isAdmin) {
           const embed = new EmbedBuilder()
-            .setTitle('<:shield:1532403012751065179> Access Denied')
+            .setTitle('<:security:1546142576984203336> Access Denied')
             .setDescription('Requires Manage Server permission to manage social updates.')
             .setColor(0xEF4444)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -117,7 +253,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
           const lines = subs.map((s: any) =>
-            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<:wrong:1532390628330307634> Paused'} (Health: **${s.validationStatus}**)`
+            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<a:wrong:1546155193303957504> Paused'} (Health: **${s.validationStatus}**)`
           );
           const embed = new EmbedBuilder()
             .setTitle('<a:lovemail:1527647157371535420> Social Updates Subscriptions')
@@ -125,15 +261,9 @@ export const SocialUpdatesManifest: ModuleManifest = {
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
-        } else if (action === 'status') {
-          const subs = await SocialSubscriptionRepository.findAll(guildId);
-          const active = subs.filter((s: any) => s.enabled).length;
-          const embed = new EmbedBuilder()
-            .setTitle('<a:lovemail:1527647157371535420> Social Updates Status')
-            .setDescription(`**Active Subscriptions:** ${active} / ${subs.length}\n**System Diagnostics:** <a:approved:1532390590707142956> Operational`)
-            .setColor(0x99CC00)
-            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
-          return interaction.reply({ embeds: [embed], flags: 64 });
+        } else if (!action || action === 'status' || action === 'dashboard' || action === 'gui' || action === 'panel') {
+          const payload = await buildSocialDashboardGUI(interaction.guild);
+          return interaction.reply(payload);
         } else if (action === 'forcecheck') {
           if (_scheduler) {
             _scheduler.triggerImmediateCheck();
@@ -145,7 +275,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
             return interaction.reply({ embeds: [embed], flags: 64 });
           } else {
             const embed = new EmbedBuilder()
-              .setTitle('<:wrong:1532390628330307634> Scheduler Error')
+              .setTitle('<a:wrong:1546155193303957504> Scheduler Error')
               .setDescription('Scheduler process is currently offline or not initialized.')
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -198,66 +328,26 @@ export const SocialUpdatesManifest: ModuleManifest = {
               if (/^\d{17,20}$/.test(cleanId)) {
                 channel = interaction.guild.channels.cache.get(cleanId) ||
                   (fetchedChannels && typeof (fetchedChannels as any).get === 'function' ? (fetchedChannels as any).get(cleanId) : null);
-                if (!channel) {
-                  channel = await interaction.guild.channels.fetch(cleanId).catch(() => null);
-                }
-                if (!channel && interaction.client) {
-                  channel = await interaction.client.channels.fetch(cleanId).catch(() => null);
-                }
                 if (channel) break;
-              }
-
-              const cleanName = arg.toLowerCase().replace(/^[#<>]*/, '').replace(/>$/, '').trim();
-              if (!cleanName) continue;
-
-              const searchPool = fetchedChannels || interaction.guild.channels.cache;
-              const foundByName = searchPool.find((c: any) => {
-                if (!c || !c.name) return false;
-                const cn = c.name.toLowerCase();
-                if (cn === cleanName) return true;
-                const cnNorm = cn.replace(/[^a-z0-9]/g, '');
-                const cleanNorm = cleanName.replace(/[^a-z0-9]/g, '');
-                return cnNorm.length > 0 && cleanNorm.length > 0 && (cnNorm === cleanNorm || cnNorm.includes(cleanNorm) || cleanNorm.includes(cnNorm));
-              });
-
-              if (foundByName) {
-                channel = foundByName;
-                break;
               }
             }
           }
 
           let sourceId = interaction.options?.getString?.('source');
-          const isChannelArg = (s: string) => {
-            if (!s) return false;
-            if (s.startsWith('<#') && s.endsWith('>')) return true;
-            const clean = s.replace(/[<#>]/g, '').trim();
-            if (channel && (clean === channel.id || clean.toLowerCase() === channel.name?.toLowerCase())) return true;
-            return false;
-          };
-
-          if (!sourceId || isChannelArg(sourceId)) {
-            const candidateArgs = rawArgs.filter((a: string) => {
-              if (!a) return false;
-              const lower = a.toLowerCase();
-              if (lower === 'add' || lower === 'subscribe') return false;
-              if (['youtube', 'instagram', 'yt', 'ig'].includes(lower)) return false;
-              if (isChannelArg(a)) return false;
-              return true;
-            });
-            if (candidateArgs.length > 0) {
-              sourceId = candidateArgs[0];
+          if (!sourceId && rawArgs.length > 0) {
+            const pIdx = rawArgs.findIndex((a: string) => ['youtube', 'instagram', 'yt', 'ig'].includes(a.toLowerCase()));
+            if (pIdx !== -1 && rawArgs[pIdx + 1]) {
+              sourceId = rawArgs[pIdx + 1];
             }
           }
 
           if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channel) {
             const embed = new EmbedBuilder()
-              .setTitle('<:wrong:1532390628330307634> Invalid Add Syntax')
+              .setTitle('<a:wrong:1546155193303957504> Invalid Add Syntax')
               .setDescription([
-                `> **Syntax**: \`r!social-updates add <youtube|instagram> <handle_or_channel> <#discordChannel>\``,
-                `> **Example YouTube (Handle)**: \`r!social-updates add youtube clasherliveop #announcements\``,
-                `> **Example YouTube (Channel ID)**: \`r!social-updates add youtube UC_x5XG1OV2P6uZZ5FSM9Ttw #announcements\``,
-                `> **Example Instagram**: \`r!social-updates add instagram nature #social-feed\``
+                `> **Syntax**: \`r!social-updates add <youtube|instagram> <handle_or_channel_id> <#discordChannel>\``,
+                `> **YouTube Handle Example**: \`r!social add youtube clasherliveop #announcements\``,
+                `> **Instagram Example**: \`r!social add instagram nature #social-feed\``
               ].join('\n'))
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -267,7 +357,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           const res = await SubscriptionManager.addSubscription(guildId, provider, sourceId, channel.id, {});
           if (!res.success) {
             const embed = new EmbedBuilder()
-              .setTitle('<:wrong:1532390628330307634> Subscription Error')
+              .setTitle('<a:wrong:1546155193303957504> Subscription Error')
               .setDescription(`Failed to add social feed: \`${res.error}\``)
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -289,7 +379,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           const subId = interaction.options?.getString?.('id') || context?.parsed?.args[1];
           if (!subId) {
             const embed = new EmbedBuilder()
-              .setTitle('<:wrong:1532390628330307634> Invalid Remove Syntax')
+              .setTitle('<a:wrong:1546155193303957504> Invalid Remove Syntax')
               .setDescription(`> **Syntax**: \`r!social-updates remove <subscription_id>\`\n> *(Use \`r!social-updates list\` to view IDs)*`)
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -299,7 +389,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           const res = await SubscriptionManager.removeSubscription(guildId, subId);
           if (!res.success) {
             const embed = new EmbedBuilder()
-              .setTitle('<:wrong:1532390628330307634> Removal Error')
+              .setTitle('<a:wrong:1546155193303957504> Removal Error')
               .setDescription(`\`${res.error}\``)
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -313,20 +403,367 @@ export const SocialUpdatesManifest: ModuleManifest = {
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
           return interaction.reply({ embeds: [embed], flags: 64 });
         } else {
+          const payload = await buildSocialDashboardGUI(interaction.guild);
+          return interaction.reply(payload);
+        }
+      }
+    },
+    {
+      name: 'button_social_generic',
+      handler: async (client: any, interaction: any, context: any) => {
+        if (!interaction.guild) return;
+        const isAdmin = interaction.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild) ||
+          (await isOwnerOrExtraOwner(interaction.user.id, interaction.guild));
+        if (!isAdmin) {
+          return interaction.reply({
+            content: `${WRONG_ICON} Access Denied: Manage Server permission is required to configure Social Alerts.`,
+            flags: 64
+          }).catch(() => {});
+        }
+
+        const customId = interaction.customId;
+        const guildId = interaction.guild.id;
+
+        // 1. Add YouTube Modal
+        if (customId === 'btn_social_add_yt') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_social_add_yt')
+            .setTitle('Subscribe YouTube Channel');
+
+          const inputChannel = new TextInputBuilder()
+            .setCustomId('yt_input')
+            .setLabel('YouTube Handle / URL / Channel ID')
+            .setPlaceholder('@clasherliveop, https://youtube.com/..., or UC...')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+          const inputTarget = new TextInputBuilder()
+            .setCustomId('yt_channel')
+            .setLabel('Discord Target Channel (Name, Mention or ID)')
+            .setPlaceholder('#announcements or 123456789012345678')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+          const inputMention = new TextInputBuilder()
+            .setCustomId('yt_mention')
+            .setLabel('Mention Role / Ping (Optional)')
+            .setPlaceholder('@everyone, @here, role ID, or none')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false);
+
+          modal.addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(inputChannel),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(inputTarget),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(inputMention)
+          );
+
+          return interaction.showModal(modal);
+        }
+
+        // 2. Add Instagram Modal
+        if (customId === 'btn_social_add_ig') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_social_add_ig')
+            .setTitle('Subscribe Instagram Account');
+
+          const inputUsername = new TextInputBuilder()
+            .setCustomId('ig_username')
+            .setLabel('Instagram Account Username / Handle')
+            .setPlaceholder('nature or natgeo')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+          const inputTarget = new TextInputBuilder()
+            .setCustomId('ig_channel')
+            .setLabel('Discord Target Channel (Name, Mention or ID)')
+            .setPlaceholder('#social-feed or 123456789012345678')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+          const inputMention = new TextInputBuilder()
+            .setCustomId('ig_mention')
+            .setLabel('Mention Role / Ping (Optional)')
+            .setPlaceholder('@everyone, @here, role ID, or none')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false);
+
+          modal.addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(inputUsername),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(inputTarget),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(inputMention)
+          );
+
+          return interaction.showModal(modal);
+        }
+
+        // 3. Force Scan
+        if (customId === 'btn_social_force_scan') {
+          await interaction.deferUpdate().catch(() => {});
+          const scheduler = getScheduler(client, context?.logSyncEvent);
+          scheduler.triggerImmediateCheck();
+          const payload = await buildSocialDashboardGUI(interaction.guild);
+          return interaction.editReply(payload);
+        }
+
+        // 4. Refresh Dashboard
+        if (customId === 'btn_social_refresh') {
+          await interaction.deferUpdate().catch(() => {});
+          const payload = await buildSocialDashboardGUI(interaction.guild);
+          return interaction.editReply(payload);
+        }
+
+        // 5. Pause All Feeds
+        if (customId === 'btn_social_pause_all') {
+          await interaction.deferUpdate().catch(() => {});
+          const subs = await SocialSubscriptionRepository.findAll(guildId);
+          for (const s of subs) {
+            await SocialSubscriptionRepository.update(s.id, { enabled: 0 }).catch(() => {});
+          }
+          const payload = await buildSocialDashboardGUI(interaction.guild);
+          return interaction.editReply(payload);
+        }
+
+        // 6. Resume All Feeds
+        if (customId === 'btn_social_resume_all') {
+          await interaction.deferUpdate().catch(() => {});
+          const subs = await SocialSubscriptionRepository.findAll(guildId);
+          for (const s of subs) {
+            await SocialSubscriptionRepository.update(s.id, { enabled: 1 }).catch(() => {});
+          }
+          const payload = await buildSocialDashboardGUI(interaction.guild);
+          return interaction.editReply(payload);
+        }
+
+        // 7. Analytics
+        if (customId === 'btn_social_stats') {
+          await interaction.deferReply({ flags: 64 }).catch(() => {});
+          const analytics = await SocialSubscriptionRepository.getAnalytics(guildId);
           const embed = new EmbedBuilder()
-            .setTitle('<a:lovemail:1527647157371535420> Social Updates Control Manual')
+            .setTitle('<a:lovemail:1527647157371535420> Social Alerts Telemetry & Delivery Analytics')
+            .setColor(Colors.BRAND)
+            .addFields(
+              { name: 'Total Subscriptions', value: `\`${analytics.totalSubscriptions}\``, inline: true },
+              { name: 'Active Feeds', value: `\`${analytics.activeSubscriptions}\``, inline: true },
+              { name: 'Notifications Dispatched', value: `\`${analytics.totalNotificationsSent}\``, inline: true },
+              { name: 'Failed Deliveries', value: `\`${analytics.totalFailedAttempts}\``, inline: true },
+              { name: 'Average Pipeline Latency', value: `\`${analytics.avgDeliveryTimeMs}ms\``, inline: true }
+            )
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+          return interaction.editReply({ embeds: [embed] });
+        }
+
+        // 8. CLI Syntax Help
+        if (customId === 'btn_social_help') {
+          await interaction.deferReply({ flags: 64 }).catch(() => {});
+          const embed = new EmbedBuilder()
+            .setTitle('<a:lovemail:1527647157371535420> Social Updates CLI Command Manual')
+            .setColor(Colors.BRAND)
             .setDescription([
-              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates add <yt|ig> <handle/id> <#channel>\`** — Add new social feed`,
-              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates remove <id>\`** — Remove a social subscription`,
-              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates status\`** — View overall system operational status`,
-              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates list\`** — List all configured social subscriptions`,
-              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates forcecheck\`** — Trigger immediate global update scan`,
-              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates validate\`** — Validate health of registered subscriptions`,
-              `> <:lightpurplearrow:1532621364115013693> **\`r!social-updates statistics\`** — View analytics and delivery telemetry`
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social add <yt|ig> <handle/id> <#channel>\`** — Add new social feed`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social remove <id>\`** — Delete a social subscription`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social status\`** — Open interactive Social Alerts Dashboard`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social list\`** — List all configured social subscriptions`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social forcecheck\`** — Trigger immediate global update scan`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social validate\`** — Validate health of registered subscriptions`,
+              `> <:lightpurplearrow:1532621364115013693> **\`r!social statistics\`** — View analytics and delivery telemetry`
             ].join('\n'))
-            .setColor(0x99CC00)
-            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
-          return interaction.reply({ embeds: [embed], flags: 64 });
+            .setFooter({ text: BRAND_FOOTER });
+          return interaction.editReply({ embeds: [embed] });
+        }
+
+        // 9. Individual feed toggle / delete / test
+        if (customId.startsWith('btn_sub_toggle_')) {
+          await interaction.deferUpdate().catch(() => {});
+          const subId = customId.replace('btn_sub_toggle_', '');
+          const sub = await SocialSubscriptionRepository.findById(subId);
+          if (sub) {
+            await SocialSubscriptionRepository.update(subId, { enabled: sub.enabled ? 0 : 1 });
+          }
+          const payload = await buildSocialDashboardGUI(interaction.guild);
+          return interaction.editReply(payload);
+        }
+
+        if (customId.startsWith('btn_sub_delete_')) {
+          await interaction.deferUpdate().catch(() => {});
+          const subId = customId.replace('btn_sub_delete_', '');
+          await SubscriptionManager.removeSubscription(guildId, subId);
+          const payload = await buildSocialDashboardGUI(interaction.guild);
+          return interaction.editReply(payload);
+        }
+
+        if (customId.startsWith('btn_sub_test_')) {
+          await interaction.deferReply({ flags: 64 }).catch(() => {});
+          const subId = customId.replace('btn_sub_test_', '');
+          const sub = await SocialSubscriptionRepository.findById(subId);
+          if (!sub) {
+            return interaction.editReply({ content: `${WRONG_ICON} Subscription not found.` });
+          }
+
+          const sampleItem = {
+            id: `test_${Date.now()}`,
+            title: `[TEST ALERT] New ${sub.provider.toUpperCase()} Content Uploaded`,
+            url: sub.provider === 'youtube' ? 'https://youtube.com' : 'https://instagram.com',
+            publishedAt: new Date().toISOString(),
+            authorName: sub.sourceName,
+            type: 'video'
+          };
+
+          const embedConf = JSON.parse(sub.embedConfig || '{}');
+          const roles = JSON.parse(sub.mentionRoles || '[]');
+          await NotificationService.send(client, sub.discordChannelId, { ...embedConf, mentionRoles: roles }, sampleItem);
+
+          return interaction.editReply({
+            content: `${VERIFIED_ICON} Test alert successfully sent to <#${sub.discordChannelId}>!`
+          });
+        }
+      }
+    },
+    {
+      name: 'select_social_generic',
+      handler: async (client: any, interaction: any, context: any) => {
+        if (!interaction.guild) return;
+        const customId = interaction.customId;
+        if (customId === 'select_social_manage_feed') {
+          await interaction.deferUpdate().catch(() => {});
+          const val = interaction.values?.[0];
+          if (!val || !val.startsWith('sub_')) return;
+          const subId = val.replace('sub_', '');
+          const sub = await SocialSubscriptionRepository.findById(subId);
+          if (!sub) {
+            const payload = await buildSocialDashboardGUI(interaction.guild);
+            return interaction.editReply(payload);
+          }
+
+          const isYt = sub.provider === 'youtube';
+          const platformIcon = isYt ? YOUTUBE_ICON : INSTAGRAM_ICON;
+
+          const embed = new EmbedBuilder()
+            .setTitle(`Feed Controls: ${sub.provider.toUpperCase()} — ${sub.sourceName}`)
+            .setColor(Colors.BRAND)
+            .setDescription([
+              `> ${ARROW_ICON} **Platform:** ${platformIcon} **\`${sub.provider.toUpperCase()}\`**`,
+              `> ${ARROW_ICON} **Source Identifier:** **\`${sub.sourceId}\`**`,
+              `> ${ARROW_ICON} **Discord Output Channel:** **<#${sub.discordChannelId}>**`,
+              `> ${ARROW_ICON} **Current State:** **\`${sub.enabled ? 'ACTIVE (Broadcasting)' : 'PAUSED (Silenced)'}\`**`,
+              `> ${ARROW_ICON} **Health Check:** **\`${sub.validationStatus}\`**`,
+              `> ${ARROW_ICON} **Created At:** <t:${Math.floor(new Date(sub.createdAt).getTime() / 1000)}:R>\n`,
+              `*Use the action buttons below to manage this specific subscription.*`
+            ].join('\n'))
+            .setFooter({ text: BRAND_FOOTER });
+
+          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`btn_sub_toggle_${sub.id}`)
+              .setLabel(sub.enabled ? 'Pause Feed' : 'Resume Feed')
+              .setStyle(ButtonStyle.Secondary)
+              .setEmoji(sub.enabled ? '1546155193303957504' : '1532390590707142956'),
+            new ButtonBuilder()
+              .setCustomId(`btn_sub_test_${sub.id}`)
+              .setLabel('Send Test Alert')
+              .setStyle(ButtonStyle.Secondary)
+              .setEmoji('1532620952087826602'),
+            new ButtonBuilder()
+              .setCustomId(`btn_sub_delete_${sub.id}`)
+              .setLabel('Delete Feed')
+              .setStyle(ButtonStyle.Danger)
+              .setEmoji('1546155193303957504'),
+            new ButtonBuilder()
+              .setCustomId('btn_social_refresh')
+              .setLabel('Back to Dashboard')
+              .setStyle(ButtonStyle.Secondary)
+              .setEmoji('1532425712844144701')
+          );
+
+          return interaction.editReply({ embeds: [embed], components: [row] });
+        }
+      }
+    },
+    {
+      name: 'modal_social_generic',
+      handler: async (client: any, interaction: any, context: any) => {
+        if (!interaction.guild) return;
+        const customId = interaction.customId;
+        const guildId = interaction.guild.id;
+
+        // Modal: Add YouTube
+        if (customId === 'modal_social_add_yt') {
+          await interaction.deferReply({ flags: 64 }).catch(() => {});
+          const input = interaction.fields.getTextInputValue('yt_input')?.trim();
+          const channelStr = interaction.fields.getTextInputValue('yt_channel')?.trim();
+          const mentionStr = interaction.fields.getTextInputValue('yt_mention')?.trim();
+
+          const cleanChanId = channelStr.replace(/[<#>]/g, '');
+          const channel = interaction.guild.channels.cache.get(cleanChanId) ||
+            interaction.guild.channels.cache.find((c: any) => c.name.toLowerCase() === channelStr.toLowerCase());
+
+          if (!channel) {
+            return interaction.editReply({
+              content: `${WRONG_ICON} Could not find target channel **${channelStr}**. Please verify the channel name or ID.`
+            });
+          }
+
+          const mentionRoles: string[] = [];
+          if (mentionStr) {
+            if (mentionStr.toLowerCase().includes('everyone')) mentionRoles.push('everyone');
+            if (mentionStr.toLowerCase().includes('here')) mentionRoles.push('here');
+            const roleMatch = mentionStr.match(/\d{17,20}/g);
+            if (roleMatch) mentionRoles.push(...roleMatch);
+          }
+
+          const res = await SubscriptionManager.addSubscription(guildId, 'youtube', input, channel.id, {
+            mentionRoles
+          });
+
+          if (!res.success) {
+            return interaction.editReply({
+              content: `${WRONG_ICON} Failed to add YouTube feed: \`${res.error}\``
+            });
+          }
+
+          return interaction.editReply({
+            content: `${VERIFIED_ICON} Successfully subscribed YouTube channel **${res.subscription?.sourceName || input}** to <#${channel.id}>! Run \`r!social\` or click Refresh to view in dashboard.`
+          });
+        }
+
+        // Modal: Add Instagram
+        if (customId === 'modal_social_add_ig') {
+          await interaction.deferReply({ flags: 64 }).catch(() => {});
+          const username = interaction.fields.getTextInputValue('ig_username')?.trim().replace(/^@/, '');
+          const channelStr = interaction.fields.getTextInputValue('ig_channel')?.trim();
+          const mentionStr = interaction.fields.getTextInputValue('ig_mention')?.trim();
+
+          const cleanChanId = channelStr.replace(/[<#>]/g, '');
+          const channel = interaction.guild.channels.cache.get(cleanChanId) ||
+            interaction.guild.channels.cache.find((c: any) => c.name.toLowerCase() === channelStr.toLowerCase());
+
+          if (!channel) {
+            return interaction.editReply({
+              content: `${WRONG_ICON} Could not find target channel **${channelStr}**. Please verify the channel name or ID.`
+            });
+          }
+
+          const mentionRoles: string[] = [];
+          if (mentionStr) {
+            if (mentionStr.toLowerCase().includes('everyone')) mentionRoles.push('everyone');
+            if (mentionStr.toLowerCase().includes('here')) mentionRoles.push('here');
+            const roleMatch = mentionStr.match(/\d{17,20}/g);
+            if (roleMatch) mentionRoles.push(...roleMatch);
+          }
+
+          const res = await SubscriptionManager.addSubscription(guildId, 'instagram', username, channel.id, {
+            mentionRoles
+          });
+
+          if (!res.success) {
+            return interaction.editReply({
+              content: `${WRONG_ICON} Failed to add Instagram feed: \`${res.error}\``
+            });
+          }
+
+          return interaction.editReply({
+            content: `${VERIFIED_ICON} Successfully subscribed Instagram account **@${username}** to <#${channel.id}>! Run \`r!social\` or click Refresh to view in dashboard.`
+          });
         }
       }
     },
@@ -648,7 +1085,7 @@ export function registerSocialUpdatesCommands(): void {
     execute: async (message: Message, args: string[], context?: any) => {
       const guildId = message.guildId;
       if (!guildId || !message.guild) {
-        return message.reply({ content: '<:wrong:1532390628330307634> Command can only be executed within a server.' });
+        return message.reply({ content: '<a:wrong:1546155193303957504> Command can only be executed within a server.' });
       }
 
       const action = (args[0] || '').toLowerCase().trim();
@@ -657,7 +1094,7 @@ export function registerSocialUpdatesCommands(): void {
 
       if (['add', 'subscribe', 'remove', 'delete', 'unsubscribe', 'forcecheck', 'validate'].includes(action) && !isAdmin) {
         const embed = new EmbedBuilder()
-          .setTitle('<:shield:1532403012751065179> Access Denied')
+          .setTitle('<:security:1546142576984203336> Access Denied')
           .setDescription('Requires Manage Server permission to modify social update settings.')
           .setColor(0xEF4444)
           .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -677,7 +1114,7 @@ export function registerSocialUpdatesCommands(): void {
           return message.reply({ embeds: [embed] });
         }
         const lines = subs.map((s: any) =>
-          `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<:wrong:1532390628330307634> Paused'} (Health: **${s.validationStatus}**) [ID: \`${s.id}\`]`
+          `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<a:wrong:1546155193303957504> Paused'} (Health: **${s.validationStatus}**) [ID: \`${s.id}\`]`
         );
         const embed = new EmbedBuilder()
           .setTitle('<a:lovemail:1527647157371535420> Social Updates Subscriptions')
@@ -687,15 +1124,9 @@ export function registerSocialUpdatesCommands(): void {
         return message.reply({ embeds: [embed] });
       }
 
-      if (action === 'status') {
-        const subs = await SocialSubscriptionRepository.findAll(guildId);
-        const active = subs.filter((s: any) => s.enabled).length;
-        const embed = new EmbedBuilder()
-          .setTitle('<a:lovemail:1527647157371535420> Social Updates Engine Status')
-          .setDescription(`**Active Subscriptions:** ${active} / ${subs.length}\n**System Diagnostics:** <a:approved:1532390590707142956> Operational`)
-          .setColor(0x99CC00)
-          .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
-        return message.reply({ embeds: [embed] });
+      if (!action || action === 'status' || action === 'dashboard' || action === 'gui' || action === 'panel') {
+        const payload = await buildSocialDashboardGUI(message.guild);
+        return message.reply(payload);
       }
 
       if (action === 'forcecheck') {
@@ -751,7 +1182,7 @@ export function registerSocialUpdatesCommands(): void {
 
         if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channelMention) {
           const embed = new EmbedBuilder()
-            .setTitle('<:wrong:1532390628330307634> Invalid Add Syntax')
+            .setTitle('<a:wrong:1546155193303957504> Invalid Add Syntax')
             .setDescription([
               `> **Syntax**: \`r!social add <youtube|instagram> <handle_or_channel_id> <#discordChannel>\``,
               `> **YouTube Handle Example**: \`r!social add youtube clasherliveop #announcements\``,
@@ -765,7 +1196,7 @@ export function registerSocialUpdatesCommands(): void {
         const res = await SubscriptionManager.addSubscription(guildId, provider, sourceId, channelMention.id, {});
         if (!res.success) {
           const embed = new EmbedBuilder()
-            .setTitle('<:wrong:1532390628330307634> Subscription Error')
+            .setTitle('<a:wrong:1546155193303957504> Subscription Error')
             .setDescription(`Failed to add social feed: \`${res.error}\``)
             .setColor(0xEF4444)
             .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
@@ -789,7 +1220,7 @@ export function registerSocialUpdatesCommands(): void {
         const subId = args[1];
         if (!subId) {
           const embed = new EmbedBuilder()
-            .setTitle('<:wrong:1532390628330307634> Invalid Remove Syntax')
+            .setTitle('<a:wrong:1546155193303957504> Invalid Remove Syntax')
             .setDescription(`> **Syntax**: \`r!social remove <subscription_id>\`\n> *(Use \`r!social list\` to view active IDs)*`)
             .setColor(0xEF4444)
             .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
@@ -799,7 +1230,7 @@ export function registerSocialUpdatesCommands(): void {
         const res = await SubscriptionManager.removeSubscription(guildId, subId);
         if (!res.success) {
           const embed = new EmbedBuilder()
-            .setTitle('<:wrong:1532390628330307634> Removal Error')
+            .setTitle('<a:wrong:1546155193303957504> Removal Error')
             .setDescription(`\`${res.error}\``)
             .setColor(0xEF4444)
             .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
@@ -814,21 +1245,8 @@ export function registerSocialUpdatesCommands(): void {
         return message.reply({ embeds: [embed] });
       }
 
-      // Default Help Manual
-      const embed = new EmbedBuilder()
-        .setTitle('<a:lovemail:1527647157371535420> Social Updates Control Manual')
-        .setDescription([
-          `> <:lightpurplearrow:1532621364115013693> **\`r!social add <yt|ig> <handle/id> <#channel>\`** — Add new social feed`,
-          `> <:lightpurplearrow:1532621364115013693> **\`r!social remove <id>\`** — Remove a social subscription`,
-          `> <:lightpurplearrow:1532621364115013693> **\`r!social status\`** — View overall system operational status`,
-          `> <:lightpurplearrow:1532621364115013693> **\`r!social list\`** — List all configured social subscriptions`,
-          `> <:lightpurplearrow:1532621364115013693> **\`r!social forcecheck\`** — Trigger immediate global update scan`,
-          `> <:lightpurplearrow:1532621364115013693> **\`r!social validate\`** — Validate health of registered subscriptions`,
-          `> <:lightpurplearrow:1532621364115013693> **\`r!social statistics\`** — View analytics and delivery telemetry`
-        ].join('\n'))
-        .setColor(0x99CC00)
-        .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
-      return message.reply({ embeds: [embed] });
+      const payload = await buildSocialDashboardGUI(message.guild);
+      return message.reply(payload);
     }
   });
 }

@@ -110,7 +110,7 @@ export const RageEnterpriseManifest: ModuleManifest = {
           return interaction.reply({ content: `${WRONG_ICON} Only Administrators can trigger emergency lockdown.`, flags: 64 });
         }
         await interaction.reply({
-          content: `<:shield:1532403012751065179> **Initiating Emergency Lockdown across server text channels...**`
+          content: `<:security:1546142576984203336> **Initiating Emergency Lockdown across server text channels...**`
         });
       }
     },
@@ -298,7 +298,7 @@ export const RageEnterpriseManifest: ModuleManifest = {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
           return interaction.reply({ content: `${WRONG_ICON} Restricted to Administrators / System Owner.`, flags: 64 });
         }
-        await interaction.reply({ content: `<:shield:1532403012751065179> **Executing Emergency Lock across all server channels!**` });
+        await interaction.reply({ content: `<:security:1546142576984203336> **Executing Emergency Lock across all server channels!**` });
       }
     },
     {

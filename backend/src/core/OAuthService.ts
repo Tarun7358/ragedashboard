@@ -20,8 +20,9 @@ function getEncryptionKey(): Buffer {
     console.warn('[OAuthService] ⚠️  TOKEN_ENCRYPTION_KEY is not set or invalid. Using derived fallback key — set a 32-byte hex key in your .env before deploying to production.');
     OAuthService._encKeyWarned = true;
   }
-  // Derive a deterministic fallback from JWT_SECRET so at least the key isn't empty
-  return crypto.createHash('sha256').update(process.env.JWT_SECRET || 'fallback_secret').digest();
+  // BUG-03 FIX: Do not fall back to the literal string 'fallback_secret'.
+  // JWT_SECRET is guaranteed by the startup guard in index.ts.
+  return crypto.createHash('sha256').update(process.env.JWT_SECRET!).digest();
 }
 
 function encryptToken(plain: string): string {
@@ -34,11 +35,12 @@ function encryptToken(plain: string): string {
   return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
 }
 
-function decryptToken(stored: string): string {
-  // Support legacy plaintext tokens that are not in the encrypted format
-  if (!stored.includes(':')) return stored;
+// BUG-08 FIX: Returns null on any decryption failure instead of silently returning
+// the raw ciphertext or legacy plaintext. Callers must check for null.
+function decryptToken(stored: string): string | null {
+  if (!stored || !stored.includes(':')) return null; // Reject legacy plaintext
   const parts = stored.split(':');
-  if (parts.length !== 3) return stored;
+  if (parts.length !== 3) return null;
   try {
     const key = getEncryptionKey();
     const iv = Buffer.from(parts[0], 'hex');
@@ -48,8 +50,9 @@ function decryptToken(stored: string): string {
     decipher.setAuthTag(authTag);
     return decipher.update(encrypted) + decipher.final('utf8');
   } catch {
-    // Decryption failed — token may be from before encryption was added
-    return stored;
+    // Decryption failed (key mismatch, corruption, tampered ciphertext)
+    console.warn('[OAuthService] decryptToken: AES-GCM decryption failed — token discarded.');
+    return null;
   }
 }
 
@@ -264,6 +267,7 @@ export class OAuthService {
     if (!db) return null;
     const session = await db.get<any>('SELECT accessToken FROM discord_sessions WHERE discordId = ?', [discordId]);
     if (!session?.accessToken) return null;
+    // BUG-08: decryptToken now returns null on failure
     return decryptToken(session.accessToken);
   }
 
@@ -343,6 +347,11 @@ export class OAuthService {
           if (managed.includes(guildId)) {
             attempted++;
             const decryptedToken = decryptToken(r.accessToken);
+            // BUG-08: skip if decryption failed
+            if (!decryptedToken) {
+              console.warn(`[OAuthService] attemptAutoRejoinForGuild: skipped user ${r.discordId} — token decryption failed.`);
+              continue;
+            }
             const res = await this.addUserToGuild(guildId, r.discordId, decryptedToken);
             if (res.success) joined++;
           }

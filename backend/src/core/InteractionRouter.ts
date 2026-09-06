@@ -242,7 +242,7 @@ export class InteractionRouter {
       const targetExecutorId = parts[parts.length - 1];
       if (/^\d{17,20}$/.test(targetExecutorId) && interaction.user.id !== targetExecutorId) {
         return interaction.reply({
-          content: `<:wrong:1532390628330307634> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
+          content: `<a:wrong:1546155193303957504> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
           flags: 64
         }).catch(() => {});
       }
@@ -253,7 +253,7 @@ export class InteractionRouter {
       const targetId = interaction.customId.split('_').pop();
       if (/^\d{17,20}$/.test(targetId) && interaction.user.id !== targetId) {
         return interaction.reply({
-          content: `<:wrong:1532390628330307634> Only the message owner (<@${targetId}>) can dismiss this confidential message.`,
+          content: `<a:wrong:1546155193303957504> Only the message owner (<@${targetId}>) can dismiss this confidential message.`,
           flags: 64
         }).catch(() => {});
       }
@@ -267,8 +267,24 @@ export class InteractionRouter {
     }
 
     // Auto-defer for slow button handlers (1.0 s eager safety net)
+    // EXCEPTION: Do NOT auto-defer button interactions that trigger a Modal popup,
+    // as Discord rejects interaction.showModal() if deferUpdate() or deferReply() has been called.
+    const isModalTrigger =
+      interaction.customId === 'btn_open_ticket_modal' ||
+      interaction.customId === 'btn_ticket_open_direct' ||
+      interaction.customId.startsWith('tkmgr_btn_') ||
+      interaction.customId.startsWith('btn_in_add_mod') ||
+      interaction.customId.startsWith('btn_social_add_') ||
+      interaction.customId === 'btn_social_add_yt' ||
+      interaction.customId === 'btn_social_add_ig' ||
+      interaction.customId === 'btn_sec_link_gmail' ||
+      interaction.customId === 'btn_sec_open_otp_modal' ||
+      interaction.customId.startsWith('btn_sec_cat_custom_thresh_') ||
+      interaction.customId === 'btn_disable_enter_code' ||
+      interaction.customId.includes('modal');
+
     let deferred = false;
-    const deferTimer = setTimeout(async () => {
+    const deferTimer = isModalTrigger ? null : setTimeout(async () => {
       if (!interaction.replied && !interaction.deferred) {
         deferred = true;
         interaction.deferUpdate().catch(() => {});
@@ -285,11 +301,28 @@ export class InteractionRouter {
       const genericPrefixes: Array<[string, string]> = [
         ['gw_enter_',    'button_gw_enter_generic'],
         ['tickets_v2_',  'button_tickets_v2_generic'],
+        ['tkmgr_',       'button_tickets_v2_generic'],
+        ['btn_open_',    'button_tickets_v2_generic'],
+        ['btn_ticket_',  'button_tickets_v2_generic'],
+        ['btn_in_',      'button_tickets_v2_generic'],
+        ['btn_control_', 'button_tickets_v2_generic'],
+        ['prio_btn_',    'button_tickets_v2_generic'],
+        ['btn_deploy_',  'button_tickets_v2_generic'],
         ['addrole_',     'button_addrole_generic'],
         ['wl_',          'button_wl_generic'],
         ['sec_',         'button_sec_generic'],
+        ['btn_sec_',     'button_sec_generic'],
+        ['select_sec_',  'button_sec_generic'],
+        ['jtc_',         'button_jtc_generic'],
+        ['ver_',         'button_ver_generic'],
         ['mod_',         'button_mod_generic'],
         ['botstats_',    'button_botstats_generic'],
+        ['social_',      'button_social_generic'],
+        ['btn_social_',  'button_social_generic'],
+        ['btn_sub_',     'button_social_generic'],
+        ['btn_al_',      'button_al_generic'],
+        ['select_al_',   'button_al_generic'],
+        ['al_',          'button_al_generic']
       ];
 
       for (const [prefix, event] of genericPrefixes) {
@@ -297,8 +330,10 @@ export class InteractionRouter {
           await this.ctx.dispatchEvent(event, interaction);
         }
       }
+
+      await this.ctx.dispatchEvent('interactionCreate', interaction);
     } finally {
-      clearTimeout(deferTimer);
+      if (deferTimer) clearTimeout(deferTimer);
     }
   }
 
@@ -312,7 +347,7 @@ export class InteractionRouter {
       const targetExecutorId = parts[parts.length - 1];
       if (/^\d{17,20}$/.test(targetExecutorId) && interaction.user.id !== targetExecutorId) {
         return interaction.reply({
-          content: `<:wrong:1532390628330307634> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
+          content: `<a:wrong:1546155193303957504> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
           flags: 64
         }).catch(() => {});
       }
@@ -324,7 +359,8 @@ export class InteractionRouter {
       return;
     }
 
-    const deferTimer = setTimeout(() => {
+    const isModalTrigger = interaction.customId === 'ticket_select_category' || interaction.customId.startsWith('ticket_select_');
+    const deferTimer = isModalTrigger ? null : setTimeout(() => {
       if (!interaction.replied && !interaction.deferred) {
         interaction.deferUpdate().catch(() => {});
       }
@@ -334,42 +370,58 @@ export class InteractionRouter {
       await this.ctx.dispatchEvent(`select_${interaction.customId}`, interaction);
 
       const genericPrefixes: Array<[string, string]> = [
-        ['tickets_v2_', 'select_tickets_v2_generic'],
+        ['tickets_v2_',      'select_tickets_v2_generic'],
+        ['tkmgr_',           'select_tickets_v2_generic'],
+        ['ticket_select_',   'select_tickets_v2_generic'],
+        ['select_sec_',      'button_sec_generic'],
+        ['select_social_',   'select_social_generic'],
+        ['social_',          'select_social_generic'],
+        ['select_al_',       'button_al_generic'],
+        ['btn_al_',          'button_al_generic'],
+        ['al_',              'button_al_generic']
       ];
 
       for (const [prefix, event] of genericPrefixes) {
         if (interaction.customId.startsWith(prefix)) {
-          this.ctx.dispatchEvent(event, interaction);
+          await this.ctx.dispatchEvent(event, interaction);
         }
       }
+
+      await this.ctx.dispatchEvent('interactionCreate', interaction);
     } finally {
-      clearTimeout(deferTimer);
+      if (deferTimer) clearTimeout(deferTimer);
     }
   }
 
   // ── Modals ───────────────────────────────────────────────────────────────
 
   private async handleModal(interaction: any): Promise<void> {
-    const deferTimer = setTimeout(() => {
-      if (!interaction.replied && !interaction.deferred) {
-        interaction.deferUpdate().catch(() => {});
-      }
-    }, 1000);
-
     try {
       await this.ctx.dispatchEvent(`modal_${interaction.customId}`, interaction);
 
       const genericPrefixes: Array<[string, string]> = [
-        ['tickets_v2_', 'modal_tickets_v2_generic'],
+        ['tickets_v2_',      'modal_tickets_v2_generic'],
+        ['ticket_modal_',    'modal_tickets_v2_generic'],
+        ['panel_draft_',     'modal_tickets_v2_generic'],
+        ['set_user_limit_',  'modal_tickets_v2_generic'],
+        ['set_admin_role_',  'modal_tickets_v2_generic'],
+        ['add_moderator_',   'modal_tickets_v2_generic'],
+        ['modal_sec_',       'button_sec_generic'],
+        ['sec_',             'button_sec_generic'],
+        ['jtc_',             'button_jtc_generic'],
+        ['modal_social_',    'modal_social_generic'],
+        ['social_',          'modal_social_generic'],
       ];
 
       for (const [prefix, event] of genericPrefixes) {
         if (interaction.customId.startsWith(prefix)) {
-          this.ctx.dispatchEvent(event, interaction);
+          await this.ctx.dispatchEvent(event, interaction);
         }
       }
-    } finally {
-      clearTimeout(deferTimer);
+
+      await this.ctx.dispatchEvent('interactionCreate', interaction);
+    } catch (err) {
+      console.error('[InteractionRouter] Error handling modal submit:', err);
     }
   }
 

@@ -350,6 +350,13 @@ export class Database {
       [entry.guildId, entry.guildId]
     ).catch(() => {});
 
+    // Automatically trigger live dashboard real-time sync across the bot
+    if (entry.guildId) {
+      import('../services/DashboardSyncService.js')
+        .then((m) => m.DashboardSyncService.triggerSync(entry.guildId, 800))
+        .catch(() => {});
+    }
+
     return result;
   }
 
@@ -793,7 +800,13 @@ export class Database {
       );`,
       `CREATE INDEX IF NOT EXISTS idx_server_audit_logs_guild ON server_audit_logs (guildId, id DESC);`,
       `CREATE INDEX IF NOT EXISTS idx_server_audit_logs_time ON server_audit_logs (guildId, timestamp DESC);`,
-      `CREATE INDEX IF NOT EXISTS idx_server_audit_logs_action ON server_audit_logs (guildId, action);`
+      `CREATE INDEX IF NOT EXISTS idx_server_audit_logs_action ON server_audit_logs (guildId, action);`,
+      `CREATE TABLE IF NOT EXISTS guild_dashboards (
+        guildId TEXT PRIMARY KEY,
+        channelId TEXT NOT NULL,
+        messageId TEXT NOT NULL,
+        updatedAt INTEGER NOT NULL
+      );`
     ];
 
     for (const schema of schemas) {

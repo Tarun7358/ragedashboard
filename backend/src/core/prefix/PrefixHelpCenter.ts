@@ -1,4 +1,4 @@
-import {
+﻿import {
   EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
@@ -13,8 +13,8 @@ import { PrefixPermissionManager } from './PrefixPermissionManager.js';
 import { Embeds, Colors, VERIFIED_ICON, WRONG_ICON } from '../UIFactory.js';
 
 const APPROVED_ICON = '<a:approved:1532390590707142956>';
-const WRONG_EMOJI = '<:wrong:1532390628330307634>';
-const SHIELD_EMOJI = '<:shield:1532403012751065179>';
+const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
+const SHIELD_EMOJI = '<:security:1546142576984203336>';
 const ARROW_ICON = '<a:animatedarrowwhite:1527647357473132554>';
 export const DEFAULT_HELP_BANNER = 'https://cdn.discordapp.com/attachments/1499055667238146289/1538212292980773004/ChatGPT_Image_Aug_15_2026_09_14_48_PM.png?ex=6a81db55&is=6a8089d5&hm=4e8308bbc0423a9b1fa28776ba323ebc65e14534cf9fa9487546a50d6e172d3b';
 
@@ -185,7 +185,7 @@ export class PrefixHelpCenter {
 
     const descLines = [
       `<a:approved:1532390590707142956> **Rage Optimiser Command Matrix**\n`,
-      `> <:shield:1532403012751065179> **Enterprise Anti-Nuke & Guild Protection**: Full native security, automated logging, role controls, and moderation.\n`,
+      `> <:security:1546142576984203336> **Enterprise Anti-Nuke & Guild Protection**: Full native security, automated logging, role controls, and moderation.\n`,
       `> <:ticks:1532620580266836148> **Active Prefix**: \`${prefix}\` | **Slash Commands**: \`/\` | **Commands Loaded**: ${totalCommands}\n`,
       `> <:config:1532425712844144701> **Change Prefix**: Use \`${prefix}prefix set <new_prefix>\` or mention the bot.\n`,
       `--------------------------------------------------\n`,

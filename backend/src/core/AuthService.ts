@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { Database } from './Database.js';
 import { IAdminUser } from '../models/index.js';
 
@@ -22,11 +23,23 @@ export class AuthService {
 
       if (!user) {
         console.log('[AuthService] No admin user found. Provisioning default owner account.');
-        const rawPassword = process.env.DASHBOARD_PASSWORD || 'rageoptimiser123';
+
+        // L-06 FIX: Generate a random password if DASHBOARD_PASSWORD is not set
+        let rawPassword = process.env.DASHBOARD_PASSWORD;
+        if (!rawPassword) {
+          rawPassword = crypto.randomBytes(16).toString('hex');
+          console.warn(
+            `[AuthService] ⚠️  DASHBOARD_PASSWORD is not set. ` +
+            `A one-time random password has been generated for the 'admin' account: ${rawPassword}\n` +
+            `Set DASHBOARD_PASSWORD in your .env to persist a fixed password.`
+          );
+        }
+
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(rawPassword, salt);
 
-        const id = 'admin_owner_' + Math.random().toString(36).substring(2, 9);
+        // L-03 FIX: Use crypto.randomUUID() instead of Math.random()
+        const id = 'admin_owner_' + crypto.randomUUID().replace(/-/g, '').substring(0, 7);
         const now = new Date().toISOString();
 
         await db.run(
@@ -47,7 +60,9 @@ export class AuthService {
    * Validate credentials and handle lockouts.
    */
   public static async authenticate(username: string, password: string): Promise<IAdminUser | null> {
-    console.log(`[AuthService] Authenticating user: ${username}`);
+    // BUG-14 FIX: Do NOT log the username — avoids PII leakage and accidental
+    // capture of passwords typed into the username field.
+    console.log('[AuthService] Authentication attempt received.');
     const db = Database.getDb();
     if (!db) {
       console.error('[AuthService] Authentication failed: database disconnected');

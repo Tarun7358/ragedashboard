@@ -472,7 +472,7 @@ export const LevelingManifest: ModuleManifest = {
           await saveUserEco(guildId, target.id, targetEco);
 
           const { embeds, components, flags } = buildRichCard({
-            emoji: '<:shield:1532403012751065179>',
+            emoji: '<:security:1546142576984203336>',
             title: 'Heist Successful!',
             accentColor: Colors.SUCCESS,
             fields: [

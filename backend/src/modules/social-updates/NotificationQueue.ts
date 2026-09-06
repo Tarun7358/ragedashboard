@@ -194,9 +194,37 @@ export class NotificationQueue {
 
       const mentionContent = NotificationService.buildMentionContent(mentionRoles, templateData);
 
+      let defaultMessage = '';
+      const channelName = templateData['channel.name'] || templateData['profile.name'] || 'Creator';
+      const contentUrl = templateData['video.url'] || templateData['post.url'] || '';
+      const contentType = job.item.extra?.contentType || (job.item.isLive ? 'live' : job.item.isPremiere ? 'premiere' : job.item.isShort ? 'short' : 'video');
+
+      if (provider === 'youtube') {
+        if (contentType === 'live' || job.item.isLive) {
+          defaultMessage = `🔴 **${channelName}** is now **LIVE** on YouTube! ${mentionContent}\n${contentUrl}`;
+        } else if (contentType === 'premiere' || job.item.isPremiere) {
+          defaultMessage = `🎬 **${channelName}** is premiering a new video! ${mentionContent}\n${contentUrl}`;
+        } else if (contentType === 'short' || job.item.isShort) {
+          defaultMessage = `**${channelName}** has released a new short! ${mentionContent}\n${contentUrl}`;
+        } else {
+          // Regular YouTube video upload
+          defaultMessage = `**${channelName}** uploaded a new video! ${mentionContent}\n${contentUrl}`;
+        }
+      } else if (provider === 'instagram') {
+        if (contentType === 'reel') {
+          defaultMessage = `🎬 **@${channelName}** shared a new reel on Instagram! ${mentionContent}\n${contentUrl}`;
+        } else if (contentType === 'story') {
+          defaultMessage = `✨ **@${channelName}** posted a new story on Instagram! ${mentionContent}\n${contentUrl}`;
+        } else {
+          defaultMessage = `📸 **@${channelName}** shared a new post on Instagram! ${mentionContent}\n${contentUrl}`;
+        }
+      } else {
+        defaultMessage = `📢 **${channelName}** posted new content! ${mentionContent}\n${contentUrl}`;
+      }
+
       const customContent = embedConfig.messageContent
         ? TemplateEngine.resolve(embedConfig.messageContent, templateData)
-        : `**${templateData['channel.name'] || 'Channel'}** is going live . ${mentionContent}\n${templateData['video.url'] || ''}`;
+        : defaultMessage;
 
       const content = customContent.substring(0, 2000);
 

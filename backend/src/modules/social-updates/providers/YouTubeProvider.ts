@@ -49,6 +49,22 @@ export class YouTubeProvider extends BaseProvider {
     // 1. Fetch standard upload RSS feed
     const items: ContentItem[] = await YouTubeFetcher.fetchRssFeed(channelId, limit).catch(() => []);
 
+    // Verify top recent items for YouTube Shorts status if not already tagged
+    await Promise.all(
+      items.slice(0, 5).map(async (item) => {
+        if (!item.isShort && !item.isLive && !item.isPremiere) {
+          const isShort = await YouTubeFetcher.checkIfShort(item.id, false);
+          if (isShort) {
+            item.isShort = true;
+            item.url = `https://www.youtube.com/shorts/${item.id}`;
+            if (item.extra) {
+              item.extra.contentType = 'short';
+            }
+          }
+        }
+      })
+    );
+
     // 2. Scrape live stream and premiere status
     const liveItem = await YouTubeFetcher.scrapeLiveStatus(channelId).catch(() => null);
     if (liveItem) {

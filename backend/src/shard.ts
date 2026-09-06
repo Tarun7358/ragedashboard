@@ -51,7 +51,7 @@ const manager = new ShardingManager(indexPath, {
 });
 
 manager.on('shardCreate', shard => {
-  console.log(`<:shield:1532403012751065179> [ShardingManager] Successfully spawned Shard #${shard.id}`);
+  console.log(`<:security:1546142576984203336> [ShardingManager] Successfully spawned Shard #${shard.id}`);
 
   shard.on('ready', () => {
     console.log(`<a:approved:1532390590707142956> [Shard #${shard.id}] Gateway Connection Ready & Online.`);

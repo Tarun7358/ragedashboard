@@ -18,7 +18,7 @@ function getServerStats(guild: any, context?: any) {
 function generateDashboardEmbed(guild: any, page: string, client: any, context: any) {
   const stats = getServerStats(guild, context);
   const verifiedIcon = '<a:approved:1532390590707142956>';
-  const shieldIcon = '<:shield:1532403012751065179>';
+  const shieldIcon = '<:security:1546142576984203336>';
   
   const embed = new EmbedBuilder()
     .setColor(0x84cc16)

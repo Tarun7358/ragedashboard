@@ -4,9 +4,9 @@ import { createLimeEmbed } from '../../core/UIFactory.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 
 const TIMER_EMOJI = '<:timer:1532620491662037123>';
-const SHIELD_EMOJI = '<:shield:1532403012751065179>';
+const SHIELD_EMOJI = '<:security:1546142576984203336>';
 const APPROVED_ICON = '<a:approved:1532390590707142956>';
-const WRONG_EMOJI = '<:wrong:1532390628330307634>';
+const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
 const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
 
 export function parseDurationToMs(str: string): number | null {
@@ -18,14 +18,21 @@ export function parseDurationToMs(str: string): number | null {
   const amount = parseInt(match[1], 10);
   const unit = match[2].toLowerCase();
 
+  let ms: number;
   switch (unit) {
-    case 's': return amount * 1000;
-    case 'm': return amount * 60 * 1000;
-    case 'h': return amount * 60 * 60 * 1000;
-    case 'd': return amount * 24 * 60 * 60 * 1000;
-    case 'w': return amount * 7 * 24 * 60 * 60 * 1000;
-    default: return null;
+    case 's': ms = amount * 1000; break;
+    case 'm': ms = amount * 60 * 1000; break;
+    case 'h': ms = amount * 60 * 60 * 1000; break;
+    case 'd': ms = amount * 24 * 60 * 60 * 1000; break;
+    case 'w': ms = amount * 7 * 24 * 60 * 60 * 1000; break;
+    default:  return null;
   }
+
+  // BUG-15 FIX: Cap at 365 days to prevent near-permanent "temporary" roles
+  const MAX_MS = 365 * 24 * 60 * 60 * 1000;
+  if (ms > MAX_MS) return -1; // Sentinel: exceeded cap
+
+  return ms;
 }
 
 export function formatMsToHuman(ms: number): string {
@@ -140,16 +147,39 @@ export function registerTempRoleCommands(): void {
           });
         }
 
+        // BUG-15 FIX: Reject durations exceeding 365 days
+        if (durationMs === -1) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Duration Exceeds Maximum',
+              description: `${WRONG_EMOJI} Temporary role duration cannot exceed **365 days**. Please use a shorter duration.`
+            })]
+          });
+        }
+
         const now = Math.floor(Date.now() / 1000);
         const expiresAt = now + Math.floor(durationMs / 1000);
 
         try {
-          await targetMember.roles.add(role.id, `Temporary Role assigned by ${message.author.tag}`);
+          // BUG-09 FIX: Write DB record FIRST, then assign the Discord role.
+          // If the DB write fails, no role is added on Discord.
+          // If the Discord role add fails, we clean up the DB record.
           await db.run(
             `INSERT INTO temp_roles (guildId, userId, roleId, assignedBy, reason, expiresAt, createdAt)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [message.guild!.id, targetMember.id, role.id, message.author.id, reason, expiresAt, now]
           );
+
+          try {
+            await targetMember.roles.add(role.id, `Temporary Role assigned by ${message.author.tag}`);
+          } catch (roleErr: any) {
+            // Roll back the DB record if the Discord API call failed
+            await db.run(
+              'DELETE FROM temp_roles WHERE guildId = ? AND userId = ? AND roleId = ? AND expiresAt = ?',
+              [message.guild!.id, targetMember.id, role.id, expiresAt]
+            );
+            throw roleErr; // Re-throw so the outer catch block reports the error
+          }
 
           const humanDuration = formatMsToHuman(durationMs);
           const { buildMinimalAction } = await import('../../core/UIFactory.js');
@@ -228,7 +258,7 @@ export function registerTempRoleCommands(): void {
         }
 
         const lines = rows.map((r: any) => 
-          `• <@${r.userId}> — <@&${r.roleId}> | Expires <t:${r.expiresAt}:R> | Reason: *${r.reason || 'N/A'}*`
+          `• <@${r.userId}> — <@&${r.roleId}> | Expires <t:${r.expiresAt}:R> | Reason: **${r.reason || 'N/A'}**`
         );
 
         const embed = createLimeEmbed({

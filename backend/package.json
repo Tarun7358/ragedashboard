@@ -53,6 +53,8 @@
     "tsx": "^4.7.1",
     "typescript": "^5.3.3",
     "ws": "^8.16.0",
-    "youtubei.js": "^17.2.0"
+    "youtubei.js": "^17.2.0",
+    "nodemailer": "^6.9.16",
+    "@types/nodemailer": "^6.4.17"
   }
 }

@@ -28,13 +28,13 @@ export async function sendVoiceProtectionLog(
     const logChan = await client.channels.fetch(config.logChannel).catch(() => null);
     if (logChan && logChan.isTextBased()) {
       const embed = new EmbedBuilder()
-        .setTitle('<:shield:1532403012751065179> Voice Protection Incident')
+        .setTitle('<:security:1546142576984203336> Voice Protection Incident')
         .setDescription(`An audio disturbance (excessive volume/ear-rape) was detected and punished.`)
         .setColor(0x99CC00)
         .addFields(
           { name: '<:member:1532621317487071426> User', value: `${user} (${user.username})`, inline: true },
           { name: '<:voicechannelgreen:1532425750278438962> Channel', value: `${channel.name} (<#${channel.id}>)`, inline: true },
-          { name: '<:shield:1532403012751065179> Action Taken', value: `**${action.toUpperCase()}**`, inline: true },
+          { name: '<:security:1546142576984203336> Action Taken', value: `**${action.toUpperCase()}**`, inline: true },
           { name: '<a:lovemail:1527647157371535420> Avg Loudness', value: `\`${avgLoudness}%\``, inline: true },
           { name: '<a:lovemail:1527647157371535420> Peak Loudness', value: `\`${peakLoudness}%\``, inline: true }
         )

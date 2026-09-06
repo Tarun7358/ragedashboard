@@ -1,4 +1,4 @@
-import { EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+﻿import { EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
 
@@ -225,6 +225,10 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
 
   log(`Initiating fast parallel restoration of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
   activeBackupRestorations.add(guild.id);
+  try {
+    const { activeRestorationGuilds } = await import('../security/manifest.js');
+    activeRestorationGuilds?.add(guild.id);
+  } catch {}
 
   try {
     const rolesScope = scope?.roles !== false;
@@ -482,8 +486,12 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
   } catch (err: any) {
     log(`❌ Restoration failed: ${err.message}`, 'warn');
   } finally {
-    setTimeout(() => {
+    setTimeout(async () => {
       activeBackupRestorations.delete(guild.id);
+      try {
+        const { activeRestorationGuilds } = await import('../security/manifest.js');
+        activeRestorationGuilds?.delete(guild.id);
+      } catch {}
     }, 5000);
   }
 }
@@ -658,13 +666,13 @@ export const BackupsManifest: ModuleManifest = {
 
             const embed = new EmbedBuilder()
               .setAuthor({ name: 'Rage Optimiser • Backup Suite' })
-              .setTitle('<:shield:1532403012751065179> Server Backup & Live Snapshot Created')
+              .setTitle('<:security:1546142576984203336> Server Backup & Live Snapshot Created')
               .setDescription(`Successfully captured complete server configuration template & updated live anti-nuke recovery snapshot!`)
               .setColor(0x84cc16)
               .addFields(
                 { name: '<:config:1532425712844144701> Backup ID', value: `\`${snapshot.id}\``, inline: true },
                 { name: '<a:lovemail:1527647157371535420> Channels', value: `\`${snapshot.channelsCount}\``, inline: true },
-                { name: '<:shield:1532403012751065179> Roles', value: `\`${snapshot.rolesCount}\``, inline: true },
+                { name: '<:security:1546142576984203336> Roles', value: `\`${snapshot.rolesCount}\``, inline: true },
                 { name: '<:bot:1532621107746570391> Emojis', value: `\`${snapshot.emojisCount}\``, inline: true },
                 { name: '<:member:1532621317487071426> Captured By', value: `\`${userTagStr}\``, inline: true },
                 { name: '<a:approved:1532390590707142956> Anti-Nuke Sync', value: `\`READY FOR RESTORATION\``, inline: true },
@@ -677,7 +685,7 @@ export const BackupsManifest: ModuleManifest = {
             context.logSyncEvent?.(`Backup Recovery: Created configuration backup snapshot "${snapshot.id}" and updated live recovery database.`, 'success');
           } catch (err: any) {
             console.error(err);
-            await reply({ content: `<:wrong:1532390628330307634> Failed to generate configuration backup: ${err.message}` });
+            await reply({ content: `<a:wrong:1546155193303957504> Failed to generate configuration backup: ${err.message}` });
           }
         }
 
@@ -696,7 +704,7 @@ export const BackupsManifest: ModuleManifest = {
           guildBackups.slice(0, 10).forEach(b => {
             embed.addFields({
               name: `Snapshot \`${b.id}\``,
-              value: `<:timer:1532620491662037123> Date: \`${new Date(b.timestamp).toLocaleString()}\` | <:shield:1532403012751065179> Roles: \`${b.rolesCount}\` | <a:lovemail:1527647157371535420> Channels: \`${b.channelsCount}\` | Created By: \`${b.createdByName}\``
+              value: `<:timer:1532620491662037123> Date: \`${new Date(b.timestamp).toLocaleString()}\` | <:security:1546142576984203336> Roles: \`${b.rolesCount}\` | <a:lovemail:1527647157371535420> Channels: \`${b.channelsCount}\` | Created By: \`${b.createdByName}\``
             });
           });
 
@@ -709,7 +717,7 @@ export const BackupsManifest: ModuleManifest = {
           const snapshot = await getBackupById(backupId);
 
           if (!snapshot) {
-            return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` was not found.`, flags: 64 });
+            return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` was not found.`, flags: 64 });
           }
 
           const embed = new EmbedBuilder()
@@ -735,14 +743,14 @@ export const BackupsManifest: ModuleManifest = {
         // 4. DELETE SUBCOMMAND
         else if (sub === 'delete') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '<:shield:1532403012751065179> Administrator permissions required to delete backups.', flags: 64 });
+            return interaction.reply({ content: '<:security:1546142576984203336> Administrator permissions required to delete backups.', flags: 64 });
           }
 
           const backupId = interaction.options.getString('backup-id') || '';
           const snapshot = await getBackupById(backupId);
 
           if (!snapshot) {
-            return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` was not found.`, flags: 64 });
+            return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` was not found.`, flags: 64 });
           }
 
           await deleteBackup(backupId);
@@ -753,14 +761,14 @@ export const BackupsManifest: ModuleManifest = {
         // 5. LOAD/RESTORE SUBCOMMAND
         else if (sub === 'load') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '<:shield:1532403012751065179> Administrator permissions required to load backups.', flags: 64 });
+            return interaction.reply({ content: '<:security:1546142576984203336> Administrator permissions required to load backups.', flags: 64 });
           }
 
           const backupId = interaction.options.getString('backup-id') || '';
           const snapshot = await getBackupById(backupId);
 
           if (!snapshot) {
-            return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` was not found.`, flags: 64 });
+            return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` was not found.`, flags: 64 });
           }
 
           // Save load intent mapping
@@ -768,12 +776,12 @@ export const BackupsManifest: ModuleManifest = {
 
           const embed = new EmbedBuilder()
             .setAuthor({ name: 'Rage Optimiser' })
-            .setTitle('<:wrong:1532390628330307634> Confirm Server Rewrite & Clone')
+            .setTitle('<a:wrong:1546155193303957504> Confirm Server Rewrite & Clone')
             .setDescription(`You are about to load backup ID **\`${backupId}\`**.\n\n` + 
                             `<a:lovemail:1527647157371535420> **Source Server**: ${snapshot.guildName}\n` +
                             `<:config:1532425712844144701> **Channels**: ${snapshot.channelsCount}\n` +
-                            `<:shield:1532403012751065179> **Roles**: ${snapshot.rolesCount}\n\n` +
-                            `<:wrong:1532390628330307634> **WARNING**: This operation is **destructive**! It will delete all existing channels, categories, and roles (except bot roles & booster roles) and rebuild them from template.`)
+                            `<:security:1546142576984203336> **Roles**: ${snapshot.rolesCount}\n\n` +
+                            `<a:wrong:1546155193303957504> **WARNING**: This operation is **destructive**! It will delete all existing channels, categories, and roles (except bot roles & booster roles) and rebuild them from template.`)
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
@@ -796,13 +804,13 @@ export const BackupsManifest: ModuleManifest = {
         else if (sub === 'compare') {
           const backupId = interaction.options.getString('backup-id') || '';
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` not found.`, flags: 64 });
+          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
           return interaction.reply({ content: `<a:lovemail:1527647157371535420> **Backup Comparison (vs Current Guild)** for \`${backupId}\`:\n• **Roles**: ${snapshot.rolesCount} backup roles vs ${guild.roles.cache.size} current roles.\n• **Channels**: ${snapshot.channelsCount} backup channels vs ${guild.channels.cache.size} current channels.\nNo configuration drift identified.`, flags: 64 });
         }
         else if (sub === 'preview') {
           const backupId = interaction.options.getString('backup-id') || '';
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` not found.`, flags: 64 });
+          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
           const embed = new EmbedBuilder()
             .setAuthor({ name: 'Rage Optimiser' })
             .setTitle(`<a:lovemail:1527647157371535420> Backup Snapshot Preview: ${snapshot.id}`)
@@ -815,7 +823,7 @@ export const BackupsManifest: ModuleManifest = {
         else if (sub === 'verify') {
           const backupId = interaction.options.getString('backup-id') || '';
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` not found.`, flags: 64 });
+          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
           return interaction.reply({ content: `<a:approved:1532390590707142956> **Backup Snapshot Verification Result** for \`${backupId}\`:\nFile checksum verified. Snapshot structure is intact and ready for deployment.`, flags: 64 });
         }
         else if (sub === 'schedule') {
@@ -826,29 +834,29 @@ export const BackupsManifest: ModuleManifest = {
         else if (sub === 'permissions') {
           const backupId = interaction.options.getString('backup-id') || '';
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          await interaction.reply({ content: `<:shield:1532403012751065179> **Restoration Commencing**\nRestoring permissions settings only from snapshot \`${backupId}\`...`, flags: 64 });
+          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
+          await interaction.reply({ content: `<:security:1546142576984203336> **Restoration Commencing**\nRestoring permissions settings only from snapshot \`${backupId}\`...`, flags: 64 });
           executeRestoration(guild, snapshot, { roles: false, channels: false, settings: true, expressions: false }, context).catch(console.error);
         }
         else if (sub === 'channels') {
           const backupId = interaction.options.getString('backup-id') || '';
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          await interaction.reply({ content: `<:shield:1532403012751065179> **Restoration Commencing**\nRestoring channels layout structure only from snapshot \`${backupId}\`...`, flags: 64 });
+          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
+          await interaction.reply({ content: `<:security:1546142576984203336> **Restoration Commencing**\nRestoring channels layout structure only from snapshot \`${backupId}\`...`, flags: 64 });
           executeRestoration(guild, snapshot, { roles: false, channels: true, settings: false, expressions: false }, context).catch(console.error);
         }
         else if (sub === 'roles') {
           const backupId = interaction.options.getString('backup-id') || '';
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          await interaction.reply({ content: `<:shield:1532403012751065179> **Restoration Commencing**\nRestoring roles hierarchy only from snapshot \`${backupId}\`...`, flags: 64 });
+          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
+          await interaction.reply({ content: `<:security:1546142576984203336> **Restoration Commencing**\nRestoring roles hierarchy only from snapshot \`${backupId}\`...`, flags: 64 });
           executeRestoration(guild, snapshot, { roles: true, channels: false, settings: false, expressions: false }, context).catch(console.error);
         }
         else if (sub === 'emojis') {
           const backupId = interaction.options.getString('backup-id') || '';
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<:wrong:1532390628330307634> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          await interaction.reply({ content: `<:shield:1532403012751065179> **Restoration Commencing**\nRestoring custom emojis only from snapshot \`${backupId}\`...`, flags: 64 });
+          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
+          await interaction.reply({ content: `<:security:1546142576984203336> **Restoration Commencing**\nRestoring custom emojis only from snapshot \`${backupId}\`...`, flags: 64 });
           executeRestoration(guild, snapshot, { roles: false, channels: false, settings: false, expressions: true }, context).catch(console.error);
         }
       }
@@ -863,22 +871,22 @@ export const BackupsManifest: ModuleManifest = {
         const backupId = pendingBackupLoads.get(key);
 
         if (!backupId) {
-          return interaction.reply({ content: '<:wrong:1532390628330307634> No pending backup load intent found. Please rerun `/backup load`.', flags: 64 });
+          return interaction.reply({ content: '<a:wrong:1546155193303957504> No pending backup load intent found. Please rerun `/backup load`.', flags: 64 });
         }
 
         pendingBackupLoads.delete(key);
 
         const snapshot = await getBackupById(backupId);
         if (!snapshot) {
-          return interaction.reply({ content: '<:wrong:1532390628330307634> Backup snapshot data not found.', flags: 64 });
+          return interaction.reply({ content: '<a:wrong:1546155193303957504> Backup snapshot data not found.', flags: 64 });
         }
 
         try {
-          await interaction.reply({ content: '<:shield:1532403012751065179> **Restoration Commencing**\nBot is rebuilding channels and roles in the background. Watch dashboard/logs for live updates.', flags: 64 });
+          await interaction.reply({ content: '<:security:1546142576984203336> **Restoration Commencing**\nBot is rebuilding channels and roles in the background. Watch dashboard/logs for live updates.', flags: 64 });
           executeRestoration(guild, snapshot, { roles: true, channels: true, settings: true, expressions: true }, context).catch(console.error);
         } catch (e: any) {
           console.error(e);
-          await interaction.followUp({ content: `<:wrong:1532390628330307634> Failed to execute restoration: ${e.message}`, flags: 64 });
+          await interaction.followUp({ content: `<a:wrong:1546155193303957504> Failed to execute restoration: ${e.message}`, flags: 64 });
         }
       }
     },
@@ -889,7 +897,7 @@ export const BackupsManifest: ModuleManifest = {
         if (!guild) return;
 
         pendingBackupLoads.delete(`${guild.id}:${interaction.user.id}`);
-        await interaction.reply({ content: '<:wrong:1532390628330307634> Backup restoration canceled.', flags: 64 });
+        await interaction.reply({ content: '<a:wrong:1546155193303957504> Backup restoration canceled.', flags: 64 });
       }
     }
   ],

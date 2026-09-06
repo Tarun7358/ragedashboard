@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags, Options, ActivityType } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags, Options, ActivityType, AuditLogEvent } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } from '@discordjs/voice';
 import { DiscordResourceRegistry, ModuleManifest, ModuleState } from './types.js';
 import { Database } from './Database.js';
@@ -438,6 +438,20 @@ export class Gateway {
         guildName: guild.name
       });
 
+      // Email alert for new guild (fire-and-forget)
+      try {
+        const owner = await guild.fetchOwner().catch(() => null);
+        const ownerTag = owner?.user?.username ?? `ID:${guild.ownerId}`;
+        const { EmailService } = await import('../services/EmailService.js');
+        EmailService.sendNewGuildAlert({
+          guildName:   guild.name,
+          guildId:     guild.id,
+          ownerTag,
+          ownerId:     guild.ownerId,
+          memberCount: guild.memberCount
+        });
+      } catch { /* non-fatal */ }
+
       // Synchronize SQLite approvals table if record exists
       try {
         const db = Database.getDb();
@@ -589,7 +603,7 @@ export class Gateway {
             color: Colors.DANGER,
             sections: [
               {
-                title: '<:shield:1532403012751065179> BOT REMOVAL DETECTED',
+                title: '<:security:1546142576984203336> BOT REMOVAL DETECTED',
                 items: [
                   `Rage Optimiser was removed from **${guild.name}**.`,
                   `If this kick was unauthorized or an anti-nuke attack, click below to re-authorize the bot instantly.`
@@ -756,6 +770,50 @@ export class Gateway {
       handleCommandPermissionsUpdate(this.client, data, this).catch(() => {});
     });
 
+    // ── REALTIME SERVER & AUDIT LOG SYNC LISTENERS ──
+    this.client.on('guildAuditLogEntryCreate' as any, (entry: any, guild: any) => {
+      const guildId = guild?.id || entry?.guildId;
+      if (!guildId) return;
+      const actionName = entry?.action ? (AuditLogEvent[entry.action] || `Action #${entry.action}`) : 'Server Audit Log Update';
+      const executorTag = entry?.executor?.tag || entry?.executor?.username || 'System';
+      this.logSyncEvent(guildId, `Audit Log Real-Time Sync: [${actionName}] by ${executorTag} at ${new Date().toLocaleTimeString()}`, 'info');
+      DashboardSyncService.triggerSync(guildId, 300);
+    });
+
+    this.client.on('guildBanAdd', (ban) => {
+      const guildId = ban.guild.id;
+      this.logSyncEvent(guildId, `Discord Event: Member ${ban.user.tag || ban.user.username} was banned. Data synced at ${new Date().toLocaleTimeString()}`, 'warn');
+      DashboardSyncService.triggerSync(guildId, 300);
+    });
+
+    this.client.on('guildBanRemove', (ban) => {
+      const guildId = ban.guild.id;
+      this.logSyncEvent(guildId, `Discord Event: Member ${ban.user.tag || ban.user.username} was unbanned. Data synced at ${new Date().toLocaleTimeString()}`, 'info');
+      DashboardSyncService.triggerSync(guildId, 300);
+    });
+
+    this.client.on('emojiCreate', (emoji) => {
+      if (emoji.guild?.id) {
+        this.logSyncEvent(emoji.guild.id, `Discord Event: Emoji :${emoji.name}: created. Data synced at ${new Date().toLocaleTimeString()}`, 'info');
+        DashboardSyncService.triggerSync(emoji.guild.id, 500);
+      }
+    });
+
+    this.client.on('emojiDelete', (emoji) => {
+      if (emoji.guild?.id) {
+        this.logSyncEvent(emoji.guild.id, `Discord Event: Emoji :${emoji.name}: deleted. Data synced at ${new Date().toLocaleTimeString()}`, 'warn');
+        DashboardSyncService.triggerSync(emoji.guild.id, 500);
+      }
+    });
+
+    this.client.on('webhookUpdate', (channel) => {
+      const guildId = (channel as any)?.guild?.id;
+      if (guildId) {
+        this.logSyncEvent(guildId, `Discord Event: Webhooks updated in #${(channel as any).name}. Data synced at ${new Date().toLocaleTimeString()}`, 'info');
+        DashboardSyncService.triggerSync(guildId, 500);
+      }
+    });
+
     // ── Single interactionCreate listener via InteractionRouter ─────────────
     // All interaction types (slash, button, selectMenu, modal, autocomplete, help)
     // are routed through InteractionRouter.route() — no double-dispatch, no race conditions.
@@ -790,7 +848,7 @@ export class Gateway {
         // DM notify users who were tagged/mentioned directly
         if (message.mentions.users.size > 0 && message.guild) {
           const verifiedIcon = '<a:approved:1532390590707142956>';
-          const shieldIcon = '<:shield:1532403012751065179>';
+          const shieldIcon = '<:security:1546142576984203336>';
           message.mentions.users.forEach(async (user) => {
             if (user.id === message.author.id || user.bot) return;
             try {
@@ -836,7 +894,7 @@ export class Gateway {
       if (resolveResult.isMentionOnly) {
         const curPrefix = PrefixResolver.getPrefix(message.guildId || undefined);
         const verifiedIcon = '<a:approved:1532390590707142956>';
-        const shieldIcon = '<:shield:1532403012751065179>';
+        const shieldIcon = '<:security:1546142576984203336>';
         const greetingEmbed = new EmbedBuilder()
           .setColor(0x84cc16)
           .setDescription([
@@ -1213,9 +1271,9 @@ export class Gateway {
             `• **Server ID**: \`${guild.id}\`\n` +
             `• **Primary Owner**: <@${guild.ownerId}>\n` +
             `• **Security Protection Status**: \`Suspended until re-invited\`\n\n` +
-            `**⚠️ POTENTIAL ACCOUNT COMPROMISE / RAID THREAT**\n` +
+            `**<a:warning:1546155457981452441> POTENTIAL ACCOUNT COMPROMISE / RAID THREAT**\n` +
             `If the Primary Owner's account was compromised, designated **Extra Owners** must **re-invite Rage Optimiser immediately** to re-activate Anti-Nuke protections.\n\n` +
-            `**🛡️ Automatic Snapshot Vault**\n` +
+            `**<:security:1546142576984203336> Automatic Snapshot Vault**\n` +
             `All server configurations, whitelists, rules, and Anti-Nuke settings remain **100% saved in cloud memory**.`
           )
           .setFooter({ text: 'Rage Optimiser Enterprise • Unbypassable Security' })

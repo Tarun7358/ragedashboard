@@ -101,10 +101,54 @@ export class InstagramFetcher {
         }
       }
     } catch (err) {
-      // Fallback silently to cache/stateful generator
+      // Fallback to HTML scraping
     }
 
-    // 3. Fallback to cached or initial feed generator
+    // 3. Fallback: Instagram Public HTML Profile Scraping
+    try {
+      const htmlUrl = `https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`;
+      const htmlRes = await fetch(htmlUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+        },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (htmlRes.ok) {
+        const html = await htmlRes.text();
+        const shortcodeMatches = [...html.matchAll(/\/p\/([A-Za-z0-9_-]+)\//g)].map(m => m[1]);
+        const uniqueCodes = [...new Set(shortcodeMatches)].slice(0, limit);
+
+        if (uniqueCodes.length > 0) {
+          const items: ContentItem[] = uniqueCodes.map(code => ({
+            id: `ig_${code}`,
+            title: `New Instagram post by @${cleanUsername}`,
+            url: `https://www.instagram.com/p/${code}/`,
+            thumbnailUrl: 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=500',
+            description: `Check out the latest post by @${cleanUsername} on Instagram!`,
+            publishedAt: new Date().toISOString(),
+            isShort: false,
+            extra: {
+              'post.caption': `Check out the latest post by @${cleanUsername} on Instagram!`,
+              'post.image': 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=500',
+              'post.url': `https://www.instagram.com/p/${code}/`,
+              'profile.name': cleanUsername,
+              'profile.username': cleanUsername,
+              'profile.avatar': '',
+              'contentType': 'post',
+              'provider': 'instagram',
+              'sourceId': cleanUsername
+            }
+          }));
+          this.feedCache.set(cleanUsername, items);
+          return items.slice(0, limit);
+        }
+      }
+    } catch {
+      // Fallback to cache/stateful generator
+    }
+
+    // 4. Fallback to cached or initial feed generator
     let cached = this.feedCache.get(cleanUsername);
     if (!cached) {
       cached = this.generateInitialFeed(cleanUsername);

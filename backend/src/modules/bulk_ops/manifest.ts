@@ -1,4 +1,4 @@
-import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 
 export const BulkOpsManifest: ModuleManifest = {
@@ -140,13 +140,13 @@ export const BulkOpsManifest: ModuleManifest = {
       name: 'command_bulk',
       handler: async (client: any, interaction: any, context: any) => {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-          return interaction.reply({ content: '<:wrong:1532390628330307634> Administrator permission required for bulk operations.', flags: 64 });
+          return interaction.reply({ content: '<a:wrong:1546155193303957504> Administrator permission required for bulk operations.', flags: 64 });
         }
 
         const sub = interaction.options.getSubcommand(false);
         const guild = interaction.guild;
         if (!guild) {
-          return interaction.reply({ content: '<:wrong:1532390628330307634> Bulk commands must be run inside a server.', flags: 64 });
+          return interaction.reply({ content: '<a:wrong:1546155193303957504> Bulk commands must be run inside a server.', flags: 64 });
         }
 
         if (sub && (sub === 'role-add' || sub === 'role-remove' || sub === 'role-purge')) {
@@ -155,7 +155,7 @@ export const BulkOpsManifest: ModuleManifest = {
           const isWhitelisted = await checkWhitelistPermission(interaction.user.id, guild, context, sub === 'role-add' ? 'anti_role_grant' : 'anti_role_remove');
           if (!isOwner && !isWhitelisted) {
             return interaction.reply({
-              content: '<:wrong:1532390628330307634> 🔒 **Access Denied**: Bulk role operations can only be executed by the **Server Owner**, **Extra Owners**, and **Whitelisted Members**.\nNormal Administrator permissions are not sufficient.',
+              content: '<a:wrong:1546155193303957504> 🔒 **Access Denied**: Bulk role operations can only be executed by the **Server Owner**, **Extra Owners**, and **Whitelisted Members**.\nNormal Administrator permissions are not sufficient.',
               flags: 64
             });
           }
@@ -193,7 +193,7 @@ export const BulkOpsManifest: ModuleManifest = {
           if (sub === 'role-add') {
             const role = interaction.options.getRole('role');
             if (!role) {
-              return interaction.editReply({ content: '<:wrong:1532390628330307634> Please specify a valid target role to add.' });
+              return interaction.editReply({ content: '<a:wrong:1546155193303957504> Please specify a valid target role to add.' });
             }
 
             const filterRole = interaction.options.getRole('filter_role');
@@ -217,7 +217,7 @@ export const BulkOpsManifest: ModuleManifest = {
           if (sub === 'role-remove') {
             const role = interaction.options.getRole('role');
             if (!role) {
-              return interaction.editReply({ content: '<:wrong:1532390628330307634> Please specify a valid target role to remove.' });
+              return interaction.editReply({ content: '<a:wrong:1546155193303957504> Please specify a valid target role to remove.' });
             }
 
             const filterRole = interaction.options.getRole('filter_role');
@@ -315,11 +315,11 @@ export const BulkOpsManifest: ModuleManifest = {
           if (sub === 'rename-channels') {
             const cat = interaction.options.getChannel('category');
             if (!cat) {
-              return interaction.editReply({ content: '<:wrong:1532390628330307634> Please specify a valid category.' });
+              return interaction.editReply({ content: '<a:wrong:1546155193303957504> Please specify a valid category.' });
             }
             const prefix = interaction.options.getString('prefix') || '';
             const suffix = interaction.options.getString('suffix') || '';
-            if (!prefix && !suffix) return interaction.editReply({ content: '<:wrong:1532390628330307634> Provide at least a prefix or suffix.' });
+            if (!prefix && !suffix) return interaction.editReply({ content: '<a:wrong:1546155193303957504> Provide at least a prefix or suffix.' });
             const channels = guild.channels.cache.filter((c: any) => c.parentId === cat.id);
             let count = 0;
             for (const [, ch] of channels) {
@@ -404,7 +404,7 @@ export const BulkOpsManifest: ModuleManifest = {
             const bans = await guild.bans.fetch().catch(() => new Map());
             if (bans.size === 0) return interaction.editReply({ content: '<a:lovemail:1527647157371535420> No banned users found.' });
             const lines = [...bans.values()].slice(0, 20).map((b: any, i: number) => `**${i + 1}.** ${b.user.username} (${b.user.id}) — ${b.reason || 'No reason'}`);
-            return interaction.editReply({ content: `<:shield:1532403012751065179> **Banned Users (${bans.size}):**\n${lines.join('\n')}` });
+            return interaction.editReply({ content: `<:security:1546142576984203336> **Banned Users (${bans.size}):**\n${lines.join('\n')}` });
           }
 
           // MASS BAN
@@ -412,7 +412,7 @@ export const BulkOpsManifest: ModuleManifest = {
             const idsStr = interaction.options.getString('user_ids') || '';
             const reason = interaction.options.getString('reason') || 'Mass ban by moderator';
             const ids = idsStr.split(/[\s,]+/).filter((id: string) => /^\d+$/.test(id));
-            if (ids.length === 0) return interaction.editReply({ content: '<:wrong:1532390628330307634> No valid user IDs provided.' });
+            if (ids.length === 0) return interaction.editReply({ content: '<a:wrong:1546155193303957504> No valid user IDs provided.' });
             let count = 0;
             for (const id of ids) {
               const res = await guild.members.ban(id, { reason }).catch(() => null);
@@ -427,7 +427,7 @@ export const BulkOpsManifest: ModuleManifest = {
           if (sub === 'mass-unban') {
             const idsStr = interaction.options.getString('user_ids') || '';
             const ids = idsStr.split(/[\s,]+/).filter((id: string) => /^\d+$/.test(id));
-            if (ids.length === 0) return interaction.editReply({ content: '<:wrong:1532390628330307634> No valid user IDs provided.' });
+            if (ids.length === 0) return interaction.editReply({ content: '<a:wrong:1546155193303957504> No valid user IDs provided.' });
             let count = 0;
             for (const id of ids) {
               const res = await guild.members.unban(id, 'Mass unban').catch(() => null);
@@ -442,11 +442,11 @@ export const BulkOpsManifest: ModuleManifest = {
           if (sub === 'clone-channel') {
             const source = interaction.options.getChannel('channel');
             if (!source || typeof source.clone !== 'function') {
-              return interaction.editReply({ content: '<:wrong:1532390628330307634> Please specify a valid channel to clone.' });
+              return interaction.editReply({ content: '<a:wrong:1546155193303957504> Please specify a valid channel to clone.' });
             }
             const cloned = await source.clone({ reason: `Cloned by ${interaction.user.username}` }).catch(() => null);
             if (!cloned) {
-              return interaction.editReply({ content: '<:wrong:1532390628330307634> Failed to clone channel. Please check bot permissions.' });
+              return interaction.editReply({ content: '<a:wrong:1546155193303957504> Failed to clone channel. Please check bot permissions.' });
             }
             logBulk('Clone Channel', 1);
             return interaction.editReply({ embeds: [buildMinimalCard('Cloned Channel', `${source} → ${cloned}`)] });
@@ -483,7 +483,7 @@ export const BulkOpsManifest: ModuleManifest = {
             const cat = interaction.options.getChannel('category');
             const names = namesStr.split(',').map((n: string) => n.trim()).filter(Boolean);
             if (names.length === 0) {
-              return interaction.editReply({ content: '<:wrong:1532390628330307634> Please provide at least one channel name.' });
+              return interaction.editReply({ content: '<a:wrong:1546155193303957504> Please provide at least one channel name.' });
             }
 
             let count = 0;
@@ -500,12 +500,12 @@ export const BulkOpsManifest: ModuleManifest = {
             return interaction.editReply({ embeds: [buildMinimalCard('Created Channels', `**${count} channels**`)] });
           }
 
-          return interaction.editReply({ content: '<:wrong:1532390628330307634> Unknown bulk operation.' });
+          return interaction.editReply({ content: '<a:wrong:1546155193303957504> Unknown bulk operation.' });
         } catch (err: any) {
           console.error('[BulkOps] Error executing bulk operation:', err);
           const errEmbed = new EmbedBuilder()
             .setColor(0xEF4444)
-            .setDescription(`<:wrong:1532390628330307634> **Bulk Operation Error**: \`${err?.message || 'Execution failed'}\``);
+            .setDescription(`<a:wrong:1546155193303957504> **Bulk Operation Error**: \`${err?.message || 'Execution failed'}\``);
           if (interaction.deferred || interaction.replied) {
             await interaction.editReply({ embeds: [errEmbed] }).catch(() => {});
           } else {

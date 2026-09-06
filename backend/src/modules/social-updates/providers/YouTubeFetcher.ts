@@ -148,6 +148,28 @@ export class YouTubeFetcher {
   }
 
   /**
+   * Check if a YouTube video is a YouTube Short by making a lightweight HEAD request.
+   */
+  static async checkIfShort(videoId: string, fallbackIsShort: boolean = false): Promise<boolean> {
+    if (fallbackIsShort) return true;
+    if (!videoId) return false;
+    try {
+      const resp = await fetch(`https://www.youtube.com/shorts/${videoId}`, {
+        method: 'HEAD',
+        redirect: 'manual',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        signal: AbortSignal.timeout(3000)
+      });
+      // A YouTube Short URL returns 200 OK. Standard videos return 303/302 redirecting to /watch?v=...
+      return resp.status === 200;
+    } catch {
+      return fallbackIsShort;
+    }
+  }
+
+  /**
    * Parse RSS feed XML tags.
    */
   private static parseAtomXml(xml: string, channelId: string): ContentItem[] {
@@ -172,7 +194,7 @@ export class YouTubeFetcher {
       const viewCountMatch = entry.match(/media:statistics[^>]+views="(\d+)"/);
       const viewCount = viewCountMatch ? parseInt(viewCountMatch[1]) : 0;
 
-      const isShort = title.toLowerCase().includes('#shorts') || description.toLowerCase().includes('#shorts');
+      const isShort = /#shorts?\b/i.test(title) || /#shorts?\b/i.test(description) || title.toLowerCase().includes('#shorts') || description.toLowerCase().includes('#shorts');
       const url = isShort 
         ? `https://www.youtube.com/shorts/${videoId}` 
         : `https://www.youtube.com/watch?v=${videoId}`;

@@ -28,14 +28,21 @@ import {
   LINK_ICON,
   VOICE_ICON,
   STATS_ICON,
-  VIP_ICON
+  VIP_ICON,
+  GOLD_CROWN_ICON,
+  ANIMATED_APPROVED_ICON,
+  RED_TICK_ICON,
+  LOADING_ANIMATED_ICON,
+  SUCCESS_CHECK_ICON,
+  SECURITY_SHIELD_ICON
 } from '../../core/UIFactory.js';
-import { DEFAULT_SECURITY_RULES } from '../config/manifest.js';
+import { DEFAULT_SECURITY_RULES, buildEnableAllDashboardGUI } from '../config/manifest.js';
 import { isOwnerOrExtraOwner, checkBypassImmunity } from '../../utils/whitelistCheck.js';
 import { DashboardSyncService } from '../../services/DashboardSyncService.js';
 import { Database } from '../../core/Database.js';
+import { EmailService } from '../../services/EmailService.js';
 
-const APPROVED_ICON = VERIFIED_ICON;
+const APPROVED_ICON = SUCCESS_CHECK_ICON;
 const WRONG_EMOJI = WRONG_ICON;
 const SHIELD_EMOJI = SHIELD_ICON;
 const CONFIG_EMOJI = CONFIG_ICON;
@@ -114,18 +121,18 @@ export async function ensureAntiNukeBackupRoles(guild: any): Promise<string[]> {
           await role.setPermissions(targetPerms, 'Rage Self-Healing: Restoring Administrator permission on backup role').catch(() => { });
         }
 
-        // Assign strictly to bot only FIRST (while role position is safe)
+        // Adjust role position to ensure it is manageable by bot
+        const targetPosition = Math.max(1, botHighestPosition - 1);
+        if (role.position >= botHighestPosition) {
+          await role.setPosition(targetPosition).catch(() => { });
+        }
+
+        // Assign strictly to bot only
         me = await guild.members?.fetchMe().catch(() => guild.members?.me);
         if (me && !me.roles.cache.has(role.id)) {
           await me.roles.add(role.id, 'Rage Backup Authority: Self-assigning backup role to bot').catch((err: any) => {
             console.error(`[AntiNuke Backup Roles] Failed to assign role "${role.name}" to bot:`, err?.message || err);
           });
-        }
-
-        // Try moving role to top of manageable hierarchy
-        const targetPosition = Math.max(1, botHighestPosition - 1);
-        if (role.position < targetPosition) {
-          await role.setPosition(targetPosition).catch(() => { });
         }
 
         createdOrFound.push(role.name);
@@ -143,31 +150,27 @@ export async function ensureAntiNukeBackupRoles(guild: any): Promise<string[]> {
 
 export async function stripBackupRolesFromNonBots(guild: any): Promise<string[]> {
   const strippedFrom: string[] = [];
-  if (!guild || !guild.roles || !guild.members) return strippedFrom;
+  if (!guild || !guild.roles) return strippedFrom;
 
   try {
     const me = guild.members?.me || await guild.members?.fetchMe().catch(() => null);
     const botId = me?.id || guild.client?.user?.id;
 
-    // Find all backup role IDs in this guild
-    const backupRoleIds: string[] = [];
     for (const [, role] of guild.roles.cache) {
-      if (BACKUP_ROLE_NAMES.some(name => role.name.toLowerCase().trim() === name.toLowerCase().trim())) {
-        backupRoleIds.push(role.id);
-      }
-    }
-
-    if (backupRoleIds.length === 0) return strippedFrom;
-
-    // Check cached members and strip any backup roles from non-bot accounts
-    for (const [, member] of guild.members.cache) {
-      if (member.id !== botId) {
-        for (const roleId of backupRoleIds) {
-          if (member.roles?.cache?.has(roleId)) {
-            const role = guild.roles.cache.get(roleId);
-            await member.roles.remove(roleId, 'Rage Anti-Nuke Security: Backup roles are strictly reserved for the bot').catch(() => { });
-            strippedFrom.push(`${member.user?.tag || member.id} (Role: ${role?.name || roleId})`);
-            console.log(`[AntiNuke Backup Roles] Stripped backup role "${role?.name || roleId}" from non-bot member "${member.user?.tag || member.id}"`);
+      const isBackupRole = BACKUP_ROLE_NAMES.some(name => role.name.toLowerCase().trim() === name.toLowerCase().trim());
+      if (isBackupRole) {
+        // Iterate members directly attached to the role (works for cached role members)
+        const membersWithRole = Array.from(role.members?.values() || []) as any[];
+        for (const member of membersWithRole) {
+          if (member.id !== botId) {
+            const success = await member.roles.remove(role.id, 'Rage Anti-Nuke Security: Backup roles are strictly reserved for the bot').then(() => true).catch((err: any) => {
+              console.error(`[AntiNuke Backup Roles] Failed to strip "${role.name}" from "${member.user?.tag || member.id}": ${err?.message || err}`);
+              return false;
+            });
+            if (success) {
+              strippedFrom.push(`${member.user?.tag || member.id} (Role: ${role.name})`);
+              console.log(`[AntiNuke Backup Roles] Stripped backup role "${role.name}" from non-bot member "${member.user?.tag || member.id}"`);
+            }
           }
         }
       }
@@ -302,6 +305,41 @@ export async function auditPrivilegedNonWhitelistedMembers(guild: any): Promise<
 
   return privileged;
 }
+
+/**
+ * Scans all members in the guild holding dangerous/administrative roles
+ * that are NOT the Server Owner, NOT Extra Owners, and NOT Whitelisted.
+ * Automatically strips all dangerous roles from unwhitelisted users/bots.
+ */
+export async function stripPrivilegedNonWhitelistedMembers(guild: any): Promise<{ strippedCount: number; details: string[] }> {
+  const result = { strippedCount: 0, details: [] as string[] };
+  if (!guild || !guild.members) return result;
+
+  try {
+    const unwhitelistedPrivileged = await auditPrivilegedNonWhitelistedMembers(guild);
+    for (const entry of unwhitelistedPrivileged) {
+      const member = entry.member;
+      if (!member || !entry.dangerousRoles || entry.dangerousRoles.length === 0) continue;
+
+      for (const role of entry.dangerousRoles) {
+        const removed = await member.roles.remove(role.id, 'Rage Anti-Nuke Enforcement: Automatically stripping high-risk roles from non-whitelisted member').then(() => true).catch((err: any) => {
+          console.error(`[AntiNuke Role Strip] Failed to strip "${role.name}" from "${entry.tag}": ${err?.message || err}`);
+          return false;
+        });
+        if (removed) {
+          result.strippedCount++;
+          result.details.push(`Stripped role "${role.name}" from unwhitelisted member @${entry.tag}`);
+          console.log(`[AntiNuke Role Strip] Stripped dangerous role "${role.name}" from unwhitelisted member "${entry.tag}"`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Strip Privileged Members] Error:', err);
+  }
+
+  return result;
+}
+
 
 export async function buildSecurityDashboardCard(guild: any): Promise<{
   content: string;
@@ -491,10 +529,15 @@ export async function buildSecurityDashboardCard(guild: any): Promise<{
           const d = new Date(r.timestamp || r.createdAt || Date.now());
           const hh = String(d.getHours()).padStart(2, '0');
           const mm = String(d.getMinutes()).padStart(2, '0');
-          const exec = (r.executorTag || r.executorId || 'System').split('#')[0].slice(0, 12);
+          const exec = (r.executorTag || r.executorId || 'System').split('#')[0].slice(0, 10);
           const act = (r.action || 'action').toLowerCase().replace('automod_', '').replace(/_/g, ' ');
-          const tgt = (r.targetName || r.targetId || 'target').split('#')[0].slice(0, 22);
-          recentLogLines.push(`[${hh}:${mm}] ${exec} ${act} ${tgt}`);
+          const tgt = (r.targetName || r.targetId || 'target').split('#')[0].slice(0, 20);
+
+          let actColor = '\u001b[1;33m';
+          if (['ban', 'kick', 'quarantine', 'delete', 'timeout', 'mute', 'strip'].some(a => act.includes(a))) actColor = '\u001b[1;31m';
+          else if (['create', 'grant', 'whitelist', 'restore', 'unban', 'verified'].some(a => act.includes(a))) actColor = '\u001b[1;32m';
+
+          recentLogLines.push(`\u001b[1;36m[${hh}:${mm}]\u001b[0m \u001b[1;37m${exec.padEnd(10)}\u001b[0m ${actColor}${act.padEnd(12)}\u001b[0m \u001b[1;34m${tgt}\u001b[0m`);
         }
       }
     } catch { }
@@ -522,7 +565,12 @@ export async function buildSecurityDashboardCard(guild: any): Promise<{
               else if (entry.action === AuditLogEvent.ChannelCreate) act = 'created channel';
               else if (entry.action === AuditLogEvent.WebhookCreate) act = 'created webhook';
               else if (entry.action === AuditLogEvent.WebhookDelete) act = 'deleted webhook';
-              recentLogLines.push(`[${hh}:${mm}] ${exec.slice(0, 12)} ${act} ${tgt.slice(0, 22)}`);
+
+              let actColor = '\u001b[1;33m';
+              if (['kicked', 'banned', 'deleted'].some(a => act.includes(a))) actColor = '\u001b[1;31m';
+              else if (['created'].some(a => act.includes(a))) actColor = '\u001b[1;32m';
+
+              recentLogLines.push(`\u001b[1;36m[${hh}:${mm}]\u001b[0m \u001b[1;37m${exec.slice(0, 10).padEnd(10)}\u001b[0m ${actColor}${act.padEnd(12)}\u001b[0m \u001b[1;34m${tgt.slice(0, 20)}\u001b[0m`);
             }
           }
         }
@@ -530,7 +578,7 @@ export async function buildSecurityDashboardCard(guild: any): Promise<{
     }
 
     if (recentLogLines.length === 0) {
-      recentLogLines.push('[--:--] System active - 0 disciplinary actions in 24h.');
+      recentLogLines.push('\u001b[1;32m[--:--] System active - 0 disciplinary actions in 24h.\u001b[0m');
     }
 
     // Load live security config for matrix & firewall status
@@ -549,7 +597,10 @@ export async function buildSecurityDashboardCard(guild: any): Promise<{
     const integrityStatus = integrityScore >= 90 ? 'OPTIMAL' : integrityScore >= 70 ? 'SECURE' : 'ACTION REQUIRED';
 
     // Embed 1: Main Header & AutoMod/Disciplinary Summary
-    const serverHeaderLine = `> **Server** — \`${guild.name.toUpperCase()}\` • **Firewall** — \`${firewallStatus}\` • **System Integrity** — \`${integrityScore}% ${integrityStatus}\` • **Last Sync** — <t:${nowSec}:T>`;
+    const serverHeaderLine = [
+      `> **Server** — \`${guild.name.toUpperCase()}\` • **Firewall** — \`${firewallStatus}\` • **System Integrity** — \`${integrityScore}% ${integrityStatus}\``,
+      `> **Real-Time Data Sync**: <t:${nowSec}:F> (<t:${nowSec}:R>)`
+    ].join('\n');
 
     const summaryEmbed = new EmbedBuilder()
       .setColor(CYAN_ACCENT)
@@ -605,7 +656,11 @@ export async function buildSecurityDashboardCard(guild: any): Promise<{
     const liveMonitoringEmbed = new EmbedBuilder()
       .setColor(CYAN_ACCENT)
       .setTitle('LIVE REALTIME SECURITY MONITORING CORE')
-      .setDescription(`\`\`\`ansi\n\u001b[1;36m[${integrityScore}%] Baseline intact. Realtime security monitoring active (Auto-refreshes every 1 min).\u001b[0m\n\`\`\``);
+      .setDescription([
+        `\`\`\`ansi`,
+        `\u001b[1;36m[${integrityScore}%] Baseline intact. Realtime Audit Log & Server Event Sync Active.\u001b[0m`,
+        `\`\`\``
+      ].join('\n'));
 
     // Embed 5: Recent Disciplinary Logs & AutoMod Actions
     const recentLogsEmbed = new EmbedBuilder()
@@ -690,34 +745,68 @@ export async function sendOwnerSecurityConsultationDM(guild: Guild): Promise<boo
     const filledBlocks = Math.round((integrityScore / 100) * 16);
     const progressBarVisual = '█'.repeat(filledBlocks) + '░'.repeat(16 - filledBlocks);
 
-    const threatRoleNames = Array.from(threatRoles.values()).slice(0, 6).map((r: any) => `\`@${r.name}\``).join(', ') || '`None`';
-    const threatUserNames = threatUsers.slice(0, 6).map(u => `\`@${u.user?.username || u.id}\``).join(', ') || '`None`';
+    const integrityStatusLabel = integrityScore >= 80 ? 'OPTIMAL' : integrityScore >= 60 ? 'MODERATE RISK' : 'CRITICAL RISK';
+
+    const threatRoleFormatted = threatRoles.size > 0
+      ? Array.from(threatRoles.values()).slice(0, 6).map((r: any) => `\`@${r.name}\``).join(', ')
+      : '`None detected`';
+
+    const threatUserFormatted = threatUsers.length > 0
+      ? threatUsers.slice(0, 6).map(u => `\`@${u.user?.username || u.id}\``).join(', ')
+      : '`None detected`';
+
+    const hierarchyStatus = isRolePositionLow
+      ? `${WRONG_ICON} **Suboptimal** — Rage Optimiser sits below other admin roles`
+      : `${VERIFIED_ICON} **Optimal** — Rage Optimiser holds top authority`;
+
+    // Automatically strip dangerous roles from unwhitelisted members upon activation
+    await stripPrivilegedNonWhitelistedMembers(guild).catch(() => {});
 
     const consultationEmbed = new EmbedBuilder()
-      .setColor(0x00E5FF)
-      .setTitle(`🛡️ Security Architecture Consultation • ${guild.name}`)
+      .setColor(0x2B2D31)
+      .setAuthor({
+        name: 'RAGE OPTIMISER ENTERPRISE • SECURITY BRIEFING',
+        iconURL: guild.client?.user?.displayAvatarURL()
+      })
+      .setTitle(`Security Activation Report — ${guild.name}`)
       .setDescription([
-        `Hello **${owner.user.username}**,`,
-        ``,
-        `You recently activated the **Rage Optimiser Enterprise Security Suite** on **${guild.name}**.`,
-        `Under our Zero-Trust philosophy, **we have NOT altered or removed any of your server's roles or permissions**. All decisions remain 100% in your hands.`,
-        ``,
-        `📊 **Current System Integrity Index: ${integrityScore}%**`,
-        `\`\`\`ansi\n\u001b[1;36m[${progressBarVisual}] ${integrityScore}%\u001b[0m\n\`\`\``,
-        ``,
-        `🔍 **Security Audit Findings**:`,
-        `• **Bot Role Hierarchy**: ${isRolePositionLow ? '⚠️ **Low** (Rage Optimiser is placed below other admin roles)' : '✅ **Optimal** (Rage Optimiser has top authority)'}`,
-        `• **Unmanaged Admin Roles**: \`${threatRoles.size}\` detected (${threatRoleNames})`,
-        `• **Unwhitelisted Admin Users**: \`${threatUsers.length}\` detected (${threatUserNames})`,
-        ``,
-        `💡 **Consultation: How to Achieve 100% System Integrity**:`,
-        `1. **Whitelist Trusted Staff**: If the admin users above are your trusted moderators, run \`/whitelist add\` or \`r!extraowner add\` so they are recognized as safe actors.`,
-        `2. **Clean Up Role Permissions**: Remove \`Administrator\` from cosmetic or non-senior roles (e.g. Trial Mods, Helpers) and assign only needed permissions.`,
-        `3. **Elevate Bot Role**: Ensure the \`Rage Optimiser\` role is at the top of your role hierarchy in *Server Settings > Roles*.`,
-        ``,
-        `*Need assistance or custom setup? Use \`/config\` or reach out to our support team anytime.*`
+        `Hello **${owner.user.username}** ${GOLD_CROWN_ICON},`,
+        '',
+        `The **Rage Optimiser Enterprise Security Suite** has been successfully deployed on **${guild.name}**. Below is your initial security briefing with threat intelligence and setup guidance.`
       ].join('\n'))
-      .setFooter({ text: 'Rage Optimiser • Zero-Trust Owner Security Sentinel' })
+      .addFields(
+        {
+          name: 'System Integrity Index',
+          value: [
+            `>>> ${STATS_ICON} **System Health**: **${integrityStatusLabel}** • **${integrityScore}%**`,
+            `\`[ ${progressBarVisual} ] ${integrityScore}%\``
+          ].join('\n'),
+          inline: false
+        },
+        {
+          name: 'Threat Intelligence & Audit',
+          value: [
+            `>>> ${SHIELD_ICON} **Security Threat Telemetry**`,
+            `${ARROW_ICON} **Bot Hierarchy**: ${hierarchyStatus}`,
+            `${ARROW_ICON} **Unmanaged Admin Roles**: \`${threatRoles.size}\` found`,
+            `> ${threatRoleFormatted}`,
+            `${ARROW_ICON} **Non-Whitelisted Admin Members**: \`${threatUsers.length}\` detected`,
+            `> ${threatUserFormatted}`
+          ].join('\n'),
+          inline: false
+        },
+        {
+          name: 'Recommended Hardening Actions',
+          value: [
+            `>>> **1.** ${VIP_ICON} **Authorize Trusted Staff** — Run \`r!extraowner add @user\` or \`r!whitelist add @user\` for moderators who need admin access.`,
+            `**2.** ${GAVEL_ICON} **Trim Role Permissions** — Strip \`Administrator\` from non-senior roles like Trial Mods & Helpers. Grant only what is needed.`,
+            `**3.** ${SHIELD_ICON} **Elevate Bot Position** — Move the **Rage Optimiser** role to the **very top** of your role list in **Server Settings › Roles**.\n`,
+            `**For full configuration, run \`r!config\` or open the Security Dashboard with \`r!dashboard\`.**`
+          ].join('\n'),
+          inline: false
+        }
+      )
+      .setFooter({ text: 'Rage Optimiser Enterprise • Zero-Trust Security Sentinel', iconURL: guild.iconURL() || undefined })
       .setTimestamp();
 
     await owner.send({ embeds: [consultationEmbed] }).catch(() => {
@@ -978,104 +1067,65 @@ export function registerEnableDisableCommands(): void {
       const modulesState = context?.getModulesState ? context.getModulesState() : [];
 
       // High-Tech Enterprise Step Definitions
+      // Step Definitions matching video reference
       const dbHash = Math.floor(1000000000000000 + Math.random() * 9000000000000000).toString();
-      const clusterNode = `NODE-${Math.floor(100 + Math.random() * 900)}-PROD`;
       const guildCleanName = message.guild.name.replace(/[*_`~|]/g, '');
 
       const steps = [
         {
-          label: 'Connecting to Cloud Security Sentinel Core...',
-          detail: '`[ ONLINE ]`',
-          subLines: [`└ Cluster Node: \`${clusterNode}\` • Latency: \`12ms\``]
+          label: 'Establishing Connection with Rage Security Cluster...',
+          detail: 'Connected'
         },
         {
-          label: 'Verifying Security Hierarchy & Admin Privileges...',
-          detail: '`[ VERIFIED ]`',
-          subLines: [`└ Bot Authority: \`ADMINISTRATOR\` • Hierarchy: \`MAXIMUM\``]
+          label: 'Checking Minimum Requirements for Antinuke...'
         },
         {
-          label: `Registering Server Defense Node (${guildCleanName})`,
-          detail: '`[ SYNCHRONIZED ]`',
+          label: `Creating DB for "${guildCleanName}"...`,
           subLines: [
-            `├ Server ID: \`${message.guild.id}\``,
-            `└ Vault Signature: \`#RAGE-${dbHash.slice(0, 10)}\``
+            `└ Server Id : ${message.guild.id}`,
+            `└ Rage Security DB ID : ${dbHash.slice(0, 16)}`
           ]
         },
         {
-          label: 'Deploying Anti-Nuke Backup Authority Roles...',
-          detail: '`[ 3 ROLES ACTIVE ]`',
-          subLines: [
-            `├ \`. Secured\` — Core Administrator Authority`,
-            `├ \`. UnBypassable\` — Self-Healing Guardian Role`,
-            `└ \`. RageUnBypassable\` — Fail-Safe Disaster Recovery`
-          ]
+          label: 'Starting Role Integrity Check...'
         },
         {
-          label: 'Self-Assigning Backup Authority To Security Core...',
-          detail: '`[ AUTHORIZED ]`'
+          label: 'Checking Rage Unbypassable , Rage Antinuke , Rage Roles Created....'
         },
         {
-          label: 'Arming 29 Real-Time Threat Sensors & Webhook Watchers...',
-          detail: '`[ 29/29 ARMED ]`'
+          label: 'Backup Admin Roles Created And Assigned To Bot.'
         },
         {
-          label: 'Deploying Live Cyber Dashboard in #rage-dashboard...',
-          detail: '`[ DEPLOYED ]`'
-        },
-        {
-          label: 'Security Activation Complete — System Fully Protected',
-          detail: '`[ SECURED ]`'
+          label: 'Establishing Gmail Connectors...'
         }
       ];
 
       const renderSetupCard = (currentIdx: number) => {
-        const totalSteps = steps.length;
-        const progressPct = Math.min(100, Math.round((currentIdx / totalSteps) * 100));
-        const filledBars = Math.round((progressPct / 100) * 14);
-        const emptyBars = 14 - filledBars;
-        const progressBar = '▰'.repeat(filledBars) + '▱'.repeat(emptyBars);
-
-        let statusPill = 'INITIALIZING ENGINE';
-        if (progressPct >= 100) statusPill = 'ONLINE • FULLY ARMED';
-        else if (progressPct >= 75) statusPill = 'DEPLOYING DASHBOARD';
-        else if (progressPct >= 50) statusPill = 'PROVISIONING ROLES';
-        else if (progressPct >= 25) statusPill = 'AUDITING HIERARCHY';
-
         const lines: string[] = [];
         for (let i = 0; i < steps.length; i++) {
           const step = steps[i];
           if (i < currentIdx) {
-            lines.push(`${APPROVED_ICON} **${step.label}** ${step.detail || ''}`);
+            lines.push(`${SUCCESS_CHECK_ICON} ${step.label}${step.detail ? ` ${step.detail}` : ''}`);
             if (step.subLines) {
               for (const sub of step.subLines) {
                 lines.push(`   ${sub}`);
               }
             }
           } else if (i === currentIdx) {
-            lines.push(`${TIMER_ICON} **${step.label}** \`[ PROCESSING... ]\``);
-          } else {
-            lines.push(`• *${step.label}*`);
+            lines.push(`${LOADING_ANIMATED_ICON} ${step.label}`);
           }
         }
 
         const embed = new EmbedBuilder()
-          .setColor(progressPct >= 100 ? Colors.LIME : 0x00E5FF)
-          .setAuthor({
-            name: 'RAGE OPTIMISER ENTERPRISE • SECURITY SUITE ACTIVATION',
-            iconURL: message.client.user?.displayAvatarURL()
-          })
-          .setTitle(`${SHIELD_ICON} Initializing Defense Core: ${target.toUpperCase()}`)
+          .setColor(0x2B2D31)
+          .setTitle('Rage Optimiser • Antinuke Setup')
           .setDescription([
-            `**Status**: \`[ ${statusPill} ]\``,
-            `**Progress**: \`[${progressBar}]\` **${progressPct}%**`,
+            '**Antinuke Setup Working...**',
             '',
-            '```ansi',
-            '\u001b[1;36m=== REAL-TIME SECURITY PROVISIONING MATRIX ===\u001b[0m',
-            '```',
-            lines.join('\n')
+            lines.length > 0 ? `>>> ${lines.join('\n')}` : `>>> ${LOADING_ANIMATED_ICON} Initializing Antinuke Engines...`
           ].join('\n'))
           .setFooter({
-            text: `Rage Enterprise Security Engine • ${message.guild?.name || 'Protected Server'}`,
+            text: 'Rage Optimiser • Unbypassable Security',
             iconURL: message.guild?.iconURL() || undefined
           })
           .setTimestamp();
@@ -1289,9 +1339,9 @@ export function registerEnableDisableCommands(): void {
 
         // Check Anti-Nuke
         if (isSecActive) {
-          alreadyRunning.push(`> ${SHIELD_ICON} **Anti-Nuke Matrix**: \`[ ARMED ]\` — 29 Real-Time Defense Rules active`);
+          alreadyRunning.push(`> ${SECURITY_SHIELD_ICON} **Anti-Nuke Matrix**: \`[ ARMED ]\` — 29 Real-Time Defense Rules active`);
         } else {
-          newlyActivated.push(`> ${SHIELD_ICON} **Anti-Nuke Matrix**: \`[ ACTIVATED ]\` — Armed 29 Real-Time Defense Rules`);
+          newlyActivated.push(`> ${SECURITY_SHIELD_ICON} **Anti-Nuke Matrix**: \`[ ACTIVATED ]\` — Armed 29 Real-Time Defense Rules`);
         }
 
         // Check PreBot Whitelist
@@ -1347,6 +1397,7 @@ export function registerEnableDisableCommands(): void {
         await ensureAntiNukeBackupRoles(message.guild);
         const { ensureRageRoleAtTop } = await import('../backups/manifest.js');
         await ensureRageRoleAtTop(message.guild);
+        await stripPrivilegedNonWhitelistedMembers(message.guild);
 
         // Enable Security & Whitelists
         if (toggleMod) {
@@ -1410,28 +1461,22 @@ export function registerEnableDisableCommands(): void {
           title: `${STATS_ICON} LIVE CYBER DASHBOARD & RECOVERY CORE`,
           items: [
             `> ${CONFIG_ICON} **Dashboard Channel**: ${dashChannel ? `<#${dashChannel.id}>` : '`#rage-dashboard`'} (Position: Top)`,
-            `> ${SHIELD_ICON} **Backup Authority Roles**: \`. Secured\`, \`. UnBypassable\`, \`. RageUnBypassable\``,
+            `> ${SECURITY_SHIELD_ICON} **Backup Authority Roles**: \`. Secured\`, \`. UnBypassable\`, \`. RageUnBypassable\``,
             `> ${TIMER_ICON} **Sync Engine**: Real-time heartbeat & event-driven auto-synchronization active`
           ]
         });
 
-        const allAlreadyRunning = newlyActivated.length === 0;
-        const overviewCard = buildLimeOverviewCard({
-          title: allAlreadyRunning
-            ? `${SHIELD_ICON} ALL DEFENSE SYSTEMS ALREADY ACTIVE & FUNCTIONAL`
-            : `${SHIELD_ICON} ENTERPRISE SECURITY SUITE SYNCHRONIZED & ACTIVATED`,
-          subtitle: allAlreadyRunning
-            ? 'ALL PROTECTION MODULES VERIFIED ONLINE • SERVER RUNNING AT 100% INTEGRITY'
-            : 'OFFLINE MODULES TURNED ON & MADE FULLY FUNCTIONAL • SERVER FULLY SECURED',
-          color: Colors.LIME,
-          sections,
-          footerText: 'Rage Optimiser Enterprise • Live Defense Core Online'
-        });
+        const guiPayload = buildEnableAllDashboardGUI(
+          message.guild,
+          currentSecConfig,
+          newlyActivated.length,
+          dashChannel
+        );
 
         if (replyMsg) {
-          await replyMsg.edit({ embeds: [overviewCard] }).catch(() => null);
+          await replyMsg.edit(guiPayload).catch(() => null);
         } else {
-          await message.reply({ embeds: [overviewCard] }).catch(() => null);
+          await message.reply(guiPayload).catch(() => null);
         }
 
         // Dispatch private Security Consultation & 100% Integrity Guide directly to Server Owner DM
@@ -1513,75 +1558,177 @@ export function registerEnableDisableCommands(): void {
       const toggleMod = context?.toggleModule;
       const modulesState = context?.getModulesState ? context.getModulesState() : [];
 
-      const TIMER_EMOJI = '<:timer:1532403043239272499>';
+      // ── 2FA GATE ───────────────────────────────────────────────
+      // Flow:
+      //  1. If --otp flag or direct 6-digit code present → validate the OTP first.
+      //  2. If no OTP AND alertEmail is set → send OTP & return early (gating).
+      //  3. If no alertEmail AND no OTP → proceed directly.
+      const secMod2FA = modulesState.find((m: any) => m.id === 'security');
+      const alertEmail = secMod2FA?.config?.alertEmail as string | undefined;
+      const otpFlagIdx = args.indexOf('--otp');
+      const directCodeArg = args.find((a, idx) => idx > 0 && /^\d{6}$/.test(a.trim()));
+      const providedCode = otpFlagIdx !== -1 ? args[otpFlagIdx + 1]?.trim() : directCodeArg?.trim();
 
-      // Step 1: Send initial Loading / Deactivating Embed
-      const loadingEmbed = buildLimeOverviewCard({
-        title: `${TIMER_EMOJI} DEACTIVATING MODULE SUITE...`,
-        subtitle: `STANDBY PROCESS FOR ${target.toUpperCase()}`,
-        color: Colors.WARN,
-        sections: [
-          {
-            title: `${CONFIG_EMOJI} DEACTIVATION IN PROGRESS`,
-            items: [
-              `• **Target Suite**: \`${target.toUpperCase()}\``,
-              `• **Status**: Deactivating rules & placing protections in standby mode...`,
-              `• *Please wait while the system updates configuration state...*`
-            ]
+      if (providedCode) {
+        // User is submitting an OTP — validate it
+        const pending = EmailService.getPending2FA(guildId);
+
+        if (!pending) {
+          return message.reply({
+            content: `${WRONG_EMOJI} No pending 2FA session found. Run \`${prefix}disable ${target}\` first to receive a code.`
+          });
+        }
+        if (pending.userId !== message.author.id) {
+          return message.reply({
+            content: `${WRONG_EMOJI} This OTP session belongs to a different user.`
+          });
+        }
+        if (Date.now() > pending.expiresAt) {
+          EmailService.clearPending2FA(guildId);
+          return message.reply({
+            content: `${WRONG_EMOJI} OTP expired. Please run \`${prefix}disable ${target}\` again to request a fresh code.`
+          });
+        }
+        if (pending.code !== providedCode) {
+          return message.reply({
+            content: `${WRONG_EMOJI} **Invalid OTP.** Double-check the code sent to your Gmail and try again.`
+          });
+        }
+        // ✅ Valid OTP — clear session and proceed with disable
+        EmailService.clearPending2FA(guildId);
+
+      } else if (alertEmail) {
+        // No OTP provided yet, but one is required — send code and gate
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        EmailService.setPending2FA(guildId, {
+          email: alertEmail,
+          code: otp,
+          expiresAt: Date.now() + 10 * 60 * 1000,
+          userId: message.author.id
+        });
+
+        const result = await EmailService.send2FAVerificationCode(alertEmail, otp, message.guild.name);
+        if (!result.success) {
+          return message.reply({
+            content: `${WRONG_EMOJI} **2FA Email Dispatch Failed.** ${result.error || 'Cannot verify your identity — disable action blocked. Check SMTP config in \`.env\`. '}`
+          });
+        }
+
+        const gate2FAEmbed = new EmbedBuilder()
+          .setColor(0x2B2D31)
+          .setTitle('Rage Security | 2FA Verification')
+          .setDescription([
+            'Disabling AntiNuke removes server threat protection.',
+            `A 6-digit verification code has been dispatched to \`${EmailService.maskEmail(alertEmail)}\`.`,
+            '',
+            `Reply with \`${prefix}disable ${target} <code>\` or click below to enter your 2FA code.`
+          ].join('\n'))
+          .setFooter({ text: 'Rage Optimiser • Unbypassable Security', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        const btnRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId('btn_sec_open_otp_modal')
+            .setLabel('Enter 2FA Code')
+            .setStyle(ButtonStyle.Primary)
+        );
+
+        return message.reply({ embeds: [gate2FAEmbed], components: [btnRow] });
+      }
+      // ── END 2FA GATE ────────────────────────────────────────────
+
+      // Step 1: Animated Deactivation Sequence
+      const deactSteps = [
+        { label: 'Stopping Role & Channel Protection Sensors...', detail: 'Stopped' },
+        { label: 'Disarming Webhook & Anti-Bot Quarantine Gate...' },
+        { label: 'Pausing Real-Time Disaster Recovery Snapshots...' },
+        { label: 'Deactivating Chat & AutoMod Filtering Engine...' },
+        { label: 'Dispatching Deactivation Alert to Gmail Sentinel...' }
+      ];
+
+      const renderShutdownCard = (currentIdx: number) => {
+        const lines: string[] = [];
+        for (let i = 0; i < deactSteps.length; i++) {
+          const s = deactSteps[i];
+          if (i < currentIdx) {
+            lines.push(`${SUCCESS_CHECK_ICON} ${s.label}${s.detail ? ` ${s.detail}` : ''}`);
+          } else if (i === currentIdx) {
+            lines.push(`${LOADING_ANIMATED_ICON} ${s.label}`);
           }
-        ],
-        footerText: 'Rage Optimiser Enterprise • Deactivation Process'
-      });
+        }
 
-      const replyMsg = await message.reply({ embeds: [loadingEmbed] }).catch(() => null);
+        return new EmbedBuilder()
+          .setColor(0x2B2D31)
+          .setTitle('Rage Optimiser • Antinuke Deactivation')
+          .setDescription([
+            '**Antinuke Deactivation Working...**',
+            '',
+            lines.length > 0 ? `>>> ${lines.join('\n')}` : `>>> ${LOADING_ANIMATED_ICON} Halting Antinuke Engines...`
+          ].join('\n'))
+          .setFooter({ text: 'Rage Optimiser • Unbypassable Security', iconURL: message.guild?.iconURL() || undefined })
+          .setTimestamp();
+      };
 
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      let replyMsg = await message.reply({ embeds: [renderShutdownCard(0)] }).catch(() => null);
+      if (replyMsg) {
+        let activeMsg: any = replyMsg;
+        for (let i = 1; i <= deactSteps.length; i++) {
+          await new Promise(res => setTimeout(res, 240));
+          if (activeMsg) {
+            const updated: any = await activeMsg.edit({ embeds: [renderShutdownCard(i)] }).catch(() => null);
+            if (updated) activeMsg = updated;
+          }
+        }
+        replyMsg = activeMsg;
+      }
 
       if (['antinuke', 'security', 'an'].includes(target)) {
         if (toggleMod) toggleMod('security', false);
         const secMod = modulesState.find((m: any) => m.id === 'security');
         if (updateConfig) updateConfig('security', { ...(secMod?.config || {}), antiNukeEnabled: false });
 
-        const card = buildLimeOverviewCard({
-          title: `${WRONG_EMOJI} ANTI-NUKE SYSTEM DISABLED`,
-          subtitle: 'ANTI-NUKE PROTECTIONS TEMPORARILY TURNED OFF',
-          color: Colors.DANGER,
-          sections: [
-            {
-              title: `${WRONG_EMOJI} DEACTIVATION PROCESS COMPLETED`,
-              items: [
-                '• Anti-Nuke protection rules have been placed on standby.',
-                `• Re-enable anytime using \`${prefix}enable antinuke\`.`
-              ]
-            }
-          ],
-          footerText: 'Rage Optimiser Enterprise • Process Complete • Security Warning'
-        });
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Threat Defense Matrix — Offline`)
+          .setDescription(
+            `**Suite**: \`ANTI-NUKE\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} All 29 threat sensors have been gracefully wound down.\n` +
+            `${SUCCESS_CHECK_ICON} Role-based backup authorities remain intact on server.\n` +
+            `${WRONG_EMOJI} Active monitoring & auto-quarantine enforcement paused.\n\n` +
+            `> Use \`${prefix}enable antinuke\` to restore full protection instantly.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Anti-Nuke Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
 
         if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
       }
 
-      if (['automod', 'am', 'antilink'].includes(target)) {
+      if (['automod', 'am', 'antilink', 'antispam'].includes(target)) {
         if (toggleMod) toggleMod('automod', false);
         const amMod = modulesState.find((m: any) => m.id === 'automod');
         if (updateConfig) updateConfig('automod', { ...(amMod?.config || {}), autoModEnabled: false, blockLinks: false });
 
-        const card = buildLimeOverviewCard({
-          title: `${WRONG_EMOJI} AUTOMOD & ANTILINK DISABLED`,
-          subtitle: 'AUTOMOD CHAT RESTRICTIONS TURNED OFF',
-          color: Colors.DANGER,
-          sections: [
-            {
-              title: `${WRONG_EMOJI} DEACTIVATION PROCESS COMPLETED`,
-              items: [
-                '• AutoMod and Anti-Link filters have been turned off.',
-                `• Re-enable anytime using \`${prefix}enable automod\`.`
-              ]
-            }
-          ],
-          footerText: 'Rage Optimiser Enterprise • Process Complete • AutoMod Standby'
-        });
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Chat Filter Engine — Offline`)
+          .setDescription(
+            `**Suite**: \`AUTOMOD + ANTILINK\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Anti-Link enforcement paused across all channels.\n` +
+            `${SUCCESS_CHECK_ICON} Anti-Spam rate limiting deactivated.\n` +
+            `${WRONG_EMOJI} Chat filter monitoring suspended.\n\n` +
+            `> Use \`${prefix}enable automod\` to restore chat protection instantly.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • AutoMod Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
 
         if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
@@ -1593,21 +1740,22 @@ export function registerEnableDisableCommands(): void {
           toggleMod('backups', false);
         }
 
-        const card = buildLimeOverviewCard({
-          title: `${WRONG_EMOJI} BACKUP RECOVERY SUITE DEACTIVATED`,
-          subtitle: 'BACKUPS DISABLED',
-          color: Colors.DANGER,
-          sections: [
-            {
-              title: `${WRONG_EMOJI} DEACTIVATION PROCESS COMPLETED`,
-              items: [
-                '• Server backup operations have been disabled.',
-                `• Re-enable anytime using \`${prefix}enable backups\`.`
-              ]
-            }
-          ],
-          footerText: 'Rage Optimiser Enterprise • Backups Disabled'
-        });
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Backup Recovery Suite — Offline`)
+          .setDescription(
+            `**Suite**: \`BACKUP-RECOVERY\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Automated backup scheduling paused.\n` +
+            `${SUCCESS_CHECK_ICON} Vault sync engine placed in standby.\n` +
+            `${WRONG_EMOJI} Real-time backup operations suspended.\n\n` +
+            `> Use \`${prefix}enable backups\` to restore backup coverage instantly.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Backup Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
 
         if (replyMsg) return replyMsg.edit({ embeds: [card] });
         return message.reply({ embeds: [card] });
@@ -1626,24 +1774,11 @@ export function registerEnableDisableCommands(): void {
         const amMod = modulesState.find((m: any) => m.id === 'automod');
         if (updateConfig) updateConfig('automod', { ...(amMod?.config || {}), autoModEnabled: false, blockLinks: false, antiSpamEnabled: false });
 
-        const card = buildLimeOverviewCard({
-          title: `${WRONG_EMOJI} ALL DEFENSE MODULES DISABLED`,
-          subtitle: 'SERVER DEFENSES ARE NOW IN STANDBY MODE',
-          color: Colors.DANGER,
-          sections: [
-            {
-              title: `${WRONG_EMOJI} DEACTIVATION PROCESS COMPLETED`,
-              items: [
-                '• All security modules have been placed in standby mode.',
-                `• Re-enable anytime using \`${prefix}enable all\`.`
-              ]
-            }
-          ],
-          footerText: 'Rage Optimiser Enterprise • Process Complete • Security Disabled'
-        });
+        const { buildDisableAllDashboardGUI } = await import('../config/manifest.js');
+        const guiPayload = buildDisableAllDashboardGUI(message.guild);
 
-        if (replyMsg) return replyMsg.edit({ embeds: [card] });
-        return message.reply({ embeds: [card] });
+        if (replyMsg) return replyMsg.edit(guiPayload);
+        return message.reply(guiPayload);
       }
 
       if (toggleMod) {
@@ -1680,11 +1815,11 @@ export function registerEnableDisableCommands(): void {
     category: 'Security',
     description: 'Display live Athena-style Security Dashboard with system integrity index, 4x3 metrics matrix, and event monitors.',
     usage: 'r!dashboard [setup | channel]',
-    aliases: ['security', 'sec', 'secstatus', 'threats', 'livematrix'],
+    aliases: ['dash', 'secstatus', 'threats', 'livematrix'],
     cooldownSeconds: 3,
     moduleOwnerId: 'security',
     dangerLevel: 'Low',
-    execute: async (message: Message, args: string[]) => {
+    execute: async (message: Message, args: string[], extra?: any) => {
       if (!message.guild) {
         return message.reply({ content: `${WRONG_EMOJI} Command can only be executed within a server.` });
       }
@@ -1694,6 +1829,16 @@ export function registerEnableDisableCommands(): void {
         return message.reply({
           content: `${WRONG_EMOJI} **Access Denied**: Viewing the Security Dashboard requires Administrator or Owner permissions.`
         });
+      }
+
+      const sub = args[0]?.toLowerCase();
+      if (!sub || sub === 'gui' || sub === 'panel' || sub === 'dashboard' || sub === 'status') {
+        const modules = extra?.getModulesState ? extra.getModulesState(message.guild.id) : [];
+        const secMod = modules.find((m: any) => m.id === 'security');
+        const secConfig = secMod?.config || {};
+        const { buildSecurityDashboardComponents } = await import('../config/manifest.js');
+        const { embed, components } = await buildSecurityDashboardComponents(message.guild, secConfig, extra);
+        return message.reply({ embeds: [embed], components });
       }
 
       let deployed = await deploySecurityDashboardToChannel(message.guild);

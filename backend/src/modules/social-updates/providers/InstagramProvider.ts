@@ -58,7 +58,7 @@ export class InstagramProvider extends BaseProvider {
   }
 
   async fetchLatest(username: string, limit = 15): Promise<ContentItem[]> {
-    return InstagramFetcher.fetchLatest(username, limit);
+    return InstagramFetcher.fetchLatestAsync(username, limit);
   }
 
   override filterByContentType(items: ContentItem[], filter: any): ContentItem[] {
@@ -94,8 +94,9 @@ export class InstagramProvider extends BaseProvider {
       'channel.name': source.sourceName,
       'channel.id': source.sourceId,
       'channel.avatar': source.sourceAvatar || '',
-      'channel.url': `https://www.instagram.com/${source.sourceId}/`,
-      ...(item.extra || {})
+      'channel.url': `https://www.instagram.com/${source.sourceId}/`
+      // L-04 FIX: item.extra is NOT spread here — attacker-controlled extra fields
+      // could override the keys above (e.g. post.url, channel.name) silently.
     };
   }
 }

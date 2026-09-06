@@ -79,7 +79,7 @@ import { GiveawayManifest, registerGiveawayCommands } from './modules/giveaway/m
 import { RemindersManifest, registerRemindersCommands } from './modules/reminders/manifest.js';
 import { AnnouncementsManifest } from './modules/announcements/manifest.js';
 import { JoinToCreateManifest } from './modules/joinToCreate/manifest.js';
-import { VoiceManagerManifest } from './modules/voice_manager/manifest.js';
+import { VoiceManagerManifest, registerVoiceManagerCommands } from './modules/voice_manager/manifest.js';
 import { BulkOpsManifest } from './modules/bulk_ops/manifest.js';
 import { DiagnosticsManifest } from './modules/diagnostics/manifest.js';
 import { VoiceProtectionManifest } from './modules/voice-protection/index.js';
@@ -101,6 +101,7 @@ import { registerTempRoleCommands, checkExpiredTempRoles } from './modules/secur
 import { registerExtraOwnerCommands, registerOwnerBroadcastCommands } from './modules/security/extraowner.js';
 import { registerNPCommands } from './modules/security/noprefix.js';
 import { registerEnableDisableCommands } from './modules/security/enable.js';
+import { registerEmailCommands } from './modules/security/email.js';
 import { registerConfigCommands, ConfigManifest } from './modules/config/manifest.js';
 import { BrainManifest, registerBrainCommands } from './brain/BrainManifest.js';
 import { BrainStore } from './brain/BrainStore.js';
@@ -110,6 +111,7 @@ import { EmbedBuilderManifest, registerEmbedPrefixCommands } from './modules/emb
 import { StatsCounterManifest, syncGuildStatCounters, registerStatsCounterCommands } from './modules/stats-counter/manifest.js';
 import { PromotionManifest, registerPromotionCommands } from './modules/promotion/manifest.js';
 import { TicketsManifest, registerTicketsCommands } from './modules/tickets/manifest.js';
+import { EmailService } from './services/EmailService.js';
 
 // All manifests in one place
 export const ALL_MANIFESTS = [
@@ -157,8 +159,26 @@ let gateway: Gateway;
 
 async function bootstrap() {
   try {
+    // 0-a. Validate critical environment variables — refuse to boot if missing
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+      Logger.error(
+        '❌ FATAL: JWT_SECRET is not set or is shorter than 32 characters. ' +
+        'Set a strong secret in your .env file and restart. Refusing to start.',
+        'startup'
+      );
+      process.exit(1);
+    }
+
+    if (!process.env.DISCORD_TOKEN) {
+      Logger.error('❌ FATAL: DISCORD_TOKEN is not set. Refusing to start.', 'startup');
+      process.exit(1);
+    }
+
     // 0. Connect Database
     await Database.connect();
+
+    // 0-b. Initialize email alert service (non-fatal — missing config just means no alerts)
+    await EmailService.testConnection();
 
     // 1. Initialize Module Registry
     registry = new ModuleRegistry((msg) => {
@@ -214,6 +234,7 @@ async function bootstrap() {
     registerOwnerBroadcastCommands();
     registerNPCommands();
     registerEnableDisableCommands();
+    registerEmailCommands();
     registerConfigCommands();
     registerPrebotCommands();
     registerBotStatsCommands();
@@ -228,6 +249,7 @@ async function bootstrap() {
     registerReactionRolesCommands();
     registerGiveawayCommands();
     registerLevelingCommands();
+    registerVoiceManagerCommands();
     registerRemindersCommands();
     registerAnalyticsCommands();
     registerWhitelistCommands();

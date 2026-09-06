@@ -1,6 +1,6 @@
-import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { PermissionFlagsBits, ChannelType, MessageFlags } from 'discord.js';
-import { Colors, buildRichCard, buildListCard, buildStatusCard, buildSuccessCard, buildErrorCard, buildPermCard, MEMBER_ICON } from '../../core/UIFactory.js';
+﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+import { PermissionFlagsBits, ChannelType, MessageFlags, Message, EmbedBuilder } from 'discord.js';
+import { Colors, buildRichCard, buildListCard, buildStatusCard, buildSuccessCard, buildErrorCard, buildPermCard, MEMBER_ICON, SHIELD_ICON, VERIFIED_ICON, WRONG_ICON, INFO_ICON, VOICE_ICON, ARROW_ICON, BRAND_FOOTER } from '../../core/UIFactory.js';
 
 export const VoiceManagerManifest: ModuleManifest = {
   id: 'voice_manager',
@@ -37,27 +37,27 @@ export const VoiceManagerManifest: ModuleManifest = {
         },
         {
           name: 'mass-mute',
-          description: 'Server-mute all members in a voice channel',
+          description: 'Server-mute all members in your current or specified voice channel',
           type: 1,
-          options: [{ name: 'channel', type: 7, description: 'Voice channel', required: true, channel_types: [2, 13] }]
+          options: [{ name: 'channel', type: 7, description: 'Voice channel (defaults to your active VC)', required: false, channel_types: [2, 13] }]
         },
         {
           name: 'mass-unmute',
-          description: 'Server-unmute all members in a voice channel',
+          description: 'Server-unmute all members in your current or specified voice channel',
           type: 1,
-          options: [{ name: 'channel', type: 7, description: 'Voice channel', required: true, channel_types: [2, 13] }]
+          options: [{ name: 'channel', type: 7, description: 'Voice channel (defaults to your active VC)', required: false, channel_types: [2, 13] }]
         },
         {
           name: 'mass-deafen',
-          description: 'Server-deafen all members in a voice channel',
+          description: 'Server-deafen all members in your current or specified voice channel',
           type: 1,
-          options: [{ name: 'channel', type: 7, description: 'Voice channel', required: true, channel_types: [2, 13] }]
+          options: [{ name: 'channel', type: 7, description: 'Voice channel (defaults to your active VC)', required: false, channel_types: [2, 13] }]
         },
         {
           name: 'mass-undeafen',
-          description: 'Server-undeafen all members in a voice channel',
+          description: 'Server-undeafen all members in your current or specified voice channel',
           type: 1,
-          options: [{ name: 'channel', type: 7, description: 'Voice channel', required: true, channel_types: [2, 13] }]
+          options: [{ name: 'channel', type: 7, description: 'Voice channel (defaults to your active VC)', required: false, channel_types: [2, 13] }]
         },
         {
           name: 'mass-drag',
@@ -221,7 +221,10 @@ export const VoiceManagerManifest: ModuleManifest = {
 
         // MASS MUTE
         if (sub === 'mass-mute') {
-          const channel = interaction.options.getChannel('channel');
+          const channel = interaction.options.getChannel('channel') || interaction.member?.voice?.channel;
+          if (!channel) {
+            return interaction.reply({ content: '<a:wrong:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
+          }
           await interaction.deferReply({ flags: 64 });
           let count = 0;
           for (const [, member] of channel.members) {
@@ -234,7 +237,10 @@ export const VoiceManagerManifest: ModuleManifest = {
 
         // MASS UNMUTE
         if (sub === 'mass-unmute') {
-          const channel = interaction.options.getChannel('channel');
+          const channel = interaction.options.getChannel('channel') || interaction.member?.voice?.channel;
+          if (!channel) {
+            return interaction.reply({ content: '<a:wrong:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
+          }
           await interaction.deferReply({ flags: 64 });
           let count = 0;
           for (const [, member] of channel.members) {
@@ -247,7 +253,10 @@ export const VoiceManagerManifest: ModuleManifest = {
 
         // MASS DEAFEN
         if (sub === 'mass-deafen') {
-          const channel = interaction.options.getChannel('channel');
+          const channel = interaction.options.getChannel('channel') || interaction.member?.voice?.channel;
+          if (!channel) {
+            return interaction.reply({ content: '<a:wrong:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
+          }
           await interaction.deferReply({ flags: 64 });
           let count = 0;
           for (const [, member] of channel.members) {
@@ -260,7 +269,10 @@ export const VoiceManagerManifest: ModuleManifest = {
 
         // MASS UNDEAFEN
         if (sub === 'mass-undeafen') {
-          const channel = interaction.options.getChannel('channel');
+          const channel = interaction.options.getChannel('channel') || interaction.member?.voice?.channel;
+          if (!channel) {
+            return interaction.reply({ content: '<a:wrong:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
+          }
           await interaction.deferReply({ flags: 64 });
           let count = 0;
           for (const [, member] of channel.members) {
@@ -308,7 +320,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           const channel = interaction.options.getChannel('channel');
           await channel.permissionOverwrites.edit(guild.id, { Connect: false });
           logVoiceAction('Lock', `#${channel.name}`);
-          return interaction.reply({ content: `<:shield:1532403012751065179> Locked ${channel}.`, flags: 64 });
+          return interaction.reply({ content: `<:security:1546142576984203336> Locked ${channel}.`, flags: 64 });
         }
 
         // UNLOCK
@@ -332,7 +344,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'limit') {
           const channel = interaction.options.getChannel('channel');
           const limit = interaction.options.getInteger('limit');
-          if (channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<:wrong:1532390628330307634> Not a voice channel.', flags: 64 });
+          if (channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:wrong:1546155193303957504> Not a voice channel.', flags: 64 });
           await channel.setUserLimit(limit);
           return interaction.reply({ content: `<a:approved:1532390590707142956> Set user limit to **${limit === 0 ? 'unlimited' : limit}** for ${channel}.`, flags: 64 });
         }
@@ -340,7 +352,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         // CLEANUP
         if (sub === 'cleanup') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
-            return interaction.reply({ content: '<:shield:1532403012751065179> Manage Channels permission required.', flags: 64 });
+            return interaction.reply({ content: '<:security:1546142576984203336> Manage Channels permission required.', flags: 64 });
           }
           await interaction.deferReply({ flags: 64 });
           const voiceChannels = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildVoice && c.members.size === 0);
@@ -359,9 +371,9 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'pull') {
           const user = interaction.options.getUser('user');
           const member = guild.members.cache.get(user.id);
-          if (!member) return interaction.reply({ content: '<:wrong:1532390628330307634> Member not found.', flags: 64 });
-          if (!interaction.member.voice?.channel) return interaction.reply({ content: '<:wrong:1532390628330307634> You must be in a voice channel.', flags: 64 });
-          if (!member.voice?.channel) return interaction.reply({ content: `<:wrong:1532390628330307634> ${user.username} is not in a voice channel.`, flags: 64 });
+          if (!member) return interaction.reply({ content: '<a:wrong:1546155193303957504> Member not found.', flags: 64 });
+          if (!interaction.member.voice?.channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You must be in a voice channel.', flags: 64 });
+          if (!member.voice?.channel) return interaction.reply({ content: `<a:wrong:1546155193303957504> ${user.username} is not in a voice channel.`, flags: 64 });
           await member.voice.setChannel(interaction.member.voice.channel);
           logVoiceAction('Pull', `${user.username} → #${interaction.member.voice.channel.name}`);
           return interaction.reply({ content: `<a:approved:1532390590707142956> Pulled ${user} to your channel.`, flags: 64 });
@@ -370,7 +382,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         // INFO
         if (sub === 'info') {
           const channel = interaction.options.getChannel('channel') || interaction.member.voice?.channel;
-          if (!channel) return interaction.reply({ content: '<:wrong:1532390628330307634> No voice channel specified or you\'re not in one.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> No voice channel specified or you\'re not in one.', flags: 64 });
 
           const memberList = channel.members.size > 0
             ? [...channel.members.values()].map((m: any) => `• ${m.user.username}`).join('\n').substring(0, 900)
@@ -438,7 +450,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           const channel = interaction.options.getChannel('channel');
           const member = guild.members.cache.get(user.id);
           if (!member || !member.voice?.channel) {
-            return interaction.reply({ content: '<:wrong:1532390628330307634> User is not currently in a voice channel.', flags: 64 });
+            return interaction.reply({ content: '<a:wrong:1546155193303957504> User is not currently in a voice channel.', flags: 64 });
           }
           await member.voice.setChannel(channel);
           logVoiceAction('Drag', `Moved ${user.username} to #${channel.name}`);
@@ -465,7 +477,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'pullall') {
           const from = interaction.options.getChannel('from');
           const to = interaction.member.voice?.channel;
-          if (!to) return interaction.reply({ content: '<:wrong:1532390628330307634> You must be in a voice channel to pull members.', flags: 64 });
+          if (!to) return interaction.reply({ content: '<a:wrong:1546155193303957504> You must be in a voice channel to pull members.', flags: 64 });
           await interaction.deferReply({ flags: 64 });
           let count = 0;
           for (const [, member] of from.members) {
@@ -505,7 +517,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           const reason = interaction.options.getString('reason') || 'Voice disconnect';
           const member = guild.members.cache.get(user.id);
           if (!member || !member.voice?.channel) {
-            return interaction.reply({ content: '<:wrong:1532390628330307634> User is not currently in a voice channel.', flags: 64 });
+            return interaction.reply({ content: '<a:wrong:1546155193303957504> User is not currently in a voice channel.', flags: 64 });
           }
           await member.voice.disconnect(reason).catch(() => {});
           logVoiceAction('Disconnect', `Disconnected ${user.username} from voice`);
@@ -515,7 +527,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         // CLEAN
         if (sub === 'clean') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
-            return interaction.reply({ content: '<:shield:1532403012751065179> Manage Channels permission required.', flags: 64 });
+            return interaction.reply({ content: '<:security:1546142576984203336> Manage Channels permission required.', flags: 64 });
           }
           await interaction.deferReply({ flags: 64 });
           const voiceChannels = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildVoice && c.members.size === 0);
@@ -557,3 +569,364 @@ export const VoiceManagerManifest: ModuleManifest = {
     }
   ]
 };
+
+import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
+
+export function registerVoiceManagerCommands() {
+  // Prefix Command: r!vcmute
+  PrefixRegistry.register({
+    name: 'vcmute',
+    category: 'Voice',
+    description: 'Bulk server-mute all members in a specific voice channel.',
+    usage: 'r!vcmute [#voice-channel | channel_id]',
+    aliases: ['massmute', 'voicemute', 'vcm'],
+    cooldownSeconds: 3,
+    examples: ['r!vcmute', 'r!vcmute #Gaming-VC', 'r!vcmute 123456789012345678'],
+    moduleOwnerId: 'voice_manager',
+    dangerLevel: 'Medium',
+    execute: async (message: Message, args: string[], context?: any) => {
+      if (!message.guild) return;
+      const authorMember = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+      if (!authorMember?.permissions.has(PermissionFlagsBits.MuteMembers) && !authorMember?.permissions.has(PermissionFlagsBits.MoveMembers)) {
+        const permEmbed = new EmbedBuilder()
+          .setColor(Colors.DANGER)
+          .setTitle(`${SHIELD_ICON} Permission Denied`)
+          .setDescription(`You require \`Mute Members\` or \`Move Members\` permission to execute bulk voice mute.\n\n> ${INFO_ICON} **Required Permissions**: \`MUTE_MEMBERS\` / \`MOVE_MEMBERS\``)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [permEmbed] });
+      }
+
+      let targetChannel: any = null;
+
+      // 1. Prioritize explicit channel argument (mention, ID, or name) if provided
+      if (args[0] || message.mentions.channels.size > 0) {
+        const channelIdRaw = args[0]?.replace(/[<#>]*/g, '').trim();
+        const mentionedChannel = message.mentions.channels.first();
+        if (mentionedChannel && mentionedChannel.isVoiceBased()) {
+          targetChannel = mentionedChannel;
+        } else if (args[0]) {
+          const found = message.guild.channels.cache.get(args[0]) || 
+                        message.guild.channels.cache.get(channelIdRaw) || 
+                        message.guild.channels.cache.find((c: any) => c.isVoiceBased() && c.name.toLowerCase() === args.slice(0).join(' ').toLowerCase());
+          if (found && found.isVoiceBased()) targetChannel = found;
+        }
+      }
+
+      // 2. Fallback to user's active Voice Channel if no target argument was provided
+      if (!targetChannel) {
+        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+        if (authorChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        }
+      }
+
+      if (!targetChannel || !targetChannel.isVoiceBased()) {
+        const noVcEmbed = new EmbedBuilder()
+          .setColor(Colors.WARN)
+          .setTitle(`${VOICE_ICON} Voice Channel Required`)
+          .setDescription(`You are not currently connected to a voice channel.\n\n> ${ARROW_ICON} **Usage**: Join a voice channel or specify \`r!vcmute [#voice-channel | channel_id]\`.`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [noVcEmbed] });
+      }
+
+      const members = Array.from(targetChannel.members.values()) as any[];
+      if (members.length === 0) {
+        const emptyEmbed = new EmbedBuilder()
+          .setColor(Colors.INFO)
+          .setTitle(`${MEMBER_ICON} Voice Channel Empty`)
+          .setDescription(`No connected members were found in ${targetChannel}.\n\n> ${INFO_ICON} Join or move members into the channel first.`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [emptyEmbed] });
+      }
+
+      let count = 0;
+      for (const member of members) {
+        await member.voice.setMute(true, `Bulk Voice Mute by @${message.author.tag}`).then(() => count++).catch(() => {});
+      }
+
+      context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} bulk-muted ${count} members in #${targetChannel.name}`, 'info');
+
+      const successEmbed = new EmbedBuilder()
+        .setColor(Colors.LIME)
+        .setTitle(`${VERIFIED_ICON} Voice Bulk Action Executed`)
+        .setDescription([
+          `> **Action**: \`Server Muted\``,
+          `> **Voice Channel**: ${targetChannel} (\`#${targetChannel.name}\`)`,
+          `> **Affected Members**: **${count}** users`,
+          `> **Executed By**: <@${message.author.id}>`
+        ].join('\n'))
+        .setFooter({ text: BRAND_FOOTER })
+        .setTimestamp();
+
+      return message.reply({ embeds: [successEmbed] });
+    }
+  });
+
+  // Prefix Command: r!vcunmute
+  PrefixRegistry.register({
+    name: 'vcunmute',
+    category: 'Voice',
+    description: 'Bulk server-unmute all members in a specific voice channel.',
+    usage: 'r!vcunmute [#voice-channel | channel_id]',
+    aliases: ['massunmute', 'voiceunmute', 'vcum'],
+    cooldownSeconds: 3,
+    examples: ['r!vcunmute', 'r!vcunmute #Gaming-VC', 'r!vcunmute 123456789012345678'],
+    moduleOwnerId: 'voice_manager',
+    dangerLevel: 'Low',
+    execute: async (message: Message, args: string[], context?: any) => {
+      if (!message.guild) return;
+      const authorMember = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+      if (!authorMember?.permissions.has(PermissionFlagsBits.MuteMembers) && !authorMember?.permissions.has(PermissionFlagsBits.MoveMembers)) {
+        const permEmbed = new EmbedBuilder()
+          .setColor(Colors.DANGER)
+          .setTitle(`${SHIELD_ICON} Permission Denied`)
+          .setDescription(`You require \`Mute Members\` or \`Move Members\` permission to execute bulk voice unmute.\n\n> ${INFO_ICON} **Required Permissions**: \`MUTE_MEMBERS\` / \`MOVE_MEMBERS\``)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [permEmbed] });
+      }
+
+      let targetChannel: any = null;
+
+      if (args[0] || message.mentions.channels.size > 0) {
+        const channelIdRaw = args[0]?.replace(/[<#>]*/g, '').trim();
+        const mentionedChannel = message.mentions.channels.first();
+        if (mentionedChannel && mentionedChannel.isVoiceBased()) {
+          targetChannel = mentionedChannel;
+        } else if (args[0]) {
+          const found = message.guild.channels.cache.get(args[0]) || 
+                        message.guild.channels.cache.get(channelIdRaw) || 
+                        message.guild.channels.cache.find((c: any) => c.isVoiceBased() && c.name.toLowerCase() === args.slice(0).join(' ').toLowerCase());
+          if (found && found.isVoiceBased()) targetChannel = found;
+        }
+      }
+
+      if (!targetChannel) {
+        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+        if (authorChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        }
+      }
+
+      if (!targetChannel || !targetChannel.isVoiceBased()) {
+        const noVcEmbed = new EmbedBuilder()
+          .setColor(Colors.WARN)
+          .setTitle(`${VOICE_ICON} Voice Channel Required`)
+          .setDescription(`You are not currently connected to a voice channel.\n\n> ${ARROW_ICON} **Usage**: Join a voice channel or specify \`r!vcunmute [#voice-channel | channel_id]\`.`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [noVcEmbed] });
+      }
+
+      const members = Array.from(targetChannel.members.values()) as any[];
+      if (members.length === 0) {
+        const emptyEmbed = new EmbedBuilder()
+          .setColor(Colors.INFO)
+          .setTitle(`${MEMBER_ICON} Voice Channel Empty`)
+          .setDescription(`No connected members were found in ${targetChannel}.\n\n> ${INFO_ICON} Join or move members into the channel first.`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [emptyEmbed] });
+      }
+
+      let count = 0;
+      for (const member of members) {
+        await member.voice.setMute(false, `Bulk Voice Unmute by @${message.author.tag}`).then(() => count++).catch(() => {});
+      }
+
+      context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} bulk-unmuted ${count} members in #${targetChannel.name}`, 'info');
+
+      const successEmbed = new EmbedBuilder()
+        .setColor(Colors.LIME)
+        .setTitle(`${VERIFIED_ICON} Voice Bulk Action Executed`)
+        .setDescription([
+          `> **Action**: \`Server Unmuted\``,
+          `> **Voice Channel**: ${targetChannel} (\`#${targetChannel.name}\`)`,
+          `> **Affected Members**: **${count}** users`,
+          `> **Executed By**: <@${message.author.id}>`
+        ].join('\n'))
+        .setFooter({ text: BRAND_FOOTER })
+        .setTimestamp();
+
+      return message.reply({ embeds: [successEmbed] });
+    }
+  });
+
+  // Prefix Command: r!vcdeafen
+  PrefixRegistry.register({
+    name: 'vcdeafen',
+    category: 'Voice',
+    description: 'Bulk server-deafen all members in a specific voice channel.',
+    usage: 'r!vcdeafen [#voice-channel | channel_id]',
+    aliases: ['massdeafen', 'voicedeafen', 'vcd'],
+    cooldownSeconds: 3,
+    examples: ['r!vcdeafen', 'r!vcdeafen #Gaming-VC', 'r!vcdeafen 123456789012345678'],
+    moduleOwnerId: 'voice_manager',
+    dangerLevel: 'Medium',
+    execute: async (message: Message, args: string[], context?: any) => {
+      if (!message.guild) return;
+      const authorMember = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+      if (!authorMember?.permissions.has(PermissionFlagsBits.DeafenMembers) && !authorMember?.permissions.has(PermissionFlagsBits.MoveMembers)) {
+        const permEmbed = new EmbedBuilder()
+          .setColor(Colors.DANGER)
+          .setTitle(`${SHIELD_ICON} Permission Denied`)
+          .setDescription(`You require \`Deafen Members\` or \`Move Members\` permission to execute bulk voice deafen.\n\n> ${INFO_ICON} **Required Permissions**: \`DEAFEN_MEMBERS\` / \`MOVE_MEMBERS\``)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [permEmbed] });
+      }
+
+      let targetChannel: any = null;
+
+      if (args[0] || message.mentions.channels.size > 0) {
+        const channelIdRaw = args[0]?.replace(/[<#>]*/g, '').trim();
+        const mentionedChannel = message.mentions.channels.first();
+        if (mentionedChannel && mentionedChannel.isVoiceBased()) {
+          targetChannel = mentionedChannel;
+        } else if (args[0]) {
+          const found = message.guild.channels.cache.get(args[0]) || 
+                        message.guild.channels.cache.get(channelIdRaw) || 
+                        message.guild.channels.cache.find((c: any) => c.isVoiceBased() && c.name.toLowerCase() === args.slice(0).join(' ').toLowerCase());
+          if (found && found.isVoiceBased()) targetChannel = found;
+        }
+      }
+
+      if (!targetChannel) {
+        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+        if (authorChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        }
+      }
+
+      if (!targetChannel || !targetChannel.isVoiceBased()) {
+        const noVcEmbed = new EmbedBuilder()
+          .setColor(Colors.WARN)
+          .setTitle(`${VOICE_ICON} Voice Channel Required`)
+          .setDescription(`You are not currently connected to a voice channel.\n\n> ${ARROW_ICON} **Usage**: Join a voice channel or specify \`r!vcdeafen [#voice-channel | channel_id]\`.`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [noVcEmbed] });
+      }
+
+      const members = Array.from(targetChannel.members.values()) as any[];
+      if (members.length === 0) {
+        const emptyEmbed = new EmbedBuilder()
+          .setColor(Colors.INFO)
+          .setTitle(`${MEMBER_ICON} Voice Channel Empty`)
+          .setDescription(`No connected members were found in ${targetChannel}.\n\n> ${INFO_ICON} Join or move members into the channel first.`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [emptyEmbed] });
+      }
+
+      let count = 0;
+      for (const member of members) {
+        await member.voice.setDeaf(true, `Bulk Voice Deafen by @${message.author.tag}`).then(() => count++).catch(() => {});
+      }
+
+      context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} bulk-deafened ${count} members in #${targetChannel.name}`, 'info');
+
+      const successEmbed = new EmbedBuilder()
+        .setColor(Colors.LIME)
+        .setTitle(`${VERIFIED_ICON} Voice Bulk Action Executed`)
+        .setDescription([
+          `> **Action**: \`Server Deafened\``,
+          `> **Voice Channel**: ${targetChannel} (\`#${targetChannel.name}\`)`,
+          `> **Affected Members**: **${count}** users`,
+          `> **Executed By**: <@${message.author.id}>`
+        ].join('\n'))
+        .setFooter({ text: BRAND_FOOTER })
+        .setTimestamp();
+
+      return message.reply({ embeds: [successEmbed] });
+    }
+  });
+
+  // Prefix Command: r!vcundeafen
+  PrefixRegistry.register({
+    name: 'vcundeafen',
+    category: 'Voice',
+    description: 'Bulk server-undeafen all members in a specific voice channel.',
+    usage: 'r!vcundeafen [#voice-channel | channel_id]',
+    aliases: ['massundeafen', 'voiceundeafen', 'vcud'],
+    cooldownSeconds: 3,
+    examples: ['r!vcundeafen', 'r!vcundeafen #Gaming-VC', 'r!vcundeafen 123456789012345678'],
+    moduleOwnerId: 'voice_manager',
+    dangerLevel: 'Low',
+    execute: async (message: Message, args: string[], context?: any) => {
+      if (!message.guild) return;
+      const authorMember = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+      if (!authorMember?.permissions.has(PermissionFlagsBits.DeafenMembers) && !authorMember?.permissions.has(PermissionFlagsBits.MoveMembers)) {
+        const permEmbed = new EmbedBuilder()
+          .setColor(Colors.DANGER)
+          .setTitle(`${SHIELD_ICON} Permission Denied`)
+          .setDescription(`You require \`Deafen Members\` or \`Move Members\` permission to execute bulk voice undeafen.\n\n> ${INFO_ICON} **Required Permissions**: \`DEAFEN_MEMBERS\` / \`MOVE_MEMBERS\``)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [permEmbed] });
+      }
+
+      let targetChannel: any = null;
+
+      if (args[0] || message.mentions.channels.size > 0) {
+        const channelIdRaw = args[0]?.replace(/[<#>]*/g, '').trim();
+        const mentionedChannel = message.mentions.channels.first();
+        if (mentionedChannel && mentionedChannel.isVoiceBased()) {
+          targetChannel = mentionedChannel;
+        } else if (args[0]) {
+          const found = message.guild.channels.cache.get(args[0]) || 
+                        message.guild.channels.cache.get(channelIdRaw) || 
+                        message.guild.channels.cache.find((c: any) => c.isVoiceBased() && c.name.toLowerCase() === args.slice(0).join(' ').toLowerCase());
+          if (found && found.isVoiceBased()) targetChannel = found;
+        }
+      }
+
+      if (!targetChannel) {
+        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+        if (authorChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        }
+      }
+
+      if (!targetChannel || !targetChannel.isVoiceBased()) {
+        const noVcEmbed = new EmbedBuilder()
+          .setColor(Colors.WARN)
+          .setTitle(`${VOICE_ICON} Voice Channel Required`)
+          .setDescription(`You are not currently connected to a voice channel.\n\n> ${ARROW_ICON} **Usage**: Join a voice channel or specify \`r!vcundeafen [#voice-channel | channel_id]\`.`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [noVcEmbed] });
+      }
+
+      const members = Array.from(targetChannel.members.values()) as any[];
+      if (members.length === 0) {
+        const emptyEmbed = new EmbedBuilder()
+          .setColor(Colors.INFO)
+          .setTitle(`${MEMBER_ICON} Voice Channel Empty`)
+          .setDescription(`No connected members were found in ${targetChannel}.\n\n> ${INFO_ICON} Join or move members into the channel first.`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [emptyEmbed] });
+      }
+
+      let count = 0;
+      for (const member of members) {
+        await member.voice.setDeaf(false, `Bulk Voice Undeafen by @${message.author.tag}`).then(() => count++).catch(() => {});
+      }
+
+      context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} bulk-undeafened ${count} members in #${targetChannel.name}`, 'info');
+
+      const successEmbed = new EmbedBuilder()
+        .setColor(Colors.LIME)
+        .setTitle(`${VERIFIED_ICON} Voice Bulk Action Executed`)
+        .setDescription([
+          `> **Action**: \`Server Undeafened\``,
+          `> **Voice Channel**: ${targetChannel} (\`#${targetChannel.name}\`)`,
+          `> **Affected Members**: **${count}** users`,
+          `> **Executed By**: <@${message.author.id}>`
+        ].join('\n'))
+        .setFooter({ text: BRAND_FOOTER })
+        .setTimestamp();
+
+      return message.reply({ embeds: [successEmbed] });
+    }
+  });
+}
+
+// Auto-register on import
+registerVoiceManagerCommands();

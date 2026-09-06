@@ -20,6 +20,7 @@
 import { Client, Guild, GuildMember, PermissionFlagsBits, TextChannel, GuildVerificationLevel } from 'discord.js';
 import { isOwnerOrExtraOwner, checkBypassImmunity } from '../utils/whitelistCheck.js';
 import { activeQuarantines } from '../modules/security/manifest.js';
+import { SECURITY_SHIELD_ICON } from '../core/UIFactory.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IN-MEMORY TRACKING STORES
@@ -200,6 +201,17 @@ async function quarantineMember(guild: Guild, executorId: string, reason: string
   const qKey = `${guild.id}_${executorId}`;
   activeQuarantines.add(qKey);
   setTimeout(() => activeQuarantines.delete(qKey), 20_000);
+
+  // Email alert (fire-and-forget, never blocks)
+  import('../services/EmailService.js').then(({ EmailService }) => {
+    EmailService.sendQuarantineAlert({
+      guildName: guild.name,
+      guildId:   guild.id,
+      userId:    executorId,
+      username:  member.user.username,
+      reason
+    });
+  }).catch(() => {});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -235,14 +247,14 @@ export async function handleThreadCreate(client: Client, thread: any, context: a
     if (triggered) {
       context.logSyncEvent?.(guild.id, `[AdvSec] Thread Spam: ${executorName} created 3+ threads in 30s. Quarantining.`, 'warn');
       await sendSecurityAlert(guild, config.alertChannelId,
-        `<:shield:1532403012751065179> **Thread Spam Detected** — \`${executorName}\` created **3+ threads in 30 seconds**. Auto-quarantined.`
+        `${SECURITY_SHIELD_ICON} **Thread Spam Detected** — \`${executorName}\` created **3+ threads in 30 seconds**. Auto-quarantined.`
       );
       await quarantineMember(guild, executorId, 'AdvSec: Thread spam attack', config);
     } else if (cumulative >= CUMULATIVE_THRESHOLD && cumulative % 5 === 0) {
       // BUG-4 FIX: Fire at >= threshold, then every 5 actions after
       context.logSyncEvent?.(guild.id, `[AdvSec] Slow Nuke: ${executorName} hit 24h cumulative (${cumulative} actions).`, 'warn');
       await sendSecurityAlert(guild, config.alertChannelId,
-        `<:shield:1532403012751065179> **Slow Nuke Alert** — \`${executorName}\` has accumulated **${cumulative} destructive actions** in the past 24h.`
+        `${SECURITY_SHIELD_ICON} **Slow Nuke Alert** — \`${executorName}\` has accumulated **${cumulative} destructive actions** in the past 24h.`
       );
     }
   } catch (err: any) {
@@ -277,7 +289,7 @@ export async function handleThreadDelete(client: Client, thread: any, context: a
     if (triggered) {
       context.logSyncEvent?.(guild.id, `[AdvSec] Mass Thread Delete: ${executorName} deleted 3+ threads in 30s.`, 'warn');
       await sendSecurityAlert(guild, config.alertChannelId,
-        `<:shield:1532403012751065179> **Mass Thread Deletion** — \`${executorName}\` deleted **3+ threads in 30 seconds**. Auto-quarantined.`
+        `${SECURITY_SHIELD_ICON} **Mass Thread Deletion** — \`${executorName}\` deleted **3+ threads in 30 seconds**. Auto-quarantined.`
       );
       await quarantineMember(guild, executorId, 'AdvSec: Mass thread deletion attack', config);
     }
@@ -326,7 +338,7 @@ export async function handleMemberJoinRaidCheck(client: Client, member: GuildMem
       }
 
       await sendSecurityAlert(guild, config.alertChannelId,
-        `<:shield:1532403012751065179> **RAID WAVE DETECTED** — **${fresh.length} members** joined in under 60 seconds.\n` +
+        `${SECURITY_SHIELD_ICON} **RAID WAVE DETECTED** — **${fresh.length} members** joined in under 60 seconds.\n` +
         `> Server verification set to **Very High**. All new invites disabled.\n` +
         `> Auto-unlocking in **10 minutes**. Use \`r!lockdown disable\` to manually unlock.`
       );
@@ -399,7 +411,7 @@ async function runRoleDriftCheck(client: Client): Promise<void> {
           const dashCh = guild.channels.cache.find((c: any) => c.name === 'rage-dashboard') as TextChannel | undefined;
           if (dashCh?.isTextBased()) {
             await dashCh.send({
-              content: `<:shield:1532403012751065179> **Role Position Drift Repaired** — ${rolesAboveBot.length} role(s) were above the bot's security role (bot was at pos **${botPos}**). Auto-repaired to position **${targetPos + 1}**.`
+              content: `${SECURITY_SHIELD_ICON} **Role Position Drift Repaired** — ${rolesAboveBot.length} role(s) were above the bot's security role (bot was at pos **${botPos}**). Auto-repaired to position **${targetPos + 1}**.`
             }).catch(() => {});
           }
         }
@@ -431,7 +443,7 @@ export function trackDestructiveAction(
     context.logSyncEvent?.(guildId, `[AdvSec] SLOW NUKE ALERT: user ${userId} hit 24h threshold (${count} actions, latest: ${actionLabel}).`, 'warn');
     if (guild && alertChannelId) {
       sendSecurityAlert(guild, alertChannelId,
-        `<:shield:1532403012751065179> **Slow/Staged Nuke Detected**\n` +
+        `${SECURITY_SHIELD_ICON} **Slow/Staged Nuke Detected**\n` +
         `> A user has performed **${count} destructive actions** over 24 hours.\n` +
         `> Latest: \`${actionLabel}\`\n> Use \`r!quarantine @user\` to isolate them immediately.`
       ).catch(() => {});
@@ -474,14 +486,14 @@ export async function handleNicknameChange(client: Client, oldMember: GuildMembe
     if (triggered) {
       context.logSyncEvent?.(guild.id, `[AdvSec] Mass Nickname Attack: ${executorName} changed 5+ nicknames in 20s.`, 'warn');
       await sendSecurityAlert(guild, config.alertChannelId,
-        `<:shield:1532403012751065179> **Mass Nickname Change Attack** — \`${executorName}\` modified **5+ member nicknames** in 20 seconds. Auto-quarantined.`
+        `${SECURITY_SHIELD_ICON} **Mass Nickname Change Attack** — \`${executorName}\` modified **5+ member nicknames** in 20 seconds. Auto-quarantined.`
       );
       await quarantineMember(guild, executorId, 'AdvSec: Mass nickname change attack', config);
     } else if (cumulative >= CUMULATIVE_THRESHOLD && (cumulative - CUMULATIVE_THRESHOLD) % 5 === 0) {
       // BUG-4 FIX: Alert at >= threshold and every 5 after
       context.logSyncEvent?.(guild.id, `[AdvSec] Slow Nuke: ${executorName} cumulative 24h threshold hit (${cumulative}).`, 'warn');
       await sendSecurityAlert(guild, config.alertChannelId,
-        `<:shield:1532403012751065179> **Slow Nuke Alert** — \`${executorName}\` has accumulated **${cumulative} destructive actions** in 24h.`
+        `${SECURITY_SHIELD_ICON} **Slow Nuke Alert** — \`${executorName}\` has accumulated **${cumulative} destructive actions** in 24h.`
       );
     }
   } catch (err: any) {
@@ -515,7 +527,7 @@ export async function handleAutoModRuleDelete(client: Client, rule: any, context
 
     context.logSyncEvent?.(guild.id, `[AdvSec] AutoMod rule "${rule.name}" deleted by ${executorName}.`, 'warn');
     await sendSecurityAlert(guild, config.alertChannelId,
-      `<:shield:1532403012751065179> **Discord AutoMod Rule Deleted**\n` +
+      `${SECURITY_SHIELD_ICON} **Discord AutoMod Rule Deleted**\n` +
       `> Rule: **"${rule.name || 'Unknown'}"** was deleted by \`${executorName}\`.\n` +
       `> This disables a native spam/content filter. Go to **Server Settings → AutoMod** to restore it immediately.`
     );
@@ -575,7 +587,7 @@ export async function handleScheduledEventCreate(client: Client, event: any, con
     if (triggered) {
       context.logSyncEvent?.(guild.id, `[AdvSec] Event Spam: ${executorName} created 5+ scheduled events in 60s.`, 'warn');
       await sendSecurityAlert(guild, config.alertChannelId,
-        `<:shield:1532403012751065179> **Scheduled Event Spam** — \`${executorName}\` created **5+ events** in 60 seconds. Timed out for 6 hours.`
+        `${SECURITY_SHIELD_ICON} **Scheduled Event Spam** — \`${executorName}\` created **5+ events** in 60 seconds. Timed out for 6 hours.`
       );
       const executorMember = await guild.members.fetch(executorId).catch(() => null);
       if (executorMember) {
@@ -618,7 +630,7 @@ export async function handleCommandPermissionsUpdate(client: Client, data: any, 
 
     context.logSyncEvent?.(guild.id, `[AdvSec] Slash command permissions modified by ${executorName}. Possible command disable attempt.`, 'warn');
     await sendSecurityAlert(guild, config.alertChannelId,
-      `<:shield:1532403012751065179> **Bot Command Permissions Changed**\n` +
+      `${SECURITY_SHIELD_ICON} **Bot Command Permissions Changed**\n` +
       `> \`${executorName}\` modified slash command permissions for this bot via **Server Settings → Integrations**.\n` +
       `> If commands are disabled, go to **Server Settings → Integrations → Rage** to restore permissions.`
     );

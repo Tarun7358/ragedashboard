@@ -1,4 +1,4 @@
-import { EmbedBuilder, AuditLogEvent } from 'discord.js';
+﻿import { EmbedBuilder, AuditLogEvent } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { buildLimeOverviewCard, createLimeEmbed, Colors, VERIFIED_ICON, WRONG_ICON, CONFIG_ICON, MEMBER_ICON, SHIELD_ICON } from '../../core/UIFactory.js';
@@ -144,10 +144,10 @@ export const LoggingManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
-        if (!isOwner) return interaction.reply({ content: '<:wrong:1532390628330307634> Requires Administrator.', flags: 64 });
+        if (!isOwner) return interaction.reply({ content: '<a:wrong:1546155193303957504> Requires Administrator.', flags: 64 });
         
         const subcommand = interaction.options.getSubcommand(false);
-        if (!subcommand) return interaction.reply({ content: '<:wrong:1532390628330307634> Please use a valid subcommand.', flags: 64 });
+        if (!subcommand) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please use a valid subcommand.', flags: 64 });
         const modules = context.getModulesState();
         const logMod = modules.find((m: any) => m.id === 'logging');
         const config = logMod?.config || {};
@@ -160,14 +160,14 @@ export const LoggingManifest: ModuleManifest = {
             if (catConfig && catConfig.enabled && catConfig.channelId) {
               desc += `<a:approved:1532390590707142956> **${cat.toUpperCase()}**: <#${catConfig.channelId}> (\`${catConfig.channelId}\`)\n`;
             } else {
-              desc += `<:wrong:1532390628330307634> **${cat.toUpperCase()}**: *Unconfigured / Disabled*\n`;
+              desc += `<a:wrong:1546155193303957504> **${cat.toUpperCase()}**: *Unconfigured / Disabled*\n`;
             }
           });
           if (!desc) desc = '*No categories configured.*';
           
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('<:shield:1532403012751065179> Advanced Logging Center — Telemetry Matrix')
+            .setTitle('<:security:1546142576984203336> Advanced Logging Center — Telemetry Matrix')
             .setDescription(
               `> ### Server Audit Distribution Configuration\n` +
               `> Real-time event logging pipelines and assigned Discord channel targets.\n\n` +
@@ -285,12 +285,12 @@ export const LoggingManifest: ModuleManifest = {
           let actualCategory = isAllCategory ? 'all' : validCategories.find(c => c.toLowerCase() === category);
           
           if (!actualCategory) {
-             return interaction.reply({ content: `<:wrong:1532390628330307634> Invalid category. Valid options: ${validCategories.join(', ')}, all`, flags: 64 });
+             return interaction.reply({ content: `<a:wrong:1546155193303957504> Invalid category. Valid options: ${validCategories.join(', ')}, all`, flags: 64 });
           }
 
           if (subcommand === 'channel') {
             const ch = interaction.options.getChannel('channel');
-            if (!ch) return interaction.reply({ content: '<:wrong:1532390628330307634> Please specify a channel.', flags: 64 });
+            if (!ch) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please specify a channel.', flags: 64 });
             
             const newConfig = { ...config };
             if (isAllCategory) {
@@ -332,7 +332,7 @@ export const LoggingManifest: ModuleManifest = {
             context.logSyncEvent(`Logging Center: ${isAllCategory ? 'ALL' : actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`${enabled ? '<a:approved:1532390590707142956>' : '<:wrong:1532390628330307634>'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
+              .setTitle(`${enabled ? '<a:approved:1532390590707142956>' : '<a:wrong:1546155193303957504>'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
               .setDescription(`> ### Telemetry Pipeline Status\n> Category **${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}** logging is now **${enabled ? 'ENABLED' : 'DISABLED'}**.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
@@ -359,7 +359,7 @@ export const LoggingManifest: ModuleManifest = {
           } else if (subcommand === 'test') {
             const catConfig = config[actualCategory];
             if (!catConfig || !catConfig.channelId) {
-              return interaction.reply({ content: `<:wrong:1532390628330307634> **${actualCategory}** does not have a configured channel.`, flags: 64 });
+              return interaction.reply({ content: `<a:wrong:1546155193303957504> **${actualCategory}** does not have a configured channel.`, flags: 64 });
             }
             try {
               const channel = await interaction.guild?.channels.fetch(catConfig.channelId).catch(() => null);
@@ -374,17 +374,17 @@ export const LoggingManifest: ModuleManifest = {
                     `**Status**: \`Operational — 200 OK\``
                   )
                   .addFields(
-                    { name: '<:shield:1532403012751065179> System Check', value: '```Event Pipeline Validated```', inline: true },
+                    { name: '<:security:1546142576984203336> System Check', value: '```Event Pipeline Validated```', inline: true },
                     { name: '<:config:1532425712844144701> Timestamp', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
                   )
                   .setFooter({ text: 'Rage Optimiser • Audit System Test', iconURL: client.user?.displayAvatarURL() })
                   .setTimestamp();
                 await channel.send({ embeds: [embed] });
               } else {
-                await interaction.reply({ content: `<:wrong:1532390628330307634> Could not find or access channel ID ${catConfig.channelId}.`, flags: 64 });
+                await interaction.reply({ content: `<a:wrong:1546155193303957504> Could not find or access channel ID ${catConfig.channelId}.`, flags: 64 });
               }
             } catch(e) {
-              await interaction.reply({ content: `<:wrong:1532390628330307634> Error sending test log. Check permissions.`, flags: 64 });
+              await interaction.reply({ content: `<a:wrong:1546155193303957504> Error sending test log. Check permissions.`, flags: 64 });
             }
           }
         }

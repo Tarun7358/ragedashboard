@@ -149,6 +149,11 @@ export function getExtraOwnerFromCache(guildId: string, userId: string): { permi
   return extraOwnersCache.get(guildId)?.get(userId);
 }
 
+export function getGuildExtraOwnersFromCache(guildId: string): string[] {
+  const guildMap = extraOwnersCache.get(guildId);
+  return guildMap ? Array.from(guildMap.keys()) : [];
+}
+
 export async function isOwnerOrExtraOwner(userId: string, guild: any): Promise<boolean> {
   if (!guild || !userId) return false;
 
@@ -200,9 +205,9 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
   const members = mwModule?.config?.members || [];
   const isWhitelistedMember = members.some((m: any) => 
     m && 
-    (m.userId === userId || m.id === userId) && 
-    m.status === 'active' && 
-    (!m.type || m.type === 'member') &&
+    (m.userId === userId || m.id === userId || m.targetId === userId) && 
+    (m.status !== 'inactive' && m.status !== 'disabled') && 
+    (!m.type || m.type === 'member' || m.type === 'user') &&
     isModuleBypassed(m.enabledModules, ruleId)
   );
   if (isWhitelistedMember) return true;
@@ -214,7 +219,7 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
   const isSecWhitelisted = secWhitelist.some((w: any) => {
     if (!w) return false;
     if (typeof w === 'string') return w === userId;
-    return w.targetId === userId && isModuleBypassed(w.enabledModules, ruleId);
+    return (w.targetId === userId || w.userId === userId || w.id === userId) && isModuleBypassed(w.enabledModules, ruleId);
   });
   if (isSecWhitelisted) return true;
 
@@ -224,7 +229,7 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
   // 4. Check whitelisted roles (from unified members with type 'role')
   if (member) {
     // 4. Check whitelisted roles (from unified members with type 'role')
-    if (members.some((m: any) => m && m.status === 'active' && m.type === 'role' && m.roleId && member.roles?.cache?.has(m.roleId) && isModuleBypassed(m.enabledModules, ruleId))) {
+    if (members.some((m: any) => m && (m.status !== 'inactive' && m.status !== 'disabled') && m.type === 'role' && (m.roleId || m.id) && member.roles?.cache?.has(m.roleId || m.id) && isModuleBypassed(m.enabledModules, ruleId))) {
       return true;
     }
 
@@ -252,8 +257,8 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
   // 5. Check whitelisted bots (from unified members with type 'bot')
   const isBotWhitelisted = members.some((m: any) =>
     m &&
-    (m.userId === userId || m.id === userId) &&
-    m.status === 'active' &&
+    (m.userId === userId || m.id === userId || m.targetId === userId) &&
+    (m.status !== 'inactive' && m.status !== 'disabled') &&
     m.type === 'bot' &&
     isModuleBypassed(m.enabledModules, ruleId)
   );
@@ -644,20 +649,20 @@ export async function getGuildAndCheckPermission(userOrId: string | any, context
 }
 
 export const WHITELIST_MENU_OPTIONS = [
-  { value: 'all', label: 'All Protections (Full Whitelist)', desc: 'Bypass all anti-nuke, anti-spam, anti-link, and voice checks', emoji: '<:shield:1532403012751065179>' },
-  { value: 'antinuke', label: 'All Anti-Nuke Rules', desc: 'Bypass all administrative and server-modifying rules', emoji: '<:shield:1532403012751065179>' },
-  { value: 'antispam', label: 'All Anti-Spam Rules', desc: 'Bypass everyone/here and role ping protections', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_link', label: 'Content: Anti Link Filter', desc: 'Bypass anti-link filter & URL blocking', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_ban', label: 'Moderation: Ban & Unban', desc: 'Bypass anti-ban and anti-unban rules', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_kick', label: 'Moderation: Kick & Prune', desc: 'Bypass anti-kick and anti-prune rules', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_bot_add', label: 'Security: Anti Bot Add', desc: 'Bypass anti-bot addition rule', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_channel', label: 'Structure: Channels', desc: 'Bypass channel create, delete, and update rules', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_role', label: 'Structure: Roles & Grants', desc: 'Bypass role modify and assignment rules', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_webhook', label: 'Access: Webhooks & Integrations', desc: 'Bypass webhook and integration rules', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_emoji', label: 'Assets: Emojis & Stickers', desc: 'Bypass emoji/sticker modify rules', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_invite', label: 'Invites: Create & Delete', desc: 'Bypass invite modify rules', emoji: '<:shield:1532403012751065179>' },
-  { value: 'anti_timeout', label: 'Moderation: Anti Timeout Abuse', desc: 'Bypass anti-timeout abuse rule', emoji: '<:shield:1532403012751065179>' },
-  { value: 'voice_protection', label: 'Utilities: Voice Protection', desc: 'Bypass voice connection limitations', emoji: '<:shield:1532403012751065179>' }
+  { value: 'all', label: 'All Protections (Full Whitelist)', desc: 'Bypass all anti-nuke, anti-spam, anti-link, and voice checks', emoji: '<:security:1546142576984203336>' },
+  { value: 'antinuke', label: 'All Anti-Nuke Rules', desc: 'Bypass all administrative and server-modifying rules', emoji: '<:security:1546142576984203336>' },
+  { value: 'antispam', label: 'All Anti-Spam Rules', desc: 'Bypass everyone/here and role ping protections', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_link', label: 'Content: Anti Link Filter', desc: 'Bypass anti-link filter & URL blocking', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_ban', label: 'Moderation: Ban & Unban', desc: 'Bypass anti-ban and anti-unban rules', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_kick', label: 'Moderation: Kick & Prune', desc: 'Bypass anti-kick and anti-prune rules', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_bot_add', label: 'Security: Anti Bot Add', desc: 'Bypass anti-bot addition rule', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_channel', label: 'Structure: Channels', desc: 'Bypass channel create, delete, and update rules', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_role', label: 'Structure: Roles & Grants', desc: 'Bypass role modify and assignment rules', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_webhook', label: 'Access: Webhooks & Integrations', desc: 'Bypass webhook and integration rules', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_emoji', label: 'Assets: Emojis & Stickers', desc: 'Bypass emoji/sticker modify rules', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_invite', label: 'Invites: Create & Delete', desc: 'Bypass invite modify rules', emoji: '<:security:1546142576984203336>' },
+  { value: 'anti_timeout', label: 'Moderation: Anti Timeout Abuse', desc: 'Bypass anti-timeout abuse rule', emoji: '<:security:1546142576984203336>' },
+  { value: 'voice_protection', label: 'Utilities: Voice Protection', desc: 'Bypass voice connection limitations', emoji: '<:security:1546142576984203336>' }
 ];
 
 export function mapSelectedOptionsToRules(selectedOptions: string[]): string[] {
@@ -782,13 +787,13 @@ export function getUnifiedWhitelistEntries(modules: any[]) {
   // 1. Process member_whitelist config
   const mwMembers = mwMod?.config?.members || [];
   for (const entry of mwMembers) {
-    if (entry && entry.status === 'active') {
+    if (entry && entry.status !== 'inactive' && entry.status !== 'disabled') {
       if (entry.type === 'role') {
-        const id = entry.roleId || entry.id;
+        const id = entry.roleId || entry.id || entry.targetId;
         if (id) roleSet.set(id, entry.name || `Role-${id}`);
       } else {
-        const id = entry.userId || entry.id;
-        if (id) userSet.set(id, entry.username || `User-${id}`);
+        const id = entry.userId || entry.id || entry.targetId;
+        if (id) userSet.set(id, entry.username || entry.tag || entry.name || `User-${id}`);
       }
     }
   }
@@ -798,9 +803,9 @@ export function getUnifiedWhitelistEntries(modules: any[]) {
   const secWhitelist = secConfig.whitelist || [];
   for (const w of secWhitelist) {
     if (w) {
-      const uId = typeof w === 'string' ? w : w.targetId;
+      const uId = typeof w === 'string' ? w : (w.targetId || w.userId || w.id);
       if (uId && !userSet.has(uId)) {
-        userSet.set(uId, typeof w === 'string' ? `User-${uId}` : (w.username || w.tag || `User-${uId}`));
+        userSet.set(uId, typeof w === 'string' ? `User-${uId}` : (w.username || w.tag || w.name || `User-${uId}`));
       }
     }
   }
@@ -811,7 +816,16 @@ export function getUnifiedWhitelistEntries(modules: any[]) {
     }
   }
 
-  // 3. Process voice protection whitelist
+  // 3. Process UPM users and roles
+  const upm = secConfig.upm || {};
+  for (const uId of (upm.whitelistUsers || [])) {
+    if (uId && !userSet.has(uId)) userSet.set(uId, `User-${uId}`);
+  }
+  for (const rId of (upm.whitelistRoles || [])) {
+    if (rId && !roleSet.has(rId)) roleSet.set(rId, `Role-${rId}`);
+  }
+
+  // 4. Process voice protection whitelist
   const vpConfig = vpMod?.config || {};
   for (const uId of (vpConfig.whitelistedUsers || [])) {
     if (uId && !userSet.has(uId)) userSet.set(uId, `User-${uId}`);

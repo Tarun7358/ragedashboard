@@ -39,6 +39,9 @@ guilds_data/
 # Binaries and large media
 yt-dlp.exe
 **/yt-dlp.exe
+*.exe.old
+*.old
+*.gif
 ffmpeg
 ffprobe
 

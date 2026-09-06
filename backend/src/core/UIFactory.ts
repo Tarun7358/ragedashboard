@@ -25,13 +25,25 @@ import {
 // ─────────────────────────────────────────────
 // CUSTOM SERVER ICONS & STATUS BADGES
 // ─────────────────────────────────────────────
-export const VERIFIED_ICON = '<a:approved:1532390590707142956>';
+export const VERIFIED_ICON = '<a:security:1546142576984203336>';
 export const SQUARE_TICK_ICON = '<:ticks:1532620580266836148>';
-export const WRONG_ICON = '<:wrong:1532390628330307634>';
-export const SHIELD_ICON = '<:shield:1532403012751065179>';
+export const WRONG_ICON = '<a:wrong:1546155193303957504>';
+export const WARNING_ICON = '<a:warning:1546155457981452441>';
+export const VIOLATION_ICON = '<a:warning:1546155457981452441>';
+export const SHIELD_ICON = '<a:security:1546142576984203336>';
 export const GAVEL_ICON = '<:gavel:1532621057318584380>';
 export const BOT_ICON = '<:bot:1532621107746570391>';
 export const MEMBER_ICON = '<:member:1532621317487071426>';
+
+export function formatCustomEmoji(client: any, id: string, name: string, isAnimated = true): string {
+  if (client?.emojis?.cache) {
+    const found = client.emojis.cache.get(id) || client.emojis.cache.find((e: any) => e.name?.toLowerCase() === name?.toLowerCase());
+    if (found) {
+      return found.toString();
+    }
+  }
+  return isAnimated ? `<a:${name}:${id}>` : `<:${name}:${id}>`;
+}
 export const INFO_ICON = '<a:lovemail:1527647157371535420>';
 export const BOOSTER_ICON = '<:booster:1532621228492460172>';
 export const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
@@ -66,15 +78,18 @@ export const RED_TICK_ICON = '<a:redtick:1538167393522557039>';
 export const ANIMATED_ARROW_RED = '<a:animatedarrowred:1538167386790830190>';
 export const ANIMATED_ARROW_PINK = '<a:animatedarrowpink2:1538167377597042808>';
 export const ANIMATED_ARROW_ORANGE = '<a:animatedarroworange:1538167381778759680>';
-export const ANIMATED_APPROVED_ICON = '<a:387155approved:1538586763226779658>';
+export const ANIMATED_APPROVED_ICON = '<a:security:1546142576984203336>';
 export const VERIFIED_BLUE_ICON = '<:verifiedblue:1518869383219253328>';
 export const VERIFIED_GREEN_ICON = '<:verifiedgreen:1518869413846188152>';
 export const VERIFIED_PURPLE_ICON = '<:verifiedpurple:1518869442086572102>';
 export const CROWN_ANIMATED_ICON = '<a:1115crown3:1518868785493184518>';
-export const SPIN_ANIMATED_ICON = '<a:Spin:1518868846214123520>';
+export const SPIN_ANIMATED_ICON = '<a:loading:1546134620087783526>';
+export const LOADING_ANIMATED_ICON = '<a:loading:1546134620087783526>';
+export const SUCCESS_CHECK_ICON = '<a:security:1546142576984203336>';
 export const ANIMATED_PINK_ARROW = '<a:pinkarrow:1527647307955310722>';
 export const ANIMATED_WHITE_ARROW = '<a:animatedarrowwhite:1527647357473132554>';
 export const BLACK_BUTTERFLY_ICON = '<a:1941blackbutterfly2:1527646894904578110>';
+export const SECURITY_SHIELD_ICON = '<a:security:1546142576984203336>';
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS (UI/UX Pro Max Cyber Palette)
@@ -228,7 +243,7 @@ export const Embeds = {
   },
 
   warn(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.WARN, `${TIMER_ICON} ${title}`, description, opts);
+    return buildBaseEmbed(Colors.WARN, `${WARNING_ICON} ${title}`, description, opts);
   },
 
   error(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
@@ -338,7 +353,7 @@ export function buildLimeWarnCard(opts: {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(`Warned ${opts.category} | ${VERIFIED_ICON}`)
+    .setTitle(`${WARNING_ICON} AutoMod Violation Warning • ${opts.category}`)
     .setDescription(desc)
     .setFooter({ text: 'Rage Optimiser • AutoMod & Anti-Nuke Protection' })
     .setTimestamp();
@@ -440,26 +455,29 @@ export function buildTicketPanelEmbed(opts: {
 }): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setColor(Colors.LIME)
-    .setTitle(`${TICKET_ICON} Rage Optimiser • Support & Inquiries`)
+    .setTitle(`${CROWN_ANIMATED_ICON} ${opts.serverName.toUpperCase()} • OFFICIAL SUPPORT DESK`)
     .setThumbnail(opts.thumbnailUrl || DEFAULT_BRAND_IMAGE_URL)
     .setImage(opts.bannerUrl || DEFAULT_BRAND_IMAGE_URL)
-    .setFooter({ text: 'Rage Optimiser Enterprise • Support Desk' })
+    .setFooter({ text: BRAND_FOOTER })
     .setTimestamp();
 
   const fieldsText = [
-    `**Server:** ${opts.serverName}`,
-    `**Status:** ${opts.statusText || 'Active Support Desk'}`,
-    `**Description:** ${opts.description || 'Open a ticket for instant help, anti-nuke queries, or technical assistance.'}`
+    `> **Server**: \`${opts.serverName}\``,
+    `> **Status**: ${VERIFIED_ICON} **Active Support Center**`,
+    `> ${ANIMATED_ARROW_PINK} Select a category from the menu below to open a private support ticket.`
   ].join('\n');
 
   const bulletsText = [
-    `• Provide full details when opening a ticket (reasons, context, screenshots)`,
-    `• Guaranteed staff response within **24 hours** with issues resolved promptly`,
-    `• All interactions are encrypted, audit-logged, and available in your transcript DM`,
-    `• **Strict Notice**: Abuse or opening tickets for fun will result in automated blacklisting`
+    `> ${VIP_ICON} **VIP & Store Help**: Billing, perks, and store support`,
+    `> ${SHIELD_ICON} **Report & Moderation**: Player reports and rule violations`,
+    `> ${TICKET_ICON} **General Support**: Inquiries, questions & general help`,
+    `> ${BOT_ICON} **Technical & Bot Help**: Technical issues & bugs`,
+    `> ${MEMBER_ICON} **Staff Application**: Apply for staff / moderator roles`,
+    ``,
+    `*🔒 All interactions are encrypted, audit-logged, and available in your transcript DM.*`
   ].join('\n');
 
-  embed.setDescription(`${fieldsText}\n\n>>> **Guidelines & Protocols**\n${bulletsText}`);
+  embed.setDescription(`${fieldsText}\n\n${bulletsText}`);
 
   return embed;
 }

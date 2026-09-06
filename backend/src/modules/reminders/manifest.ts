@@ -1,4 +1,4 @@
-import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { IReminder } from '../../models/index.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
@@ -122,7 +122,7 @@ export const RemindersManifest: ModuleManifest = {
         const rMod = modules.find((m: any) => m.id === 'reminders');
 
         if (!rMod || rMod.status !== 'enabled') {
-          return interaction.reply({ content: '<:wrong:1532390628330307634> Reminder module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<a:wrong:1546155193303957504> Reminder module is not enabled.', flags: 64 });
         }
 
         let reminders: IReminder[] = rMod.config?.reminders || [];
@@ -134,10 +134,10 @@ export const RemindersManifest: ModuleManifest = {
           const repeat = interaction.options.getString('repeat') || null;
           const ms = parseMs(timeStr);
 
-          if (ms < 5000) return interaction.reply({ content: '<:wrong:1532390628330307634> Minimum reminder time is 5 seconds.', flags: 64 });
+          if (ms < 5000) return interaction.reply({ content: '<a:wrong:1546155193303957504> Minimum reminder time is 5 seconds.', flags: 64 });
 
           const userReminders = reminders.filter(r => r.userId === interaction.user.id);
-          if (userReminders.length >= 10) return interaction.reply({ content: '<:wrong:1532390628330307634> You can only have up to 10 active reminders.', flags: 64 });
+          if (userReminders.length >= 10) return interaction.reply({ content: '<a:wrong:1546155193303957504> You can only have up to 10 active reminders.', flags: 64 });
 
           const remindAt = new Date(Date.now() + ms);
           const reminder: IReminder = {
@@ -182,7 +182,7 @@ export const RemindersManifest: ModuleManifest = {
         if (sub === 'cancel') {
           const id = interaction.options.getString('id');
           const rem = reminders.find(r => r.id === id && r.userId === interaction.user.id);
-          if (!rem) return interaction.reply({ content: `<:wrong:1532390628330307634> Reminder \`${id}\` not found.`, flags: 64 });
+          if (!rem) return interaction.reply({ content: `<a:wrong:1546155193303957504> Reminder \`${id}\` not found.`, flags: 64 });
           const existing = reminderTimers.get(id);
           if (existing) { clearTimeout(existing); reminderTimers.delete(id); }
           saveReminders(reminders.filter(r => r.id !== id));
@@ -193,7 +193,7 @@ export const RemindersManifest: ModuleManifest = {
           const id = interaction.options.getString('id');
           const timeStr = interaction.options.getString('time');
           const rem = reminders.find(r => r.id === id && r.userId === interaction.user.id);
-          if (!rem) return interaction.reply({ content: `<:wrong:1532390628330307634> Reminder \`${id}\` not found.`, flags: 64 });
+          if (!rem) return interaction.reply({ content: `<a:wrong:1546155193303957504> Reminder \`${id}\` not found.`, flags: 64 });
 
           const existing = reminderTimers.get(id);
           if (existing) { clearTimeout(existing); reminderTimers.delete(id); }

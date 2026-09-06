@@ -5,6 +5,11 @@ import { EmbedBuilder } from 'discord.js';
 
 
 export class ModuleRegistry {
+  private static instance: ModuleRegistry | null = null;
+  public static getInstance(): ModuleRegistry | null {
+    return ModuleRegistry.instance;
+  }
+
   public client: any = null;
   private guildStates: Map<string, {
     modules: ModuleState[];
@@ -20,6 +25,7 @@ export class ModuleRegistry {
   constructor(
     private broadcast: (msg: any) => void
   ) {
+    ModuleRegistry.instance = this;
     // Eagerly load the default guild state
     const defaultGuildId = process.env.GUILD_ID || 'default_guild';
     this.getGuildState(defaultGuildId);

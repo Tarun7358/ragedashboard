@@ -157,7 +157,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: errorMods > 0 ? Colors.DANGER : Colors.BRAND,
             sections: [
               {
-                title: '<:shield:1532403012751065179> CORE SECURITY ENGINE STATUS',
+                title: '<:security:1546142576984203336> CORE SECURITY ENGINE STATUS',
                 items: [
                   `Engine Health: ${healthStatus}`,
                   `WebSocket Ping: \`${client.ws.ping}ms\``,
@@ -287,7 +287,7 @@ export const DiagnosticsManifest: ModuleManifest = {
               color: db ? Colors.BRAND : Colors.DANGER,
               sections: [
                 {
-                  title: '<:shield:1532403012751065179> PERSISTENCE STATE',
+                  title: '<:security:1546142576984203336> PERSISTENCE STATE',
                   items: [
                     `Database Connection: ${status}`,
                     `Engine Type: \`SQLite 3 (Hardened WAL Mode)\``

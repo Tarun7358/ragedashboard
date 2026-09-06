@@ -11,6 +11,7 @@ import { Database } from './Database.js';
 import { ModuleRegistry } from './ModuleRegistry.js';
 import { ModuleManifest } from './types.js';
 import { OAuthService } from './OAuthService.js';
+import { AuthService } from './AuthService.js';
 import type { PublicFeedManager } from './PublicFeedManager.js';
 
 export class WebServer {
@@ -29,27 +30,67 @@ export class WebServer {
   constructor(private registry?: ModuleRegistry) {
     this.app = express();
 
-    // Security Headers & CORS
+    // ── Security Headers (BUG-13 fix: re-enable Helmet CSP) ──────────────────
     this.app.use(helmet({
-      contentSecurityPolicy: false,
-      crossOriginResourcePolicy: false,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc:  ["'self'", "'unsafe-inline'"],
+          styleSrc:   ["'self'", "'unsafe-inline'"],
+          imgSrc:     ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'", 'ws:', 'wss:']
+        }
+      },
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
       crossOriginEmbedderPolicy: false
     }));
+
+    // ── CORS (BUG-12 fix: restrict to allowlist, not wildcard) ───────────────
+    const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+      .split(',')
+      .map(o => o.trim())
+      .filter(Boolean);
     this.app.use(cors({
-      origin: true,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, curl, Postman)
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`CORS: origin '${origin}' not allowed`));
+      },
       credentials: true
     }));
+
     this.app.use(express.json());
     this.app.use('/assets', express.static(path.join(process.cwd(), 'public/assets')));
 
-    // Rate limiting for API calls
-    const limiter = rateLimit({
+    // ── Rate Limiting (BUG-10 fix: tight limits per endpoint class) ──────────
+    // General API: 200 req / 15 min
+    const apiLimiter = rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 500,
+      max: 200,
       standardHeaders: true,
       legacyHeaders: false,
+      message: { error: 'Too many requests. Please slow down.' }
     });
-    this.app.use('/api/', limiter);
+    // Auth routes: 15 attempts / 15 min (brute-force protection)
+    const authLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 15,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Too many authentication attempts. Try again later.' }
+    });
+    // Sensitive system actions: 10 req / 15 min
+    const criticalLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Rate limit exceeded for sensitive operation.' }
+    });
+    this.app.use('/api/', apiLimiter);
+    this.app.use('/api/auth/', authLimiter);
+    this.app.use('/api/system/', criticalLimiter);
+    this.app.use('/api/commands/', criticalLimiter);
 
     this.setupRoutes();
     this.server = createServer(this.app);
@@ -100,6 +141,25 @@ export class WebServer {
       });
 
       this.wss.on('connection', (ws: WebSocket, req: any) => {
+        // ── BUG-04 FIX: Authenticate WebSocket upgrade requests ────────────────
+        const urlObj = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+        const queryToken = urlObj.searchParams.get('token');
+        const headerToken = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
+        const token = queryToken || headerToken;
+
+        if (!token) {
+          ws.close(4001, 'Authentication required: supply ?token= or Authorization header');
+          return;
+        }
+
+        try {
+          jwt.verify(token, process.env.JWT_SECRET!);
+        } catch {
+          ws.close(4003, 'Invalid or expired authentication token');
+          return;
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         this.clients.add(ws);
 
         const metrics = this.getBotMetrics ? this.getBotMetrics() : { latency: 0, uptime: '0s' };
@@ -217,7 +277,7 @@ export class WebServer {
     this.app.get('/metrics', handleMetrics);
     this.app.get('/api/metrics', handleMetrics);
 
-    // Dashboard Status endpoint
+    // Dashboard Status endpoint (BUG-16 fix: removed hardcoded fake metric)
     this.app.get('/api/status', (req: Request, res: Response) => {
       const metrics = this.getBotMetrics ? this.getBotMetrics() : { latency: 0, uptime: '0s' };
       const client = this.getDiscordClient ? this.getDiscordClient() : null;
@@ -226,38 +286,47 @@ export class WebServer {
 
       res.json({
         activeModules: activeModulesCount,
-        protectedServers: client ? client.guilds?.cache?.size || 1 : 1,
-        threatsBlocked: 286,
+        protectedServers: client ? client.guilds?.cache?.size || 0 : 0,
         bot: { status: client && client.ws.status === 0 ? 'Online' : 'Offline', latency: metrics.latency, uptime: metrics.uptime },
         database: { status: 'Connected' },
         api: { status: 'Healthy' }
       });
     });
 
-    // JWT Auth Middleware
+    // ── Email alert endpoints ─────────────────────────────────────────────────
+    this.app.get('/api/email/status', async (_req: Request, res: Response) => {
+      const { EmailService } = await import('../services/EmailService.js');
+      res.json({
+        configured: EmailService.isConfigured(),
+        from: EmailService.isConfigured() ? process.env.ALERT_EMAIL_FROM : null,
+        to:   EmailService.isConfigured() ? process.env.ALERT_EMAIL_TO   : null
+      });
+    });
+    // ─────────────────────────────────────────────────────────────────────────
+    // ── JWT Auth Middleware (BUG-02 + BUG-03 fix) ────────────────────────────
+    // Missing token → 401 Unauthorized
+    // Invalid / expired token → 403 Forbidden
+    // Never falls back to owner role
     const authenticateToken = (req: any, res: Response, next: NextFunction) => {
       const authHeader = req.headers['authorization'];
       const token = authHeader && authHeader.split(' ')[1];
-      
-      // Allow unauthenticated local requests if JWT_SECRET is not configured or in local dashboard mode
+
       if (!token) {
-        req.user = { id: 'local_admin', username: 'LocalAdmin', role: 'owner' };
-        return next();
+        return res.status(401).json({ error: 'Authentication required. Please provide a valid Bearer token.' });
       }
 
-      const secret = process.env.JWT_SECRET || 'fallback_secret';
-      jwt.verify(token, secret, (err: any, user: any) => {
+      jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
         if (err) {
-          req.user = { id: 'local_admin', username: 'LocalAdmin', role: 'owner' };
-          return next();
+          return res.status(403).json({ error: 'Invalid or expired authentication token.' });
         }
         req.user = user;
         next();
       });
     };
+    // ─────────────────────────────────────────────────────────────────────────
 
-    // State endpoint
-    this.app.get('/api/state', (req: Request, res: Response) => {
+    // State endpoint (BUG-05 fix: require authentication)
+    this.app.get('/api/state', authenticateToken, (req: Request, res: Response) => {
       const metrics = this.getBotMetrics ? this.getBotMetrics() : { latency: 0, uptime: '0s' };
       res.json({
         modules: this.registry ? this.registry.getModulesState() : [],
@@ -287,15 +356,38 @@ export class WebServer {
       }
     });
 
-    this.app.post('/api/auth/login', (req: Request, res: Response) => {
-      const secret = process.env.JWT_SECRET || 'fallback_secret';
-      const token = jwt.sign(
-        { id: 'local_admin', username: 'LocalAdmin', role: 'owner' },
-        secret,
-        { expiresIn: '7d' }
-      );
-      res.json({ token, user: { id: 'local_admin', username: 'LocalAdmin', role: 'owner' } });
+    // ── POST /api/auth/login (BUG-01 + BUG-03 fix) ───────────────────────────
+    // Verifies credentials via AuthService before issuing a JWT.
+    // JWT_SECRET fallback removed — startup guard guarantees it is always set.
+    this.app.post('/api/auth/login', async (req: Request, res: Response) => {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password are required.' });
+      }
+
+      try {
+        const user = await AuthService.authenticate(String(username), String(password));
+        if (!user) {
+          return res.status(401).json({ error: 'Invalid credentials.' });
+        }
+
+        const token = jwt.sign(
+          { id: user.id, username: user.username, role: user.role },
+          process.env.JWT_SECRET!,
+          { expiresIn: '7d' }
+        );
+        return res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+      } catch (err: any) {
+        if (err.message === 'ACCOUNT_LOCKED') {
+          return res.status(423).json({
+            error: 'Account temporarily locked due to multiple failed login attempts. Try again in 15 minutes.'
+          });
+        }
+        console.error('[WebServer] /api/auth/login error:', err);
+        return res.status(500).json({ error: 'Authentication service error.' });
+      }
     });
+    // ─────────────────────────────────────────────────────────────────────────
 
     this.app.get('/api/auth/me', authenticateToken, (req: any, res: Response) => {
       res.json({ user: req.user });
@@ -334,12 +426,27 @@ export class WebServer {
       res.json({ success: true, globalSettings: newReg.globalSettings });
     });
 
-    // Approvals endpoints
-    this.app.get('/api/approvals', authenticateToken, async (req: Request, res: Response) => {
+    // Approvals endpoints (BUG-11 fix: scope by JWT role)
+    this.app.get('/api/approvals', authenticateToken, async (req: any, res: Response) => {
       try {
         const db = Database.getDb();
         if (!db) return res.json([]);
-        const approvals = await db.all<any>('SELECT * FROM approvals ORDER BY joinedAt DESC');
+
+        let approvals: any[];
+        if (req.user?.role === 'owner') {
+          // Bot owner can see every guild's record
+          approvals = await db.all<any>('SELECT * FROM approvals ORDER BY joinedAt DESC');
+        } else {
+          // guild_manager: only see guilds they manage
+          const managedGuildIds: string[] = req.user?.managedGuildIds || [];
+          if (managedGuildIds.length === 0) return res.json([]);
+          const placeholders = managedGuildIds.map(() => '?').join(',');
+          approvals = await db.all<any>(
+            `SELECT * FROM approvals WHERE guildId IN (${placeholders}) ORDER BY joinedAt DESC`,
+            managedGuildIds
+          );
+        }
+
         res.json(approvals);
       } catch (e) {
         res.status(500).json({ error: 'Failed to fetch approvals' });

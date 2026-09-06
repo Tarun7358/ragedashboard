@@ -12,8 +12,8 @@ import { NoPrefixManager } from '../../core/security/NoPrefixManager.js';
 import { buildLimeOverviewCard, Colors, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, CONFIG_ICON } from '../../core/UIFactory.js';
 
 const APPROVED_ICON = '<a:approved:1532390590707142956>';
-const WRONG_EMOJI = '<:wrong:1532390628330307634>';
-const SHIELD_EMOJI = '<:shield:1532403012751065179>';
+const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
+const SHIELD_EMOJI = '<:security:1546142576984203336>';
 const VIP_ICON = '<:vip:1532620837117759508>';
 const MEMBER_ICON = '<:member:1532621317487071426>';
 
@@ -48,11 +48,14 @@ export function registerNPCommands(): void {
       }
 
       const prefix = PrefixResolver.getPrefix(guildId);
-      const isOwner = message.guild.ownerId === message.author.id ||
-                      message.member?.permissions?.has?.('Administrator');
+
+      // BUG-06 FIX: Use isOwnerOrExtraOwner — Administrators must NOT be able to
+      // grant no-prefix access. This is consistent with every other security gate.
+      const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+      const isOwner = await isOwnerOrExtraOwner(message.author.id, message.guild);
 
       if (!isOwner) {
-        return message.reply({ content: `${WRONG_EMOJI} **Access Denied**: Only the **Server Owner** and Administrators can manage No-Prefix permissions.` });
+        return message.reply({ content: `${WRONG_EMOJI} **Access Denied**: Only the **Server Owner** and Extra Owners can manage No-Prefix permissions.` });
       }
 
       const rawSub = args[0]?.toLowerCase();
@@ -95,7 +98,7 @@ export function registerNPCommands(): void {
         const npUsers = await NoPrefixManager.getNPUsers(guildId);
         const userListText = npUsers.length > 0
           ? npUsers.map(id => `• <@${id}> (\`${id}\`)`).join('\n')
-          : `*No extra No-Prefix users added yet.*`;
+          : `**No extra No-Prefix users added yet.**`;
 
         const card = buildLimeOverviewCard({
           title: `${VIP_ICON} NO-PREFIX USERS MANAGEMENT MATRIX`,
@@ -230,7 +233,7 @@ export function registerNPCommands(): void {
         const npUsers = await NoPrefixManager.getNPUsers(guildId);
         const listDesc = npUsers.length > 0
           ? npUsers.map(id => `> • <@${id}> (\`${id}\`)`).join('\n')
-          : `*No No-Prefix users registered.*`;
+          : `**No No-Prefix users registered.**`;
 
         const listEmbed = new EmbedBuilder()
           .setTitle(`${VIP_ICON} Whitelisted No-Prefix Directory`)

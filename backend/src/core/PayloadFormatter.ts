@@ -22,8 +22,10 @@ import { EmbedBuilder } from 'discord.js';
 // ── Enterprise icon tokens (Zero-Unicode design system) ────────────────────
 export const FMT_ICONS = {
   verified:   '<a:approved:1532390590707142956>',
-  wrong:      '<:wrong:1532390628330307634>',
-  shield:     '<:shield:1532403012751065179>',
+  wrong:      '<a:wrong:1546155193303957504>',
+  warning:    '<a:warning:1546155457981452441>',
+  violation:  '<a:warning:1546155457981452441>',
+  shield:     '<:security:1546142576984203336>',
   timer:      '<:timer:1532620491662037123>',
   ticket:     '<:ticket:1532620631466836021>',
   config:     '<:config:1532425712844144701>',
@@ -195,7 +197,7 @@ export class PayloadFormatter {
       .replace(/❌/g, FMT_ICONS.wrong)
       .replace(/🔒/g, FMT_ICONS.shield)
       .replace(/🛡️/g, FMT_ICONS.shield)
-      .replace(/⚠️/g, FMT_ICONS.wrong)
+      .replace(/⚠️/g, FMT_ICONS.warning)
       .replace(/⏳/g, FMT_ICONS.timer)
       .replace(/⏱️/g, FMT_ICONS.timer)
       .replace(/🔨/g, FMT_ICONS.gavel)
@@ -213,10 +215,11 @@ export class PayloadFormatter {
       .replace(/🎫/g, FMT_ICONS.ticket)
       // Collapse duplicate sequential icons → pick dominant one
       .replace(
-        /(?:<:wrong:\d+>|<a:approved:\d+>|<:shield:\d+>|<:timer:\d+>|[❌✅🔒⚠️🛡️])\s*(?:<:wrong:\d+>|<a:approved:\d+>|<:shield:\d+>|<:timer:\d+>|[❌✅🔒⚠️🛡️])+/g,
+        /(?:<a:wrong:\d+>|<a:warning:\d+>|<:wrong:\d+>|<a:success_check:\d+>|<a:approved:\d+>|<:security:\d+>|<:shield:\d+>|<:timer:\d+>|[❌✅🔒⚠️🛡️])\s*(?:<a:wrong:\d+>|<a:warning:\d+>|<:wrong:\d+>|<a:success_check:\d+>|<a:approved:\d+>|<:security:\d+>|<:shield:\d+>|<:timer:\d+>|[❌✅🔒⚠️🛡️])+/g,
         (match: string) => {
-          if (match.includes('<:wrong:') || match.includes('❌') || match.includes('⚠️')) return FMT_ICONS.wrong;
-          if (match.includes('🔒') || match.includes('🛡️') || match.includes('<:shield:')) return FMT_ICONS.shield;
+          if (match.includes('wrong') || match.includes('❌')) return FMT_ICONS.wrong;
+          if (match.includes('warning') || match.includes('⚠️')) return FMT_ICONS.warning;
+          if (match.includes('🔒') || match.includes('🛡️') || match.includes('security') || match.includes('shield')) return FMT_ICONS.shield;
           return FMT_ICONS.verified;
         }
       );

@@ -58,21 +58,46 @@ export class NotificationService {
    * Build a Discord embed from an EmbedConfig and resolved template data.
    */
   static buildEmbed(rawConfig: EmbedConfig, data: Record<string, string>): EmbedBuilder {
-    // Standard default YouTube alert embed UI
+    const isLive = data['video.live'] === 'true';
+    const isPremiere = data['video.premiere'] === 'true';
+    const isShort = data['video.short'] === 'true';
+    const isInstagram = !!data['profile.username'] && (!!data['post.id'] || data['provider'] === 'instagram');
+
+    const defaultFooter = isLive
+      ? '{channel.name} • Live Stream'
+      : isPremiere
+      ? '{channel.name} • YouTube Premiere'
+      : isShort
+      ? '{channel.name} • YouTube Shorts'
+      : isInstagram
+      ? '{profile.name} • Instagram'
+      : '{channel.name} • YouTube Video';
+
+    const defaultColor = isLive
+      ? '#FF0000'
+      : isPremiere
+      ? '#FFA500'
+      : isShort
+      ? '#FF0033'
+      : isInstagram
+      ? '#E1306C'
+      : '#FF0000';
+
+    // Standard default alert embed UI
     const defaultUI: EmbedConfig = {
-      color: '#FF0000',
+      color: defaultColor,
       authorEnabled: true,
-      authorName: '{channel.name}',
-      authorIcon: '{channel.avatar}',
-      authorUrl: '{channel.url}',
+      authorName: isInstagram ? '{profile.name}' : '{channel.name}',
+      authorIcon: isInstagram ? '{profile.avatar}' : '{channel.avatar}',
+      authorUrl: isInstagram ? '{profile.url}' : '{channel.url}',
       titleEnabled: true,
-      title: '{video.title}',
-      titleUrl: '{video.url}',
+      title: isInstagram ? '{post.caption}' : '{video.title}',
+      titleUrl: isInstagram ? '{post.url}' : '{video.url}',
       imageEnabled: true,
-      image: '{video.thumbnail}',
+      image: isInstagram ? '{post.image}' : '{video.thumbnail}',
       footerEnabled: true,
-      footerText: '{channel.name}',
-      footerIcon: '{channel.avatar}',
+      footerText: defaultFooter,
+      footerIcon: isInstagram ? '{profile.avatar}' : '{channel.avatar}',
       timestampEnabled: true
     };
 

@@ -100,8 +100,10 @@ export interface ITicket {
   claimedBy?: string;
   claimedByTag?: string;
   status: 'open' | 'claimed' | 'closed';
+  lockStatus?: 'Unlocked' | 'Locked' | 'Archived';
   category?: string;
   subject?: string;
+  description?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   transcript?: string[];
   createdAt: Date;
@@ -204,6 +206,7 @@ export interface IJoinToCreateTrigger {
 export interface IJoinToCreate {
   id: string;
   guildId: string;
+  enabled?: boolean;
   // Multi-trigger system (primary)
   triggers: IJoinToCreateTrigger[];
   // Legacy single-trigger fields (kept for backward compat — migrated on first save)
@@ -340,6 +343,9 @@ export interface ITicketConfig {
   categoryId: string | null;          // Parent category for created ticket channels
   transcriptChannelId: string | null; // Channel for closing transcripts & logs
   supportRoleIds: string[];           // Support staff role IDs
+  defaultAdminRoleId?: string | null;
+  blacklistedUserIds?: string[];
+  activePanels?: any[];
   ticketCounter: number;
   maxOpenPerUser: number;
   categories: ITicketCategory[];

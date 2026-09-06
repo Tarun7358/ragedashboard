@@ -5,6 +5,50 @@ import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 // BUG-008 FIX: Import the canonical wrapInteraction from Gateway to eliminate the
 // copy-pasted duplicate that caused double-wrapping and divergent bug-fix paths.
 import { wrapInteraction } from '../../core/Gateway.js';
+import { Colors, BRAND_FOOTER, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, MEMBER_ICON, VIP_ICON, CONFIG_ICON, GOLD_CROWN_ICON } from '../../core/UIFactory.js';
+
+export function buildMemberWhitelistGUI(guild: any, modules: any[]) {
+  const mwMod = modules.find((m: any) => m.id === 'member_whitelist');
+  const mwMembers = mwMod?.config?.members || [];
+  const secMod = modules.find((m: any) => m.id === 'security');
+  const extraOwners = secMod?.config?.extraOwners || [];
+
+  const memberCount = mwMembers.filter((m: any) => !m.type || m.type === 'member').length;
+  const botCount = mwMembers.filter((m: any) => m.type === 'bot').length;
+  const roleCount = mwMembers.filter((m: any) => m.type === 'role').length;
+
+  const embed = new EmbedBuilder()
+    .setTitle('Rage Optimiser • Whitelist & Clearance Hub')
+    .setColor(0x2B2D31)
+    .setDescription([
+      `>>> ${SHIELD_ICON} **Global Whitelist & Clearance System**`,
+      `Central control center for member, bot, and role whitelists defending **${guild?.name || 'Server'}**.\n`,
+      `• **Primary Server Owner:** <@${guild?.ownerId}> (\`${guild?.ownerId}\`)`,
+      `• **Whitelisted Members:** \`[ ${memberCount} Active ]\``,
+      `• **Whitelisted Roles:** \`[ ${roleCount} Active ]\``,
+      `• **Whitelisted Bots:** \`[ ${botCount} Active ]\``,
+      `• **Extra Owners:** \`[ ${extraOwners.length} Active ]\``
+    ].join('\n'))
+    .setThumbnail(guild?.iconURL({ size: 256 }) || undefined)
+    .setFooter({ text: BRAND_FOOTER });
+
+  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId('wl_add_user').setLabel('Add User').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('wl_add_role').setLabel('Add Role').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('wl_remove_user').setLabel('Remove User').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('wl_remove_role').setLabel('Remove Role').setStyle(ButtonStyle.Secondary)
+  );
+
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId('wl_list_btn').setLabel('View Whitelist').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('btn_sec_refresh_punishments').setLabel('Threat Punishments').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('btn_sec_nav_hub').setLabel('Security Hub').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('wl_refresh_hub').setLabel('Refresh').setStyle(ButtonStyle.Secondary)
+  );
+
+  return { embed, components: [row1, row2] };
+}
+
 function resolveUserTag(user: any): string {
   if (!user) return 'Unknown User';
   const tag = user.username;
@@ -36,17 +80,17 @@ function sanitizeWhitelistMembers(members: any[]): any[] {
 }
 
 const PUNISHMENTS = [
-  { value: 'quarantine',  label: 'Quarantine',  emoji: '<:shield:1532403012751065179>', desc: 'Strip all roles & isolate in quarantine channel' },
+  { value: 'quarantine',  label: 'Quarantine',  emoji: '<:security:1546142576984203336>', desc: 'Strip all roles & isolate in quarantine channel' },
   { value: 'ban',         label: 'Ban',          emoji: '<:gavel:1532621057318584380>',  desc: 'Permanently ban the violator from the server' },
   { value: 'kick',        label: 'Kick',         emoji: '<:gavel:1532621057318584380>',  desc: 'Remove the violator from the server' },
-  { value: 'strip_roles', label: 'Strip Roles',  emoji: '<:shield:1532403012751065179>', desc: 'Strip admin roles only, no further action' },
+  { value: 'strip_roles', label: 'Strip Roles',  emoji: '<:security:1546142576984203336>', desc: 'Strip admin roles only, no further action' },
   { value: 'timeout',     label: 'Timeout',      emoji: '<:timer:1532620491662037123>',  desc: 'Temporary mute/timeout the violator' },
 ];
 const P_EMOJI: Record<string, string> = {
-  quarantine: '<:shield:1532403012751065179>',
+  quarantine: '<:security:1546142576984203336>',
   ban: '<:gavel:1532621057318584380>',
   kick: '<:gavel:1532621057318584380>',
-  strip_roles: '<:shield:1532403012751065179>',
+  strip_roles: '<:security:1546142576984203336>',
   timeout: '<:timer:1532620491662037123>'
 };
 
@@ -171,7 +215,7 @@ async function renderWhitelistConfigUI(
 
   const buildEmbed = (bypasses: string[]) => {
     const verifiedIcon = '<a:approved:1532390590707142956>';
-    const wrongIcon = '<:wrong:1532390628330307634>';
+    const wrongIcon = '<a:wrong:1546155193303957504>';
 
     const activeCount = bypasses.length;
     const totalCount = protections.length;
@@ -179,11 +223,11 @@ async function renderWhitelistConfigUI(
 
     const hasSec = securityKeys.every(k => bypasses.includes(k));
     const countSec = securityKeys.filter(k => bypasses.includes(k)).length;
-    const secStatus = hasSec ? `${verifiedIcon} Active (Full Bypass)` : (countSec > 0 ? `⚠️ Partial (${countSec}/${securityKeys.length})` : `${wrongIcon} Disabled`);
+    const secStatus = hasSec ? `${verifiedIcon} Active (Full Bypass)` : (countSec > 0 ? `<a:warning:1546155457981452441> Partial (${countSec}/${securityKeys.length})` : `${wrongIcon} Disabled`);
 
     const hasAm = automodKeys.every(k => bypasses.includes(k));
     const countAm = automodKeys.filter(k => bypasses.includes(k)).length;
-    const amStatus = hasAm ? `${verifiedIcon} Active (Full Bypass)` : (countAm > 0 ? `⚠️ Partial (${countAm}/${automodKeys.length})` : `${wrongIcon} Disabled`);
+    const amStatus = hasAm ? `${verifiedIcon} Active (Full Bypass)` : (countAm > 0 ? `<a:warning:1546155457981452441> Partial (${countAm}/${automodKeys.length})` : `${wrongIcon} Disabled`);
 
     const hasVc = voiceKeys.every(k => bypasses.includes(k));
     const vcStatus = hasVc ? `${verifiedIcon} Active (Full Bypass)` : `${wrongIcon} Disabled`;
@@ -203,9 +247,9 @@ async function renderWhitelistConfigUI(
       `**RAGE OPTIMISER** • **${interaction.guild.name}**\n`,
       `**Target Entity**: ${isRole ? `<@&${targetId}>` : `<@${targetId}>`}`,
       `**Entry Status**: ${isNew ? '<a:approved:1532390590707142956> Newly Whitelisted' : '<:config:1532425712844144701> Active Whitelist Entry'}`,
-      `**Audit Notes**: ${record.notes || notesInput || '*None provided*'}\n`,
+      `**Audit Notes**: ${record.notes || notesInput || '**None provided**'}\n`,
       `**Sub-Module Category Statuses**:`,
-      `> <:shield:1532403012751065179> **Security Bypasses**: ${secStatus}`,
+      `> <:security:1546142576984203336> **Security Bypasses**: ${secStatus}`,
       `> <:config:1532425712844144701> **AutoMod Bypasses**: ${amStatus}`,
       `> <:voicechannelgreen:1532425750278438962> **Voice Bypasses**: ${vcStatus}\n`,
       `**Granular Protection Bypass Overview**`,
@@ -234,7 +278,7 @@ async function renderWhitelistConfigUI(
             .setLabel(opt.label)
             .setValue(opt.value)
             .setDescription(opt.desc)
-            .setEmoji('<:shield:1532403012751065179>');
+            .setEmoji('<:security:1546142576984203336>');
           if (selectedVals.includes(opt.value)) {
             option.setDefault(true);
           }
@@ -252,7 +296,7 @@ async function renderWhitelistConfigUI(
       new ButtonBuilder()
         .setCustomId(`wl_cat_security_${targetId}_${interaction.user.id}`)
         .setLabel(hasSecurity ? 'Security Bypasses (Active)' : 'Toggle Security Bypasses')
-        .setEmoji('<:shield:1532403012751065179>')
+        .setEmoji('<:security:1546142576984203336>')
         .setStyle(hasSecurity ? ButtonStyle.Success : ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`wl_cat_automod_${targetId}_${interaction.user.id}`)
@@ -278,13 +322,13 @@ async function renderWhitelistConfigUI(
       new ButtonBuilder()
         .setCustomId(`wl_action_revoke_${targetId}_${interaction.user.id}`)
         .setLabel('Revoke All')
-        .setEmoji('<:wrong:1532390628330307634>')
+        .setEmoji('<a:wrong:1546155193303957504>')
         .setStyle(ButtonStyle.Danger)
         .setDisabled(bypasses.length === 0),
       new ButtonBuilder()
         .setCustomId(`btn_dismiss_${interaction.user.id}`)
         .setLabel('Dismiss')
-        .setEmoji('<:wrong:1532390628330307634>')
+        .setEmoji('<a:wrong:1546155193303957504>')
         .setStyle(ButtonStyle.Secondary)
     );
 
@@ -703,8 +747,8 @@ export const MemberWhitelistManifest: ModuleManifest = {
         if (sub === 'list' || sub === 'overview') {
           const { userSet, roleSet } = getUnifiedWhitelistEntries(modules);
 
-          const userMentions = [...userSet.keys()].map(uId => `<@${uId}>`).join('\n') || '*No users whitelisted.*';
-          const roleMentions = [...roleSet.keys()].map(rId => `<@&${rId}>`).join('\n') || '*No roles whitelisted.*';
+          const userMentions = [...userSet.keys()].map(uId => `<@${uId}>`).join('\n') || '**No users whitelisted.**';
+          const roleMentions = [...roleSet.keys()].map(rId => `<@&${rId}>`).join('\n') || '**No roles whitelisted.**';
 
           const embedDesc = [
             `__**WL OVERVIEW**__\n`,
@@ -830,33 +874,14 @@ export const MemberWhitelistManifest: ModuleManifest = {
           const embed = new EmbedBuilder()
             .setTitle('📋 Whitelist Audit Timeline')
             .setColor(0x7C5CFC)
-            .setDescription(lines || '*No recent whitelist activity logged.*')
+            .setDescription(lines || '**No recent whitelist activity logged.**')
             .setTimestamp();
 
           return interaction.editReply({ embeds: [embed] }).catch(() => {});
         }
 
-        const mwMod = modules.find((m: any) => m.id === 'member_whitelist');
-        const mwMembers = mwMod?.config?.members || [];
-
-        const memberCount = mwMembers.filter((m: any) => !m.type || m.type === 'member').length;
-        const botCount = mwMembers.filter((m: any) => m.type === 'bot').length;
-        const roleCount = mwMembers.filter((m: any) => m.type === 'role').length;
-
-        const embed = new EmbedBuilder()
-          .setTitle('🛡️ Whitelist System Hub')
-          .setColor(0x7C5CFC)
-          .setThumbnail(interaction.guild.iconURL({ size: 256 }) || null)
-          .setDescription('Central control panel for member, bot, and role whitelists.')
-          .addFields(
-            { name: '👥 Whitelisted Members', value: `\`${memberCount}\` entries`, inline: true },
-            { name: '🤖 Whitelisted Bots', value: `\`${botCount}\` entries`, inline: true },
-            { name: '🎖️ Whitelisted Roles', value: `\`${roleCount}\` entries`, inline: true }
-          )
-          .setFooter({ text: 'Use /whitelist punishment view to customize violation punishments' })
-          .setTimestamp();
-
-        return interaction.editReply({ embeds: [embed] }).catch(() => {});
+        const { embed, components } = buildMemberWhitelistGUI(interaction.guild, modules);
+        return interaction.editReply({ embeds: [embed], components }).catch(() => {});
       }
     },
     ...[
@@ -901,6 +926,38 @@ export const MemberWhitelistManifest: ModuleManifest = {
             .setColor(0x84cc16)
             .setDescription(`${verifiedIcon} ${interaction.user} **To manage permissions for a ${isRole ? 'role' : 'user'}**:\n> Use \`/whitelist config target:@${isRole ? 'Role' : 'User'}\` or \`r!whitelist edit @${isRole ? 'Role' : 'User'}\``);
           return interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
+        }
+
+        if (customId === 'wl_list_btn') {
+          await interaction.deferUpdate().catch(() => {});
+          const modules = context.getModulesState ? context.getModulesState(interaction.guild.id) : [];
+          const { userSet, roleSet } = getUnifiedWhitelistEntries(modules);
+
+          const userMentions = [...userSet.keys()].map(uId => `<@${uId}>`).join('\n') || '`No users whitelisted`';
+          const roleMentions = [...roleSet.keys()].map(rId => `<@&${rId}>`).join('\n') || '`No roles whitelisted`';
+
+          const embed = new EmbedBuilder()
+            .setTitle('Rage Optimiser • Active Whitelist Directory')
+            .setColor(Colors.BRAND)
+            .setDescription(
+              `> **Whitelisted Entities Directory**\n\n` +
+              `**Whitelisted Members (${userSet.size}):**\n> ` + userMentions.split('\n').join('\n> ') + `\n\n` +
+              `**Whitelisted Roles (${roleSet.size}):**\n> ` + roleMentions.split('\n').join('\n> ')
+            )
+            .setFooter({ text: BRAND_FOOTER });
+
+          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId('wl_refresh_hub').setLabel('Back to Whitelist Hub').setStyle(ButtonStyle.Secondary)
+          );
+
+          return interaction.editReply({ embeds: [embed], components: [row] }).catch(() => {});
+        }
+
+        if (customId === 'wl_refresh_hub') {
+          await interaction.deferUpdate().catch(() => {});
+          const modules = context.getModulesState ? context.getModulesState(interaction.guild.id) : [];
+          const { embed, components } = buildMemberWhitelistGUI(interaction.guild, modules);
+          return interaction.editReply({ embeds: [embed], components }).catch(() => {});
         }
       }
     }))
@@ -1102,6 +1159,63 @@ export function registerWhitelistCommands() {
     aliases: ['wl', 'trust', 'whitelists', 'trusted'],
     userPermissions: [],
     cooldownSeconds: 3,
+    execute: async (message: any, args: string[], extra?: any) => {
+      const sub = args[0]?.toLowerCase();
+      const modules = extra?.getModulesState ? extra.getModulesState(message.guild!.id) : [];
+
+      if (sub === 'list') {
+        const { userSet, roleSet } = getUnifiedWhitelistEntries(modules);
+        const userMentions = [...userSet.keys()].map(uId => `<@${uId}>`).join('\n') || '`No users whitelisted`';
+        const roleMentions = [...roleSet.keys()].map(rId => `<@&${rId}>`).join('\n') || '`No roles whitelisted`';
+
+        const embed = new EmbedBuilder()
+          .setTitle('Rage Optimiser • Active Whitelist Directory')
+          .setColor(Colors.BRAND)
+          .setDescription(
+            `> **Whitelisted Entities Directory**\n\n` +
+            `**Whitelisted Members (${userSet.size}):**\n> ` + userMentions.split('\n').join('\n> ') + `\n\n` +
+            `**Whitelisted Roles (${roleSet.size}):**\n> ` + roleMentions.split('\n').join('\n> ')
+          )
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [embed] });
+      }
+
+      if (sub === 'add') {
+        const isRole = Boolean(message.mentions.roles?.first());
+        const target = message.mentions.members?.first() || message.mentions.roles?.first();
+        if (!target) {
+          return message.reply({ content: `${WRONG_ICON} **Invalid Syntax**: \`r!wl add @User\` or \`r!wl add @Role\`` });
+        }
+        const mwMod = modules.find((m: any) => m.id === 'member_whitelist');
+        const currentMembers = mwMod?.config?.members || [];
+        const exists = currentMembers.some((m: any) => m.id === target.id);
+        if (!exists) {
+          currentMembers.push({
+            id: target.id,
+            type: isRole ? 'role' : 'member',
+            name: target.name || (target as any).user?.username || target.id,
+            addedAt: Date.now()
+          });
+          extra.updateModuleConfig?.('member_whitelist', { members: currentMembers });
+        }
+        return message.reply({ content: `${VERIFIED_ICON} Successfully added ${target} to the global Anti-Nuke whitelist.` });
+      }
+
+      if (sub === 'remove') {
+        const target = message.mentions.members?.first() || message.mentions.roles?.first();
+        if (!target) {
+          return message.reply({ content: `${WRONG_ICON} **Invalid Syntax**: \`r!wl remove @User\` or \`r!wl remove @Role\`` });
+        }
+        const mwMod = modules.find((m: any) => m.id === 'member_whitelist');
+        let currentMembers = mwMod?.config?.members || [];
+        currentMembers = currentMembers.filter((m: any) => m.id !== target.id);
+        extra.updateModuleConfig?.('member_whitelist', { members: currentMembers });
+        return message.reply({ content: `${VERIFIED_ICON} Successfully removed ${target} from the global Anti-Nuke whitelist.` });
+      }
+
+      const { embed, components } = buildMemberWhitelistGUI(message.guild, modules);
+      return message.reply({ embeds: [embed], components });
+    },
     examples: [
       'r!wl add @User',
       'r!wl add @Role',

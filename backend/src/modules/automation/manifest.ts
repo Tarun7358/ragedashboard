@@ -1,4 +1,4 @@
-import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 
 export const AutomationManifest: ModuleManifest = {
   id: 'automation',
@@ -38,7 +38,7 @@ export const AutomationManifest: ModuleManifest = {
         const action = interaction.options.getString('action');
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
-        if (!isOwner) return interaction.reply({ content: '<:wrong:1532390628330307634> Requires Administrator.', flags: 64 });
+        if (!isOwner) return interaction.reply({ content: '<a:wrong:1546155193303957504> Requires Administrator.', flags: 64 });
         const modules = context.getModulesState();
         const autoMod = modules.find((m: any) => m.id === 'automation');
         if (!action || action === 'status' || action === 'list') {

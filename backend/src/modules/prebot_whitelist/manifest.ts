@@ -3,7 +3,7 @@ import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
 import { isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import { wrapInteraction } from '../../core/Gateway.js';
-import { VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, BOT_ICON, ARROW_ICON, CONFIG_ICON, INFO_ICON, Colors, createLimeEmbed } from '../../core/UIFactory.js';
+import { VERIFIED_ICON, WRONG_ICON, WARNING_ICON, SHIELD_ICON, BOT_ICON, ARROW_ICON, CONFIG_ICON, INFO_ICON, Colors, createLimeEmbed } from '../../core/UIFactory.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { TwoFactorManager } from '../../core/security/TwoFactorManager.js';
 
@@ -45,18 +45,27 @@ export async function getPrebotEntries(guildId: string): Promise<PreBotEntry[]> 
     const db = Database.getDb();
     if (!db) return [];
     const rows = await db.all<any>('SELECT * FROM prebot_whitelist WHERE guildId = ?', [guildId]);
-    return rows.map(r => ({
-      guildId: r.guildId,
-      botId: r.botId,
-      botName: r.botName,
-      allowedPerms: JSON.parse(r.allowedPerms || '[]'),
-      createRole: Boolean(r.createRole),
-      roleName: r.roleName,
-      roleColor: r.roleColor,
-      addedBy: r.addedBy,
-      addedAt: r.addedAt,
-      notes: r.notes
-    }));
+    return rows.map(r => {
+      let allowedPerms: string[] = [];
+      try {
+        if (Array.isArray(r.allowedPerms)) allowedPerms = r.allowedPerms;
+        else if (typeof r.allowedPerms === 'string') allowedPerms = JSON.parse(r.allowedPerms);
+      } catch {
+        allowedPerms = [];
+      }
+      return {
+        guildId: r.guildId,
+        botId: r.botId,
+        botName: r.botName,
+        allowedPerms,
+        createRole: Boolean(r.createRole),
+        roleName: r.roleName,
+        roleColor: r.roleColor,
+        addedBy: r.addedBy,
+        addedAt: r.addedAt,
+        notes: r.notes
+      };
+    });
   } catch (err) {
     console.error('[PreBot DB] Error fetching entries:', err);
     return [];
@@ -69,11 +78,18 @@ export async function getPrebotEntry(guildId: string, botId: string): Promise<Pr
     if (!db) return null;
     const r = await db.get<any>('SELECT * FROM prebot_whitelist WHERE guildId = ? AND botId = ?', [guildId, botId]);
     if (!r) return null;
+    let allowedPerms: string[] = [];
+    try {
+      if (Array.isArray(r.allowedPerms)) allowedPerms = r.allowedPerms;
+      else if (typeof r.allowedPerms === 'string') allowedPerms = JSON.parse(r.allowedPerms);
+    } catch {
+      allowedPerms = [];
+    }
     return {
       guildId: r.guildId,
       botId: r.botId,
       botName: r.botName,
-      allowedPerms: JSON.parse(r.allowedPerms || '[]'),
+      allowedPerms,
       createRole: Boolean(r.createRole),
       roleName: r.roleName,
       roleColor: r.roleColor,
@@ -156,7 +172,7 @@ async function launchPrebotBuilder(
         const item = PREBOT_PERMISSIONS.find(item => item.key === p);
         return `\`${item?.label || p}\``;
       }).join(', ')
-      : '*No permissions selected (Least Privilege)*';
+      : '**No permissions selected (Least Privilege)**';
 
     const desc = [
       `__**PREBOT WHITELIST CONFIGURATION**__\n`,
@@ -165,7 +181,7 @@ async function launchPrebotBuilder(
       `> Defines exact permission profile applied automatically upon bot arrival.\n`,
       `**Bot Target**: <@${botId}> (\`${botId}\`)`,
       `**Dedicated Role**: ${createRole ? `${VERIFIED_ICON} Enabled (\`${roleName}\`)` : `${WRONG_ICON} Disabled`}`,
-      `**Notes**: ${notes ? notes : '*None provided*'}\n`,
+      `**Notes**: ${notes ? notes : '**None provided**'}\n`,
       `**Approved Permission Profile (${selectedPerms.length}/${PREBOT_PERMISSIONS.length})**:`,
       `> ${permBadges}`
     ].join('\n');
@@ -315,12 +331,12 @@ async function launchPrebotBuilder(
 
         const successEmbed = new EmbedBuilder()
           .setColor(Colors.SUCCESS)
-          .setTitle(`${VERIFIED_ICON} PreBot Whitelist — Saved`)
+          .setTitle(`${BOT_ICON} PreBot Whitelist — Saved`)
           .setDescription([
-            `**Bot <@${botId}>** (\`${botName}\`) has been successfully registered in the **PreBot Whitelist**.`,
-            `When this bot enters **${guild.name}**, Rage Optimiser will instantly verify it, strip unauthorized roles, and enforce this custom profile.`,
-            `\n**Allowed Permissions**: ${selectedPerms.length > 0 ? selectedPerms.map(p => `\`${p}\``).join(', ') : '`None`'}`,
-            `**Dedicated Trusted Role**: ${createRole ? `\`${roleName}\`` : '`Disabled`'}`
+            `${VERIFIED_ICON} **Bot <@${botId}>** (\`${botName}\`) has been successfully registered in the **PreBot Whitelist**.`,
+            `When this bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser will instantly verify it, strip unauthorized roles, and enforce this custom profile.`,
+            `\n${ARROW_ICON} **Allowed Permissions**: ${selectedPerms.length > 0 ? selectedPerms.map(p => `\`${p}\``).join(', ') : '`None`'}`,
+            `${ARROW_ICON} **Dedicated Trusted Role**: ${createRole ? `\`${roleName}\`` : '`Disabled`'}`
           ].join('\n'))
           .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
           .setTimestamp();
@@ -337,7 +353,7 @@ export function registerPrebotCommands(): void {
     category: 'Security',
     description: 'Confidential PreBot Whitelist Management (Server Owner & Extra Owner Only)',
     usage: 'r!prebot <add|remove|list|info> [bot]',
-    aliases: ['prebotwhitelist', 'botwhitelist', 'bwl', 'whitelistbot', 'pb'],
+    aliases: ['prebotwhitelist', 'prebotlist', 'prebot-list', 'botwhitelist', 'bwl', 'whitelistbot', 'pb'],
     cooldownSeconds: 3,
     examples: ['r!prebot add 1234567890', 'r!prebot list'],
     moduleOwnerId: 'prebot_whitelist',
@@ -396,7 +412,7 @@ export function registerPrebotCommands(): void {
               .setDescription([
                 `**Server**: \`${guild.name}\``,
                 `**Passcode**: \`•••••• (Hidden for Security)\``,
-                `**Security Status**: 🟢 **ENABLED (Active)**`,
+                `**Security Status**: ${VERIFIED_ICON} **ENABLED (Active)**`,
                 `\nAll future PreBot additions (\`r!prebot add\`, \`r!prebot quickadd\`) will now require this 6-digit passcode.`
               ].join('\n'))
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
@@ -487,13 +503,13 @@ export function registerPrebotCommands(): void {
             .setColor(isEnabled ? Colors.SUCCESS : Colors.INFO)
             .setDescription([
               `**Server**: \`${guild.name}\``,
-              `**Security Status**: ${isEnabled ? '🟢 **ENABLED (Active)**' : '🔴 **DISABLED (Inactive)**'}`,
-              `**Passcode Configured**: ${hasPin ? `${VERIFIED_ICON} **Passcode Set**` : `${WRONG_ICON} **No Passcode Set**`}`,
+              `**Security Status**: ${isEnabled ? `${VERIFIED_ICON} **ENABLED (Active)**` : `${WRONG_ICON} **DISABLED (Inactive)**`}`,
+              `**Passcode Configured**: ${hasPin ? `${VERIFIED_ICON} **Passcode Set**` : `${WARNING_ICON} **No Passcode Set**`}`,
               `**Managed By**: Server Owner (<@${guild.ownerId}>)`,
               `\n**Management Commands**:`,
-              `> \`r!prebot 2fa set <6-digit-pin>\` — Set your custom 6-digit passcode & enable 2FA`,
-              `> \`r!prebot 2fa change <old-pin> <new-pin>\` — Change your existing 6-digit passcode`,
-              `> \`r!prebot 2fa off <6-digit-pin>\` — Disable 2FA enforcement`
+              `${ARROW_ICON} \`r!prebot 2fa set <6-digit-pin>\` — Set your custom 6-digit passcode & enable 2FA`,
+              `${ARROW_ICON} \`r!prebot 2fa change <old-pin> <new-pin>\` — Change your existing 6-digit passcode`,
+              `${ARROW_ICON} \`r!prebot 2fa off <6-digit-pin>\` — Disable 2FA enforcement`
             ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp()]
@@ -586,14 +602,18 @@ export function registerPrebotCommands(): void {
         };
 
         await savePrebotEntry(newEntry);
-        return message.reply({
-          embeds: [new EmbedBuilder()
-            .setTitle(`${VERIFIED_ICON} PreBot Whitelist — Quick Added`)
-            .setColor(Colors.SUCCESS)
-            .setDescription(`Successfully registered bot **<@${targetUser.id}>** (\`${targetUser.username}\`) in the PreBot Whitelist with standard default permissions.\n\n**Dedicated Role**: \`[Trusted] ${targetUser.username}\`\n**Allowed Permissions**: \`ViewChannel, SendMessages, ReadMessageHistory, EmbedLinks, AttachFiles\``)
-            .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
-            .setTimestamp()]
-        });
+        const successEmbed = new EmbedBuilder()
+          .setTitle(`${BOT_ICON} PreBot Whitelist — Quick Added`)
+          .setColor(Colors.SUCCESS)
+          .setDescription([
+            `${VERIFIED_ICON} **Bot <@${targetUser.id}>** (\`${targetUser.username}\`) has been successfully registered in the **PreBot Whitelist**.`,
+            `When this bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser will instantly verify it, strip unauthorized roles, and enforce this custom profile.`,
+            `\n${ARROW_ICON} **Allowed Permissions**: \`ViewChannel\`, \`SendMessages\`, \`ReadMessageHistory\`, \`EmbedLinks\`, \`AttachFiles\``,
+            `${ARROW_ICON} **Dedicated Trusted Role**: \`[Trusted] ${targetUser.username}\``
+          ].join('\n'))
+          .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
+          .setTimestamp();
+        return message.reply({ embeds: [successEmbed] });
       }
 
       if (sub === 'remove') {
@@ -607,35 +627,59 @@ export function registerPrebotCommands(): void {
           return message.reply(`${WRONG_ICON} Bot **<@${targetUser.id}>** is not in the PreBot Whitelist.`);
         }
 
-        return message.reply({
-          embeds: [new EmbedBuilder()
-            .setTitle(`${VERIFIED_ICON} Bot Removed`)
-            .setColor(Colors.SUCCESS)
-            .setDescription(`Successfully removed bot **<@${targetUser.id}>** (\`${targetUser.username}\`) from the PreBot Whitelist.`)
-            .setTimestamp()]
-        });
+        const removeEmbed = new EmbedBuilder()
+          .setTitle(`${BOT_ICON} PreBot Whitelist — Bot Removed`)
+          .setColor(Colors.SUCCESS)
+          .setDescription([
+            `${WRONG_ICON} **Bot <@${targetUser.id}>** (\`${targetUser.username}\`) has been removed from the **PreBot Whitelist**.`,
+            `When this bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser will treat it as unauthorized and enforce zero-trust security restrictions.`
+          ].join('\n'))
+          .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
+          .setTimestamp();
+        return message.reply({ embeds: [removeEmbed] });
       }
 
-      if (sub === 'list') {
+      if (['list', 'show', 'view', 'all'].includes(sub)) {
         const entries = await getPrebotEntries(guild.id);
         if (entries.length === 0) {
           return message.reply({
             embeds: [new EmbedBuilder()
-              .setTitle(`${BOT_ICON} Secret PreBot Whitelist Registry`)
-              .setColor(Colors.INFO)
-              .setDescription('**No bots pre-registered in this server.**\n\nTo pre-approve a bot before it joins, use:\n> `r!prebot add @BotName`')
+              .setTitle(`${BOT_ICON} PreBot Whitelist — Registry`)
+              .setColor(Colors.SUCCESS)
+              .setDescription([
+                `${INFO_ICON} **No bots pre-registered in this server.**`,
+                `When an un-registered bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser's Zero-Trust architecture will instantly ban it on join.`,
+                `\n**How to Pre-Approve a Bot**:`,
+                `${ARROW_ICON} Use \`r!prebot add <@bot|id>\` to configure custom permissions.`,
+                `${ARROW_ICON} Use \`r!prebot quickadd <@bot|id>\` for instant default permissions.`
+              ].join('\n'))
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
               .setTimestamp()]
           });
         }
 
-        const lines = entries.map(e => `• **<@${e.botId}>** (\`${e.botName}\`) — \`${e.allowedPerms.length}\` allowed perms | ${e.createRole ? `Role: \`${e.roleName}\`` : 'Role: Disabled'}`).join('\n');
+        const lines = entries.map((e, idx) => {
+          const roleStr = e.createRole ? `\`${e.roleName}\`` : '`Disabled`';
+          const permsFormatted = e.allowedPerms && e.allowedPerms.length > 0
+            ? e.allowedPerms.map(p => `\`${p}\``).join(', ')
+            : '`None`';
+          return [
+            `${VERIFIED_ICON} **${idx + 1}. Bot <@${e.botId}>** (\`${e.botName || e.botId}\`)`,
+            `   ${ARROW_ICON} **Dedicated Trusted Role**: ${roleStr}`,
+            `   ${ARROW_ICON} **Allowed Permissions**: ${permsFormatted}`
+          ].join('\n');
+        }).join('\n\n');
 
         return message.reply({
           embeds: [new EmbedBuilder()
-            .setTitle(`${BOT_ICON} Secret PreBot Whitelist Registry (${entries.length})`)
-            .setColor(Colors.BRAND)
-            .setDescription([`__**APPROVED BOTS**__`, lines, `\n> Use \`r!prebot info @Bot\` to inspect full permission profile.`].join('\n'))
+            .setTitle(`${BOT_ICON} PreBot Whitelist — Registry (${entries.length})`)
+            .setColor(Colors.SUCCESS)
+            .setDescription([
+              `The following bots are pre-approved to join **${guild.name}**. Unauthorized bots will be banned immediately.`,
+              `\n${lines}`,
+              `\n${ARROW_ICON} Use \`r!prebot info <@bot|id>\` to inspect full bot profile.`,
+              `${ARROW_ICON} Use \`r!prebot remove <@bot|id>\` to revoke pre-approval.`
+            ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp()]
         });
@@ -654,22 +698,40 @@ export function registerPrebotCommands(): void {
 
         return message.reply({
           embeds: [new EmbedBuilder()
-            .setTitle(`${BOT_ICON} PreBot Profile — ${entry.botName}`)
-            .setColor(Colors.BRAND)
+            .setTitle(`${BOT_ICON} PreBot Whitelist — ${entry.botName}`)
+            .setColor(Colors.SUCCESS)
             .setThumbnail(targetUser.displayAvatarURL({ size: 256 }) || null)
             .setDescription([
-              `**Bot User**: <@${entry.botId}> (\`${entry.botId}\`)`,
-              `**Registered By**: <@${entry.addedBy}>`,
-              `**Registered At**: <t:${Math.floor(entry.addedAt / 1000)}:F>`,
-              `**Dedicated Role**: ${entry.createRole ? `\`${entry.roleName}\`` : '`Disabled`'}`,
-              `**Notes**: ${entry.notes ? entry.notes : '*None*'}`,
-              `\n**Approved Permission Profile (${entry.allowedPerms.length})**:`,
-              entry.allowedPerms.length > 0 ? entry.allowedPerms.map(p => `\`${p}\``).join(', ') : '`None`'
+              `**Bot <@${entry.botId}>** (\`${entry.botId}\`) profile specifications for **${guild.name}**:`,
+              `\n${ARROW_ICON} **Registered By**: <@${entry.addedBy}>`,
+              `${ARROW_ICON} **Registered At**: <t:${Math.floor(entry.addedAt / 1000)}:F>`,
+              `${ARROW_ICON} **Allowed Permissions**: ${entry.allowedPerms.length > 0 ? entry.allowedPerms.map(p => `\`${p}\``).join(', ') : '`None`'}`,
+              `${ARROW_ICON} **Dedicated Trusted Role**: ${entry.createRole ? `\`${entry.roleName}\`` : '`Disabled`'}`,
+              `${ARROW_ICON} **Notes**: ${entry.notes ? entry.notes : '**None**'}`
             ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp()]
         });
       }
+
+      // Fallback: Help & Command Syntax Manual
+      return message.reply({
+        embeds: [new EmbedBuilder()
+          .setTitle(`${SHIELD_ICON} PreBot Whitelist — Command Manual`)
+          .setColor(Colors.SUCCESS)
+          .setDescription([
+            `Under ${SHIELD_ICON} Rage Optimiser's **Zero-Trust Security Architecture**, all bots must be pre-approved with an explicit permission profile prior to joining **${guild.name}**.\n`,
+            `**Available Commands**:`,
+            `${ARROW_ICON} \`r!prebot list\` — View all pre-approved bot applications`,
+            `${ARROW_ICON} \`r!prebot add <@bot|id>\` — Pre-approve bot with custom permissions`,
+            `${ARROW_ICON} \`r!prebot quickadd <@bot|id>\` — Fast default permission profile`,
+            `${ARROW_ICON} \`r!prebot remove <@bot|id>\` — Revoke bot pre-approval`,
+            `${ARROW_ICON} \`r!prebot info <@bot|id>\` — Inspect a bot's permission profile`,
+            `${ARROW_ICON} \`r!prebot 2fa <set|change|off|status>\` — Mandatory 2FA passcode gate`
+          ].join('\n'))
+          .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
+          .setTimestamp()]
+      });
     }
   });
 }
@@ -727,7 +789,7 @@ export const PrebotWhitelistManifest: ModuleManifest = {
             .setColor(isEnabled ? Colors.SUCCESS : Colors.WARN)
             .setDescription([
               `**Server**: \`${guild.name}\``,
-              `**PreBot Whitelist Guard**: **${isEnabled ? '🟢 ENABLED (ACTIVE)' : '🔴 DISABLED (INACTIVE)'}**`,
+              `**PreBot Whitelist Guard**: **${isEnabled ? `${VERIFIED_ICON} ENABLED (ACTIVE)` : `${WRONG_ICON} DISABLED (INACTIVE)`}**`,
               `\n${isEnabled ? 'Un-registered bots will be automatically kicked on join.' : 'Bot join enforcement is paused. Bots can join freely without pre-registration.'}`
             ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
@@ -795,7 +857,7 @@ export const PrebotWhitelistManifest: ModuleManifest = {
               .setDescription([
                 `**Server**: \`${guild.name}\``,
                 `**Passcode**: \`•••••• (Hidden for Security)\``,
-                `**Security Status**: 🟢 **ENABLED (Active)**`,
+                `**Security Status**: ${VERIFIED_ICON} **ENABLED (Active)**`,
                 `\nAll future PreBot additions will now require this 6-digit passcode.`
               ].join('\n'))
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
@@ -898,13 +960,13 @@ export const PrebotWhitelistManifest: ModuleManifest = {
             .setColor(isEnabled ? Colors.SUCCESS : Colors.INFO)
             .setDescription([
               `**Server**: \`${guild.name}\``,
-              `**Security Status**: ${isEnabled ? '🟢 **ENABLED (Active)**' : '🔴 **DISABLED (Inactive)**'}`,
-              `**Passcode Configured**: ${hasPin ? `${VERIFIED_ICON} **Passcode Set**` : `${WRONG_ICON} **No Passcode Set**`}`,
+              `**Security Status**: ${isEnabled ? `${VERIFIED_ICON} **ENABLED (Active)**` : `${WRONG_ICON} **DISABLED (Inactive)**`}`,
+              `**Passcode Configured**: ${hasPin ? `${VERIFIED_ICON} **Passcode Set**` : `${WARNING_ICON} **No Passcode Set**`}`,
               `**Managed By**: Server Owner (<@${guild.ownerId}>)`,
               `\n**Management Commands**:`,
-              `> \`r!prebot 2fa set <6-digit-pin>\` — Set your custom 6-digit passcode & enable 2FA`,
-              `> \`r!prebot 2fa change <old-pin> <new-pin>\` — Change your existing 6-digit passcode`,
-              `> \`r!prebot 2fa off <6-digit-pin>\` — Disable 2FA enforcement`
+              `${ARROW_ICON} \`r!prebot 2fa set <6-digit-pin>\` — Set your custom 6-digit passcode & enable 2FA`,
+              `${ARROW_ICON} \`r!prebot 2fa change <old-pin> <new-pin>\` — Change your existing 6-digit passcode`,
+              `${ARROW_ICON} \`r!prebot 2fa off <6-digit-pin>\` — Disable 2FA enforcement`
             ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp();
@@ -995,9 +1057,14 @@ export const PrebotWhitelistManifest: ModuleManifest = {
           context.logSyncEvent(guild.id, `✅ [PreBot Whitelist]: Quick-added bot ${botUser.username} (${botUser.id}).`, 'success');
 
           const successEmbed = new EmbedBuilder()
-            .setTitle(`${VERIFIED_ICON} PreBot Whitelist — Quick Added`)
+            .setTitle(`${BOT_ICON} PreBot Whitelist — Quick Added`)
             .setColor(Colors.SUCCESS)
-            .setDescription(`Successfully registered bot **<@${botUser.id}>** (\`${botUser.username}\`) in the PreBot Whitelist with standard default permissions.\n\n**Dedicated Role**: \`[Trusted] ${botUser.username}\`\n**Allowed Permissions**: \`ViewChannel, SendMessages, ReadMessageHistory, EmbedLinks, AttachFiles\``)
+            .setDescription([
+              `${VERIFIED_ICON} **Bot <@${botUser.id}>** (\`${botUser.username}\`) has been successfully registered in the **PreBot Whitelist**.`,
+              `When this bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser will instantly verify it, strip unauthorized roles, and enforce this custom profile.`,
+              `\n${ARROW_ICON} **Allowed Permissions**: \`ViewChannel\`, \`SendMessages\`, \`ReadMessageHistory\`, \`EmbedLinks\`, \`AttachFiles\``,
+              `${ARROW_ICON} **Dedicated Trusted Role**: \`[Trusted] ${botUser.username}\``
+            ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp();
 
@@ -1020,9 +1087,13 @@ export const PrebotWhitelistManifest: ModuleManifest = {
           context.logSyncEvent(guild.id, `[PreBot Whitelist]: Removed bot ${botUser.username} (${botUser.id}) from registry.`, 'info');
 
           const successEmbed = new EmbedBuilder()
-            .setTitle(`${VERIFIED_ICON} Bot Removed`)
+            .setTitle(`${BOT_ICON} PreBot Whitelist — Bot Removed`)
             .setColor(Colors.SUCCESS)
-            .setDescription(`Successfully removed bot **<@${botUser.id}>** (\`${botUser.username}\`) from the PreBot Whitelist.`)
+            .setDescription([
+              `${WRONG_ICON} **Bot <@${botUser.id}>** (\`${botUser.username}\`) has been removed from the **PreBot Whitelist**.`,
+              `When this bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser will treat it as unauthorized and enforce zero-trust security restrictions.`
+            ].join('\n'))
+            .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp();
           return interaction.editReply({ embeds: [successEmbed] }).catch(() => { });
         }
@@ -1031,31 +1102,40 @@ export const PrebotWhitelistManifest: ModuleManifest = {
           const entries = await getPrebotEntries(guild.id);
           if (entries.length === 0) {
             const emptyEmbed = new EmbedBuilder()
-              .setTitle(`${BOT_ICON} PreBot Whitelist Registry`)
-              .setColor(Colors.INFO)
+              .setTitle(`${BOT_ICON} PreBot Whitelist — Registry`)
+              .setColor(Colors.SUCCESS)
               .setDescription([
-                `**No bots pre-registered in this server.**`,
-                `\nTo pre-approve a bot before it joins, use:`,
-                `> \`/prebot add bot:@BotName\` or \`r!prebot add @BotName\``
+                `${INFO_ICON} **No bots pre-registered in this server.**`,
+                `When an un-registered bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser's Zero-Trust architecture will instantly ban it on join.`,
+                `\n**How to Pre-Approve a Bot**:`,
+                `${ARROW_ICON} Use \`/prebot add bot:@BotName\` to configure custom permissions.`,
+                `${ARROW_ICON} Use \`r!prebot quickadd <@bot|id>\` for instant default permissions.`
               ].join('\n'))
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
               .setTimestamp();
             return interaction.editReply({ embeds: [emptyEmbed] }).catch(() => { });
           }
 
-          const lines = entries.map(e => {
-            const permCount = e.allowedPerms.length;
-            const roleStr = e.createRole ? `Role: \`${e.roleName}\`` : 'Role: Disabled';
-            return `• **<@${e.botId}>** (\`${e.botName}\`) — \`${permCount}\` allowed perms | ${roleStr}`;
-          }).join('\n');
+          const lines = entries.map((e, idx) => {
+            const roleStr = e.createRole ? `\`${e.roleName}\`` : '`Disabled`';
+            const permsFormatted = e.allowedPerms && e.allowedPerms.length > 0
+              ? e.allowedPerms.map(p => `\`${p}\``).join(', ')
+              : '`None`';
+            return [
+              `${VERIFIED_ICON} **${idx + 1}. Bot <@${e.botId}>** (\`${e.botName || e.botId}\`)`,
+              `   ${ARROW_ICON} **Dedicated Trusted Role**: ${roleStr}`,
+              `   ${ARROW_ICON} **Allowed Permissions**: ${permsFormatted}`
+            ].join('\n');
+          }).join('\n\n');
 
           const listEmbed = new EmbedBuilder()
-            .setTitle(`${BOT_ICON} PreBot Whitelist Registry (${entries.length})`)
-            .setColor(Colors.BRAND)
+            .setTitle(`${BOT_ICON} PreBot Whitelist — Registry (${entries.length})`)
+            .setColor(Colors.SUCCESS)
             .setDescription([
-              `__**APPROVED BOTS**__`,
-              lines,
-              `\n> Use \`/prebot info bot:@Bot\` to inspect full permission profile.`
+              `The following bots are pre-approved to join **${guild.name}**. Unauthorized bots will be banned immediately.`,
+              `\n${lines}`,
+              `\n${ARROW_ICON} Use \`/prebot info bot:@Bot\` to inspect full bot profile.`,
+              `${ARROW_ICON} Use \`/prebot remove bot:@Bot\` to revoke pre-approval.`
             ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp();
@@ -1077,17 +1157,16 @@ export const PrebotWhitelistManifest: ModuleManifest = {
           }
 
           const infoEmbed = new EmbedBuilder()
-            .setTitle(`${BOT_ICON} PreBot Profile — ${entry.botName}`)
-            .setColor(Colors.BRAND)
+            .setTitle(`${BOT_ICON} PreBot Whitelist — ${entry.botName}`)
+            .setColor(Colors.SUCCESS)
             .setThumbnail(botUser.displayAvatarURL({ size: 256 }) || null)
             .setDescription([
-              `**Bot User**: <@${entry.botId}> (\`${entry.botId}\`)`,
-              `**Registered By**: <@${entry.addedBy}>`,
-              `**Registered At**: <t:${Math.floor(entry.addedAt / 1000)}:F>`,
-              `**Dedicated Role**: ${entry.createRole ? `\`${entry.roleName}\`` : '`Disabled`'}`,
-              `**Notes**: ${entry.notes ? entry.notes : '*None*'}`,
-              `\n**Approved Permission Profile (${entry.allowedPerms.length})**:`,
-              entry.allowedPerms.length > 0 ? entry.allowedPerms.map(p => `\`${p}\``).join(', ') : '`None`'
+              `**Bot <@${entry.botId}>** (\`${entry.botId}\`) profile specifications for **${guild.name}**:`,
+              `\n${ARROW_ICON} **Registered By**: <@${entry.addedBy}>`,
+              `${ARROW_ICON} **Registered At**: <t:${Math.floor(entry.addedAt / 1000)}:F>`,
+              `${ARROW_ICON} **Allowed Permissions**: ${entry.allowedPerms.length > 0 ? entry.allowedPerms.map(p => `\`${p}\``).join(', ') : '`None`'}`,
+              `${ARROW_ICON} **Dedicated Trusted Role**: ${entry.createRole ? `\`${entry.roleName}\`` : '`Disabled`'}`,
+              `${ARROW_ICON} **Notes**: ${entry.notes ? entry.notes : '**None**'}`
             ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
             .setTimestamp();

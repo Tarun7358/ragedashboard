@@ -1,4 +1,4 @@
-import { Message, EmbedBuilder, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+﻿import { Message, EmbedBuilder, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { PrefixCommandMeta } from './PrefixRegistry.js';
 import { PrefixCooldownManager } from './PrefixCooldownManager.js';
 import { PrefixPermissionManager } from './PrefixPermissionManager.js';
@@ -117,6 +117,20 @@ export class CommandPipeline {
         if (!isOwner && !isWhitelisted) {
           PrefixAnalytics.trackFailure('permission');
           return this.sendError(ctx, '🔒 Access Denied: Role management commands can only be executed by the Server Owner, Extra Owners, and Whitelisted Members. Normal Administrators cannot use role commands.');
+        }
+      }
+
+      // Ticket Management Commands Gate (ticketmanager, ticket deploy/config/lock/limit/etc.)
+      const isTicketCommand = ['ticketmanager', 'tkmgr', 'ticketmgr', 'tconfig'].includes(cmdMeta.name) ||
+        (['ticket', 't', 'tck', 'tickets'].includes(cmdMeta.name) &&
+          !['open', 'create', 'ping', 'pingadmin', 'close', 'transcript', 'log'].includes(ctx.args[0]?.toLowerCase()));
+
+      if (isTicketCommand && ctx.guild) {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const allowed = await isOwnerOrExtraOwner(ctx.executor.id, ctx.guild);
+        if (!allowed) {
+          PrefixAnalytics.trackFailure('permission');
+          return this.sendError(ctx, 'Access Denied: Only the Server Owner and Extra Owners can manage tickets.');
         }
       }
 
@@ -243,7 +257,7 @@ export class CommandPipeline {
 
       const errEmbed = new EmbedBuilder()
         .setAuthor({ name: 'Rage Optimiser Engine • Execution Error' })
-        .setTitle('<:wrong:1532390628330307634> Command Execution Failed')
+        .setTitle('<a:wrong:1546155193303957504> Command Execution Failed')
         .setDescription(err.message || 'An internal server error occurred during validation or execution of this command.')
         .setColor(0xEF4444)
         .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -260,7 +274,7 @@ export class CommandPipeline {
 
     const embed = new EmbedBuilder()
       .setAuthor({ name: 'Rage Optimiser Security Gate • High Risk Action' })
-      .setTitle('<:shield:1532403012751065179> High Risk Action Confirmation')
+      .setTitle('<:security:1546142576984203336> High Risk Action Confirmation')
       .setDescription(`Are you sure you want to execute **\`r!${ctx.cmdMeta.name} ${ctx.args.join(' ')}\`**?\nThis is classified as a high-risk administrative command.`)
       .setColor(0xF59E0B)
       .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${ctx.correlationId}` })
@@ -278,7 +292,7 @@ export class CommandPipeline {
         await confirmation.update({ content: '<a:approved:1532390590707142956> Command confirmed. Starting execution...', embeds: [], components: [] });
         return true;
       } else {
-        await confirmation.update({ content: '<:wrong:1532390628330307634> Command cancelled.', embeds: [], components: [] });
+        await confirmation.update({ content: '<a:wrong:1546155193303957504> Command cancelled.', embeds: [], components: [] });
         return false;
       }
     } catch {
@@ -292,13 +306,13 @@ export class CommandPipeline {
       new ButtonBuilder()
         .setCustomId(`btn_dismiss_${ctx.executor.id}`)
         .setLabel('Dismiss Message')
-        .setEmoji('<:wrong:1532390628330307634>')
+        .setEmoji('<a:wrong:1546155193303957504>')
         .setStyle(ButtonStyle.Danger)
     );
 
     const embed = new EmbedBuilder()
       .setAuthor({ name: 'Rage Optimiser Security Gate • System Warning' })
-      .setTitle('<:wrong:1532390628330307634> Command Pipeline Warning')
+      .setTitle('<a:wrong:1546155193303957504> Command Pipeline Warning')
       .setDescription(message)
       .setColor(0xEF4444)
       .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${ctx.correlationId}` })

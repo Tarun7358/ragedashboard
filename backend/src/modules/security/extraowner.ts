@@ -1,4 +1,4 @@
-import { Message } from 'discord.js';
+import { Message, EmbedBuilder } from 'discord.js';
 import { Database } from '../../core/Database.js';
 import { createLimeEmbed } from '../../core/UIFactory.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
@@ -8,9 +8,9 @@ import { updateExtraOwnerInCache, removeExtraOwnerFromCache, loadExtraOwnersCach
 import { TwoFactorManager } from '../../core/security/TwoFactorManager.js';
 
 const VIP_EMOJI = '<:vip:1532620837117759508>';
-const SHIELD_EMOJI = '<:shield:1532403012751065179>';
+const SHIELD_EMOJI = '<:security:1546142576984203336>';
 const APPROVED_ICON = '<a:approved:1532390590707142956>';
-const WRONG_EMOJI = '<:wrong:1532390628330307634>';
+const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
 const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
 
 export function registerExtraOwnerCommands(): void {
@@ -214,21 +214,34 @@ export function registerExtraOwnerCommands(): void {
 
         if (rows.length === 0) {
           return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Extra Owner Directory',
-              description: `${SHIELD_EMOJI} No delegated Extra Owners have been assigned for this server.`
-            })]
+            embeds: [new EmbedBuilder()
+              .setTitle('Extra Owner Directory')
+              .setColor(0x2B2D31)
+              .setDescription([
+                `>>> ${SHIELD_EMOJI} **No Delegated Extra Owners**`,
+                `No delegated Extra Owners have been assigned for **${message.guild?.name}**.\n`,
+                `• Use \`r!extraowner add <@user>\` to grant delegated authority.`
+              ].join('\n'))
+              .setFooter({ text: 'Rage Optimiser • Zero-Trust Security' })
+              .setTimestamp()]
           });
         }
 
-        const lines = rows.map((r: any) => 
-          `• ${VIP_EMOJI} <@${r.userId}> (\`${r.userId}\`) — Added <t:${r.addedAt}:R> by <@${r.addedBy}>`
+        const lines = rows.map((r: any, idx: number) => 
+          `**${idx + 1}.** ${VIP_EMOJI} <@${r.userId}> (\`${r.userId}\`)\n   └ Added <t:${r.addedAt}:R> by <@${r.addedBy}>`
         );
 
-        const embed = createLimeEmbed({
-          title: `Extra Owners Directory (${rows.length})`,
-          description: lines.join('\n')
-        });
+        const embed = new EmbedBuilder()
+          .setTitle(`Extra Owners Directory (${rows.length})`)
+          .setColor(0x2B2D31)
+          .setDescription([
+            `>>> ${SHIELD_EMOJI} **Delegated Server Operators**`,
+            `The following operators hold permanent owner bypass and administrative clearance:`,
+            '',
+            ...lines
+          ].join('\n'))
+          .setFooter({ text: 'Rage Optimiser • Zero-Trust Security' })
+          .setTimestamp();
         return message.reply({ embeds: [embed] });
       }
 
@@ -318,7 +331,7 @@ export function registerOwnerBroadcastCommands(): void {
 
         const embed = createLimeEmbed({
           title: `🌐 Server Owner Directory (${guilds.length} Servers)`,
-          description: lines.join('\n') + (guilds.length > 25 ? `\n\n*...and ${guilds.length - 25} more servers.*` : '')
+          description: lines.join('\n') + (guilds.length > 25 ? `\n\n**...and ${guilds.length - 25} more servers.**` : '')
         });
         return message.reply({ embeds: [embed] });
       }

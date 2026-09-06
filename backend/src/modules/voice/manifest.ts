@@ -1,4 +1,4 @@
-import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { joinVoiceChannel, getVoiceConnection } from '@discordjs/voice';
 import { EmbedBuilder, ChannelType } from 'discord.js';
 
@@ -89,7 +89,7 @@ export const VoiceManifest: ModuleManifest = {
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
         if (!isOwner) {
-          return interaction.reply({ content: '<:shield:1532403012751065179> Voice Presence commands require Administrator permissions.', flags: 64 });
+          return interaction.reply({ content: '<:security:1546142576984203336> Voice Presence commands require Administrator permissions.', flags: 64 });
         }
         const modules = context.getModulesState();
         const voiceMod = modules.find((m: any) => m.id === 'voice');
@@ -102,14 +102,14 @@ export const VoiceManifest: ModuleManifest = {
             flags: 64
           });
         } else if (action === 'join') {
-          if (!channelId) return interaction.reply({ content: '<:wrong:1532390628330307634> No voice channel configured. Set it in the Dashboard → Voice Presence.', flags: 64 });
+          if (!channelId) return interaction.reply({ content: '<a:wrong:1546155193303957504> No voice channel configured. Set it in the Dashboard → Voice Presence.', flags: 64 });
           context.logSyncEvent(`Voice command: Owner requested join to channel ${channelId}.`, 'info');
           await interaction.reply({ content: `<a:approved:1532390590707142956> Bot will attempt to join <#${channelId}> on the next check cycle (within 10 seconds).`, flags: 64 });
         } else if (action === 'leave') {
           context.logSyncEvent('Voice command: Owner requested voice disconnect.', 'info');
           await interaction.reply({ content: '<a:approved:1532390590707142956> Voice disconnection queued. Bot will leave its current voice channel.', flags: 64 });
         } else {
-          await interaction.reply({ content: '<:wrong:1532390628330307634> Unknown action. Use: `status`, `join`, or `leave`.', flags: 64 });
+          await interaction.reply({ content: '<a:wrong:1546155193303957504> Unknown action. Use: `status`, `join`, or `leave`.', flags: 64 });
         }
       }
     },
@@ -121,7 +121,7 @@ export const VoiceManifest: ModuleManifest = {
                         interaction.member?.permissions?.has?.('Administrator');
         if (!isAdmin) {
           const embed = new EmbedBuilder()
-            .setTitle('<:wrong:1532390628330307634> Access Denied')
+            .setTitle('<a:wrong:1546155193303957504> Access Denied')
             .setDescription('Administrator permissions are required to manage the 24/7 Voice Presence system.')
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -130,7 +130,7 @@ export const VoiceManifest: ModuleManifest = {
 
         const sub = interaction.options.getSubcommand(false);
         if (!sub) {
-          return interaction.reply({ content: '<:wrong:1532390628330307634> Please use a subcommand: `join`, `leave`, `status`, or `set`.', flags: 64 });
+          return interaction.reply({ content: '<a:wrong:1546155193303957504> Please use a subcommand: `join`, `leave`, `status`, or `set`.', flags: 64 });
         }
         const modules = context.getModulesState();
         const voiceMod = modules.find((m: any) => m.id === 'voice');
@@ -143,7 +143,7 @@ export const VoiceManifest: ModuleManifest = {
           // Validate it's actually a voice or stage channel
           if (!channel || (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice)) {
             const embed = new EmbedBuilder()
-              .setTitle('<:wrong:1532390628330307634> Invalid Channel')
+              .setTitle('<a:wrong:1546155193303957504> Invalid Channel')
               .setDescription('The selected channel must be a **Voice or Stage Channel**. Please try again and pick a voice/stage channel from the list.')
               .setColor(0x99CC00)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -186,7 +186,7 @@ export const VoiceManifest: ModuleManifest = {
               .addFields(
                 { name: '<:voicechannelgreen:1532425750278438962> Connected Channel', value: `<#${channel.id}>`, inline: true },
                 { name: '<:config:1532425712844144701> Auto-Reconnect', value: '`Enabled`', inline: true },
-                { name: '<:shield:1532403012751065179> Mode', value: '`Deafened (Silent)`', inline: true },
+                { name: '<:security:1546142576984203336> Mode', value: '`Deafened (Silent)`', inline: true },
                 { name: '<:config:1532425712844144701> Configured By', value: `<@${interaction.user.id}>`, inline: true }
               )
               .setColor(0x99CC00)
@@ -196,7 +196,7 @@ export const VoiceManifest: ModuleManifest = {
             await interaction.editReply({ embeds: [embed] });
           } catch (err: any) {
             const embed = new EmbedBuilder()
-              .setTitle('<:wrong:1532390628330307634> Connection Failed')
+              .setTitle('<a:wrong:1546155193303957504> Connection Failed')
               .setDescription(`Failed to join the voice channel. Check that the bot has **Connect** and **View Channel** permissions in **${channel.name}**.`)
               .addFields({ name: 'Error Detail', value: `\`${err?.message || err}\`` })
               .setColor(0x99CC00)
@@ -258,7 +258,7 @@ export const VoiceManifest: ModuleManifest = {
           const isConnected = !!existingConnection;
           const channelId = config.channelId;
 
-          const statusText = isConnected ? '<a:approved:1532390590707142956> Connected' : (channelId ? '<:config:1532425712844144701> Configured (Not Connected)' : '<:wrong:1532390628330307634> Not Configured');
+          const statusText = isConnected ? '<a:approved:1532390590707142956> Connected' : (channelId ? '<:config:1532425712844144701> Configured (Not Connected)' : '<a:wrong:1546155193303957504> Not Configured');
 
           const connState = voiceMod?.connectionStatus || (isConnected ? 'connected' : 'disconnected');
           const duration = voiceMod?.connectionDuration || '—';
@@ -287,7 +287,7 @@ export const VoiceManifest: ModuleManifest = {
 
           if (!channel || (channel.type !== ChannelType.GuildVoice && channel.type !== ChannelType.GuildStageVoice)) {
             const embed = new EmbedBuilder()
-              .setTitle('<:wrong:1532390628330307634> Invalid Channel')
+              .setTitle('<a:wrong:1546155193303957504> Invalid Channel')
               .setDescription('The selected channel must be a **Voice or Stage Channel**. Please pick a voice/stage channel from the list.')
               .setColor(0x99CC00)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
