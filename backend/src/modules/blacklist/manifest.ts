@@ -236,7 +236,7 @@ export const BlacklistManifest: ModuleManifest = {
             }).catch(() => {});
           }
 
-          return interaction.reply({ content: `<a:approved:1532390590707142956> **${type.toUpperCase()}** \`${label}\` has been blacklisted and immediate actions applied.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> **${type.toUpperCase()}** \`${label}\` has been blacklisted and immediate actions applied.`, flags: 64 });
         }
 
         // --- REMOVE ---
@@ -258,7 +258,7 @@ export const BlacklistManifest: ModuleManifest = {
           if (entries.length === before) return interaction.reply({ content: `<a:wrong:1546155193303957504> Entry not found in blacklist.`, flags: 64 });
           saveEntries(entries);
           context.logSyncEvent(`[Blacklist] Removed ${subGroup} blacklist entry: ${value} by ${interaction.user.username}`, 'info');
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Removed \`${value}\` from **${subGroup}** blacklist.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Removed \`${value}\` from **${subGroup}** blacklist.`, flags: 64 });
         }
 
         // --- LIST ---
@@ -266,13 +266,13 @@ export const BlacklistManifest: ModuleManifest = {
           const filtered = entries.filter(e => e.type === (subGroup as BlacklistType));
           if (filtered.length === 0) return interaction.reply({ content: `<a:lovemail:1527647157371535420> No ${subGroup} entries in the blacklist.`, flags: 64 });
           const lines = filtered.slice(0, 20).map((e, i) => `**${i + 1}.** \`${e.label || e.value}\` — ${e.reason || 'No reason'}`);
-          return interaction.reply({ content: `<:security:1546142576984203336> **${subGroup?.toUpperCase()} Blacklist** (${filtered.length} entries):\n${lines.join('\n')}`, flags: 64 });
+          return interaction.reply({ content: `<a:success_check:1546134620087783526> **${subGroup?.toUpperCase()} Blacklist** (${filtered.length} entries):\n${lines.join('\n')}`, flags: 64 });
         }
 
         // --- VIEW ---
         if (sub === 'view') {
           const types: BlacklistType[] = ['user', 'role', 'channel', 'bot', 'domain', 'invite', 'word', 'regex', 'emoji', 'sticker'];
-          const embed = new EmbedBuilder().setTitle('<:security:1546142576984203336> Server Blacklist Overview').setColor('#ff4444').setTimestamp();
+          const embed = new EmbedBuilder().setTitle('<a:success_check:1546134620087783526> Server Blacklist Overview').setColor('#ff4444').setTimestamp();
           for (const t of types) {
             const count = entries.filter(e => e.type === t).length;
             if (count > 0) embed.addFields({ name: t.charAt(0).toUpperCase() + t.slice(1), value: `${count} entries`, inline: true });
@@ -287,7 +287,7 @@ export const BlacklistManifest: ModuleManifest = {
           if (type === 'all') { entries = []; }
           else { entries = entries.filter(e => e.type !== type); }
           saveEntries(entries);
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Cleared all **${type}** blacklist entries.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Cleared all **${type}** blacklist entries.`, flags: 64 });
         }
 
         // --- EXPORT ---
@@ -295,7 +295,7 @@ export const BlacklistManifest: ModuleManifest = {
           const json = JSON.stringify(entries, null, 2);
           const { AttachmentBuilder } = await import('discord.js');
           const attachment = new AttachmentBuilder(Buffer.from(json), { name: `blacklist-${interaction.guildId}.json` });
-          return interaction.reply({ content: '<a:approved:1532390590707142956> Blacklist export:', files: [attachment], flags: 64 });
+          return interaction.reply({ content: '<:ticks:1532620580266836148> Blacklist export:', files: [attachment], flags: 64 });
         }
 
         await interaction.reply({ content: '<a:wrong:1546155193303957504> Unknown subcommand.', flags: 64 });

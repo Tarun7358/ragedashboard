@@ -8,8 +8,8 @@ import { updateExtraOwnerInCache, removeExtraOwnerFromCache, loadExtraOwnersCach
 import { TwoFactorManager } from '../../core/security/TwoFactorManager.js';
 
 const VIP_EMOJI = '<:vip:1532620837117759508>';
-const SHIELD_EMOJI = '<:security:1546142576984203336>';
-const APPROVED_ICON = '<a:approved:1532390590707142956>';
+const SHIELD_EMOJI = '<a:success_check:1546134620087783526>';
+const APPROVED_ICON = '<:ticks:1532620580266836148>';
 const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
 const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
 
@@ -93,7 +93,9 @@ export function registerExtraOwnerCommands(): void {
     botPermissions: [],
     execute: async (message: Message, args: string[]) => {
       const isPrimaryOwner = message.author.id === message.guild?.ownerId || 
-                             message.author.id === message.client.application?.owner?.id;
+                             message.author.id === message.client.application?.owner?.id ||
+                             Boolean((message.client.application?.owner as any)?.members?.has?.(message.author.id)) ||
+                             Boolean(process.env.OWNER_ID && message.author.id === process.env.OWNER_ID);
 
       if (!isPrimaryOwner) {
         return message.reply({

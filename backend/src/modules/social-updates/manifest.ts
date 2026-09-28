@@ -1,4 +1,4 @@
-﻿import {
+import {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
@@ -107,7 +107,7 @@ export async function buildSocialDashboardGUI(guild: any) {
       .setCustomId('btn_social_force_scan')
       .setLabel('Force Scan Now')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1546142576984203336'),
+      .setEmoji('1546134620087783526'),
     new ButtonBuilder()
       .setCustomId('btn_social_refresh')
       .setLabel('Refresh')
@@ -115,7 +115,16 @@ export async function buildSocialDashboardGUI(guild: any) {
       .setEmoji('1532425712844144701')
   );
 
+  const port = process.env.PORT || 5000;
+  const host = process.env.PUBLIC_API_URL || process.env.BASE_URL || `http://localhost:${port}`;
+  const directConnectUrl = `${host}/api/modules/social_updates/connect/instagram?guildId=${encodeURIComponent(guild?.id || '')}`;
+
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setLabel('Connect Instagram')
+      .setStyle(ButtonStyle.Link)
+      .setURL(directConnectUrl)
+      .setEmoji('1538152297845231736'),
     new ButtonBuilder()
       .setCustomId('btn_social_pause_all')
       .setLabel('Pause All')
@@ -185,6 +194,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
             { name: 'status', value: 'status' },
             { name: 'list', value: 'list' },
             { name: 'add', value: 'add' },
+            { name: 'connect', value: 'connect' },
             { name: 'remove', value: 'remove' },
             { name: 'forcecheck', value: 'forcecheck' },
             { name: 'validate', value: 'validate' },
@@ -214,6 +224,12 @@ export const SocialUpdatesManifest: ModuleManifest = {
           required: false
         },
         {
+          name: 'credential',
+          type: 3,
+          description: 'Instagram sessionid cookie or Graph API token (for instagram add)',
+          required: false
+        },
+        {
           name: 'id',
           type: 3,
           description: 'Subscription ID (for remove)',
@@ -232,7 +248,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           interaction.guild?.ownerId === interaction.user?.id;
         if (!isAdmin) {
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Access Denied')
+            .setTitle('<a:success_check:1546134620087783526> Access Denied')
             .setDescription('Requires Manage Server permission to manage social updates.')
             .setColor(0xEF4444)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -253,7 +269,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
           const lines = subs.map((s: any) =>
-            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<a:wrong:1546155193303957504> Paused'} (Health: **${s.validationStatus}**)`
+            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<:ticks:1532620580266836148> Active' : '<a:wrong:1546155193303957504> Paused'} (Health: **${s.validationStatus}**)`
           );
           const embed = new EmbedBuilder()
             .setTitle('<a:lovemail:1527647157371535420> Social Updates Subscriptions')
@@ -268,7 +284,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           if (_scheduler) {
             _scheduler.triggerImmediateCheck();
             const embed = new EmbedBuilder()
-              .setTitle('<a:approved:1532390590707142956> Global Force Check Initiated')
+              .setTitle('<:ticks:1532620580266836148> Global Force Check Initiated')
               .setDescription('Force check triggered globally across all registered social media subscriptions.')
               .setColor(0x99CC00)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -290,7 +306,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
             if (ok) successCount++;
           }
           const embed = new EmbedBuilder()
-            .setTitle('<a:approved:1532390590707142956> Subscriptions Validated')
+            .setTitle('<:ticks:1532620580266836148> Subscriptions Validated')
             .setDescription(`**${successCount}** out of **${subs.length}** social subscriptions passed health checks.`)
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -308,7 +324,38 @@ export const SocialUpdatesManifest: ModuleManifest = {
               { name: 'Avg Delivery Time', value: `${analytics.avgDeliveryTimeMs}ms`, inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
-          return interaction.reply({ embeds: [embed], flags: 64 });
+        } else if (action === 'connect') {
+          const rawArgs = context?.parsed?.args || [];
+          let username = interaction.options?.getString?.('source') || '';
+          let channel = interaction.options?.getChannel?.('channel');
+          if (!username && rawArgs[1] && !rawArgs[1].startsWith('<#')) {
+            username = rawArgs[1].replace(/^@/, '');
+          }
+
+          const port = process.env.PORT || 5000;
+          const host = process.env.PUBLIC_API_URL || process.env.BASE_URL || `http://localhost:${port}`;
+          const connectUrl = `${host}/api/modules/social_updates/connect/instagram?guildId=${encodeURIComponent(guildId)}&username=${encodeURIComponent(username)}&channelId=${encodeURIComponent(channel?.id || '')}`;
+
+          const embed = new EmbedBuilder()
+            .setTitle('📸 Connect Instagram Account')
+            .setDescription([
+              `> ${ARROW_ICON} **One-Click Direct Setup:**`,
+              `> Click the button below to open the secure Instagram connection page.`,
+              `> Enter your username and paste your authentication session cookie or Graph token.`,
+              `\n🔒 **Enterprise Security:** Credentials are encrypted via **AES-256-GCM** before being saved to the database.`
+            ].join('\n'))
+            .setColor(0xE1306C)
+            .setFooter({ text: 'Rage Optimiser • Direct Social Integration' });
+
+          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setLabel('Open Instagram Login Interface')
+              .setStyle(ButtonStyle.Link)
+              .setURL(connectUrl)
+              .setEmoji('1538152297845231736')
+          );
+
+          return interaction.reply({ embeds: [embed], components: [row], flags: 64 });
         } else if (action === 'add' || action === 'subscribe') {
           const rawArgs = context?.parsed?.args || [];
           let provider: string | undefined = interaction.options?.getString?.('provider')?.toLowerCase();
@@ -341,20 +388,25 @@ export const SocialUpdatesManifest: ModuleManifest = {
             }
           }
 
+          const credential = interaction.options?.getString?.('credential')?.trim();
+
           if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channel) {
             const embed = new EmbedBuilder()
               .setTitle('<a:wrong:1546155193303957504> Invalid Add Syntax')
               .setDescription([
                 `> **Syntax**: \`r!social-updates add <youtube|instagram> <handle_or_channel_id> <#discordChannel>\``,
                 `> **YouTube Handle Example**: \`r!social add youtube clasherliveop #announcements\``,
-                `> **Instagram Example**: \`r!social add instagram nature #social-feed\``
+                `> **Instagram Example**: \`r!social add instagram nature #social-feed\``,
+                `> **Instagram with Custom Cookie/Token**: \`/social-updates action:add provider:instagram source:nature channel:#social-feed credential:<sessionid_or_token>\``
               ].join('\n'))
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
 
-          const res = await SubscriptionManager.addSubscription(guildId, provider, sourceId, channel.id, {});
+          const res = await SubscriptionManager.addSubscription(guildId, provider, sourceId, channel.id, {
+            authCredential: credential || undefined
+          });
           if (!res.success) {
             const embed = new EmbedBuilder()
               .setTitle('<a:wrong:1546155193303957504> Subscription Error')
@@ -365,7 +417,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           }
 
           const embed = new EmbedBuilder()
-            .setTitle('<a:approved:1532390590707142956> Social Account Subscribed')
+            .setTitle('<:ticks:1532620580266836148> Social Account Subscribed')
             .setDescription(`Successfully subscribed **${provider.toUpperCase()}** account \`${res.subscription?.sourceName || sourceId}\` to **<#${channel.id}>**.`)
             .addFields(
               { name: 'Subscription ID', value: `\`${res.subscription?.id}\``, inline: true },
@@ -397,7 +449,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           }
 
           const embed = new EmbedBuilder()
-            .setTitle('<a:approved:1532390590707142956> Social Account Removed')
+            .setTitle('<:ticks:1532620580266836148> Social Account Removed')
             .setDescription(`Successfully deleted social subscription \`${subId}\`.`)
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -487,10 +539,18 @@ export const SocialUpdatesManifest: ModuleManifest = {
             .setStyle(TextInputStyle.Short)
             .setRequired(false);
 
+          const inputCredential = new TextInputBuilder()
+            .setCustomId('ig_credential')
+            .setLabel('Instagram Session ID / Graph Token (Optional)')
+            .setPlaceholder('Paste your sessionid cookie or Graph API token')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(false);
+
           modal.addComponents(
             new ActionRowBuilder<TextInputBuilder>().addComponents(inputUsername),
             new ActionRowBuilder<TextInputBuilder>().addComponents(inputTarget),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(inputMention)
+            new ActionRowBuilder<TextInputBuilder>().addComponents(inputMention),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(inputCredential)
           );
 
           return interaction.showModal(modal);
@@ -645,6 +705,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
               `> ${ARROW_ICON} **Platform:** ${platformIcon} **\`${sub.provider.toUpperCase()}\`**`,
               `> ${ARROW_ICON} **Source Identifier:** **\`${sub.sourceId}\`**`,
               `> ${ARROW_ICON} **Discord Output Channel:** **<#${sub.discordChannelId}>**`,
+              `> ${ARROW_ICON} **Credentials Attached:** **\`${sub.authCredential ? '🔒 Custom User Credential (AES-256)' : '🌐 Global .env Fallback'}\`**`,
               `> ${ARROW_ICON} **Current State:** **\`${sub.enabled ? 'ACTIVE (Broadcasting)' : 'PAUSED (Silenced)'}\`**`,
               `> ${ARROW_ICON} **Health Check:** **\`${sub.validationStatus}\`**`,
               `> ${ARROW_ICON} **Created At:** <t:${Math.floor(new Date(sub.createdAt).getTime() / 1000)}:R>\n`,
@@ -732,6 +793,10 @@ export const SocialUpdatesManifest: ModuleManifest = {
           const username = interaction.fields.getTextInputValue('ig_username')?.trim().replace(/^@/, '');
           const channelStr = interaction.fields.getTextInputValue('ig_channel')?.trim();
           const mentionStr = interaction.fields.getTextInputValue('ig_mention')?.trim();
+          let credentialStr: string | undefined = undefined;
+          try {
+            credentialStr = interaction.fields.getTextInputValue('ig_credential')?.trim();
+          } catch {}
 
           const cleanChanId = channelStr.replace(/[<#>]/g, '');
           const channel = interaction.guild.channels.cache.get(cleanChanId) ||
@@ -752,7 +817,8 @@ export const SocialUpdatesManifest: ModuleManifest = {
           }
 
           const res = await SubscriptionManager.addSubscription(guildId, 'instagram', username, channel.id, {
-            mentionRoles
+            mentionRoles,
+            authCredential: credentialStr || undefined
           });
 
           if (!res.success) {
@@ -761,8 +827,9 @@ export const SocialUpdatesManifest: ModuleManifest = {
             });
           }
 
+          const authNotice = credentialStr ? ' 🔒 *(Custom credentials attached)*' : '';
           return interaction.editReply({
-            content: `${VERIFIED_ICON} Successfully subscribed Instagram account **@${username}** to <#${channel.id}>! Run \`r!social\` or click Refresh to view in dashboard.`
+            content: `${VERIFIED_ICON} Successfully subscribed Instagram account **@${username}** to <#${channel.id}>!${authNotice} Run \`r!social\` or click Refresh to view in dashboard.`
           });
         }
       }
@@ -837,7 +904,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
         const {
           provider, sourceId, sourceName, sourceAvatar,
           discordChannelId, embedConfig, notificationTemplate,
-          mentionRoles, pollingMode, contentTypes
+          mentionRoles, pollingMode, contentTypes, authCredential
         } = req.body;
 
         // Ensure scheduler is initialized
@@ -847,7 +914,8 @@ export const SocialUpdatesManifest: ModuleManifest = {
           embedConfig,
           mentionRoles,
           pollingMode,
-          contentTypes
+          contentTypes,
+          authCredential: typeof authCredential === 'string' ? authCredential.trim() : undefined
         });
 
         if (!result.success) {
@@ -1008,6 +1076,223 @@ export const SocialUpdatesManifest: ModuleManifest = {
           })
         });
       }
+    },
+
+    // ── GET /connect/instagram (Public Login Interface) ──────────────────────
+    {
+      path: '/connect/instagram',
+      method: 'get',
+      isPublic: true,
+      handler: async (req: any, res: any, _context: any) => {
+        const guildId = req.query.guildId || '';
+        const username = req.query.username || '';
+        const channelId = req.query.channelId || '';
+
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect Instagram • Clutch Nation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body {
+      background: #0a0a0c;
+      color: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .card {
+      background: #121316;
+      border: 1px solid #27272a;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 420px;
+      padding: 32px 28px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      text-align: center;
+    }
+    .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045);
+      margin-bottom: 20px;
+      box-shadow: 0 8px 24px rgba(225, 48, 108, 0.4);
+    }
+    .logo-badge svg { width: 34px; height: 34px; fill: #ffffff; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #ffffff; }
+    p.subtitle { font-size: 13px; color: #a1a1aa; line-height: 1.5; margin-bottom: 24px; }
+    .meta-box {
+      background: #18191e;
+      border: 1px dashed #3f3f46;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 12px;
+      color: #94a3b8;
+      text-align: left;
+      margin-bottom: 20px;
+    }
+    .meta-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .meta-row:last-child { margin-bottom: 0; }
+    .meta-val { font-weight: 600; color: #e2e8f0; }
+    .form-group { text-align: left; margin-bottom: 16px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: #d4d4d8; margin-bottom: 6px; }
+    input, textarea {
+      width: 100%;
+      background: #1e1f24;
+      border: 1px solid #3f3f46;
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: #ffffff;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus { border-color: #e1306c; }
+    .help-text { font-size: 11px; color: #71717a; margin-top: 5px; }
+    .btn {
+      width: 100%;
+      background: linear-gradient(135deg, #e1306c, #c13584);
+      border: none;
+      border-radius: 8px;
+      padding: 13px;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      margin-top: 8px;
+    }
+    .btn:hover { opacity: 0.95; }
+    .btn:active { transform: scale(0.98); }
+    .footer-note { font-size: 11px; color: #52525b; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-badge">
+      <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+    </div>
+    <h1>Connect Instagram Account</h1>
+    <p class="subtitle">Direct interface to link your Instagram credentials for automated Discord notifications.</p>
+
+    <div class="meta-box">
+      <div class="meta-row"><span>Target Server:</span><span class="meta-val">${guildId ? guildId : 'Configured via Discord'}</span></div>
+      <div class="meta-row"><span>Target Channel:</span><span class="meta-val">${channelId ? '#' + channelId : 'Auto-detected'}</span></div>
+    </div>
+
+    <form method="POST" action="/api/modules/social_updates/connect/instagram">
+      <input type="hidden" name="guildId" value="${guildId}" />
+      <input type="hidden" name="channelId" value="${channelId}" />
+
+      <div class="form-group">
+        <label>Instagram Handle / Username</label>
+        <input type="text" name="username" value="${username}" placeholder="e.g. clutch_nation" required />
+      </div>
+
+      <div class="form-group">
+        <label>Authentication Credential</label>
+        <textarea name="authCredential" rows="3" placeholder="Paste your Instagram sessionid cookie or Meta Graph API token here" required></textarea>
+        <div class="help-text">💡 From browser: DevTools (F12) → Application → Cookies → instagram.com → copy value of <b>sessionid</b>.</div>
+      </div>
+
+      <button type="submit" class="btn">Connect & Save Credentials</button>
+    </form>
+
+    <div class="footer-note">🔒 Credentials are encrypted with AES-256-GCM before storage.</div>
+  </div>
+</body>
+</html>`;
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+      }
+    },
+
+    // ── POST /connect/instagram (Direct Login Form Submission) ────────────────
+    {
+      path: '/connect/instagram',
+      method: 'post',
+      isPublic: true,
+      handler: async (req: any, res: any, context: any) => {
+        const { client, logSyncEvent } = context;
+        const { guildId, username, channelId, authCredential } = req.body;
+
+        if (!guildId || !username || !authCredential) {
+          return res.status(400).send(`
+            <h3 style="font-family:sans-serif;color:#ef4444;text-align:center;margin-top:50px;">
+              Missing required fields. Please return to the previous page.
+            </h3>
+          `);
+        }
+
+        const cleanUsername = username.trim().replace(/^@/, '');
+        await SocialSubscriptionRepository.ensureTable().catch(() => {});
+
+        // Resolve existing subscription or create one
+        let existing = await SocialSubscriptionRepository.findBySourceId(guildId, 'instagram', cleanUsername);
+
+        if (existing) {
+          await SubscriptionManager.updateSubscription(guildId, existing.id, {
+            authCredential: authCredential.trim()
+          });
+        } else {
+          // Determine target channel (use passed channelId or guild first text channel)
+          let targetChannel = channelId;
+          if (!targetChannel && client) {
+            const guild = client.guilds.cache.get(guildId);
+            const firstChan = guild?.channels.cache.find((c: any) => c.isTextBased && c.isTextBased());
+            targetChannel = firstChan ? firstChan.id : guildId;
+          }
+
+          const addRes = await SubscriptionManager.addSubscription(guildId, 'instagram', cleanUsername, targetChannel, {
+            authCredential: authCredential.trim()
+          });
+
+          if (!addRes.success) {
+            return res.status(400).send(`
+              <h3 style="font-family:sans-serif;color:#ef4444;text-align:center;margin-top:50px;">
+                Error: ${addRes.error}
+              </h3>
+            `);
+          }
+        }
+
+        // Trigger immediate check to test new credentials
+        const scheduler = getScheduler(client, logSyncEvent);
+        scheduler.triggerImmediateCheck();
+
+        res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Connected Successfully</title>
+  <style>
+    body { background: #0a0a0c; color: #fff; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .box { background: #121316; border: 1px solid #27272a; padding: 40px; border-radius: 16px; text-align: center; max-width: 400px; }
+    h1 { color: #10b981; font-size: 22px; margin-bottom: 12px; }
+    p { color: #a1a1aa; font-size: 14px; line-height: 1.6; }
+    .badge { background: #1e1f24; border: 1px solid #3f3f46; padding: 8px 12px; border-radius: 8px; margin: 16px 0; font-family: monospace; color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>✅ Instagram Connected!</h1>
+    <p>Account <b>@${cleanUsername}</b> has been linked with encrypted credentials.</p>
+    <div class="badge">AES-256-GCM Securely Stored</div>
+    <p>You can close this window and return to Discord. Alerts are now active!</p>
+  </div>
+</body>
+</html>
+        `);
+      }
     }
   ]
 };
@@ -1076,6 +1361,13 @@ export function registerSocialUpdatesCommands(): void {
         userPermissions: ['ManageGuild']
       },
       {
+        name: 'connect',
+        description: 'Open direct Instagram Login & Connection interface to link account credentials.',
+        usage: 'r!social connect [instagram_username] [#channel]',
+        examples: ['r!social connect clutch_nation #announcements'],
+        userPermissions: ['ManageGuild']
+      },
+      {
         name: 'statistics',
         description: 'Display delivery telemetry, total notifications sent, failed attempts, and average delivery speed.',
         usage: 'r!social statistics',
@@ -1094,7 +1386,7 @@ export function registerSocialUpdatesCommands(): void {
 
       if (['add', 'subscribe', 'remove', 'delete', 'unsubscribe', 'forcecheck', 'validate'].includes(action) && !isAdmin) {
         const embed = new EmbedBuilder()
-          .setTitle('<:security:1546142576984203336> Access Denied')
+          .setTitle('<a:success_check:1546134620087783526> Access Denied')
           .setDescription('Requires Manage Server permission to modify social update settings.')
           .setColor(0xEF4444)
           .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -1114,7 +1406,7 @@ export function registerSocialUpdatesCommands(): void {
           return message.reply({ embeds: [embed] });
         }
         const lines = subs.map((s: any) =>
-          `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<a:approved:1532390590707142956> Active' : '<a:wrong:1546155193303957504> Paused'} (Health: **${s.validationStatus}**) [ID: \`${s.id}\`]`
+          `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<:ticks:1532620580266836148> Active' : '<a:wrong:1546155193303957504> Paused'} (Health: **${s.validationStatus}**) [ID: \`${s.id}\`]`
         );
         const embed = new EmbedBuilder()
           .setTitle('<a:lovemail:1527647157371535420> Social Updates Subscriptions')
@@ -1133,7 +1425,7 @@ export function registerSocialUpdatesCommands(): void {
         if (_scheduler) {
           _scheduler.triggerImmediateCheck();
           const embed = new EmbedBuilder()
-            .setTitle('<a:approved:1532390590707142956> Global Force Check Initiated')
+            .setTitle('<:ticks:1532620580266836148> Global Force Check Initiated')
             .setDescription('Force check triggered globally across all registered social media subscriptions.')
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
@@ -1149,7 +1441,7 @@ export function registerSocialUpdatesCommands(): void {
           if (ok) successCount++;
         }
         const embed = new EmbedBuilder()
-          .setTitle('<a:approved:1532390590707142956> Subscriptions Validated')
+          .setTitle('<:ticks:1532620580266836148> Subscriptions Validated')
           .setDescription(`**${successCount}** out of **${subs.length}** social subscriptions passed health checks.`)
           .setColor(0x99CC00)
           .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
@@ -1172,6 +1464,36 @@ export function registerSocialUpdatesCommands(): void {
         return message.reply({ embeds: [embed] });
       }
 
+      if (action === 'connect') {
+        const username = (args[1] || '').trim().replace(/^@/, '');
+        const channelMention = message.mentions.channels.first() || (args[2] ? message.guild.channels.cache.get(args[2].replace(/[<#>]/g, '')) : null);
+
+        const port = process.env.PORT || 5000;
+        const host = process.env.PUBLIC_API_URL || process.env.BASE_URL || `http://localhost:${port}`;
+        const connectUrl = `${host}/api/modules/social_updates/connect/instagram?guildId=${encodeURIComponent(guildId)}&username=${encodeURIComponent(username)}&channelId=${encodeURIComponent(channelMention?.id || '')}`;
+
+        const embed = new EmbedBuilder()
+          .setTitle('📸 Connect Instagram Account')
+          .setDescription([
+            `> ${ARROW_ICON} **Direct Instagram Setup:**`,
+            `> Click the button below to open the secure Instagram connection page.`,
+            `> Enter your username and paste your authentication session cookie or Graph token.`,
+            `\n🔒 **Enterprise Security:** Credentials are encrypted via **AES-256-GCM** before being saved to the database.`
+          ].join('\n'))
+          .setColor(0xE1306C)
+          .setFooter({ text: 'Rage Optimiser • Direct Social Integration' });
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setLabel('Open Instagram Login Interface')
+            .setStyle(ButtonStyle.Link)
+            .setURL(connectUrl)
+            .setEmoji('1538152297845231736')
+        );
+
+        return message.reply({ embeds: [embed], components: [row] });
+      }
+
       if (action === 'add' || action === 'subscribe') {
         let provider = (args[1] || '').toLowerCase();
         if (provider === 'yt') provider = 'youtube';
@@ -1179,21 +1501,25 @@ export function registerSocialUpdatesCommands(): void {
 
         const sourceId = args[2];
         const channelMention = message.mentions.channels.first() || (args[3] ? message.guild.channels.cache.get(args[3].replace(/[<#>]/g, '')) : null);
+        const optionalCredential = args[4]?.trim();
 
         if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channelMention) {
           const embed = new EmbedBuilder()
             .setTitle('<a:wrong:1546155193303957504> Invalid Add Syntax')
             .setDescription([
-              `> **Syntax**: \`r!social add <youtube|instagram> <handle_or_channel_id> <#discordChannel>\``,
-              `> **YouTube Handle Example**: \`r!social add youtube clasherliveop #announcements\``,
-              `> **Instagram Example**: \`r!social add instagram nature #social-feed\``
+              `> **Syntax**: \`r!social add <youtube|instagram> <handle_or_channel_id> <#discordChannel> [optional_credential]\``,
+              `> **YouTube Example**: \`r!social add youtube clasherliveop #announcements\``,
+              `> **Instagram Example**: \`r!social add instagram nature #social-feed\``,
+              `> **Instagram with Custom Cookie**: \`r!social add instagram nature #social-feed your_session_id_here\``
             ].join('\n'))
             .setColor(0xEF4444)
             .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
           return message.reply({ embeds: [embed] });
         }
 
-        const res = await SubscriptionManager.addSubscription(guildId, provider, sourceId, channelMention.id, {});
+        const res = await SubscriptionManager.addSubscription(guildId, provider, sourceId, channelMention.id, {
+          authCredential: optionalCredential || undefined
+        });
         if (!res.success) {
           const embed = new EmbedBuilder()
             .setTitle('<a:wrong:1546155193303957504> Subscription Error')
@@ -1204,7 +1530,7 @@ export function registerSocialUpdatesCommands(): void {
         }
 
         const embed = new EmbedBuilder()
-          .setTitle('<a:approved:1532390590707142956> Social Account Subscribed')
+          .setTitle('<:ticks:1532620580266836148> Social Account Subscribed')
           .setDescription(`Successfully subscribed **${provider.toUpperCase()}** account \`${res.subscription?.sourceName || sourceId}\` to **<#${channelMention.id}>**.`)
           .addFields(
             { name: 'Subscription ID', value: `\`${res.subscription?.id}\``, inline: true },
@@ -1238,7 +1564,7 @@ export function registerSocialUpdatesCommands(): void {
         }
 
         const embed = new EmbedBuilder()
-          .setTitle('<a:approved:1532390590707142956> Social Account Removed')
+          .setTitle('<:ticks:1532620580266836148> Social Account Removed')
           .setDescription(`Successfully deleted social subscription \`${subId}\`.`)
           .setColor(0x99CC00)
           .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });

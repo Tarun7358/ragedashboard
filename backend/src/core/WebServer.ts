@@ -30,6 +30,11 @@ export class WebServer {
   constructor(private registry?: ModuleRegistry) {
     this.app = express();
 
+    // ── Trust Proxy for Reverse Proxies (Cloudflare/Nginx/Docker) ─────────────
+    if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production') {
+      this.app.set('trust proxy', 1);
+    }
+
     // ── Security Headers (BUG-13 fix: re-enable Helmet CSP) ──────────────────
     this.app.use(helmet({
       contentSecurityPolicy: {
@@ -45,21 +50,23 @@ export class WebServer {
       crossOriginEmbedderPolicy: false
     }));
 
-    // ── CORS (BUG-12 fix: restrict to allowlist, not wildcard) ───────────────
-    const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+    // ── CORS (BUG-12 fix: restrict to allowlist, support * wildcard & dev ports) ──
+    const rawOrigins = process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173,http://localhost:5000,*';
+    const allowedOrigins = rawOrigins
       .split(',')
       .map(o => o.trim())
       .filter(Boolean);
     this.app.use(cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, curl, Postman)
-        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        // Allow requests with no origin (mobile apps, curl, Postman), wildcard '*', or exact match
+        if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return callback(null, true);
         callback(new Error(`CORS: origin '${origin}' not allowed`));
       },
       credentials: true
     }));
 
-    this.app.use(express.json());
+    this.app.use(express.json({ limit: '10mb' }));
+    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     this.app.use('/assets', express.static(path.join(process.cwd(), 'public/assets')));
 
     // ── Rate Limiting (BUG-10 fix: tight limits per endpoint class) ──────────
@@ -97,11 +104,34 @@ export class WebServer {
     this.setupWebSockets();
   }
 
+  /**
+   * Universal JWT Authentication Middleware
+   */
+  public authenticateToken = (req: any, res: Response, next: NextFunction) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required. Please provide a valid Bearer token.' });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
+      if (err) {
+        return res.status(403).json({ error: 'Invalid or expired authentication token.' });
+      }
+      req.user = user;
+      next();
+    });
+  };
+
   public registerModuleManifests(manifests: ModuleManifest[]) {
     manifests.forEach(manifest => {
       if (manifest.routes) {
         manifest.routes.forEach(route => {
           const routePath = `/api/modules/${manifest.id}${route.path}`;
+          const isPublic = (route as any).isPublic === true;
+          const authMiddleware = isPublic ? [] : [this.authenticateToken];
+
           const handler = async (req: Request, res: Response) => {
             try {
               await route.handler(req, res, {
@@ -123,9 +153,9 @@ export class WebServer {
           };
 
           if (route.method === 'post') {
-            this.app.post(routePath, handler);
+            this.app.post(routePath, ...authMiddleware, handler);
           } else {
-            this.app.get(routePath, handler);
+            this.app.get(routePath, ...authMiddleware, handler);
           }
         });
       }
@@ -303,26 +333,8 @@ export class WebServer {
       });
     });
     // ─────────────────────────────────────────────────────────────────────────
-    // ── JWT Auth Middleware (BUG-02 + BUG-03 fix) ────────────────────────────
-    // Missing token → 401 Unauthorized
-    // Invalid / expired token → 403 Forbidden
-    // Never falls back to owner role
-    const authenticateToken = (req: any, res: Response, next: NextFunction) => {
-      const authHeader = req.headers['authorization'];
-      const token = authHeader && authHeader.split(' ')[1];
-
-      if (!token) {
-        return res.status(401).json({ error: 'Authentication required. Please provide a valid Bearer token.' });
-      }
-
-      jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
-        if (err) {
-          return res.status(403).json({ error: 'Invalid or expired authentication token.' });
-        }
-        req.user = user;
-        next();
-      });
-    };
+    // ── JWT Auth Middleware Reference ────────────────────────────────────────
+    const authenticateToken = this.authenticateToken;
     // ─────────────────────────────────────────────────────────────────────────
 
     // State endpoint (BUG-05 fix: require authentication)
@@ -338,23 +350,64 @@ export class WebServer {
       });
     });
 
-    // Auth endpoints
+    // Auth endpoints (OAuth Login CSRF protected via signed state)
     this.app.get('/api/auth/discord/login', (req: Request, res: Response) => {
-      const url = OAuthService.getAuthorizationUrl();
-      res.json({ url });
+      const state = OAuthService.generateState();
+      const url = OAuthService.getAuthorizationUrl(state);
+      res.json({ url, state });
     });
 
-    this.app.post('/api/auth/discord/callback', async (req: Request, res: Response) => {
-      const { code } = req.body;
-      if (!code) return res.status(400).json({ error: 'Missing code parameter' });
+    const handleDiscordCallback = async (req: Request, res: Response) => {
+      const code = (req.query.code || req.body?.code) as string;
+      const state = (req.query.state || req.body?.state) as string;
+      const error = (req.query.error || req.body?.error) as string;
+
+      const host = req.get('host') || 'localhost:5000';
+      const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+      const defaultFrontend = isLocal ? 'http://localhost:4680' : `${req.protocol}://${host}`;
+      const frontendUrl = (process.env.FRONTEND_URL || defaultFrontend).replace(/\/$/, '');
+
+      if (error) {
+        if (req.method === 'GET') {
+          return res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(error)}`);
+        }
+        return res.status(400).json({ error });
+      }
+
+      if (!code) {
+        if (req.method === 'GET') {
+          return res.redirect(`${frontendUrl}/auth/callback?error=missing_code`);
+        }
+        return res.status(400).json({ error: 'Missing code parameter' });
+      }
+
+      if (state && !OAuthService.validateState(state)) {
+        if (req.method === 'GET') {
+          return res.redirect(`${frontendUrl}/auth/callback?error=csrf_state_invalid`);
+        }
+        return res.status(403).json({ error: 'Invalid or expired OAuth state parameter (CSRF protection failed).' });
+      }
+
       try {
         const client = this.getDiscordClient ? this.getDiscordClient() : null;
         const result = await OAuthService.processCallback(code, client);
-        res.json(result);
+
+        if (req.method === 'GET') {
+          const encoded = encodeURIComponent(JSON.stringify(result));
+          return res.redirect(`${frontendUrl}/auth/callback?data=${encoded}`);
+        }
+        return res.json(result);
       } catch (err: any) {
-        res.status(500).json({ error: err.message || 'OAuth callback failed' });
+        console.error('[WebServer] OAuth callback failed:', err.message || err);
+        if (req.method === 'GET') {
+          return res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(err.message || 'auth_failed')}`);
+        }
+        return res.status(500).json({ error: err.message || 'OAuth callback failed' });
       }
-    });
+    };
+
+    this.app.get('/api/auth/discord/callback', handleDiscordCallback);
+    this.app.post('/api/auth/discord/callback', handleDiscordCallback);
 
     // ── POST /api/auth/login (BUG-01 + BUG-03 fix) ───────────────────────────
     // Verifies credentials via AuthService before issuing a JWT.
@@ -654,14 +707,32 @@ export class WebServer {
     this.app.post('/api/simulate', authenticateToken, (req: Request, res: Response) => {
       res.json({ success: true });
     });
-
-    // Fallback 404 handler for unmatched routes
-    this.app.use((req: Request, res: Response) => {
-      res.status(404).json({ error: 'Endpoint not found.' });
-    });
   }
 
   public listen(port: number) {
+    // Serve production frontend build if available (supports live all-in-one dashboard on server)
+    const candidates = [
+      path.resolve(process.cwd(), '../frontend/dist'),
+      path.resolve(process.cwd(), 'frontend/dist'),
+      path.resolve(process.cwd(), 'public/dist'),
+      path.resolve(process.cwd(), 'dist-frontend')
+    ];
+    const distPath = candidates.find(p => fs.existsSync(path.join(p, 'index.html')));
+
+    if (distPath) {
+      console.log(`[WebServer] 🌐 Serving live dashboard from: ${distPath}`);
+      this.app.use(express.static(distPath));
+      this.app.get('*', (req: Request, res: Response, next: NextFunction) => {
+        if (req.path.startsWith('/api') || req.path.startsWith('/ws')) return next();
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
+
+    // Fallback 404 handler for unmatched routes (attached after all module routes are mounted)
+    this.app.use((req: Request, res: Response) => {
+      res.status(404).json({ error: 'Endpoint not found.' });
+    });
+
     this.server.listen(port, () => {
       console.log(`[WebServer] 🩺 WebServer started. Backend API running and listening on port http://localhost:${port}`);
     });

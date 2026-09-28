@@ -101,6 +101,44 @@ export class OAuthService {
   }
 
   /**
+   * Generate an HMAC-signed, expiring, cryptographic OAuth2 state parameter.
+   */
+  public static generateState(): string {
+    const timestamp = Date.now().toString();
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const secret = process.env.JWT_SECRET || 'oauth_hmac_secret';
+    const hmac = crypto.createHmac('sha256', secret)
+      .update(`${timestamp}:${nonce}`)
+      .digest('hex');
+    return `${timestamp}:${nonce}:${hmac}`;
+  }
+
+  /**
+   * Validate that the OAuth2 state parameter has not been tampered with or expired.
+   */
+  public static validateState(state?: string): boolean {
+    if (!state || typeof state !== 'string') return false;
+    const parts = state.split(':');
+    if (parts.length !== 3) return false;
+    const [timestampStr, nonce, receivedHmac] = parts;
+    const timestamp = parseInt(timestampStr, 10);
+    if (isNaN(timestamp)) return false;
+
+    // Check expiration: valid for 10 minutes
+    if (Date.now() - timestamp > 10 * 60 * 1000 || timestamp > Date.now() + 60000) {
+      return false;
+    }
+
+    const secret = process.env.JWT_SECRET || 'oauth_hmac_secret';
+    const expectedHmac = crypto.createHmac('sha256', secret)
+      .update(`${timestampStr}:${nonce}`)
+      .digest('hex');
+
+    if (receivedHmac.length !== expectedHmac.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(receivedHmac, 'hex'), Buffer.from(expectedHmac, 'hex'));
+  }
+
+  /**
    * Build the Discord OAuth2 authorization URL (includes guilds.join for auto-rejoin capability)
    */
   public static getAuthorizationUrl(state?: string): string {

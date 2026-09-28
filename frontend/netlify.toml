@@ -5,7 +5,7 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "http://sg-node-3.altvr.in:2927/api/:splat"
+  to = "https://apirageoptimisercom.altvr.in/api/:splat"
   status = 200
   force = true
 

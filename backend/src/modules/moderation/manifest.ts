@@ -1,4 +1,4 @@
-﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { Database } from '../../core/Database.js';
 import { DashboardSyncService } from '../../services/DashboardSyncService.js';
@@ -74,6 +74,19 @@ async function handlePurgeExecution(client: any, interaction: any, context: any)
       return interaction.reply({ embeds: [errEmbed], flags: 64 });
     }
   } else {
+    // Purging ALL channel messages (up to 1,000) is a high-risk destructive action
+    // Strictly restrict to Server Owner and Extra Owners
+    const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+    const executorId = interaction.user?.id || interaction.author?.id;
+    const isOwner = await isOwnerOrExtraOwner(executorId, interaction.guild);
+    if (!isOwner) {
+      const errEmbed = new EmbedBuilder()
+        .setTitle('<a:wrong:1546155193303957504> Owner Authorization Required')
+        .setDescription('Purging all channel messages (up to 1,000) is a high-risk operation restricted to the **Server Owner** and **Extra Owners**.\n\nTo purge recent messages, please specify an explicit quantity: `r!purge 50` or `/purge 50`.')
+        .setColor('#ff4444')
+        .setFooter({ text: 'Rage Optimiser • Access Control System' });
+      return interaction.reply({ embeds: [errEmbed], flags: 64 });
+    }
     purgeAll = true;
   }
 
@@ -94,9 +107,9 @@ async function handlePurgeExecution(client: any, interaction: any, context: any)
     }
 
     const successEmbed = new EmbedBuilder()
-      .setTitle('<a:approved:1532390590707142956> Channel Message Deletion Complete')
+      .setTitle('<:ticks:1532620580266836148> Channel Message Deletion Complete')
       .setDescription(purgeAll 
-        ? `<a:approved:1532390590707142956> **All channel messages have been cleared.**` 
+        ? `<:ticks:1532620580266836148> **All channel messages have been cleared.**` 
         : `A bulk deletion request of **${totalDeleted}** messages was successfully executed.`)
       .addFields(
         { name: 'Deleted Messages Count', value: `\`${totalDeleted}\``, inline: true },
@@ -576,12 +589,12 @@ export const ModerationManifest: ModuleManifest = {
 
           const { embeds, components, flags } = buildRichCard({
             emoji: SHIELD_ICON,
-            title: `${isVoice ? '<:voicechannelgreen:1532425750278438962> Voice Channel' : '<:security:1546142576984203336> Text Channel'} Lockdown Active`,
+            title: `${isVoice ? '<:voicechannelgreen:1532425750278438962> Voice Channel' : '<a:success_check:1546134620087783526> Text Channel'} Lockdown Active`,
             description: `Permissions for ${targetChannel} have been restricted to enforce security isolation.`,
             accentColor: Colors.DANGER,
             fields: [
               { label: '<a:lovemail:1527647157371535420> Target Channel', value: `${targetChannel} (\`${targetChannel.name}\`)`, inline: true },
-              { label: '<:security:1546142576984203336> Authorized By', value: `${interaction.user}`, inline: true },
+              { label: '<a:success_check:1546134620087783526> Authorized By', value: `${interaction.user}`, inline: true },
               { label: '<:config:1532425712844144701> Lock Type', value: isVoice ? (makePrivate ? '`Voice & View Hidden`' : '`Voice Connect Blocked`') : (makePrivate ? '`Text & View Hidden`' : '`Send Messages Restricted`'), inline: true },
               { label: '<a:wrong:1546155193303957504> Channel Status', value: '<a:wrong:1546155193303957504> **LOCKED / PRIVATE**', inline: true },
             ],
@@ -659,14 +672,14 @@ export const ModerationManifest: ModuleManifest = {
 
           const { embeds, components, flags } = buildRichCard({
             emoji: VERIFIED_ICON,
-            title: `${isVoice ? '<:voicechannelgreen:1532425750278438962> Voice Channel' : '<a:approved:1532390590707142956> Text Channel'} Unlocked`,
+            title: `${isVoice ? '<:voicechannelgreen:1532425750278438962> Voice Channel' : '<:ticks:1532620580266836148> Text Channel'} Unlocked`,
             description: `Permissions for ${targetChannel} have been restored. Member access is active.`,
             accentColor: Colors.SUCCESS,
             fields: [
               { label: '<a:lovemail:1527647157371535420> Target Channel', value: `${targetChannel} (\`${targetChannel.name}\`)`, inline: true },
-              { label: '<:security:1546142576984203336> Authorized By', value: `${interaction.user}`, inline: true },
-              { label: '<a:approved:1532390590707142956> Restoration', value: isVoice ? '`Voice Connection Restored`' : '`Messaging Restored`', inline: true },
-              { label: '<a:approved:1532390590707142956> Channel Status', value: '<a:approved:1532390590707142956> **UNLOCKED / PUBLIC**', inline: true },
+              { label: '<a:success_check:1546134620087783526> Authorized By', value: `${interaction.user}`, inline: true },
+              { label: '<:ticks:1532620580266836148> Restoration', value: isVoice ? '`Voice Connection Restored`' : '`Messaging Restored`', inline: true },
+              { label: '<:ticks:1532620580266836148> Channel Status', value: '<:ticks:1532620580266836148> **UNLOCKED / PUBLIC**', inline: true },
             ],
             footerNote: 'Rage Optimiser Enterprise • Channel Access Control',
           });

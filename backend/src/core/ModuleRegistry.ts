@@ -449,16 +449,25 @@ export class ModuleRegistry {
     }
   }
 
+  public findModuleInState(state: any, id: string): any {
+    if (!id || !state?.modules) return undefined;
+    const normalizedId = id.toLowerCase().replace(/[-_]/g, '');
+    return state.modules.find((m: any) =>
+      m.id === id ||
+      m.id?.toLowerCase().replace(/[-_]/g, '') === normalizedId
+    );
+  }
+
   public updateModuleConfig(guildId: string | undefined, id: string, config: Record<string, any>): ModuleState | null {
     const gId = guildId || process.env.GUILD_ID || 'default_guild';
     const state = this.getGuildState(gId);
-    const mod = state.modules.find(m => m.id === id);
+    const mod = this.findModuleInState(state, id);
     if (!mod) return null;
 
     mod.config = { ...mod.config, ...config };
     this.reevaluateAllModules(gId);
 
-    if (['member_whitelist', 'security', 'voice-protection'].includes(id)) {
+    if (['member_whitelist', 'security', 'voice-protection'].includes(mod.id)) {
       this.triggerWhitelistMigration(gId, true);
     } else {
       this.saveGuildState(gId, state);
@@ -471,7 +480,7 @@ export class ModuleRegistry {
   public toggleModule(guildId: string | undefined, id: string, enabledOverride?: boolean): ModuleState | null {
     const gId = guildId || process.env.GUILD_ID || 'default_guild';
     const state = this.getGuildState(gId);
-    const mod = state.modules.find(m => m.id === id);
+    const mod = this.findModuleInState(state, id);
     if (!mod) return null;
 
     if (enabledOverride !== undefined) {

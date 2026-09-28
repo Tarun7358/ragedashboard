@@ -25,12 +25,12 @@ import {
 // ─────────────────────────────────────────────
 // CUSTOM SERVER ICONS & STATUS BADGES
 // ─────────────────────────────────────────────
-export const VERIFIED_ICON = '<a:security:1546142576984203336>';
+export const VERIFIED_ICON = '<a:success_check:1546134620087783526>';
 export const SQUARE_TICK_ICON = '<:ticks:1532620580266836148>';
 export const WRONG_ICON = '<a:wrong:1546155193303957504>';
 export const WARNING_ICON = '<a:warning:1546155457981452441>';
 export const VIOLATION_ICON = '<a:warning:1546155457981452441>';
-export const SHIELD_ICON = '<a:security:1546142576984203336>';
+export const SHIELD_ICON = '<a:success_check:1546134620087783526>';
 export const GAVEL_ICON = '<:gavel:1532621057318584380>';
 export const BOT_ICON = '<:bot:1532621107746570391>';
 export const MEMBER_ICON = '<:member:1532621317487071426>';
@@ -49,7 +49,8 @@ export const BOOSTER_ICON = '<:booster:1532621228492460172>';
 export const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
 export const CONFIG_ICON = '<:config:1532425712844144701>';
 export const TICKET_ICON = '<:ticket:1532620631466836021>';
-export const TIMER_ICON = '<:timer:1532620491662037123>';
+export const TIMER_ICON = '<a:Timer:1546231426863730728>';
+export const TIMER_GIF_URL = 'https://cdn.discordapp.com/attachments/1522887123374702684/1546231426863730728/Timer.gif?ex=6a9f07bb&is=6a9db63b&hm=f8a00c38c6fbc1cb3699cef57dc3fe5f0ba559568095e845ea729ae4e54224ae&';
 export const DEFAULT_BRAND_IMAGE_URL = 'https://cdn.discordapp.com/attachments/1499055667238146289/1538212292980773004/ChatGPT_Image_Aug_15_2026_09_14_48_PM.png?ex=6a81db55&is=6a8089d5&hm=4e8308bbc0423a9b1fa28776ba323ebc65e14534cf9fa9487546a50d6e172d3b';
 export const VIP_ICON = '<:vip:1532620837117759508>';
 export const LINK_ICON = '<:link:1532620952087826602>';
@@ -78,18 +79,18 @@ export const RED_TICK_ICON = '<a:redtick:1538167393522557039>';
 export const ANIMATED_ARROW_RED = '<a:animatedarrowred:1538167386790830190>';
 export const ANIMATED_ARROW_PINK = '<a:animatedarrowpink2:1538167377597042808>';
 export const ANIMATED_ARROW_ORANGE = '<a:animatedarroworange:1538167381778759680>';
-export const ANIMATED_APPROVED_ICON = '<a:security:1546142576984203336>';
+export const ANIMATED_APPROVED_ICON = '<a:success_check:1546134620087783526>';
 export const VERIFIED_BLUE_ICON = '<:verifiedblue:1518869383219253328>';
 export const VERIFIED_GREEN_ICON = '<:verifiedgreen:1518869413846188152>';
 export const VERIFIED_PURPLE_ICON = '<:verifiedpurple:1518869442086572102>';
 export const CROWN_ANIMATED_ICON = '<a:1115crown3:1518868785493184518>';
-export const SPIN_ANIMATED_ICON = '<a:loading:1546134620087783526>';
-export const LOADING_ANIMATED_ICON = '<a:loading:1546134620087783526>';
-export const SUCCESS_CHECK_ICON = '<a:security:1546142576984203336>';
+export const SPIN_ANIMATED_ICON = '<a:loading:1546134304625528882>';
+export const LOADING_ANIMATED_ICON = '<a:loading:1546134304625528882>';
+export const SUCCESS_CHECK_ICON = '<a:success_check:1546134620087783526>';
 export const ANIMATED_PINK_ARROW = '<a:pinkarrow:1527647307955310722>';
 export const ANIMATED_WHITE_ARROW = '<a:animatedarrowwhite:1527647357473132554>';
 export const BLACK_BUTTERFLY_ICON = '<a:1941blackbutterfly2:1527646894904578110>';
-export const SECURITY_SHIELD_ICON = '<a:security:1546142576984203336>';
+export const SECURITY_SHIELD_ICON = '<a:success_check:1546134620087783526>';
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS (UI/UX Pro Max Cyber Palette)

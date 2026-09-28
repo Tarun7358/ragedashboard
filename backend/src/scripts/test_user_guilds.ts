@@ -4,7 +4,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function run() {
-  const secret = process.env.JWT_SECRET || 'fallback_secret';
+  if (!process.env.JWT_SECRET) {
+    console.error("❌ Error: JWT_SECRET environment variable is missing.");
+    process.exit(1);
+  }
+  const secret: string = process.env.JWT_SECRET;
   
   // Payload for wt.void based on the session dump
   const payload = {

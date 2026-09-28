@@ -603,7 +603,7 @@ export class Gateway {
             color: Colors.DANGER,
             sections: [
               {
-                title: '<:security:1546142576984203336> BOT REMOVAL DETECTED',
+                title: '<a:success_check:1546134620087783526> BOT REMOVAL DETECTED',
                 items: [
                   `Rage Optimiser was removed from **${guild.name}**.`,
                   `If this kick was unauthorized or an anti-nuke attack, click below to re-authorize the bot instantly.`
@@ -847,8 +847,8 @@ export class Gateway {
 
         // DM notify users who were tagged/mentioned directly
         if (message.mentions.users.size > 0 && message.guild) {
-          const verifiedIcon = '<a:approved:1532390590707142956>';
-          const shieldIcon = '<:security:1546142576984203336>';
+          const verifiedIcon = '<:ticks:1532620580266836148>';
+          const shieldIcon = '<a:success_check:1546134620087783526>';
           message.mentions.users.forEach(async (user) => {
             if (user.id === message.author.id || user.bot) return;
             try {
@@ -893,8 +893,8 @@ export class Gateway {
       // Handle standalone bot mention
       if (resolveResult.isMentionOnly) {
         const curPrefix = PrefixResolver.getPrefix(message.guildId || undefined);
-        const verifiedIcon = '<a:approved:1532390590707142956>';
-        const shieldIcon = '<:security:1546142576984203336>';
+        const verifiedIcon = '<:ticks:1532620580266836148>';
+        const shieldIcon = '<a:success_check:1546134620087783526>';
         const greetingEmbed = new EmbedBuilder()
           .setColor(0x84cc16)
           .setDescription([
@@ -1094,7 +1094,7 @@ export class Gateway {
 
       // Handle built-in prefix command: r!help
       if (parsed.commandName === 'help') {
-        return PrefixHelpCenter.handleHelp(message, parsed.args[0]);
+        return PrefixHelpCenter.handleHelp(message, parsed.args.join(' '));
       }
 
       // Lookup Command Metadata — single registry path, no executeMap fallback needed
@@ -1105,7 +1105,7 @@ export class Gateway {
         const suggested = FuzzySuggestions.suggest(parsed.commandName, allCmds);
         const curPfx = PrefixResolver.getPrefix(message.guildId || undefined);
         const unknownDesc = suggested
-          ? `Command \`${parsed.commandName}\` was not found.\n\n> <a:lovemail:1527647157371535420> Did you mean **\`${curPfx}${suggested}\`**?`
+          ? `Command \`${parsed.commandName}\` was not found.\n\n> ${CONFIG_ICON} Did you mean **\`${curPfx}${suggested}\`**?`
           : `Unknown command \`${curPfx}${parsed.commandName}\`.\n\nType **\`${curPfx}help\`** or **\`/help\`** to view all commands.`;
         const unknownEmbed = Embeds.error('Command Not Found', unknownDesc, { module: 'system' });
         await message.reply({ embeds: [unknownEmbed] }).catch(() => { });
@@ -1273,7 +1273,7 @@ export class Gateway {
             `• **Security Protection Status**: \`Suspended until re-invited\`\n\n` +
             `**<a:warning:1546155457981452441> POTENTIAL ACCOUNT COMPROMISE / RAID THREAT**\n` +
             `If the Primary Owner's account was compromised, designated **Extra Owners** must **re-invite Rage Optimiser immediately** to re-activate Anti-Nuke protections.\n\n` +
-            `**<:security:1546142576984203336> Automatic Snapshot Vault**\n` +
+            `**<a:success_check:1546134620087783526> Automatic Snapshot Vault**\n` +
             `All server configurations, whitelists, rules, and Anti-Nuke settings remain **100% saved in cloud memory**.`
           )
           .setFooter({ text: 'Rage Optimiser Enterprise • Unbypassable Security' })

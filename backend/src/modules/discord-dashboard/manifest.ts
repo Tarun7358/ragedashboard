@@ -17,8 +17,8 @@ function getServerStats(guild: any, context?: any) {
 // Generate the embed based on the page using Lime GG Reference UI
 function generateDashboardEmbed(guild: any, page: string, client: any, context: any) {
   const stats = getServerStats(guild, context);
-  const verifiedIcon = '<a:approved:1532390590707142956>';
-  const shieldIcon = '<:security:1546142576984203336>';
+  const verifiedIcon = '<:ticks:1532620580266836148>';
+  const shieldIcon = '<a:success_check:1546134620087783526>';
   
   const embed = new EmbedBuilder()
     .setColor(0x84cc16)

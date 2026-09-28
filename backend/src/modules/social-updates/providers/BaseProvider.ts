@@ -58,7 +58,7 @@ export abstract class BaseProvider {
   /**
    * Fetch the latest N content items from this source.
    */
-  abstract fetchLatest(sourceId: string, limit?: number): Promise<ContentItem[]>;
+  abstract fetchLatest(sourceId: string, limit?: number, authCredential?: string): Promise<ContentItem[]>;
 
   /**
    * Given the latest fetched items and the last known processed ID, return new items only.

@@ -1,4 +1,4 @@
-﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 
 export const BulkOpsManifest: ModuleManifest = {
@@ -181,7 +181,7 @@ export const BulkOpsManifest: ModuleManifest = {
           context.logSyncEvent(`[Bulk Ops] ${interaction.user.username} — ${action} (${count} items).`, 'warn');
         };
 
-        const verifiedIcon = '<a:approved:1532390590707142956>';
+        const verifiedIcon = '<:ticks:1532620580266836148>';
         const buildMinimalCard = (action: string, detail: string) => {
           return new EmbedBuilder()
             .setColor(0x84cc16)
@@ -404,7 +404,7 @@ export const BulkOpsManifest: ModuleManifest = {
             const bans = await guild.bans.fetch().catch(() => new Map());
             if (bans.size === 0) return interaction.editReply({ content: '<a:lovemail:1527647157371535420> No banned users found.' });
             const lines = [...bans.values()].slice(0, 20).map((b: any, i: number) => `**${i + 1}.** ${b.user.username} (${b.user.id}) — ${b.reason || 'No reason'}`);
-            return interaction.editReply({ content: `<:security:1546142576984203336> **Banned Users (${bans.size}):**\n${lines.join('\n')}` });
+            return interaction.editReply({ content: `<a:success_check:1546134620087783526> **Banned Users (${bans.size}):**\n${lines.join('\n')}` });
           }
 
           // MASS BAN

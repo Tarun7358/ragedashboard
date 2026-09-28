@@ -350,6 +350,10 @@ export interface ITicketConfig {
   maxOpenPerUser: number;
   categories: ITicketCategory[];
   activeTickets: ITicket[];
+  panelTitle?: string;
+  panelDescription?: string;
+  panelGuidelines?: string;
+  panelFooterWarning?: string;
 }
 
 

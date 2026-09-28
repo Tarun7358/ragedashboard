@@ -1,4 +1,4 @@
-﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 
 export const AutomationManifest: ModuleManifest = {
   id: 'automation',
@@ -87,7 +87,7 @@ export const AutomationManifest: ModuleManifest = {
         try {
           const content = message.content?.toLowerCase();
           if (content === '!rage') {
-            await message.reply('<a:approved:1532390590707142956> **RAGE OPTIMISER Core System is Online!**\nEverything is operational. Manage your settings on the local Dashboard.');
+            await message.reply('<:ticks:1532620580266836148> **RAGE OPTIMISER Core System is Online!**\nEverything is operational. Manage your settings on the local Dashboard.');
             context.logSyncEvent(`Automation Studio: Handled keyword trigger "!rage" in #${message.channel.name}.`, 'success');
           } else if (content === '!support' || content?.includes('need help')) {
             await message.reply('<a:lovemail:1527647157371535420> Need help? Please open a support ticket using the ticket board or by running the `/setup-tickets` slash command!');

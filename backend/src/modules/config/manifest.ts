@@ -18,32 +18,32 @@ const CONFIG_EMOJI = CONFIG_ICON;
 const SHIELD_EMOJI = SHIELD_ICON;
 
 export const DEFAULT_SECURITY_RULES: Record<string, { enabled: boolean; limit: number; window: number; action: string; recovery: boolean }> = {
-  anti_role_grant: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_role_remove: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_role_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_role_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_role_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_channel_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_channel_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_channel_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_ban: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_kick: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_timeout: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_bot_add: { enabled: true, limit: 1, window: 10, action: 'ban', recovery: true },
-  anti_bot_remove: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_webhook_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_webhook_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_webhook_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_guild_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_prune: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_emoji_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_emoji_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_emoji_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_sticker_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_sticker_delete: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_sticker_update: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_everyone_here: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
-  anti_invite_create: { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true },
+  anti_role_grant: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_role_remove: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_role_update: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_role_create: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_role_delete: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_channel_create: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_channel_delete: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_channel_update: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_ban: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_kick: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_timeout: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_bot_add: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_bot_remove: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_webhook_create: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_webhook_delete: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_webhook_update: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_guild_update: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_prune: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_emoji_create: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_emoji_delete: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_emoji_update: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_sticker_create: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_sticker_delete: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_sticker_update: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_everyone_here: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_invite_create: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
   anti_link: { enabled: true, limit: 5, window: 10, action: 'warn', recovery: false }
 };
 
@@ -135,7 +135,7 @@ export function parseDurationToMs(str: string): number | null {
 
 export function getEffectiveRule(rules: any, ruleKey: string, secConfig?: any): { enabled: boolean; limit: number; window: number; action: string; recovery: boolean; [key: string]: any } {
   const normalizedKey = normalizeRuleName(ruleKey);
-  const defaultConfig = DEFAULT_SECURITY_RULES[normalizedKey] || { enabled: true, limit: 3, window: 10, action: 'quarantine', recovery: true };
+  const defaultConfig = DEFAULT_SECURITY_RULES[normalizedKey] || { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true };
   const actualRules = (rules && typeof rules === 'object' && 'rules' in rules) ? rules.rules : rules;
   const actualConfig = secConfig || ((rules && typeof rules === 'object' && ('antiNukeEnabled' in rules || 'rules' in rules)) ? rules : undefined);
 
@@ -232,7 +232,7 @@ export async function buildAntiNukeDashboardGUI(guild: any, secConfig: any, extr
   const autoRevertEngineActive = isAntiNukeEnabled;
 
   const getStatus = (active: boolean) => (active
-    ? formatCustomEmoji(guild?.client, '1546142576984203336', 'security', true)
+    ? formatCustomEmoji(guild?.client, '1546134620087783526', 'success_check', true)
     : formatCustomEmoji(guild?.client, '1546155193303957504', 'wrong', true));
 
   const subsystems = [
@@ -388,7 +388,7 @@ export async function buildSecurityDashboardComponents(guild: any, secConfig: an
   const isAutoModActive = amConfig?.autoModEnabled !== false && amConfig?.antiLinkEnabled !== false;
 
   const getStatus = (active: boolean) => (active
-    ? formatCustomEmoji(guild?.client, '1546142576984203336', 'security', true)
+    ? formatCustomEmoji(guild?.client, '1546134620087783526', 'success_check', true)
     : formatCustomEmoji(guild?.client, '1546155193303957504', 'wrong', true));
 
   const subsystems = [
@@ -555,7 +555,7 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
     const isRuleActive = isMasterEnabled && rule.enabled;
     if (isRuleActive) activeInCat++;
     const icon = isRuleActive
-      ? formatCustomEmoji(null, '1546142576984203336', 'security', true)
+      ? formatCustomEmoji(null, '1546134620087783526', 'success_check', true)
       : formatCustomEmoji(null, '1546155193303957504', 'wrong', true);
     const label = RULE_LABELS[key] || key;
     const revertTag = rule.recovery ? 'Auto-Revert' : 'No-Revert';
@@ -644,10 +644,14 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
 export async function buildAutoModDashboardComponents(guild: any, secConfig: any, extraOrContext?: any) {
   const guildId = guild?.id;
   let amConfig: any = {};
+  let amModStatus = 'enabled';
   if (extraOrContext?.getModulesState) {
     const modules = extraOrContext.getModulesState(guildId) || [];
     const amMod = modules.find((m: any) => m.id === 'automod');
-    if (amMod?.config) amConfig = amMod.config;
+    if (amMod) {
+      amModStatus = amMod.status || 'enabled';
+      if (amMod.config) amConfig = amMod.config;
+    }
   }
   if (!amConfig || Object.keys(amConfig).length === 0) {
     const db = Database.getDb();
@@ -659,7 +663,12 @@ export async function buildAutoModDashboardComponents(guild: any, secConfig: any
     }
   }
 
-  const isMasterActive = amConfig?.autoModEnabled !== false;
+  // Merge any secConfig.automod fallback if missing
+  if (secConfig?.automod) {
+    amConfig = { ...secConfig.automod, ...amConfig };
+  }
+
+  const isMasterActive = amModStatus !== 'disabled' && amConfig?.autoModEnabled !== false && secConfig?.autoModEnabled !== false;
   const isAntiLink = isMasterActive && amConfig?.blockLinks !== false && amConfig?.antiLinkEnabled !== false;
   const isAntiSpam = isMasterActive && (amConfig?.antiSpamEnabled === true || Boolean(amConfig?.maxSpamMessages));
   const ruleEveryone = secConfig?.rules?.anti_everyone_here;
@@ -675,7 +684,7 @@ export async function buildAutoModDashboardComponents(guild: any, secConfig: any
   const ignoredChannels = (amConfig?.ignoredChannels || []).length;
 
   const getStatus = (active: boolean) => (active
-    ? formatCustomEmoji(guild?.client, '1546142576984203336', 'security', true)
+    ? formatCustomEmoji(guild?.client, '1546134620087783526', 'success_check', true)
     : formatCustomEmoji(guild?.client, '1546155193303957504', 'wrong', true));
 
   const filters = [
@@ -981,6 +990,25 @@ export async function buildWhitelistManagerGUI(guild: any, secConfig: any, extra
     .setThumbnail(guild?.iconURL({ size: 256 }) || undefined)
     .setFooter({ text: BRAND_FOOTER });
 
+  const row0 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('wl_add_user')
+      .setLabel('Add User')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('wl_add_role')
+      .setLabel('Add Role')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('wl_remove_user')
+      .setLabel('Remove User')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('wl_remove_role')
+      .setLabel('Remove Role')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('btn_sec_refresh')
@@ -994,7 +1022,7 @@ export async function buildWhitelistManagerGUI(guild: any, secConfig: any, extra
 
   const row2 = buildSecuritySelectMenu('group_whitelist');
 
-  return { embeds: [embed], components: [row1, row2] };
+  return { embeds: [embed], components: [row0, row1, row2] };
 }
 
 export function buildEnableAllDashboardGUI(
@@ -1423,7 +1451,7 @@ export function registerConfigCommands(): void {
               ]
             },
             {
-              title: '<:security:1546142576984203336> QUICK TOGGLE COMMANDS',
+              title: '<a:success_check:1546134620087783526> QUICK TOGGLE COMMANDS',
               items: [
                 `• Block all Text & Voice: \`r!media all off\` or \`r!attachfiles off\``,
                 `• Allow all Text & Voice: \`r!media all on\` or \`r!attachfiles on\``,
@@ -1514,7 +1542,7 @@ export function registerConfigCommands(): void {
         color: targetState ? Colors.BRAND : Colors.DANGER,
         sections: [
           {
-            title: '<:security:1546142576984203336> EXECUTION AUDIT SUMMARY',
+            title: '<a:success_check:1546134620087783526> EXECUTION AUDIT SUMMARY',
             items: [
               `• **Action Enforced**: \`Attach Files & Embed Links -> ${targetState ? 'ALLOWED (ON)' : 'DENIED (OFF)'}\``,
               `• **Text Channels Modified**: \`${updatedText} Channels\``,
@@ -1572,9 +1600,9 @@ export function registerConfigCommands(): void {
         .setCustomId('setup_preset_select')
         .setPlaceholder('Choose Protection Preset...')
         .addOptions(
-          { label: 'Relaxed Profile', description: 'Basic protection with higher tolerance limits', value: 'relaxed', emoji: '<:security:1546142576984203336>' },
-          { label: 'Standard Profile (Recommended)', description: 'Balanced protection for active communities', value: 'standard', emoji: '<:security:1546142576984203336>' },
-          { label: 'Strict Profile', description: 'High security with fast anti-nuke threshold triggers', value: 'strict', emoji: '<:security:1546142576984203336>' },
+          { label: 'Relaxed Profile', description: 'Basic protection with higher tolerance limits', value: 'relaxed', emoji: '<a:success_check:1546134620087783526>' },
+          { label: 'Standard Profile (Recommended)', description: 'Balanced protection for active communities', value: 'standard', emoji: '<a:success_check:1546134620087783526>' },
+          { label: 'Strict Profile', description: 'High security with fast anti-nuke threshold triggers', value: 'strict', emoji: '<a:success_check:1546134620087783526>' },
           { label: 'Aggressive Lockdown Profile', description: 'Maximum protection for vulnerable servers', value: 'aggressive', emoji: '<:gavel:1532621057318584380>' }
         );
 
@@ -2181,7 +2209,7 @@ export function registerConfigCommands(): void {
           color: Colors.BRAND,
           sections: [
             {
-              title: '<:security:1546142576984203336> VALID ANTI-NUKE CONFIGURATION COMMANDS',
+              title: '<a:success_check:1546134620087783526> VALID ANTI-NUKE CONFIGURATION COMMANDS',
               items: [
                 '`r!config antinuke status` — View active protection matrix',
                 '`r!config antinuke threshold <event|all> <limit> [window_sec]` — Set limit',
@@ -2483,7 +2511,7 @@ export function registerConfigCommands(): void {
 
           return message.reply({
             embeds: [createLimeEmbed({
-              title: `<:security:1546142576984203336> User Violation Warnings Matrix`,
+              title: `<a:success_check:1546134620087783526> User Violation Warnings Matrix`,
               description: [
                 `> **Member**: ${targetUser} (\`${targetUser.username}\` • \`ID: ${targetUser.id}\`)`,
                 ``,
@@ -2926,7 +2954,7 @@ export function registerConfigCommands(): void {
             color: Colors.BRAND,
             sections: [
               {
-                title: '<:security:1546142576984203336> VERIFICATION SYSTEM PARAMETERS',
+                title: '<a:success_check:1546134620087783526> VERIFICATION SYSTEM PARAMETERS',
                 items: [
                   `${statusIcon} **Verification Gate**: \`${verifConfig.enabled ? 'ENABLED' : 'DISABLED'}\``,
                   `Gate Type: \`${(verifConfig.verificationType || 'button').toUpperCase()}\``,
@@ -3307,14 +3335,14 @@ export function registerConfigCommands(): void {
         .setCustomId('config_category_select')
         .setPlaceholder('Select module category to configure...')
         .addOptions(
-          { label: 'Anti-Nuke & Protection', description: 'Configure triggers, punishments & limits', value: 'antinuke', emoji: '<:security:1546142576984203336>' },
+          { label: 'Anti-Nuke & Protection', description: 'Configure triggers, punishments & limits', value: 'antinuke', emoji: '<a:success_check:1546134620087783526>' },
           { label: 'AutoMod & Filters', description: 'Configure Anti-Link, Anti-Spam & Word Filter', value: 'automod', emoji: '<:link:1532620952087826602>' },
           { label: 'Audit & Event Logging', description: 'Set channel routes for audit events', value: 'logging', emoji: '<:config:1532425712844144701>' },
           { label: 'Welcome & Auto-Roles', description: 'Configure onboarding messages & join roles', value: 'welcome', emoji: '<:member:1532621317487071426>' },
           { label: 'Ticket Panels & Support', description: 'Configure categories & staff roles', value: 'tickets', emoji: '<:ticket:1532620631466836021>' },
           { label: 'Voice Protection & 24/7', description: 'Configure voice security & 24/7 channels', value: 'voice', emoji: '<:voicechannelgreen:1532425750278438962>' },
           { label: 'Leveling & XP System', description: 'Configure XP rate & level up announcements', value: 'leveling', emoji: '<:vip:1532620837117759508>' },
-          { label: 'Member Verification Gate', description: 'Configure captcha & verification roles', value: 'verification', emoji: '<:security:1546142576984203336>' },
+          { label: 'Member Verification Gate', description: 'Configure captcha & verification roles', value: 'verification', emoji: '<a:success_check:1546134620087783526>' },
           { label: 'Social Media Feeds', description: 'Configure YouTube & Instagram dispatches', value: 'social', emoji: '<:link:1532620952087826602>' },
           { label: 'Server Automation', description: 'Configure auto-publish & sticky messages', value: 'automation', emoji: '<:bot:1532621107746570391>' }
         );
@@ -3748,7 +3776,7 @@ export const ConfigManifest: ModuleManifest = {
         }
 
         const embed = createLimeEmbed({
-          title: '<:security:1546142576984203336> Security Profile Applied',
+          title: '<a:success_check:1546134620087783526> Security Profile Applied',
           description: [
             `> ${ARROW_ICON} Successfully configured **${presetName}** for this server!`,
             `> ${desc}`,
@@ -3881,7 +3909,7 @@ export const ConfigManifest: ModuleManifest = {
         }
 
         const embed = createLimeEmbed({
-          title: '<:security:1546142576984203336> Emergency Lockdown Executed',
+          title: '<a:success_check:1546134620087783526> Emergency Lockdown Executed',
           description: `${APPROVED_ICON} Server text channels locked down successfully.`
         });
         if (interaction.replied || interaction.deferred) {

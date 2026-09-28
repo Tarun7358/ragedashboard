@@ -8,6 +8,7 @@
 import { SocialSubscriptionRepository, SocialSubscription } from './SocialSubscriptionRepository.js';
 import { ProviderManager } from './ProviderManager.js';
 import { YouTubeFetcher } from './providers/YouTubeFetcher.js';
+import { SecurityService } from '../../core/SecurityService.js';
 
 export class SubscriptionManager {
   private static schedulerRef: any = null;
@@ -36,6 +37,7 @@ export class SubscriptionManager {
       mentionRoles?: string[];
       pollingMode?: string;
       contentTypes?: any;
+      authCredential?: string;
     }
   ): Promise<{ success: boolean; subscription?: SocialSubscription; error?: string }> {
     await SocialSubscriptionRepository.ensureTable().catch(() => {});
@@ -71,6 +73,16 @@ export class SubscriptionManager {
         videos: true, shorts: true, streams: true, premieres: true, communityPosts: false, posts: true, reels: true, stories: false
       };
 
+      // Encrypt user-provided credentials (session cookie or token)
+      let encryptedAuth: string | undefined = undefined;
+      if (options.authCredential && options.authCredential.trim()) {
+        try {
+          encryptedAuth = SecurityService.encrypt(options.authCredential.trim());
+        } catch {
+          encryptedAuth = options.authCredential.trim();
+        }
+      }
+
       await SocialSubscriptionRepository.insert({
         id,
         guildId,
@@ -84,6 +96,7 @@ export class SubscriptionManager {
         pollingMode: options.pollingMode || 'normal',
         contentTypes: JSON.stringify(defaultContentTypes),
         enabled: 1,
+        authCredential: encryptedAuth,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
@@ -168,6 +181,18 @@ export class SubscriptionManager {
       if (updates.sourceAvatar !== undefined) patch.sourceAvatar = updates.sourceAvatar;
       if (updates.validationStatus !== undefined) patch.validationStatus = updates.validationStatus;
       if (updates.validationError !== undefined) patch.validationError = updates.validationError;
+      if ((updates as any).authCredential !== undefined) {
+        const raw = (updates as any).authCredential;
+        if (raw && typeof raw === 'string' && raw.trim().length > 0) {
+          try {
+            patch.authCredential = SecurityService.encrypt(raw.trim());
+          } catch {
+            patch.authCredential = raw.trim();
+          }
+        } else {
+          patch.authCredential = undefined;
+        }
+      }
 
       await SocialSubscriptionRepository.update(id, patch);
 
@@ -255,8 +280,10 @@ export class SubscriptionManager {
    * Retrieve structured configurations list.
    */
   static deserialize(sub: any): any {
+    const { authCredential, ...rest } = sub;
     return {
-      ...sub,
+      ...rest,
+      hasAuthCredential: !!authCredential,
       embedConfig: typeof sub.embedConfig === 'string' ? JSON.parse(sub.embedConfig || '{}') : sub.embedConfig,
       mentionRoles: typeof sub.mentionRoles === 'string' ? JSON.parse(sub.mentionRoles || '[]') : sub.mentionRoles,
       contentTypes: typeof sub.contentTypes === 'string' ? JSON.parse(sub.contentTypes || '{}') : sub.contentTypes

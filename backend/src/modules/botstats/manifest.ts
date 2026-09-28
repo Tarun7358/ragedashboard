@@ -133,7 +133,7 @@ export function buildBotStatsOverviewEmbed(m: BotStatsMetrics) {
         ]
       },
       {
-        title: '<:security:1546142576984203336> ZERO-TRUST SECURITY ENGINE',
+        title: '<a:success_check:1546134620087783526> ZERO-TRUST SECURITY ENGINE',
         items: [
           `Whitelisted Bots: \`${fmt(m.whitelistedBotsCount)}\` Pre-approved Entries`,
           `Google 2FA Protection: \`${m.twoFactorServersCount}\` Servers Active`,
@@ -221,7 +221,7 @@ export function buildCategoryEmbed(category: string, m: BotStatsMetrics) {
       color: Colors.BRAND,
       sections: [
         {
-          title: '<:security:1546142576984203336> PREBOT WHITELIST REGISTRY',
+          title: '<a:success_check:1546134620087783526> PREBOT WHITELIST REGISTRY',
           items: [
             `Total Whitelisted Bots: \`${fmt(m.whitelistedBotsCount)}\` Pre-approved Applications`,
             `Google 2FA Active Servers: \`${fmt(m.twoFactorServersCount)}\` Protected Guilds`,

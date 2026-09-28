@@ -8,7 +8,8 @@
     "frontend"
   ],
   "scripts": {
-    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
+    "build": "npm run build --workspace=backend",
+    "build:all": "npm run build --workspace=backend && npm run build --workspace=frontend",
     "start": "node start.js",
     "health": "node health.js"
   },

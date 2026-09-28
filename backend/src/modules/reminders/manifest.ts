@@ -1,4 +1,4 @@
-﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { IReminder } from '../../models/index.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
@@ -22,7 +22,7 @@ async function fireReminder(client: any, reminder: IReminder, context: any) {
     if (!user) return;
 
     const embed = new EmbedBuilder()
-      .setTitle('<:timer:1532620491662037123> Reminder!')
+      .setTitle('<a:Timer:1546231426863730728> Reminder!')
       .setDescription(reminder.message)
       .setColor(0x99CC00)
       .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -160,7 +160,7 @@ export const RemindersManifest: ModuleManifest = {
           reminderTimers.set(reminder.id, timer);
 
           const embed = new EmbedBuilder()
-            .setTitle('<:timer:1532620491662037123> Reminder Set!')
+            .setTitle('<a:Timer:1546231426863730728> Reminder Set!')
             .setDescription(`I'll remind you <t:${Math.floor(remindAt.getTime() / 1000)}:R>:\n**${message}**`)
             .setColor(0x99CC00)
             .addFields(
@@ -176,7 +176,7 @@ export const RemindersManifest: ModuleManifest = {
           const mine = reminders.filter(r => r.userId === interaction.user.id);
           if (mine.length === 0) return interaction.reply({ content: '<a:lovemail:1527647157371535420> You have no active reminders.', flags: 64 });
           const lines = mine.map((r, i) => `**${i + 1}.** \`${r.id}\` — <t:${Math.floor(new Date(r.remindAt).getTime() / 1000)}:R> — ${r.message.substring(0, 50)}${r.message.length > 50 ? '...' : ''}`);
-          return interaction.reply({ content: `<:timer:1532620491662037123> **Your Reminders (${mine.length}):**\n${lines.join('\n')}`, flags: 64 });
+          return interaction.reply({ content: `<a:Timer:1546231426863730728> **Your Reminders (${mine.length}):**\n${lines.join('\n')}`, flags: 64 });
         }
 
         if (sub === 'cancel') {
@@ -186,7 +186,7 @@ export const RemindersManifest: ModuleManifest = {
           const existing = reminderTimers.get(id);
           if (existing) { clearTimeout(existing); reminderTimers.delete(id); }
           saveReminders(reminders.filter(r => r.id !== id));
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Cancelled reminder \`${id}\`.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Cancelled reminder \`${id}\`.`, flags: 64 });
         }
 
         if (sub === 'snooze') {
@@ -206,7 +206,7 @@ export const RemindersManifest: ModuleManifest = {
           const timer = setTimeout(() => fireReminder(client, { ...rem, remindAt: newRemindAt }, context), ms);
           reminderTimers.set(id, timer);
 
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Snoozed reminder \`${id}\` for **${timeStr}**! Will remind you <t:${Math.floor(newRemindAt.getTime() / 1000)}:R>.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Snoozed reminder \`${id}\` for **${timeStr}**! Will remind you <t:${Math.floor(newRemindAt.getTime() / 1000)}:R>.`, flags: 64 });
         }
 
         if (sub === 'clear') {
@@ -216,7 +216,7 @@ export const RemindersManifest: ModuleManifest = {
             if (t) { clearTimeout(t); reminderTimers.delete(r.id); }
           }
           saveReminders(reminders.filter(r => r.userId !== interaction.user.id));
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Cleared all ${mine.length} of your reminders.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Cleared all ${mine.length} of your reminders.`, flags: 64 });
         }
       }
     },

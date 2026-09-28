@@ -14,12 +14,25 @@ export class InstagramFetcher {
 
   /**
    * Fetch latest feed items for an Instagram username.
+   * Accepts an optional custom credential (sessionid cookie or Graph API token) per user/guild.
    */
-  static async fetchLatestAsync(username: string, limit = 15): Promise<ContentItem[]> {
+  static async fetchLatestAsync(username: string, limit = 15, authCredential?: string): Promise<ContentItem[]> {
     const cleanUsername = username.trim().replace(/^@/, '');
 
+    // Determine credential type (Graph API token vs session cookie)
+    let customGraphToken: string | undefined = undefined;
+    let customSessionId: string | undefined = undefined;
+
+    if (authCredential) {
+      if (authCredential.startsWith('IGQ') || authCredential.startsWith('EA') || authCredential.length > 80) {
+        customGraphToken = authCredential;
+      } else {
+        customSessionId = authCredential;
+      }
+    }
+
     // 1. Meta Graph API Integration (if access token configured)
-    const graphToken = process.env.INSTAGRAM_GRAPH_TOKEN || process.env.META_GRAPH_TOKEN;
+    const graphToken = customGraphToken || process.env.INSTAGRAM_GRAPH_TOKEN || process.env.META_GRAPH_TOKEN;
     if (graphToken) {
       try {
         const graphUrl = `https://graph.instagram.com/v18.0/me/media?fields=id,caption,media_type,media_url,permalink,thumbnail_url,timestamp&access_token=${graphToken}`;
@@ -56,17 +69,34 @@ export class InstagramFetcher {
       }
     }
 
-    // 2. Direct Instagram Web API Request
+    // 2. Direct Instagram Web API Request (with Session Cookie & Sec-Fetch support)
     try {
       const webUrl = `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(cleanUsername)}`;
-      const res = await fetch(webUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'X-IG-App-ID': '936619743392459',
-          'Accept': '*/*'
+      const reqHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'X-IG-App-ID': '936619743392459',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-ASBD-ID': '129477',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'Referer': `https://www.instagram.com/${encodeURIComponent(cleanUsername)}/`,
+        'Accept': '*/*'
+      };
+
+      const sessionId = customSessionId || process.env.INSTAGRAM_SESSION_ID || process.env.INSTAGRAM_COOKIE;
+      if (sessionId) {
+        reqHeaders['Cookie'] = sessionId.includes('=') ? sessionId : `sessionid=${sessionId};`;
+      }
+
+      const res = await fetch(webUrl, { headers: reqHeaders });
+
+      if (res.status === 401 || res.status === 403 || res.status === 400) {
+        const bodyText = await res.text().catch(() => '');
+        if (bodyText.includes('require_login')) {
+          console.warn(`[InstagramFetcher] Instagram requires authentication for @${cleanUsername}. Add per-user session/token or INSTAGRAM_SESSION_ID in .env.`);
         }
-      });
-      if (res.ok) {
+      } else if (res.ok) {
         const data = await res.json();
         const user = data?.data?.user;
         const timeline = user?.edge_owner_to_timeline_media?.edges || [];

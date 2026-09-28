@@ -1,4 +1,4 @@
-﻿import { Message, EmbedBuilder, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { Message, EmbedBuilder, PermissionFlagsBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { PrefixCommandMeta } from './PrefixRegistry.js';
 import { PrefixCooldownManager } from './PrefixCooldownManager.js';
 import { PrefixPermissionManager } from './PrefixPermissionManager.js';
@@ -66,7 +66,11 @@ export class CommandPipeline {
 
       // 2. Module Validation
       const modules = ctx.get('getModulesState') ? ctx.get('getModulesState')() : [];
-      const modState = modules.find((m: any) => m.id === cmdMeta.moduleOwnerId);
+      const normOwner = (cmdMeta.moduleOwnerId || '').toLowerCase().replace(/[-_]/g, '');
+      const modState = modules.find((m: any) =>
+        m.id === cmdMeta.moduleOwnerId ||
+        (m.id && m.id.toLowerCase().replace(/[-_]/g, '') === normOwner)
+      );
       
       const managementCmdNames = [
         'enable', 'disable', 'on', 'off', 'activate', 'deactivate',
@@ -168,7 +172,7 @@ export class CommandPipeline {
         PrefixAnalytics.trackFailure('cooldown');
         const embed = new EmbedBuilder()
           .setAuthor({ name: 'Rage Optimiser Security Gate • Cooldown' })
-          .setTitle('<:timer:1532620491662037123> Command Cooldown Active')
+          .setTitle('<a:Timer:1546231426863730728> Command Cooldown Active')
           .setDescription(`Please wait **\`${cdResult.retryAfter}s\`** before executing \`r!${cmdMeta.name}\` again.`)
           .setColor(0xF59E0B)
           .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${correlationId}` })
@@ -217,7 +221,8 @@ export class CommandPipeline {
 
       // Path B: manifest event handler (standard module commands fallback)
       if (!handlerFound) {
-        let targetManifest = manifests.find(m => m.id === cmdMeta.moduleOwnerId || m.commands?.some((c: any) => c.name === cmdMeta.name));
+        const normOwnerFallback = (cmdMeta.moduleOwnerId || '').toLowerCase().replace(/[-_]/g, '');
+        let targetManifest = manifests.find(m => m.id === cmdMeta.moduleOwnerId || (m.id && m.id.toLowerCase().replace(/[-_]/g, '') === normOwnerFallback) || m.commands?.some((c: any) => c.name === cmdMeta.name));
         if (targetManifest) {
           const eventObj = targetManifest.events?.find((e: any) => e.name === `command_${cmdMeta.name}`);
           if (eventObj) {
@@ -274,7 +279,7 @@ export class CommandPipeline {
 
     const embed = new EmbedBuilder()
       .setAuthor({ name: 'Rage Optimiser Security Gate • High Risk Action' })
-      .setTitle('<:security:1546142576984203336> High Risk Action Confirmation')
+      .setTitle('<a:success_check:1546134620087783526> High Risk Action Confirmation')
       .setDescription(`Are you sure you want to execute **\`r!${ctx.cmdMeta.name} ${ctx.args.join(' ')}\`**?\nThis is classified as a high-risk administrative command.`)
       .setColor(0xF59E0B)
       .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${ctx.correlationId}` })
@@ -289,14 +294,14 @@ export class CommandPipeline {
       });
 
       if (confirmation.customId === 'confirm_yes') {
-        await confirmation.update({ content: '<a:approved:1532390590707142956> Command confirmed. Starting execution...', embeds: [], components: [] });
+        await confirmation.update({ content: '<:ticks:1532620580266836148> Command confirmed. Starting execution...', embeds: [], components: [] });
         return true;
       } else {
         await confirmation.update({ content: '<a:wrong:1546155193303957504> Command cancelled.', embeds: [], components: [] });
         return false;
       }
     } catch {
-      await response.edit({ content: '<:timer:1532620491662037123> Command timed out due to inactivity.', embeds: [], components: [] }).catch(() => {});
+      await response.edit({ content: '<a:Timer:1546231426863730728> Command timed out due to inactivity.', embeds: [], components: [] }).catch(() => {});
       return false;
     }
   }

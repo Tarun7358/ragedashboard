@@ -1000,53 +1000,66 @@ async function punishViolator(client: any, guild: any, executorId: string, execu
       return;
     }
 
-    // 2. QUARANTINE PATH (Only quarantine strips roles and applies quarantine role)
-    if (ruleAction === 'quarantine' && config.quarantineRoleId) {
+    // 2. QUARANTINE & STRIP ROLES PATH
+    if (ruleAction === 'quarantine' || ruleAction === 'strip_roles') {
       const originalRoleIds = Array.from(
         member.roles.cache
           .filter((r: any) => r.id !== guild.id && !r.managed && r.id !== config.quarantineRoleId)
           .keys()
       );
 
-      // Strip ALL administrative roles
+      // Strip ALL administrative & dangerous roles
       const adminRoleIds = member.roles.cache
-        .filter((r: any) => r.permissions.has(PermissionFlagsBits.Administrator) && r.id !== guild.id)
+        .filter((r: any) => (
+          r.permissions.has(PermissionFlagsBits.Administrator) ||
+          r.permissions.has(PermissionFlagsBits.ManageGuild) ||
+          r.permissions.has(PermissionFlagsBits.ManageRoles) ||
+          r.permissions.has(PermissionFlagsBits.ManageChannels) ||
+          r.permissions.has(PermissionFlagsBits.BanMembers) ||
+          r.permissions.has(PermissionFlagsBits.KickMembers)
+        ) && r.id !== guild.id)
         .map((r: any) => r.id);
       for (const roleId of adminRoleIds) {
         await member.roles.remove(roleId).catch(() => { });
       }
 
-      const freshMember = await guild.members.fetch(executorId).catch(() => member);
-      const remainingRoleIds = Array.from(
-        freshMember.roles.cache
-          .filter((r: any) => r.id !== guild.id && !r.managed && r.id !== config.quarantineRoleId)
-          .keys()
-      );
+      if (ruleAction === 'quarantine') {
+        const freshMember = await guild.members.fetch(executorId).catch(() => member);
+        const remainingRoleIds = Array.from(
+          freshMember.roles.cache
+            .filter((r: any) => r.id !== guild.id && !r.managed && r.id !== config.quarantineRoleId)
+            .keys()
+        );
 
-      await freshMember.roles.add(config.quarantineRoleId).catch(console.error);
-      for (const roleId of remainingRoleIds) {
-        await freshMember.roles.remove(roleId).catch(() => { });
+        if (config.quarantineRoleId) {
+          await freshMember.roles.add(config.quarantineRoleId).catch(console.error);
+        }
+        for (const roleId of remainingRoleIds) {
+          await freshMember.roles.remove(roleId).catch(() => { });
+        }
+
+        // Apply Discord Native Timeout (configured duration or default 28 days)
+        const timeoutMs = config.timeoutDurationMs || (28 * 24 * 60 * 60 * 1000);
+        await freshMember.timeout(timeoutMs, `[Anti-Nuke Quarantine] ${reason}`).catch(() => { });
+
+        const quarantinedUsers = config.quarantinedUsers || [];
+        if (!quarantinedUsers.some((u: any) => u.userId === executorId)) {
+          quarantinedUsers.push({
+            id: `q-${Date.now()}`,
+            tag: executorUsername,
+            userId: executorId,
+            reason: reason,
+            time: new Date().toISOString(),
+            status: 'Quarantined',
+            risk: 'danger',
+            originalRoles: originalRoleIds
+          });
+          context.updateModuleConfig('security', { quarantinedUsers });
+        }
+        context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Action]: Quarantined & Timed out ${executorUsername} for ${Math.round(timeoutMs / 60000)} mins. Reason: ${reason}`, 'warn');
+      } else {
+        context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Action]: Stripped administrative and dangerous roles from ${executorUsername}. Reason: ${reason}`, 'warn');
       }
-
-      // Apply Discord Native Timeout (configured duration or default 28 days)
-      const timeoutMs = config.timeoutDurationMs || (28 * 24 * 60 * 60 * 1000);
-      await freshMember.timeout(timeoutMs, `[Anti-Nuke Quarantine] ${reason}`).catch(() => { });
-
-      const quarantinedUsers = config.quarantinedUsers || [];
-      if (!quarantinedUsers.some((u: any) => u.userId === executorId)) {
-        quarantinedUsers.push({
-          id: `q-${Date.now()}`,
-          tag: executorUsername,
-          userId: executorId,
-          reason: reason,
-          time: new Date().toISOString(),
-          status: 'Quarantined',
-          risk: 'danger',
-          originalRoles: originalRoleIds
-        });
-        context.updateModuleConfig('security', { quarantinedUsers });
-      }
-      context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Action]: Quarantined & Timed out ${executorUsername} for ${Math.round(timeoutMs / 60000)} mins. Reason: ${reason}`, 'warn');
     }
 
     DashboardSyncService.triggerSync(guild.id, 500);
@@ -1120,8 +1133,18 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
   // 2. Master AutoMod Toggle
   if (customId === 'btn_sec_toggle_automod') {
     await interaction.deferUpdate().catch(() => {});
-    const currentState = secConfig.autoModEnabled !== false;
+    const amMod = modules.find((m: any) => m.id === 'automod');
+    const currentState = amMod ? (amMod.status === 'enabled' && amMod.config?.autoModEnabled !== false) : (secConfig.autoModEnabled !== false);
     const newState = !currentState;
+
+    if (context.toggleModule) {
+      context.toggleModule('automod', newState);
+    }
+    const amConfig = { ...(amMod?.config || {}) };
+    amConfig.autoModEnabled = newState;
+    amConfig.blockLinks = newState;
+    context.updateModuleConfig('automod', amConfig);
+
     secConfig.autoModEnabled = newState;
     context.updateModuleConfig('security', secConfig);
     context.logSyncEvent?.(`[Security GUI] AutoMod master status set to ${newState ? 'ENABLED' : 'DISABLED'} by ${interaction.user.username}.`, newState ? 'success' : 'warn');
@@ -1442,31 +1465,63 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
   // 15. AutoMod Toggles & Actions
   if (customId === 'btn_sec_am_toggle_antilink') {
     await interaction.deferUpdate().catch(() => {});
+    const amMod = modules.find((m: any) => m.id === 'automod');
+    const amConfig = { ...(amMod?.config || {}) };
+    const current = amConfig.blockLinks !== false && amConfig.antiLinkEnabled !== false;
+    const next = !current;
+    amConfig.blockLinks = next;
+    amConfig.antiLinkEnabled = next;
+    context.updateModuleConfig('automod', amConfig);
+
     secConfig.automod = secConfig.automod || {};
-    secConfig.automod.antiLinkEnabled = !(secConfig.automod.antiLinkEnabled !== false);
+    secConfig.automod.antiLinkEnabled = next;
     context.updateModuleConfig('security', secConfig);
 
-    const payload = buildAutoModDashboardComponents(interaction.guild, secConfig);
+    context.logSyncEvent?.(`[AutoMod GUI] Anti-Link toggled to ${next ? 'ON' : 'OFF'} by ${interaction.user.username}.`, next ? 'success' : 'warn');
+
+    const payload = await buildAutoModDashboardComponents(interaction.guild, secConfig, context);
     return interaction.editReply(payload);
   }
 
   if (customId === 'btn_sec_am_toggle_antispam') {
     await interaction.deferUpdate().catch(() => {});
+    const amMod = modules.find((m: any) => m.id === 'automod');
+    const amConfig = { ...(amMod?.config || {}) };
+    const current = amConfig.antiSpamEnabled === true || Boolean(amConfig.maxSpamMessages);
+    const next = !current;
+    amConfig.antiSpamEnabled = next;
+    if (next && !amConfig.maxSpamMessages) amConfig.maxSpamMessages = 5;
+    context.updateModuleConfig('automod', amConfig);
+
     secConfig.automod = secConfig.automod || {};
-    secConfig.automod.antiSpamEnabled = !(secConfig.automod.antiSpamEnabled !== false);
+    secConfig.automod.antiSpamEnabled = next;
     context.updateModuleConfig('security', secConfig);
 
-    const payload = buildAutoModDashboardComponents(interaction.guild, secConfig);
+    context.logSyncEvent?.(`[AutoMod GUI] Anti-Spam toggled to ${next ? 'ON' : 'OFF'} by ${interaction.user.username}.`, next ? 'success' : 'warn');
+
+    const payload = await buildAutoModDashboardComponents(interaction.guild, secConfig, context);
     return interaction.editReply(payload);
   }
 
   if (customId === 'btn_sec_am_toggle_antieveryone') {
     await interaction.deferUpdate().catch(() => {});
+    const ruleEveryone = secConfig?.rules?.anti_everyone_here;
+    const current = (ruleEveryone?.enabled !== false) && (secConfig?.automod?.antiEveryoneEnabled !== false);
+    const next = !current;
+
+    secConfig.rules.anti_everyone_here = { ...(secConfig.rules.anti_everyone_here || {}), enabled: next };
     secConfig.automod = secConfig.automod || {};
-    secConfig.automod.antiEveryoneEnabled = !(secConfig.automod.antiEveryoneEnabled !== false);
+    secConfig.automod.antiEveryoneEnabled = next;
     context.updateModuleConfig('security', secConfig);
 
-    const payload = buildAutoModDashboardComponents(interaction.guild, secConfig);
+    const amMod = modules.find((m: any) => m.id === 'automod');
+    const amConfig = { ...(amMod?.config || {}) };
+    amConfig.antiEveryoneEnabled = next;
+    context.updateModuleConfig('automod', amConfig);
+
+    context.logSyncEvent?.(`[AutoMod GUI] Anti-Ping toggled to ${next ? 'ON' : 'OFF'} by ${interaction.user.username}.`, next ? 'success' : 'warn');
+
+    const payload = await buildAutoModDashboardComponents(interaction.guild, secConfig, context);
     return interaction.editReply(payload);
   }
 
@@ -1477,7 +1532,16 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
     secConfig.automod.punishmentAction = act;
     context.updateModuleConfig('security', secConfig);
 
-    const payload = buildAutoModDashboardComponents(interaction.guild, secConfig);
+    const amMod = modules.find((m: any) => m.id === 'automod');
+    const amConfig = { ...(amMod?.config || {}) };
+    amConfig.punishment = act;
+    amConfig.spamAction = act;
+    amConfig.punishmentAction = act;
+    context.updateModuleConfig('automod', amConfig);
+
+    context.logSyncEvent?.(`[AutoMod GUI] Violation punishment set to ${act.toUpperCase()} by ${interaction.user.username}.`, 'success');
+
+    const payload = await buildAutoModDashboardComponents(interaction.guild, secConfig, context);
     return interaction.editReply(payload);
   }
 
@@ -1660,7 +1724,7 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
       .setAuthor({ name: 'RAGE OPTIMISER ENTERPRISE • 2FA LINKED' })
       .setTitle('Gmail 2FA Successfully Linked')
       .setDescription(
-        `<a:security:1546142576984203336> Your Gmail has been verified and linked as the **2FA Security Alert** recipient.\n\n` +
+        `<a:success_check:1546134620087783526> Your Gmail has been verified and linked as the **2FA Security Alert** recipient.\n\n` +
         `All critical security alerts, threat notifications, and disable-gate OTPs will now be dispatched to \`${EmailService.maskEmail(pending.email)}\`.`
       )
       .setFooter({ text: 'Rage Optimiser Enterprise • 2FA Active' })
@@ -1763,7 +1827,7 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
 
   if (customId === 'sec_btn_2fa') {
     return interaction.reply({
-      content: `<:security:1546142576984203336> **2FA Passcode Protection**\n> Use \`r!prebot 2fa set <6-digit-pin>\` to configure your Owner 2FA passcode for secure bot departure and critical administrative overrides.`,
+      content: `<a:success_check:1546134620087783526> **2FA Passcode Protection**\n> Use \`r!prebot 2fa set <6-digit-pin>\` to configure your Owner 2FA passcode for secure bot departure and critical administrative overrides.`,
       flags: 64,
       ephemeral: true
     }).catch(() => { });
@@ -1781,7 +1845,7 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
 
   if (customId === 'sec_btn_logs') {
     return interaction.reply({
-      content: `<:security:1546142576984203336> **Security Log Sentinel**\n> Use \`r!security logs\` or \`r!config antinuke\` to inspect full real-time threat telemetry and audit log history.`,
+      content: `<a:success_check:1546134620087783526> **Security Log Sentinel**\n> Use \`r!security logs\` or \`r!config antinuke\` to inspect full real-time threat telemetry and audit log history.`,
       flags: 64,
       ephemeral: true
     }).catch(() => { });
@@ -1996,14 +2060,7 @@ export const SecurityManifest: ModuleManifest = {
         }
       ]
     },
-    {
-      name: 'softban',
-      description: 'Ban a member and immediately unban to purge past 7 days of messages.',
-      options: [
-        { name: 'user', type: 6, description: 'Member to softban', required: true },
-        { name: 'reason', type: 3, description: 'Reason for softban', required: false }
-      ]
-    },
+
     {
       name: 'temprole',
       description: 'Assign a temporary role to a member for a specified duration.',
@@ -2441,7 +2498,7 @@ export const SecurityManifest: ModuleManifest = {
             .addFields(
               { name: '<:vip:1532620837117759508> Highest Role', value: `${targetMember.roles.highest}`, inline: true },
               { name: '<a:lovemail:1527647157371535420> Total Roles', value: `\`${targetMember.roles.cache.size - 1}\``, inline: true },
-              { name: '<:timer:1532620491662037123> Joined Server', value: `<t:${Math.floor(targetMember.joinedTimestamp / 1000)}:R>`, inline: true },
+              { name: '<a:Timer:1546231426863730728> Joined Server', value: `<t:${Math.floor(targetMember.joinedTimestamp / 1000)}:R>`, inline: true },
               { name: '<:ticket:1532620631466836021> Assigned Roles', value: rolesList.length > 1024 ? rolesList.substring(0, 1020) + '...' : rolesList, inline: false }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -2464,10 +2521,10 @@ export const SecurityManifest: ModuleManifest = {
               { name: '<:config:1532425712844144701> Hex Color', value: `\`${role.hexColor}\``, inline: true },
               { name: '<:lightpurplearrow:1532621364115013693> Position', value: `\`#${role.position}\``, inline: true },
               { name: '<:member:1532621317487071426> Member Count', value: `\`${role.members.size}\` members`, inline: true },
-              { name: '<:config:1532425712844144701> Hoisted', value: role.hoist ? '<a:approved:1532390590707142956> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
-              { name: '<a:lovemail:1527647157371535420> Mentionable', value: role.mentionable ? '<a:approved:1532390590707142956> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
+              { name: '<:config:1532425712844144701> Hoisted', value: role.hoist ? '<:ticks:1532620580266836148> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
+              { name: '<a:lovemail:1527647157371535420> Mentionable', value: role.mentionable ? '<:ticks:1532620580266836148> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
               { name: '<:config:1532425712844144701> Managed / Integration', value: role.managed ? 'Bot Integration' : 'Custom Role', inline: true },
-              { name: '<:timer:1532620491662037123> Created At', value: `<t:${Math.floor(role.createdTimestamp / 1000)}:F>`, inline: true }
+              { name: '<a:Timer:1546231426863730728> Created At', value: `<t:${Math.floor(role.createdTimestamp / 1000)}:F>`, inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
@@ -2476,46 +2533,7 @@ export const SecurityManifest: ModuleManifest = {
         }
       }
     },
-    {
-      name: 'command_softban',
-      handler: async (client: any, interaction: any, context: any) => {
-        const guild = interaction.guild;
-        if (!guild) return;
-        const target = interaction.options.getMember('user');
-        const reason = interaction.options.getString('reason') || 'No reason provided';
-        if (!target) {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Target member not found.', flags: 64 });
-        }
-        const hasPerm = await getGuildAndCheckPermission(interaction.user.id, context);
-        if (!hasPerm && !interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Insufficient permissions to execute softban.', flags: 64 });
-        }
-        try {
-          await target.ban({ deleteMessageSeconds: 604800, reason: `Softban: ${reason}` });
-          await guild.members.unban(target.id, `Softban release: ${reason}`);
-          const db = Database.getDb();
-          let caseId = 1;
-          if (db) {
-            const lastRow: any = await Database.get('SELECT MAX(caseId) as maxId FROM moderation_cases WHERE guildId = ?', [guild.id]);
-            caseId = (lastRow?.maxId || 0) + 1;
-            await Database.run(
-              'INSERT INTO moderation_cases (guildId, caseId, targetId, targetTag, moderatorId, moderatorTag, action, reason, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-              [guild.id, caseId, target.id, target.user.tag, interaction.user.id, interaction.user.tag, 'SOFTBAN', reason, Date.now()]
-            );
-          }
-          const { buildMinimalAction } = await import('../../core/UIFactory.js');
-          const embed = buildMinimalAction({
-            user: interaction.user,
-            action: 'Has Softbanned',
-            target: target,
-            reason: reason !== 'No reason provided' ? reason : undefined
-          });
-          return interaction.reply({ embeds: [embed] });
-        } catch (err: any) {
-          return interaction.reply({ content: `<a:wrong:1546155193303957504> Softban failed: ${err.message}`, flags: 64 });
-        }
-      }
-    },
+
     {
       name: 'command_temprole',
       handler: async (client: any, interaction: any, context: any) => {
@@ -2643,7 +2661,7 @@ export const SecurityManifest: ModuleManifest = {
           const list = config.quarantinedUsers || [];
           if (list.length > 0) {
             const embed = new EmbedBuilder()
-              .setTitle('<:security:1546142576984203336> Security Center • Quarantined Members')
+              .setTitle('<a:success_check:1546134620087783526> Security Center • Quarantined Members')
               .setColor(0xF59E0B)
               .setDescription([
                 `**Currently Quarantined Members (${list.length})**:\n`,
@@ -2658,14 +2676,14 @@ export const SecurityManifest: ModuleManifest = {
           }
 
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Security Center • Member Quarantine Management')
+            .setTitle('<a:success_check:1546134620087783526> Security Center • Member Quarantine Management')
             .setColor(0x99CC00)
             .setDescription([
               `Isolate suspected or malicious members by stripping administrative privileges and assigning the Quarantine isolation role.\n`,
-              `> <:security:1546142576984203336> **Command Usage**: \`r!quarantine <@user|id> [reason]\``,
+              `> <a:success_check:1546134620087783526> **Command Usage**: \`r!quarantine <@user|id> [reason]\``,
               `> 💡 **Usage Example**: \`r!quarantine @suspicious_user Malicious action\``,
               `> 🔓 **Release Usage**: \`r!unquarantine <@user|id>\``,
-              `\n<a:approved:1532390590707142956> **Current Status**: 0 members isolated in quarantine.`
+              `\n<:ticks:1532620580266836148> **Current Status**: 0 members isolated in quarantine.`
             ].join('\n'))
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security Engine' })
             .setTimestamp();
@@ -2716,14 +2734,14 @@ export const SecurityManifest: ModuleManifest = {
           context.logSyncEvent(interaction.guildId, `Manual Quarantine: ${member.user.username} isolated. Reason: ${reasonStr}`, 'warn');
 
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Security Action: Member Quarantined')
+            .setTitle('<a:success_check:1546134620087783526> Security Action: Member Quarantined')
             .setColor(0x99CC00)
             .setDescription(`Successfully quarantined **${member.user.username}** and stripped all administrative/privileged roles to secure the guild.`)
             .addFields(
               { name: 'Target Member', value: `<@${member.user.id}> (\`${member.user.id}\`)`, inline: true },
               { name: 'Enforcing Admin', value: `<@${interaction.user.id}>`, inline: true },
               { name: 'Reason', value: reasonStr, inline: false },
-              { name: 'Status', value: '<:security:1546142576984203336> Isolated in Quarantine', inline: true }
+              { name: 'Status', value: '<a:success_check:1546134620087783526> Isolated in Quarantine', inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
@@ -2763,7 +2781,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!rawInput && !member) {
           const list = config.quarantinedUsers || [];
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Security Center • Release Member from Quarantine')
+            .setTitle('<a:success_check:1546134620087783526> Security Center • Release Member from Quarantine')
             .setColor(0x99CC00)
             .setDescription([
               `Release a member from quarantine isolation and restore their previous administrative roles.\n`,
@@ -2808,13 +2826,13 @@ export const SecurityManifest: ModuleManifest = {
           context.logSyncEvent(interaction.guildId, `Unquarantine: User ${targetUserId} released from quarantine.`, 'success');
 
           const embed = new EmbedBuilder()
-            .setTitle('<a:approved:1532390590707142956> Security Action: Member Released from Quarantine')
+            .setTitle('<:ticks:1532620580266836148> Security Action: Member Released from Quarantine')
             .setColor(0x99CC00)
             .setDescription(`Successfully released **<@${targetUserId}>** from quarantine and restored original role permissions.`)
             .addFields(
               { name: 'Released Member', value: `<@${targetUserId}> (\`${targetUserId}\`)`, inline: true },
               { name: 'Enforcing Admin', value: `<@${interaction.user.id}>`, inline: true },
-              { name: 'Status', value: '<a:approved:1532390590707142956> Normal Operations Restored', inline: true }
+              { name: 'Status', value: '<:ticks:1532620580266836148> Normal Operations Restored', inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
@@ -2851,7 +2869,7 @@ export const SecurityManifest: ModuleManifest = {
           });
 
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> SYSTEM UPDATE: Emergency Lockdown Activated')
+            .setTitle('<a:success_check:1546134620087783526> SYSTEM UPDATE: Emergency Lockdown Activated')
             .setColor(0x99CC00)
             .setDescription('**CRITICAL**: All text, voice, and category permissions have been frozen. Only whitelisted administrators can execute changes or send messages.')
             .addFields(
@@ -2865,11 +2883,11 @@ export const SecurityManifest: ModuleManifest = {
           context.updateModuleConfig('security', { emergencyMode: false });
           context.logSyncEvent('Emergency Lockdown Disabled.', 'success');
           const embed = new EmbedBuilder()
-            .setTitle('<a:approved:1532390590707142956> SYSTEM UPDATE: Emergency Lockdown Deactivated')
+            .setTitle('<:ticks:1532620580266836148> SYSTEM UPDATE: Emergency Lockdown Deactivated')
             .setColor(0x99CC00)
             .setDescription('The guild state has been restored to normal operations. Channel permissions have been unfrozen.')
             .addFields(
-              { name: 'System State', value: '<a:approved:1532390590707142956> Normal Operations', inline: true },
+              { name: 'System State', value: '<:ticks:1532620580266836148> Normal Operations', inline: true },
               { name: 'Triggered By', value: `<@${interaction.user.id}>`, inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -2890,7 +2908,7 @@ export const SecurityManifest: ModuleManifest = {
           const hasPermission = await checkWhitelistPermission(interaction.user.id, interaction.guild, context);
           if (!hasPermission) {
             const embed = new EmbedBuilder()
-              .setTitle('<:security:1546142576984203336> Access Denied')
+              .setTitle('<a:success_check:1546134620087783526> Access Denied')
               .setColor(0x99CC00)
               .setDescription('Only the Server Owner and whitelisted users can manage the anti-nuke whitelist.')
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -2899,7 +2917,7 @@ export const SecurityManifest: ModuleManifest = {
         } else {
           if (!interaction.memberPermissions?.has('Administrator')) {
             const embed = new EmbedBuilder()
-              .setTitle('<:security:1546142576984203336> Access Denied')
+              .setTitle('<a:success_check:1546134620087783526> Access Denied')
               .setColor(0x99CC00)
               .setDescription('Administrator permissions are required to perform security actions.')
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -2949,7 +2967,7 @@ export const SecurityManifest: ModuleManifest = {
               {
                 title: '<:config:1532425712844144701> UPDATED CONFIGURATION PARAMETERS',
                 items: [
-                  `Status: ${updatedRule.enabled ? '<a:approved:1532390590707142956> ENABLED' : '<a:wrong:1546155193303957504> DISABLED'}`,
+                  `Status: ${updatedRule.enabled ? '<:ticks:1532620580266836148> ENABLED' : '<a:wrong:1546155193303957504> DISABLED'}`,
                   `Rate Threshold: \`${updatedRule.limit} actions / ${updatedRule.window} seconds\``,
                   `Punishment Action: \`${updatedRule.action.toUpperCase()}\``,
                   `Automatic Reversion: \`${updatedRule.recovery ? 'ENABLED (Auto-Rollback)' : 'DISABLED'}\``
@@ -2969,12 +2987,12 @@ export const SecurityManifest: ModuleManifest = {
           const scoreVal = ruleCount > 0 ? Math.round((enabledCount / ruleCount) * 100) : 50;
 
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Security Health & Score')
+            .setTitle('<a:success_check:1546134620087783526> Security Health & Score')
             .setColor(0x99CC00)
             .addFields(
               { name: 'Security Score', value: `**${scoreVal}/100**`, inline: true },
               { name: 'Active Protection Rules', value: `${enabledCount} / ${ruleCount}`, inline: true },
-              { name: 'Emergency Lockdown', value: config.emergencyMode ? '<a:wrong:1546155193303957504> ACTIVATED' : '<a:approved:1532390590707142956> Normal', inline: true }
+              { name: 'Emergency Lockdown', value: config.emergencyMode ? '<a:wrong:1546155193303957504> ACTIVATED' : '<:ticks:1532620580266836148> Normal', inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
@@ -2995,7 +3013,7 @@ export const SecurityManifest: ModuleManifest = {
           const embed = new EmbedBuilder()
             .setTitle('<a:lovemail:1527647157371535420> Real-time Risk Analysis')
             .setColor(0x99CC00)
-            .setDescription(riskFactors.length > 0 ? riskFactors.join('\n') : '<a:approved:1532390590707142956> No critical risk factors identified. Server configuration is hardened.')
+            .setDescription(riskFactors.length > 0 ? riskFactors.join('\n') : '<:ticks:1532620580266836148> No critical risk factors identified. Server configuration is hardened.')
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
           return interaction.editReply({ embeds: [embed] });
@@ -3012,7 +3030,7 @@ export const SecurityManifest: ModuleManifest = {
 
           const lines = dangerousRoles.map((r: any) => `• <@&${r.id}> — Permissions: ${r.permissions.has(PermissionFlagsBits.Administrator) ? 'Admin' : 'Manage Server/Roles/Channels'}`);
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Privileged Role Scan')
+            .setTitle('<a:success_check:1546134620087783526> Privileged Role Scan')
             .setColor(0x99CC00)
             .setDescription(lines.join('\n') || 'No privileged roles found.')
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -3044,7 +3062,7 @@ export const SecurityManifest: ModuleManifest = {
           saveConfig({ whitelist });
           context.logSyncEvent(`[Security] Added user ${user.username} to anti-nuke whitelist.`, 'success');
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Security Whitelist: Member Added')
+            .setTitle('<a:success_check:1546134620087783526> Security Whitelist: Member Added')
             .setColor(0x99CC00)
             .setDescription(`Successfully whitelisted **${user.username}** from Anti-Nuke restrictions. Standard security limitations will not apply to this user.`)
             .addFields(
@@ -3074,7 +3092,7 @@ export const SecurityManifest: ModuleManifest = {
           saveConfig({ whitelist });
           context.logSyncEvent(`[Security] Removed user ${user.username} from anti-nuke whitelist.`, 'info');
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Security Whitelist: Member Removed')
+            .setTitle('<a:success_check:1546134620087783526> Security Whitelist: Member Removed')
             .setColor(0x99CC00)
             .setDescription(`Successfully removed **${user.username}** from Anti-Nuke bypass whitelist.`)
             .addFields(
@@ -3090,7 +3108,7 @@ export const SecurityManifest: ModuleManifest = {
           const whitelist = config.whitelist || [];
           if (whitelist.length === 0) {
             const embed = new EmbedBuilder()
-              .setTitle('<:security:1546142576984203336> Security Whitelist')
+              .setTitle('<a:success_check:1546134620087783526> Security Whitelist')
               .setColor(0x99CC00)
               .setDescription('No users are currently whitelisted.')
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -3101,7 +3119,7 @@ export const SecurityManifest: ModuleManifest = {
             return `<@${id}> (\`${id}\`)`;
           }).join('\n');
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Whitelisted Users')
+            .setTitle('<a:success_check:1546134620087783526> Whitelisted Users')
             .setColor(0x99CC00)
             .setDescription(mentions)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -3113,7 +3131,7 @@ export const SecurityManifest: ModuleManifest = {
           const list = config.quarantinedUsers || [];
           if (list.length === 0) {
             const embed = new EmbedBuilder()
-              .setTitle('<:security:1546142576984203336> Quarantined Members')
+              .setTitle('<a:success_check:1546134620087783526> Quarantined Members')
               .setColor(0x99CC00)
               .setDescription('No members are currently isolated in quarantine.')
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -3121,7 +3139,7 @@ export const SecurityManifest: ModuleManifest = {
           }
           const lines = list.map((u: any) => `• <@${u.userId}> — Reason: **${u.reason}** (Isolated: <t:${Math.floor(new Date(u.time).getTime() / 1000)}:R>)`);
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Isolated Quarantined Members')
+            .setTitle('<a:success_check:1546134620087783526> Isolated Quarantined Members')
             .setColor(0x99CC00)
             .setDescription(lines.join('\n'))
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -3163,13 +3181,13 @@ export const SecurityManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
         if (sub === 'hierarchy') {
-          return interaction.reply({ content: '<:security:1546142576984203336> **Role Hierarchy Vulnerability Check**:\nAll admin roles are placed correctly in the server role list.', flags: 64 });
+          return interaction.reply({ content: '<a:success_check:1546134620087783526> **Role Hierarchy Vulnerability Check**:\nAll admin roles are placed correctly in the server role list.', flags: 64 });
         }
         if (sub === 'exposed') {
           return interaction.reply({ content: '<a:lovemail:1527647157371535420> **Exposed Channel Permissions Check**:\n0 channels found with broad public admin rights.', flags: 64 });
         }
         if (sub === 'inactive-admins') {
-          return interaction.reply({ content: '<:timer:1532620491662037123> **Inactive Administrator Check** (Last 30 Days):\n0 inactive administrator accounts found.', flags: 64 });
+          return interaction.reply({ content: '<a:Timer:1546231426863730728> **Inactive Administrator Check** (Last 30 Days):\n0 inactive administrator accounts found.', flags: 64 });
         }
         if (sub === 'permissions') {
           return interaction.reply({ content: '<a:lovemail:1527647157371535420> **Role Permission Score Report**:\nAll roles scored above target baseline (100% compliant).', flags: 64 });
@@ -3178,16 +3196,16 @@ export const SecurityManifest: ModuleManifest = {
           return interaction.reply({ content: '<a:lovemail:1527647157371535420> **Security Baseline POST Check**:\nServer state matches target secure configuration.', flags: 64 });
         }
         if (sub === 'restore-perms') {
-          return interaction.reply({ content: '<a:approved:1532390590707142956> **Restore Permissions Overwrites**:\nDefault permission overwrites successfully restored.', flags: 64 });
+          return interaction.reply({ content: '<:ticks:1532620580266836148> **Restore Permissions Overwrites**:\nDefault permission overwrites successfully restored.', flags: 64 });
         }
         if (sub === 'lockdown-status') {
-          return interaction.reply({ content: `<:security:1546142576984203336> **Emergency Lockdown Status**:\nSystem is currently in **${config.emergencyMode ? '<a:wrong:1546155193303957504> EMERGENCY LOCKDOWN' : '<a:approved:1532390590707142956> NORMAL OPERATION'}** mode.`, flags: 64 });
+          return interaction.reply({ content: `<a:success_check:1546134620087783526> **Emergency Lockdown Status**:\nSystem is currently in **${config.emergencyMode ? '<a:wrong:1546155193303957504> EMERGENCY LOCKDOWN' : '<:ticks:1532620580266836148> NORMAL OPERATION'}** mode.`, flags: 64 });
         }
         if (sub === 'emergency') {
           context.updateModuleConfig('security', { emergencyMode: true });
           context.logSyncEvent('EMERGENCY LOCKDOWN ENABLED via Slash Command.', 'warn');
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> SYSTEM UPDATE: Emergency Lockdown Activated')
+            .setTitle('<a:success_check:1546134620087783526> SYSTEM UPDATE: Emergency Lockdown Activated')
             .setColor(0x99CC00)
             .setDescription('**CRITICAL**: All permissions frozen. Only whitelisted users can execute changes.')
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -3195,7 +3213,7 @@ export const SecurityManifest: ModuleManifest = {
           return interaction.reply({ embeds: [embed] });
         }
         if (sub === 'trust') {
-          return interaction.reply({ content: '<:security:1546142576984203336> **Trusted Roles & Admins**:\nOnly server owner and whitelisted bypass users are trusted.', flags: 64 });
+          return interaction.reply({ content: '<a:success_check:1546134620087783526> **Trusted Roles & Admins**:\nOnly server owner and whitelisted bypass users are trusted.', flags: 64 });
         }
       }
     },
@@ -3333,12 +3351,10 @@ export const SecurityManifest: ModuleManifest = {
 
             if (reCreated && typeof channel.position === 'number') {
               await reCreated.setPosition(channel.position).catch(() => { });
+            } else if (!reCreated) {
+              // Direct creation failed (e.g. rate-limit or permissions) — fallback to full snapshot restore
+              restoreFromLiveSnapshot(guild, client, context).catch(() => { });
             }
-          }
-
-          // STEP 3: BACKGROUND TOTAL RECOVERY SWEEP
-          if (rule.recovery !== false) {
-            restoreFromLiveSnapshot(guild, client, context).catch(() => { });
           }
         } catch (err) {
           console.error('[Anti-Nuke Debug] [channelDelete] Error in handler:', err);
@@ -3369,7 +3385,7 @@ export const SecurityManifest: ModuleManifest = {
 
           const purgeAllSpamChannels = async (targetName: string) => {
             try {
-              const spamChannels = guild.channels.cache.filter((c: any) => c.name === targetName || (c.createdTimestamp && Date.now() - c.createdTimestamp < 30000));
+              const spamChannels = guild.channels.cache.filter((c: any) => c.name === targetName || (c.createdTimestamp && Date.now() - c.createdTimestamp < 30000 && (c.name.includes('nuke') || c.name.includes('raid') || c.name.includes('hack'))));
               await Promise.allSettled(spamChannels.map((c: any) => c.delete('Anti-Nuke Mass Channel Purge').catch(() => { })));
             } catch { }
           };
@@ -3905,16 +3921,10 @@ export const SecurityManifest: ModuleManifest = {
               }
             }
 
-            // ── New Member Auto-Role Bypass ───────────────────────────────────────
-            // If the target member joined within the last 30 seconds AND none of the
-            // granted roles contain ANY dangerous permission (Admin, ManageRoles, BanMembers,
-            // ManageChannels, ManageGuild, ManageWebhooks), this is almost certainly a
-            // Discord auto-role or bot-assigned join role — not an attack.
-            // NOTE: We check the full dangerous permission set here (not just Administrator)
-            // to close the bypass window where a role with BanMembers/ManageGuild but not Admin
-            // would otherwise slip through undetected for new members.
-            const memberJoinedAt = newMember.joinedTimestamp ?? 0;
-            const isNewMember = memberJoinedAt > 0 && (Date.now() - memberJoinedAt) < 30_000;
+            // ── Join Role Guard Interceptor ──────────────────────────────────────
+            // Evaluates join grace period, Discord Onboarding, Membership Screening,
+            // and Trusted Bot role assignments, ensuring non-dangerous auto-roles
+            // are bypassed cleanly while unauthorized grants trigger Anti-Nuke.
             const DANGEROUS_PERMS = [
               PermissionFlagsBits.Administrator,
               PermissionFlagsBits.ManageGuild,
@@ -3924,25 +3934,15 @@ export const SecurityManifest: ModuleManifest = {
               PermissionFlagsBits.BanMembers,
               PermissionFlagsBits.ManageWebhooks
             ];
-            const hasDangerousInGrant = addedRoles.some((r: any) =>
-              DANGEROUS_PERMS.some(flag => r.permissions?.has?.(flag))
-            );
 
-            if (isNewMember && !hasDangerousInGrant) {
-              console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Bypassing role grant check for ${newMember.user.username} — new member auto-role (joined ${Math.round((Date.now() - memberJoinedAt) / 1000)}s ago, no dangerous perms in granted roles: ${addedRoles.map((r: any) => r.name).join(', ')}).`);
-              // Skip to role-remove and timeout checks below
+            const guardResult = await checkRoleAssignment(client, newMember, addedRoles, context).catch(err => {
+              console.error('[Anti-Nuke Debug] Error running Join Role Guard:', err);
+              return 'ALLOW_CHECK' as const;
+            });
+
+            if (guardResult === 'IGNORE_EVENT') {
+              console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Join Role Guard validated role grant for ${newMember.user.username} (onboarding/auto-role). Skipping anti-nuke role checks.`);
             } else {
-
-              // Join Guard Pre-Validation Interceptor
-              const guardResult = await checkRoleAssignment(client, newMember, addedRoles, context).catch(err => {
-                console.error('[Anti-Nuke Debug] Error running Join Role Guard:', err);
-                return 'ALLOW_CHECK' as const;
-              });
-              if (guardResult === 'IGNORE_EVENT') {
-                console.log(`[Anti-Nuke Debug] [guildMemberUpdate] Join Role Guard returned IGNORE_EVENT for ${newMember.user.username}. Skipping anti-nuke role checks.`);
-                return;
-              }
-
               const hasAdmin = addedRoles.some((r: any) => r.permissions?.has?.(PermissionFlagsBits.Administrator));
               const isMonitored = addedRoles.some((r: any) => (config.monitoredRoleIds || []).includes(r.id));
               const monitorAll = !config.roleMonitorMode || config.roleMonitorMode === 'All Roles';
@@ -4281,6 +4281,49 @@ export const SecurityManifest: ModuleManifest = {
       }
     },
     {
+      name: 'guildBanRemove',
+      handler: async (client: any, ban: any, context: any) => {
+        const modules = context.getModulesState ? context.getModulesState(ban.guild?.id) : [];
+        const secModule = modules.find((m: any) => m.id === 'security');
+        if (!secModule || secModule.status === 'disabled') return;
+
+        const config = secModule.config || {};
+        if (config.antiNukeEnabled === false) return;
+        const rule = getEffectiveRule(config.rules, 'anti_member_unban', config);
+        if (!rule.enabled) return;
+
+        try {
+          const guild = ban.guild;
+          if (!guild) return;
+
+          const logEntry = await fetchAuditLogWithRetry(guild, AuditLogEvent.MemberBanRemove, ban.user.id);
+          if (!logEntry) return;
+
+          const executor = logEntry.executor;
+          if (!executor || executor.id === client.user.id) return;
+          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_member_unban')) return;
+
+          const triggered = checkRateLimit(guild.id, executor.id, 'anti_member_unban', rule.limit, rule.window);
+          if (!triggered) return;
+
+          addThreatPoints(guild.id, 40);
+          context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized unban of ${ban.user.username} by ${executor.username}.`, 'warn');
+          AdvancedSecurityService.trackAction(guild.id, executor.id, `Unban: ${ban.user.username}`, context, config.alertChannelId, guild);
+
+          // STEP 1: Punish violator who performed unauthorized unban
+          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Unban of ${ban.user.username}`, rule.action || 'quarantine', config, context, 'anti_member_unban');
+
+          // STEP 2: Instant Recovery (re-ban the unauthorized unbanned target)
+          if (rule.recovery !== false) {
+            await guild.members.ban(ban.user.id, { reason: 'Anti-Nuke Recovery: Re-banning unauthorized unban target' }).catch(() => null);
+            context.logSyncEvent(guild.id, `🛡️ [Recovery]: Re-banned ${ban.user.username} following unauthorized unban.`, 'success');
+          }
+        } catch (err) {
+          console.error('[Anti-Nuke Debug] [guildBanRemove] Error in handler:', err);
+        }
+      }
+    },
+    {
       name: 'guildMemberRemove',
       handler: async (client: any, member: any, context: any) => {
         const modules = context.getModulesState ? context.getModulesState(member.guild?.id) : [];
@@ -4289,32 +4332,32 @@ export const SecurityManifest: ModuleManifest = {
 
         const config = secModule.config || {};
         if (config.antiNukeEnabled === false) return;
-        const rule = getEffectiveRule(config.rules, 'anti_kick', config);
-        if (!rule.enabled) return;
+
+        const ruleKick = getEffectiveRule(config.rules, 'anti_kick', config);
+        const ruleBotRemove = getEffectiveRule(config.rules, 'anti_bot_remove', config);
+        const rulePrune = getEffectiveRule(config.rules, 'anti_prune', config);
+
+        if (!ruleKick.enabled && !ruleBotRemove.enabled && !rulePrune.enabled) return;
 
         try {
           const guild = member.guild;
           if (!guild) return;
 
           // A) Bot Removal Protection (anti_bot_remove)
-          if (member.user?.bot) {
-            const ruleBotRemove = getEffectiveRule(config.rules, 'anti_bot_remove');
-            if (ruleBotRemove.enabled) {
-              const logEntry = (await fetchAuditLogWithRetry(guild, AuditLogEvent.MemberKick, member.id)) || (await fetchAuditLogWithRetry(guild, AuditLogEvent.MemberBanAdd, member.id));
-              if (logEntry && logEntry.executor && logEntry.executor.id !== client.user.id) {
-                const executor = logEntry.executor;
-                if (!(await isExecutorBypassed(guild, executor.id, config, context, 'anti_bot_remove'))) {
-                  addThreatPoints(guild.id, 60);
-                  context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized bot removal (${member.user.username}) by ${executor.username}.`, 'warn');
-                  await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Bot Removal (${member.user.username})`, ruleBotRemove.action || 'quarantine', config, context, 'anti_bot_remove');
-                  return;
-                }
+          if (member.user?.bot && ruleBotRemove.enabled) {
+            const logEntry = (await fetchAuditLogWithRetry(guild, AuditLogEvent.MemberKick, member.id)) || (await fetchAuditLogWithRetry(guild, AuditLogEvent.MemberBanAdd, member.id));
+            if (logEntry && logEntry.executor && logEntry.executor.id !== client.user.id) {
+              const executor = logEntry.executor;
+              if (!(await isExecutorBypassed(guild, executor.id, config, context, 'anti_bot_remove'))) {
+                addThreatPoints(guild.id, 60);
+                context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized bot removal (${member.user.username}) by ${executor.username}.`, 'warn');
+                await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Bot Removal (${member.user.username})`, ruleBotRemove.action || 'quarantine', config, context, 'anti_bot_remove');
+                return;
               }
             }
           }
 
           // B) Member Kick Check (anti_kick)
-          const ruleKick = getEffectiveRule(config.rules, 'anti_kick');
           if (ruleKick.enabled) {
             const logEntry = await fetchAuditLogWithRetry(guild, AuditLogEvent.MemberKick, member.id);
             if (logEntry && logEntry.executor && logEntry.executor.id !== client.user.id) {
@@ -4323,13 +4366,36 @@ export const SecurityManifest: ModuleManifest = {
                 addThreatPoints(guild.id, 50);
                 context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized kick of ${member.user.username} by ${executor.username}.`, 'warn');
                 await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Kick of ${member.user.username}`, ruleKick.action || 'quarantine', config, context, 'anti_kick');
+
+                // Kick Recovery: Auto-Rejoin DM if recovery enabled
+                if (ruleKick.recovery !== false && !member.user?.bot) {
+                  try {
+                    const inviteChannel = guild.channels.cache.find((c: any) => c.type === 0 && c.permissionsFor?.(guild.members.me)?.has('CreateInstantInvite')) || guild.systemChannel;
+                    let inviteUrl = '';
+                    if (inviteChannel) {
+                      const invite = await inviteChannel.createInvite({ maxAge: 86400, maxUses: 5, unique: true, reason: 'Anti-Nuke Auto-Rejoin Link' }).catch(() => null);
+                      if (invite) inviteUrl = invite.url;
+                    }
+                    if (inviteUrl) {
+                      const dmEmbed = {
+                        title: `🛡️ Security Recovery: Rejoin ${guild.name}`,
+                        color: 0x84cc16,
+                        description: `Hello **${member.user.username}**,\n\nYou were kicked from **${guild.name}** by an unauthorized actor.\n\nOur Anti-Nuke engine has **neutralized the attacker**.\n\n👉 **Click here to rejoin the server:**\n${inviteUrl}`,
+                        footer: { text: 'Rage Optimiser Enterprise Security' },
+                        timestamp: new Date().toISOString()
+                      };
+                      await member.user.send({ embeds: [dmEmbed] }).catch(() => {});
+                    }
+                  } catch (e) {
+                    console.error('[Anti-Nuke Debug] Error sending kick auto-rejoin DM:', e);
+                  }
+                }
                 return;
               }
             }
           }
 
           // C) Mass Member Prune Check (anti_prune)
-          const rulePrune = getEffectiveRule(config.rules, 'anti_prune');
           if (rulePrune.enabled) {
             const logEntry = await fetchAuditLogWithRetry(guild, AuditLogEvent.MemberPrune);
             if (logEntry && logEntry.executor && logEntry.executor.id !== client.user.id) {
@@ -4601,6 +4667,10 @@ export const SecurityManifest: ModuleManifest = {
           addThreatPoints(guild.id, logEntry.action === AuditLogEvent.WebhookDelete ? 40 : 30);
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized webhook activity (${ruleName.replace('anti_', '')}) in #${channel.name} by ${executor.username}.`, 'warn');
 
+          // STEP 1: Punish violator immediately
+          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Webhook Activity (${ruleName})`, rule.action, config, context, ruleName);
+
+          // STEP 2: Recovery
           if (rule.recovery !== false) {
             if (logEntry.action === AuditLogEvent.WebhookCreate) {
               const webhooks = await channel.fetchWebhooks().catch(() => null);
@@ -4621,8 +4691,6 @@ export const SecurityManifest: ModuleManifest = {
               }
             }
           }
-
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Webhook Activity (${ruleName})`, rule.action, config, context, ruleName);
         } catch (err) {
           console.error(err);
         }
@@ -4701,11 +4769,13 @@ export const SecurityManifest: ModuleManifest = {
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized emoji creation by ${executor.username}.`, 'warn');
 
+          // STEP 1: Punish violator immediately
+          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Emoji Creation`, rule.action, config, context, 'anti_emoji_create');
+
+          // STEP 2: Delete unauthorized emoji
           if (rule.recovery !== false) {
             await emoji.delete('Anti-Nuke Recovery: Deleting unauthorized emoji').catch(console.error);
           }
-
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Emoji Creation`, rule.action, config, context, 'anti_emoji_create');
         } catch (err) {
           console.error(err);
         }
@@ -4741,11 +4811,13 @@ export const SecurityManifest: ModuleManifest = {
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized emoji deletion by ${executor.username}.`, 'warn');
 
+          // STEP 1: Punish violator immediately
+          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Emoji Deletion`, rule.action, config, context, 'anti_emoji_delete');
+
+          // STEP 2: Restore deleted emoji
           if (rule.recovery !== false) {
             await guild.emojis.create({ attachment: emoji.url, name: emoji.name, reason: 'Anti-Nuke Recovery: Restoring deleted emoji' }).catch(console.error);
           }
-
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Emoji Deletion`, rule.action, config, context, 'anti_emoji_delete');
         } catch (err) {
           console.error(err);
         }
@@ -4781,11 +4853,13 @@ export const SecurityManifest: ModuleManifest = {
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized emoji update by ${executor.username}.`, 'warn');
 
+          // STEP 1: Punish violator immediately
+          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Emoji Update`, rule.action, config, context, 'anti_emoji_update');
+
+          // STEP 2: Revert emoji properties
           if (rule.recovery !== false) {
             await newEmoji.edit({ name: oldEmoji.name, reason: 'Anti-Nuke Recovery: Restoring original emoji state' }).catch(console.error);
           }
-
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Emoji Update`, rule.action, config, context, 'anti_emoji_update');
         } catch (err) {
           console.error(err);
         }
@@ -4799,7 +4873,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_emoji_create');
+        const rule = getEffectiveRule(config.rules, 'anti_sticker_create', config);
 
         if (!rule.enabled) return;
 
@@ -4813,18 +4887,20 @@ export const SecurityManifest: ModuleManifest = {
 
           const executor = logEntry.executor;
           if (!executor || executor.id === client.user.id) return;
-          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_emoji_create')) return;
+          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_sticker_create')) return;
 
-          const triggered = checkRateLimit(guild.id, executor.id, 'anti_emoji_create', rule.limit, rule.window);
+          const triggered = checkRateLimit(guild.id, executor.id, 'anti_sticker_create', rule.limit, rule.window);
           if (!triggered) return;
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized sticker creation by ${executor.username}.`, 'warn');
 
+          // STEP 1: Punish violator immediately
+          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Sticker Creation`, rule.action, config, context, 'anti_sticker_create');
+
+          // STEP 2: Delete unauthorized sticker
           if (rule.recovery !== false) {
             await sticker.delete('Anti-Nuke Recovery: Deleting unauthorized sticker').catch(console.error);
           }
-
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Sticker Creation`, rule.action, config, context, 'anti_emoji_create');
         } catch (err) {
           console.error(err);
         }
@@ -4838,7 +4914,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_emoji_delete');
+        const rule = getEffectiveRule(config.rules, 'anti_sticker_delete', config);
 
         if (!rule.enabled) return;
 
@@ -4852,14 +4928,18 @@ export const SecurityManifest: ModuleManifest = {
 
           const executor = logEntry.executor;
           if (!executor || executor.id === client.user.id) return;
-          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_emoji_delete')) return;
+          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_sticker_delete')) return;
 
-          const triggered = checkRateLimit(guild.id, executor.id, 'anti_emoji_delete', rule.limit, rule.window);
+          const triggered = checkRateLimit(guild.id, executor.id, 'anti_sticker_delete', rule.limit, rule.window);
           if (!triggered) return;
 
           addThreatPoints(guild.id, 15);
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized sticker deletion by ${executor.username}.`, 'warn');
 
+          // STEP 1: Punish violator immediately
+          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Sticker Deletion`, rule.action, config, context, 'anti_sticker_delete');
+
+          // STEP 2: Re-upload deleted sticker
           if (rule.recovery !== false && sticker.url) {
             await guild.stickers.create({
               file: sticker.url,
@@ -4870,8 +4950,6 @@ export const SecurityManifest: ModuleManifest = {
             }).catch(console.error);
             context.logSyncEvent(guild.id, `Re-uploaded deleted sticker "${sticker.name}".`, 'success');
           }
-
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Sticker Deletion`, rule.action, config, context, 'anti_emoji_delete');
         } catch (err) {
           console.error(err);
         }
@@ -4885,7 +4963,7 @@ export const SecurityManifest: ModuleManifest = {
         if (!secModule || secModule.status === 'disabled') return;
 
         const config = secModule.config || {};
-        const rule = getEffectiveRule(config.rules, 'anti_emoji_update');
+        const rule = getEffectiveRule(config.rules, 'anti_sticker_update', config);
 
         if (!rule.enabled) return;
 
@@ -4899,14 +4977,25 @@ export const SecurityManifest: ModuleManifest = {
 
           const executor = logEntry.executor;
           if (!executor || executor.id === client.user.id) return;
-          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_emoji_update')) return;
+          if (await isExecutorBypassed(guild, executor.id, config, context, 'anti_sticker_update')) return;
 
-          const triggered = checkRateLimit(guild.id, executor.id, 'anti_emoji_update', rule.limit, rule.window);
+          const triggered = checkRateLimit(guild.id, executor.id, 'anti_sticker_update', rule.limit, rule.window);
           if (!triggered) return;
 
           context.logSyncEvent(guild.id, `🚨 [Anti-Nuke Triggered]: Unauthorized sticker update by ${executor.username}.`, 'warn');
 
-          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Sticker Update`, rule.action, config, context, 'anti_emoji_update');
+          // STEP 1: Punish violator FIRST
+          await punishViolator(client, guild, executor.id, executor.username, `Anti-Nuke: Unauthorized Sticker Update`, rule.action, config, context, 'anti_sticker_update');
+
+          // STEP 2: Revert sticker properties if recovery is enabled
+          if (rule.recovery !== false) {
+            await newSticker.edit({
+              name: oldSticker.name,
+              description: oldSticker.description,
+              tags: oldSticker.tags,
+              reason: 'Anti-Nuke Recovery: Restoring original sticker properties'
+            }).catch(console.error);
+          }
         } catch (err) {
           console.error(err);
         }
@@ -4951,12 +5040,12 @@ export const SecurityManifest: ModuleManifest = {
           const triggered = checkRateLimit(guild.id, inviter.id, 'anti_invite_create', rule.limit || 1, rule.window || 10);
           if (!triggered) return;
 
-          context.logSyncEvent(guild.id, `<:security:1546142576984203336> [Anti-Nuke Triggered]: Unauthorized Role-Bound Invite (${invite.code}) created by ${inviter.username}. Deleting invite link.`, 'warn');
+          context.logSyncEvent(guild.id, `<a:success_check:1546134620087783526> [Anti-Nuke Triggered]: Unauthorized Role-Bound Invite (${invite.code}) created by ${inviter.username}. Deleting invite link.`, 'warn');
 
           // Immediately delete the unauthorized role-bound invite link
           await invite.delete('Anti-Nuke Protection: Deleting unauthorized role-bound invite link').catch(() => { });
 
-          await punishViolator(client, guild, inviter.id, inviter.username, `<:security:1546142576984203336> Anti-Nuke: Unauthorized Role-Bound Invite Creation (${invite.code})`, rule.action || 'quarantine', config, context, 'anti_invite_create');
+          await punishViolator(client, guild, inviter.id, inviter.username, `<a:success_check:1546134620087783526> Anti-Nuke: Unauthorized Role-Bound Invite Creation (${invite.code})`, rule.action || 'quarantine', config, context, 'anti_invite_create');
         } catch (err) {
           console.error('[Anti-Nuke InviteCreate Error]:', err);
         }

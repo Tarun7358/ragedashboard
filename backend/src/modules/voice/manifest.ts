@@ -1,4 +1,4 @@
-﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { joinVoiceChannel, getVoiceConnection } from '@discordjs/voice';
 import { EmbedBuilder, ChannelType } from 'discord.js';
 
@@ -89,7 +89,7 @@ export const VoiceManifest: ModuleManifest = {
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
         if (!isOwner) {
-          return interaction.reply({ content: '<:security:1546142576984203336> Voice Presence commands require Administrator permissions.', flags: 64 });
+          return interaction.reply({ content: '<a:success_check:1546134620087783526> Voice Presence commands require Administrator permissions.', flags: 64 });
         }
         const modules = context.getModulesState();
         const voiceMod = modules.find((m: any) => m.id === 'voice');
@@ -104,10 +104,10 @@ export const VoiceManifest: ModuleManifest = {
         } else if (action === 'join') {
           if (!channelId) return interaction.reply({ content: '<a:wrong:1546155193303957504> No voice channel configured. Set it in the Dashboard → Voice Presence.', flags: 64 });
           context.logSyncEvent(`Voice command: Owner requested join to channel ${channelId}.`, 'info');
-          await interaction.reply({ content: `<a:approved:1532390590707142956> Bot will attempt to join <#${channelId}> on the next check cycle (within 10 seconds).`, flags: 64 });
+          await interaction.reply({ content: `<:ticks:1532620580266836148> Bot will attempt to join <#${channelId}> on the next check cycle (within 10 seconds).`, flags: 64 });
         } else if (action === 'leave') {
           context.logSyncEvent('Voice command: Owner requested voice disconnect.', 'info');
-          await interaction.reply({ content: '<a:approved:1532390590707142956> Voice disconnection queued. Bot will leave its current voice channel.', flags: 64 });
+          await interaction.reply({ content: '<:ticks:1532620580266836148> Voice disconnection queued. Bot will leave its current voice channel.', flags: 64 });
         } else {
           await interaction.reply({ content: '<a:wrong:1546155193303957504> Unknown action. Use: `status`, `join`, or `leave`.', flags: 64 });
         }
@@ -132,7 +132,7 @@ export const VoiceManifest: ModuleManifest = {
         if (!sub) {
           return interaction.reply({ content: '<a:wrong:1546155193303957504> Please use a subcommand: `join`, `leave`, `status`, or `set`.', flags: 64 });
         }
-        const modules = context.getModulesState();
+        const modules = (context.getModulesState ? context.getModulesState(interaction.guildId) : null) || [];
         const voiceMod = modules.find((m: any) => m.id === 'voice');
         const config = voiceMod?.config || {};
 
@@ -186,7 +186,7 @@ export const VoiceManifest: ModuleManifest = {
               .addFields(
                 { name: '<:voicechannelgreen:1532425750278438962> Connected Channel', value: `<#${channel.id}>`, inline: true },
                 { name: '<:config:1532425712844144701> Auto-Reconnect', value: '`Enabled`', inline: true },
-                { name: '<:security:1546142576984203336> Mode', value: '`Deafened (Silent)`', inline: true },
+                { name: '<a:success_check:1546134620087783526> Mode', value: '`Deafened (Silent)`', inline: true },
                 { name: '<:config:1532425712844144701> Configured By', value: `<@${interaction.user.id}>`, inline: true }
               )
               .setColor(0x99CC00)
@@ -253,12 +253,16 @@ export const VoiceManifest: ModuleManifest = {
 
         // ─── /247 status ─────────────────────────────────────────────
         else if (sub === 'status') {
+          await interaction.deferReply({ flags: 64 });
           const guildId = interaction.guildId;
-          const existingConnection = getVoiceConnection(guildId);
+          let existingConnection = null;
+          try {
+            existingConnection = getVoiceConnection(guildId);
+          } catch (e) {}
           const isConnected = !!existingConnection;
           const channelId = config.channelId;
 
-          const statusText = isConnected ? '<a:approved:1532390590707142956> Connected' : (channelId ? '<:config:1532425712844144701> Configured (Not Connected)' : '<a:wrong:1546155193303957504> Not Configured');
+          const statusText = isConnected ? '<:ticks:1532620580266836148> Connected' : (channelId ? '<:config:1532425712844144701> Configured (Not Connected)' : '<a:wrong:1546155193303957504> Not Configured');
 
           const connState = voiceMod?.connectionStatus || (isConnected ? 'connected' : 'disconnected');
           const duration = voiceMod?.connectionDuration || '—';
@@ -270,7 +274,7 @@ export const VoiceManifest: ModuleManifest = {
               { name: '<:stats:1532429110775779459> Status', value: statusText, inline: true },
               { name: '<:voicechannelgreen:1532425750278438962> Configured Channel', value: channelId ? `<#${channelId}>` : '`Not Set`', inline: true },
               { name: '<:link:1532620952087826602> Gateway State', value: `\`${connState}\``, inline: true },
-              { name: '<:timer:1532620491662037123> Connection Duration', value: `\`${duration}\``, inline: true },
+              { name: '<a:Timer:1546231426863730728> Connection Duration', value: `\`${duration}\``, inline: true },
               { name: '<:config:1532425712844144701> Reconnect Attempts', value: `\`${reconnectAttempts}\``, inline: true },
               { name: '<a:lovemail:1527647157371535420> Module Status', value: `\`${voiceMod?.status || 'unknown'}\``, inline: true }
             )
@@ -278,7 +282,7 @@ export const VoiceManifest: ModuleManifest = {
             .setTimestamp()
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
 
-          await interaction.reply({ embeds: [embed], flags: 64 });
+          await interaction.editReply({ embeds: [embed] });
         }
 
         // ─── /247 set ────────────────────────────────────────────────
@@ -294,30 +298,38 @@ export const VoiceManifest: ModuleManifest = {
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
 
-          context.updateModuleConfig('voice', {
-            ...config,
-            channelId: channel.id
-          });
+          await interaction.deferReply({ flags: 64 });
 
-          context.logSyncEvent(
-            interaction.guildId,
-            `[/247 set] 24/7 target set to #${channel.name} by ${interaction.user.globalName ?? interaction.user.username}. Will connect on next cycle.`,
-            'success'
-          );
+          try {
+            context.updateModuleConfig('voice', {
+              ...config,
+              channelId: channel.id
+            });
 
-          const embed = new EmbedBuilder()
-            .setTitle('<:config:1532425712844144701> 24/7 Target Channel Updated')
-            .setDescription(`The 24/7 voice presence target has been updated. The bot will connect to the new channel within **10 seconds**.`)
-            .addFields(
-              { name: '<:voicechannelgreen:1532425750278438962> New Target Channel', value: `<#${channel.id}>`, inline: true },
-              { name: '<:config:1532425712844144701> Auto-Connect', value: '`On next cycle`', inline: true },
-              { name: '<:config:1532425712844144701> Set By', value: `<@${interaction.user.id}>`, inline: true }
-            )
-            .setColor(0x99CC00)
-            .setTimestamp()
-            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            context.logSyncEvent(
+              interaction.guildId,
+              `[/247 set] 24/7 target set to #${channel.name} by ${interaction.user.globalName ?? interaction.user.username}. Will connect on next cycle.`,
+              'success'
+            );
 
-          await interaction.reply({ embeds: [embed], flags: 64 });
+            const embed = new EmbedBuilder()
+              .setTitle('<:config:1532425712844144701> 24/7 Target Channel Updated')
+              .setDescription(`The 24/7 voice presence target has been updated. The bot will connect to the new channel within **10 seconds**.`)
+              .addFields(
+                { name: '<:voicechannelgreen:1532425750278438962> New Target Channel', value: `<#${channel.id}>`, inline: true },
+                { name: '<:config:1532425712844144701> Auto-Connect', value: '`On next cycle`', inline: true },
+                { name: '<:config:1532425712844144701> Set By', value: `<@${interaction.user.id}>`, inline: true }
+              )
+              .setColor(0x99CC00)
+              .setTimestamp()
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+
+            await interaction.editReply({ embeds: [embed] });
+          } catch (err: any) {
+            await interaction.editReply({
+              content: `<a:wrong:1546155193303957504> Failed to update 24/7 target: \`${err?.message || err}\``
+            });
+          }
         }
       }
     }

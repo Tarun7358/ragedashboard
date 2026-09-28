@@ -1,4 +1,4 @@
-﻿import { PermissionFlagsBits, MessageFlags, EmbedBuilder } from 'discord.js';
+import { PermissionFlagsBits, MessageFlags, EmbedBuilder } from 'discord.js';
 import { updateVoiceChannelConnection } from './detector.js';
 import { checkWhitelistPermission } from '../../utils/whitelistCheck.js';
 import { joinVoiceChannel, getVoiceConnection } from '@discordjs/voice';
@@ -206,7 +206,7 @@ export async function handleVoiceProtectionSlashCommand(
   // 1. ENABLE
   if (sub === 'enable') {
     if (config.enabled) {
-      return interaction.reply(buildStatusCard({ emoji: '<:security:1546142576984203336>', title: 'Voice Protection Active', body: 'Voice Protection Engine is already online and monitoring.', accentColor: Colors.BRAND }));
+      return interaction.reply(buildStatusCard({ emoji: '<a:success_check:1546134620087783526>', title: 'Voice Protection Active', body: 'Voice Protection Engine is already online and monitoring.', accentColor: Colors.BRAND }));
     }
     await context.updateModuleConfig('voice-protection', { enabled: true });
     
@@ -219,7 +219,7 @@ export async function handleVoiceProtectionSlashCommand(
     }
 
     const { embeds, components } = buildRichCard({
-      emoji: '<:security:1546142576984203336>',
+      emoji: '<a:success_check:1546134620087783526>',
       title: 'Voice Protection Suite Initialized',
       description: 'Acoustic shield initialized successfully. Real-time decibel analysis and automated spike suppression are now online.',
       accentColor: Colors.BRAND,
@@ -232,7 +232,7 @@ export async function handleVoiceProtectionSlashCommand(
   // 2. DISABLE
   if (sub === 'disable') {
     if (!config.enabled) {
-      return interaction.reply(buildStatusCard({ emoji: '<:security:1546142576984203336>', title: 'Voice Protection Offline', body: 'Voice Protection Engine is currently offline.', accentColor: Colors.MUTED }));
+      return interaction.reply(buildStatusCard({ emoji: '<a:success_check:1546134620087783526>', title: 'Voice Protection Offline', body: 'Voice Protection Engine is currently offline.', accentColor: Colors.MUTED }));
     }
     await context.updateModuleConfig('voice-protection', { enabled: false });
 
@@ -245,7 +245,7 @@ export async function handleVoiceProtectionSlashCommand(
     }
 
     const { embeds, components, flags } = buildRichCard({
-      emoji: '<:security:1546142576984203336>',
+      emoji: '<a:success_check:1546134620087783526>',
       title: 'Voice Protection Suite Disabled',
       description: 'Acoustic shield offline. Voice auditing has been suspended, and connection loops are terminated.',
       accentColor: Colors.MUTED,
@@ -455,7 +455,7 @@ export async function handleVoiceProtectionSlashCommand(
       .setColor(0x99CC00)
       .addFields(
         { name: '<a:wrong:1546155193303957504> Total Violations', value: `\`${stats.totalDetections || 0}\` times`, inline: true },
-        { name: '<:security:1546142576984203336> Enforced Penalties', value: `\`${stats.totalMutes || 0}\` mutes`, inline: true },
+        { name: '<a:success_check:1546134620087783526> Enforced Penalties', value: `\`${stats.totalMutes || 0}\` mutes`, inline: true },
         { name: '<:voicechannelgreen:1532425750278438962> Mean Level (RMS)', value: `\`${stats.avgLoudness || 0}%\``, inline: true },
         { name: '<a:lovemail:1527647157371535420> Peak Audio Surge', value: `\`${stats.peakLoudness || 0}%\``, inline: true }
       )

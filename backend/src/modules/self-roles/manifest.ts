@@ -123,8 +123,8 @@ export const SelfRolesManifest: ModuleManifest = {
           return interaction.reply({ content: `${WRONG_ICON} Self-roles can only be managed inside a server.`, flags: 64 });
         }
 
-        const cmdName = interaction.parsed?.commandName?.toLowerCase() || 'selfroles';
-        const sub = interaction.options?.getSubcommand(false) || interaction.parsed?.args?.[0]?.toLowerCase();
+        const cmdName = interaction.commandName?.toLowerCase() || interaction.parsed?.commandName?.toLowerCase() || 'selfroles';
+        const sub = interaction.options?.getSubcommand?.(false) || interaction.parsed?.args?.[0]?.toLowerCase();
 
         const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
         const srMod = modules.find((m: any) => m.id === 'self-roles');
@@ -397,6 +397,20 @@ export const SelfRolesManifest: ModuleManifest = {
         }
 
         return interaction.reply({ content: `${WRONG_ICON} Unknown selfroles subcommand. Use \`r!help selfroles\`.`, flags: 64 });
+      }
+    },
+    {
+      name: 'command_iam',
+      handler: async (client: any, interaction: any, context: any) => {
+        const cmd = SelfRolesManifest.events?.find((e: any) => e.name === 'command_selfroles');
+        if (cmd) return cmd.handler(client, interaction, context);
+      }
+    },
+    {
+      name: 'command_iamnot',
+      handler: async (client: any, interaction: any, context: any) => {
+        const cmd = SelfRolesManifest.events?.find((e: any) => e.name === 'command_selfroles');
+        if (cmd) return cmd.handler(client, interaction, context);
       }
     },
 

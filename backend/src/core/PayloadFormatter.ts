@@ -21,12 +21,12 @@ import { EmbedBuilder } from 'discord.js';
 
 // ── Enterprise icon tokens (Zero-Unicode design system) ────────────────────
 export const FMT_ICONS = {
-  verified:   '<a:approved:1532390590707142956>',
+  verified:   '<:ticks:1532620580266836148>',
   wrong:      '<a:wrong:1546155193303957504>',
   warning:    '<a:warning:1546155457981452441>',
   violation:  '<a:warning:1546155457981452441>',
-  shield:     '<:security:1546142576984203336>',
-  timer:      '<:timer:1532620491662037123>',
+  shield:     '<a:success_check:1546134620087783526>',
+  timer:      '<a:Timer:1546231426863730728>',
   ticket:     '<:ticket:1532620631466836021>',
   config:     '<:config:1532425712844144701>',
   member:     '<:member:1532621317487071426>',

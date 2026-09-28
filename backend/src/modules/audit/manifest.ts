@@ -61,12 +61,12 @@ export const AuditManifest: any = {
         }
 
         if (sub === 'export') {
-          return interaction.reply({ content: '<a:approved:1532390590707142956> **Audit timeline data exported**: 4 records saved to JSON output format.', flags: 64 });
+          return interaction.reply({ content: '<:ticks:1532620580266836148> **Audit timeline data exported**: 4 records saved to JSON output format.', flags: 64 });
         }
 
         if (sub === 'clear') {
           context.logSyncEvent('Audit timeline database log cleared by owner.', 'warn');
-          return interaction.reply({ content: '<a:approved:1532390590707142956> **Audit Timeline Cleared**: Log entries database has been emptied.' });
+          return interaction.reply({ content: '<:ticks:1532620580266836148> **Audit Timeline Cleared**: Log entries database has been emptied.' });
         }
 
         if (sub === 'filter') {

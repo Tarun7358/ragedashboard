@@ -1,4 +1,4 @@
-﻿import { EmbedBuilder, AuditLogEvent } from 'discord.js';
+import { EmbedBuilder, AuditLogEvent } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { buildLimeOverviewCard, createLimeEmbed, Colors, VERIFIED_ICON, WRONG_ICON, CONFIG_ICON, MEMBER_ICON, SHIELD_ICON } from '../../core/UIFactory.js';
@@ -158,7 +158,7 @@ export const LoggingManifest: ModuleManifest = {
           validCategories.forEach(cat => {
             const catConfig = config[cat];
             if (catConfig && catConfig.enabled && catConfig.channelId) {
-              desc += `<a:approved:1532390590707142956> **${cat.toUpperCase()}**: <#${catConfig.channelId}> (\`${catConfig.channelId}\`)\n`;
+              desc += `<:ticks:1532620580266836148> **${cat.toUpperCase()}**: <#${catConfig.channelId}> (\`${catConfig.channelId}\`)\n`;
             } else {
               desc += `<a:wrong:1546155193303957504> **${cat.toUpperCase()}**: *Unconfigured / Disabled*\n`;
             }
@@ -167,7 +167,7 @@ export const LoggingManifest: ModuleManifest = {
           
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('<:security:1546142576984203336> Advanced Logging Center — Telemetry Matrix')
+            .setTitle('<a:success_check:1546134620087783526> Advanced Logging Center — Telemetry Matrix')
             .setDescription(
               `> ### Server Audit Distribution Configuration\n` +
               `> Real-time event logging pipelines and assigned Discord channel targets.\n\n` +
@@ -224,7 +224,7 @@ export const LoggingManifest: ModuleManifest = {
         } else if (subcommand === 'export') {
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('<a:approved:1532390590707142956> Logging Center — Audit Export')
+            .setTitle('<:ticks:1532620580266836148> Logging Center — Audit Export')
             .setDescription(
               `> ### Log Export Engine\n` +
               `> Telemetry logs can be exported directly via the Web Dashboard.\n\n` +
@@ -274,7 +274,7 @@ export const LoggingManifest: ModuleManifest = {
           context.logSyncEvent('Logging Center: Live logs telemetry test initiated.', 'success');
           const embed = new EmbedBuilder()
             .setColor(0x84cc16)
-            .setTitle('<a:approved:1532390590707142956> Logging Center — Live Simulation')
+            .setTitle('<:ticks:1532620580266836148> Logging Center — Live Simulation')
             .setDescription(`> ### Mock Event Telemetry\n> Mock live activity stream initiated. Check your Web Dashboard under **Logs Timeline**.`)
             .setFooter({ text: 'Rage Optimiser • Simulation Engine', iconURL: client.user?.displayAvatarURL() })
             .setTimestamp();
@@ -309,7 +309,7 @@ export const LoggingManifest: ModuleManifest = {
             context.logSyncEvent(`Logging Center: ${isAllCategory ? 'ALL' : actualCategory} log channel updated to #${ch.name} via slash command.`, 'success');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`<a:approved:1532390590707142956> Logging Channel Updated — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
+              .setTitle(`<:ticks:1532620580266836148> Logging Channel Updated — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
               .setDescription(`> ### Target Channel Assigned\n> **Category**: \`${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}\` → Target: ${ch} (\`${ch.id}\`)`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
@@ -332,7 +332,7 @@ export const LoggingManifest: ModuleManifest = {
             context.logSyncEvent(`Logging Center: ${isAllCategory ? 'ALL' : actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`${enabled ? '<a:approved:1532390590707142956>' : '<a:wrong:1546155193303957504>'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
+              .setTitle(`${enabled ? '<:ticks:1532620580266836148>' : '<a:wrong:1546155193303957504>'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
               .setDescription(`> ### Telemetry Pipeline Status\n> Category **${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}** logging is now **${enabled ? 'ENABLED' : 'DISABLED'}**.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
@@ -351,7 +351,7 @@ export const LoggingManifest: ModuleManifest = {
             }
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`<a:approved:1532390590707142956> Category Reset — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
+              .setTitle(`<:ticks:1532620580266836148> Category Reset — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
               .setDescription(`> ### Configuration Restored\n> Category **${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}** configuration has been reset to defaults.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
@@ -374,7 +374,7 @@ export const LoggingManifest: ModuleManifest = {
                     `**Status**: \`Operational — 200 OK\``
                   )
                   .addFields(
-                    { name: '<:security:1546142576984203336> System Check', value: '```Event Pipeline Validated```', inline: true },
+                    { name: '<a:success_check:1546134620087783526> System Check', value: '```Event Pipeline Validated```', inline: true },
                     { name: '<:config:1532425712844144701> Timestamp', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
                   )
                   .setFooter({ text: 'Rage Optimiser • Audit System Test', iconURL: client.user?.displayAvatarURL() })

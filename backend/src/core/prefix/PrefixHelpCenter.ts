@@ -1,4 +1,4 @@
-﻿import {
+import {
   EmbedBuilder,
   ActionRowBuilder,
   StringSelectMenuBuilder,
@@ -10,12 +10,36 @@
 import { PrefixRegistry, PrefixCommandMeta } from './PrefixRegistry.js';
 import { PrefixResolver } from './PrefixResolver.js';
 import { PrefixPermissionManager } from './PrefixPermissionManager.js';
-import { Embeds, Colors, VERIFIED_ICON, WRONG_ICON } from '../UIFactory.js';
+import {
+  Embeds,
+  Colors,
+  VERIFIED_ICON,
+  WRONG_ICON,
+  SUCCESS_CHECK_ICON,
+  LOADING_ANIMATED_ICON,
+  TIMER_ICON,
+  TICKET_ICON,
+  SHIELD_ICON,
+  CONFIG_ICON,
+  GAVEL_ICON,
+  BOT_ICON,
+  MEMBER_ICON,
+  VIP_ICON,
+  LINK_ICON,
+  VOICE_ICON,
+  STATS_ICON,
+  CART_ICON,
+  ANNOUNCEMENTS_ICON,
+  ANIMATED_APPROVED_ICON,
+  SQUARE_TICK_ICON,
+  GOLD_CROWN_ICON,
+  ARROW_ICON,
+  INFO_ICON
+} from '../UIFactory.js';
 
-const APPROVED_ICON = '<a:approved:1532390590707142956>';
-const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
-const SHIELD_EMOJI = '<:security:1546142576984203336>';
-const ARROW_ICON = '<a:animatedarrowwhite:1527647357473132554>';
+const APPROVED_ICON = SUCCESS_CHECK_ICON;
+const WRONG_EMOJI = WRONG_ICON;
+const SHIELD_EMOJI = SHIELD_ICON;
 export const DEFAULT_HELP_BANNER = 'https://cdn.discordapp.com/attachments/1499055667238146289/1538212292980773004/ChatGPT_Image_Aug_15_2026_09_14_48_PM.png?ex=6a81db55&is=6a8089d5&hm=4e8308bbc0423a9b1fa28776ba323ebc65e14534cf9fa9487546a50d6e172d3b';
 
 interface CategoryInfo {
@@ -25,34 +49,37 @@ interface CategoryInfo {
 
 export class PrefixHelpCenter {
   private static categoryMeta: Record<string, CategoryInfo> = {
-    'Security': { icon: SHIELD_EMOJI, description: 'Anti-Nuke, Lockdowns, Quarantine & Whitelists' },
-    'AntiNuke': { icon: SHIELD_EMOJI, description: 'Anti-Nuke Protection & Action Thresholds' },
-    'Moderation': { icon: '<:gavel:1532621057318584380>', description: 'Ban, Kick, Timeout, Mute, Warn, Purge & Cases' },
-    'Community': { icon: '<:member:1532621317487071426>', description: 'Welcome Cards, User Info, AFK, Polls & Utilities' },
-    'Voice': { icon: '<:voicechannelgreen:1532425750278438962>', description: 'Voice Protection, Join-To-Create & 24/7 Engine' },
-    'Voice Protection': { icon: '<:voicechannelgreen:1532425750278438962>', description: 'Voice Security & Disconnect Controls' },
-    'Join To Create': { icon: '<:voicechannelgreen:1532425750278438962>', description: 'Dynamic Voice Channel Generators' },
-    'Analytics': { icon: '<:stats:1532429110775779459>', description: 'Guild Telemetry, Audit Logs & Security History' },
-    'Logging': { icon: '<a:lovemail:1527647157371535420>', description: 'Real-time Event Channels & Audit Trail' },
-    'Audit': { icon: '<a:lovemail:1527647157371535420>', description: 'Administrative Audit Logs & Case Histories' },
-    'Leveling & Economy': { icon: '<:vip:1532620837117759508>', description: 'Balance, Daily, Work, Shop, Inventory & Ranks' },
-    'Giveaways': { icon: '<:cart:1532621146208473115>', description: 'Automated Member Giveaways & Prize Rolls' },
-    'Announcements': { icon: '<a:lovemail:1527647157371535420>', description: 'Scheduled Broadcasts & Embedded Notices' },
-    'Reminders': { icon: '<:timer:1532620491662037123>', description: 'Personal & Server Timed Reminders' },
-    'Management': { icon: '<:config:1532425712844144701>', description: 'Reaction Roles, Channel Controls & Guild Overrides' },
-    'Promotion': { icon: '<:link:1532620952087826602>', description: '24h Auto-Clearing Promotion Channels & Cooldowns' },
-    'Tickets': { icon: '<:ticket:1532620631466836021>', description: 'Support Ticket Panels, Transcripts & Staff Controls' },
-    'Reaction Roles': { icon: '<:member:1532621317487071426>', description: 'Self-Assign Role Grid Panels & Numbered Buttons' },
-    'Roles': { icon: '<:vip:1532620837117759508>', description: 'Interactive Dropdown Self Roles, Button Menus & r!iam' },
-    'Automations': { icon: '<:bot:1532621107746570391>', description: 'Custom Auto-Responders & Event Hooks' },
-    'Social Updates': { icon: '<:link:1532620952087826602>', description: 'YouTube & Social Media Stream Alerts' },
-    'System': { icon: '<:bot:1532621107746570391>', description: 'System Diagnostics, Bot Health, Uptime & Latency' },
-    'Bulk Operations': { icon: '<:gavel:1532621057318584380>', description: 'Mass Role & Channel Management Utilities' },
-    'Diagnostics': { icon: '<:bot:1532621107746570391>', description: 'Deep Cluster Health & Resource Metrics' },
-    'Configuration': { icon: '<:config:1532425712844144701>', description: 'Prefix Customization, Auto-Roles & System Overrides' },
-    'AutoMod': { icon: '<:gavel:1532621057318584380>', description: 'Automated Content Filters & Link Guards' },
-    'Enterprise': { icon: '<:vip:1532620837117759508>', description: 'Emergency Lockdowns, Hot Reload & Debugging' },
-    'Backups': { icon: '<:config:1532425712844144701>', description: 'Server State Snapshots & One-Click Rollbacks' }
+    'Security': { icon: SHIELD_ICON, description: '29 Anti-Nuke Rules, Lockdowns, Quarantine & Whitelists' },
+    'AntiNuke': { icon: SHIELD_ICON, description: 'Anti-Nuke Protection, Instant Rollback & 1/1 Kick Defaults' },
+    'AutoMod': { icon: SHIELD_ICON, description: 'Anti-Link, Anti-Spam Rate Limiters & Malicious Content Filters' },
+    'Moderation': { icon: GAVEL_ICON, description: 'Ban, Kick, Timeout, Mute, Warn, Purge & Mod Cases' },
+    'Community': { icon: MEMBER_ICON, description: 'Welcome Cards, User Info, AFK, Polls & Custom Embed Builder' },
+    'Voice': { icon: VOICE_ICON, description: 'Voice Safeguards, Dynamic Join-To-Create & 24/7 Presence' },
+    'Voice Protection': { icon: VOICE_ICON, description: 'Anti-Disconnect, Voice Abuse Gates & Channel Safeguards' },
+    'Join To Create': { icon: VOICE_ICON, description: 'Dynamic Voice Channel Generators & Temp Channels' },
+    'Logging': { icon: INFO_ICON, description: 'Real-time Server Audit Telemetry & 8 Event Categories (#rage-logs)' },
+    'Audit': { icon: INFO_ICON, description: 'Administrative Audit Logs, Case History & Telemetry' },
+    'Backups': { icon: CONFIG_ICON, description: 'Server Snapshots, Vault Sync & One-Click Disaster Recovery' },
+    'Tickets': { icon: TICKET_ICON, description: 'Support Ticket Panels, Custom Guidelines & Transcripts' },
+    'Support': { icon: TICKET_ICON, description: 'Support Ticket Panels, Custom Guidelines & Staff Controls' },
+    'General Support': { icon: TICKET_ICON, description: 'Support Panel Dispatch & Ticket Category Routing' },
+    'Verification': { icon: SHIELD_ICON, description: 'Captcha Gatekeeper, Click-to-Verify & Anti-Raid Isolation' },
+    'Leveling & Economy': { icon: VIP_ICON, description: 'XP Progression, Rank Cards, Leaderboard, Daily & Work' },
+    'Giveaways': { icon: CART_ICON, description: 'Automated Member Giveaways & Prize Rolls' },
+    'Reaction Roles': { icon: MEMBER_ICON, description: 'Self-Assign Role Grid Panels & Numbered Buttons' },
+    'Roles': { icon: VIP_ICON, description: 'Interactive Dropdown Self Roles, Button Menus & r!autorole' },
+    'Management': { icon: CONFIG_ICON, description: 'Reaction Roles, Channel Controls & Guild Overrides' },
+    'Configuration': { icon: CONFIG_ICON, description: 'Prefix, 1-Click Module Enabler (r!enable), Auto-Roles & Overrides' },
+    'Reminders': { icon: TIMER_ICON, description: 'Personal & Server Timed Reminders with Animated Timer' },
+    'Announcements': { icon: ANNOUNCEMENTS_ICON, description: 'Scheduled Broadcasts & Embedded Server Notices' },
+    'Promotion': { icon: LINK_ICON, description: '24h Auto-Clearing Promotion Channels & Cooldowns' },
+    'Social Updates': { icon: LINK_ICON, description: 'YouTube Video Alerts & Twitch Stream Live Sentinel' },
+    'Analytics': { icon: STATS_ICON, description: 'Guild Telemetry, Audit Logs & Security History' },
+    'Diagnostics': { icon: BOT_ICON, description: 'Deep Cluster Health & Resource Metrics' },
+    'System': { icon: BOT_ICON, description: 'System Diagnostics, Bot Health, Uptime & Latency' },
+    'Bulk Operations': { icon: GAVEL_ICON, description: 'Mass Role & Channel Management Utilities' },
+    'Enterprise': { icon: GOLD_CROWN_ICON, description: 'Emergency Lockdowns, 2FA Sentinel & Threat Matrix' },
+    'Automations': { icon: BOT_ICON, description: 'Custom Auto-Responders & Event Hooks' }
   };
 
   private static getCategoryMeta(cat: string): CategoryInfo {
@@ -184,10 +211,12 @@ export class PrefixHelpCenter {
     const totalCommands = allCommands.length > 0 ? allCommands.length : 981;
 
     const descLines = [
-      `<a:approved:1532390590707142956> **Rage Optimiser Command Matrix**\n`,
-      `> <:security:1546142576984203336> **Enterprise Anti-Nuke & Guild Protection**: Full native security, automated logging, role controls, and moderation.\n`,
-      `> <:ticks:1532620580266836148> **Active Prefix**: \`${prefix}\` | **Slash Commands**: \`/\` | **Commands Loaded**: ${totalCommands}\n`,
-      `> <:config:1532425712844144701> **Change Prefix**: Use \`${prefix}prefix set <new_prefix>\` or mention the bot.\n`,
+      `${ANIMATED_APPROVED_ICON} **Rage Optimiser Enterprise Command Matrix**\n`,
+      `> ${SUCCESS_CHECK_ICON} **Enterprise Anti-Nuke (29 Rules)**: Instant 1/1 punishment kick/ban & zero-latency automated rollbacks.`,
+      `> ${SHIELD_ICON} **Universal Module Engine**: Run \`${prefix}enable all\` or \`${prefix}enable <module>\` to activate any of 34 systems.`,
+      `> ${SQUARE_TICK_ICON} **Active Prefix**: \`${prefix}\` | **Slash Commands**: \`/\` | **Commands Loaded**: \`${totalCommands}\``,
+      `> ${TIMER_ICON} **Live Gateway Heartbeat**: \`${Math.round(latency)}ms\` latency | **Telemetry**: Real-Time Auditing`,
+      `> ${CONFIG_ICON} **Prefix Customization**: Use \`${prefix}prefix set <new_prefix>\` or mention the bot.\n`,
       `--------------------------------------------------\n`,
       ...categories.map(cat => {
         const meta = this.getCategoryMeta(cat);
@@ -195,17 +224,17 @@ export class PrefixHelpCenter {
         return `• ${meta.icon} **${cat}** — \`${count} commands\``;
       }),
       `\n--------------------------------------------------`,
-      `*Select a module from the menu below or type \`${prefix}help <command_name>\` for detailed subcommand manual.*`
+      `*Select a module from the menu below or type \`${prefix}help <command_name>\` or \`${prefix}help <cmd> <subcmd>\` for detailed manuals.*`
     ];
 
     const embed = new EmbedBuilder()
-      .setColor(0x99CC00)
-      .setAuthor({ name: 'Rage Optimiser' })
-      .setTitle('<:config:1532425712844144701> Command Hub & Security Modules')
+      .setColor(0x84cc16)
+      .setAuthor({ name: 'Rage Optimiser Enterprise' })
+      .setTitle(`${CONFIG_ICON} Command Hub & Security Modules`)
       .setDescription(descLines.join('\n'))
       .setThumbnail(botUser?.displayAvatarURL({ size: 256 }) ?? null)
       .setImage(DEFAULT_HELP_BANNER)
-      .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+      .setFooter({ text: 'Rage Optimiser Enterprise • 29 Defense Rules • Zero-Latency Rollback' })
       .setTimestamp();
 
     const selectMenu = new StringSelectMenuBuilder()
@@ -216,7 +245,7 @@ export class PrefixHelpCenter {
           label: 'Back to Home Center',
           value: 'help_cat_home',
           description: 'View all modules and status statistics',
-          emoji: '<:50738home:1532426273366741143>',
+          emoji: '🏠',
           default: true
         },
         ...categories.slice(0, 24).map(cat => {
@@ -275,25 +304,25 @@ export class PrefixHelpCenter {
       const aliasStr = c.aliases.length > 0 ? ` *(${c.aliases.map(a => prefix + a).join(', ')})*` : '';
       const usageStr = c.usage ? `\n> └ **Syntax**: \`${this.formatUsage(c.usage, c.name, prefix)}\`` : '';
       const subStr = c.subcommands && c.subcommands.length > 0 ? `\n> └ **Subcommands (${c.subcommands.length})**: ${c.subcommands.map(s => `\`${s.name.split(' ')[0]}\``).slice(0, 6).join(', ')}${c.subcommands.length > 6 ? ', ...' : ''}` : '';
-      return `> ${APPROVED_ICON} **\`${prefix}${c.name}\`**${aliasStr} — ${c.description}${usageStr}${subStr}`;
+      return `> ${SUCCESS_CHECK_ICON} **\`${prefix}${c.name}\`**${aliasStr} — ${c.description}${usageStr}${subStr}`;
     });
 
     const meta = this.getCategoryMeta(category);
     const embedDesc = [
       `### ${meta.icon} ${category} Command Suite (Page ${currentPage}/${totalPages})`,
       `*${meta.description}*\n`,
-      ...(cmdEntries.length > 0 ? cmdEntries : [`> ${APPROVED_ICON} __**No Commands Registered**__`]),
+      ...(cmdEntries.length > 0 ? cmdEntries : [`> ${WRONG_ICON} __**No Commands Registered**__`]),
       `\n*Type \`${prefix}help <command_name>\` or \`${prefix}help <command> <subcommand>\` for detailed manual.*`
     ].join('\n');
 
     const embed = new EmbedBuilder()
-      .setColor(0x99CC00)
-      .setAuthor({ name: 'Rage Optimiser' })
+      .setColor(0x84cc16)
+      .setAuthor({ name: 'Rage Optimiser Enterprise' })
       .setTitle(`${meta.icon} ${category} Module Commands`)
       .setDescription(embedDesc)
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
       .setImage(DEFAULT_HELP_BANNER)
-      .setFooter({ text: `Rage Optimiser • Unbypassable Security • Module Commands: ${visibleCmds.length}` })
+      .setFooter({ text: `Rage Optimiser Enterprise • Module Commands: ${visibleCmds.length} • High Performance` })
       .setTimestamp();
 
     const categories = PrefixRegistry.getCategories();
@@ -305,7 +334,7 @@ export class PrefixHelpCenter {
           label: 'Back to Home Center',
           value: 'help_cat_home',
           description: 'View all modules and status statistics',
-          emoji: '<:50738home:1532426273366741143>'
+          emoji: '🏠'
         },
         ...categories.slice(0, 24).map(cat => {
           const catMeta = this.getCategoryMeta(cat);
@@ -364,12 +393,12 @@ export class PrefixHelpCenter {
     const displayUsage = this.formatUsage(cmd.usage, cmd.name, prefix);
 
     const embed = new EmbedBuilder()
-      .setColor(hasPermission ? 0x99CC00 : 0xEF4444)
-      .setAuthor({ name: 'Rage Optimiser • Command Manual' })
-      .setTitle(`${hasPermission ? SHIELD_EMOJI : WRONG_EMOJI} Command Manual: ${prefix}${cmd.name}`)
+      .setColor(hasPermission ? 0x84cc16 : 0xEF4444)
+      .setAuthor({ name: 'Rage Optimiser Enterprise • Command Manual' })
+      .setTitle(`${hasPermission ? SHIELD_ICON : WRONG_ICON} Command Manual: ${prefix}${cmd.name}`)
       .setDescription([
         `> **Description**: ${cmd.description}`,
-        !hasPermission ? `> ${WRONG_EMOJI} **Permission Warning**: You lack the required server permissions to run this command.` : ''
+        !hasPermission ? `> ${WRONG_ICON} **Permission Warning**: You lack the required server permissions to run this command.` : ''
       ].filter(Boolean).join('\n'))
       .addFields(
         { name: 'Command Name', value: `\`${cmd.name}\``, inline: true },
@@ -393,7 +422,7 @@ export class PrefixHelpCenter {
 
       const fullSubText = subLines.join('\n');
       if (fullSubText.length <= 1020) {
-        embed.addFields({ name: `<:config:1532425712844144701> Subcommands & Execution Modes (${cmd.subcommands.length})`, value: fullSubText, inline: false });
+        embed.addFields({ name: `${CONFIG_ICON} Subcommands & Execution Modes (${cmd.subcommands.length})`, value: fullSubText, inline: false });
       } else {
         const chunks: string[] = [];
         let currentChunk = '';
@@ -409,7 +438,7 @@ export class PrefixHelpCenter {
 
         chunks.forEach((chunk, idx) => {
           embed.addFields({
-            name: idx === 0 ? `<:config:1532425712844144701> Subcommands & Execution Modes (${cmd.subcommands!.length})` : `Subcommands (Part ${idx + 1})`,
+            name: idx === 0 ? `${CONFIG_ICON} Subcommands & Execution Modes (${cmd.subcommands!.length})` : `Subcommands (Part ${idx + 1})`,
             value: chunk,
             inline: false
           });
@@ -419,7 +448,7 @@ export class PrefixHelpCenter {
 
     if (cmd.examples && cmd.examples.length > 0) {
       embed.addFields({
-        name: '<a:lovemail:1527647157371535420> Practical Usage Examples',
+        name: `${INFO_ICON} Practical Usage Examples`,
         value: cmd.examples.map(e => `\`${this.formatExample(e, prefix)}\``).join('\n'),
         inline: false
       });
@@ -440,13 +469,13 @@ export class PrefixHelpCenter {
     const displayUsage = this.formatUsage(subCmd.name, mainCmd.name, prefix);
 
     const embed = new EmbedBuilder()
-      .setColor(hasPermission ? 0x99CC00 : 0xEF4444)
-      .setAuthor({ name: 'Rage Optimiser • Targeted Subcommand Manual' })
-      .setTitle(`${hasPermission ? SHIELD_EMOJI : WRONG_EMOJI} Subcommand Manual: ${displayUsage}`)
+      .setColor(hasPermission ? 0x84cc16 : 0xEF4444)
+      .setAuthor({ name: 'Rage Optimiser Enterprise • Targeted Subcommand Manual' })
+      .setTitle(`${hasPermission ? SHIELD_ICON : WRONG_ICON} Subcommand Manual: ${displayUsage}`)
       .setDescription([
         `> **Description**: ${subCmd.description || 'Subcommand execution mode for ' + mainCmd.name}`,
         `> **Parent Module**: \`${mainCmd.category}\` (Command: \`${prefix}${mainCmd.name}\`)`,
-        !hasPermission ? `> ${WRONG_EMOJI} **Permission Warning**: You lack the required server permissions to run this command.` : ''
+        !hasPermission ? `> ${WRONG_ICON} **Permission Warning**: You lack the required server permissions to run this command.` : ''
       ].filter(Boolean).join('\n'))
       .addFields(
         { name: 'Parent Command', value: `\`${prefix}${mainCmd.name}\``, inline: true },
@@ -462,7 +491,7 @@ export class PrefixHelpCenter {
 
     if (subCmd.examples && subCmd.examples.length > 0) {
       embed.addFields({
-        name: '<a:lovemail:1527647157371535420> Subcommand Usage Examples',
+        name: `${INFO_ICON} Subcommand Usage Examples`,
         value: subCmd.examples.map((e: string) => `\`${this.formatExample(e, prefix)}\``).join('\n'),
         inline: false
       });
@@ -471,7 +500,7 @@ export class PrefixHelpCenter {
       const matchingEx = mainCmd.examples.filter(e => e.includes(subKey));
       if (matchingEx.length > 0) {
         embed.addFields({
-          name: '<a:lovemail:1527647157371535420> Practical Subcommand Examples',
+          name: `${INFO_ICON} Practical Subcommand Examples`,
           value: matchingEx.map(e => `\`${this.formatExample(e, prefix)}\``).join('\n'),
           inline: false
         });
@@ -499,7 +528,7 @@ export class PrefixHelpCenter {
           label: 'Home Center',
           value: 'help_cat_home',
           description: 'View command matrix and live system telemetry',
-          emoji: '<:50738home:1532426273366741143>',
+          emoji: '🏠',
           default: currentCategory === 'home'
         },
         ...categories.slice(0, 24).map(cat => {
@@ -521,7 +550,7 @@ export class PrefixHelpCenter {
     const btnHome = new ButtonBuilder()
       .setCustomId(`help_btn_home${execSuffix}`)
       .setLabel('Home')
-      .setEmoji('<:50738home:1532426273366741143>')
+      .setEmoji('🏠')
       .setStyle(ButtonStyle.Success);
 
     const btnPrev = new ButtonBuilder()

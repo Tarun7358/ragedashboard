@@ -23,6 +23,7 @@ import { PermissionFlagsBits } from 'discord.js';
 import { PayloadFormatter } from './PayloadFormatter.js';
 import { PrefixHelpCenter } from './prefix/PrefixHelpCenter.js';
 import { AnalyticsService } from './AnalyticsService.js';
+import { PrefixCooldownManager } from './prefix/PrefixCooldownManager.js';
 import { protections } from '../utils/whitelistCheck.js';
 
 export type RouterDispatch = (eventName: string, ...args: any[]) => Promise<void>;
@@ -128,6 +129,22 @@ export class InteractionRouter {
       }
     }
 
+    // 0. Cooldown protection for slash commands (exempt for Server Owner / Bot Developers)
+    const isBotOwner = interaction.user.id === process.env.OWNER_ID ||
+                       interaction.user.id === interaction.guild?.ownerId ||
+                       interaction.user.id === interaction.client.application?.owner?.id ||
+                       Boolean((interaction.client.application?.owner as any)?.members?.has?.(interaction.user.id));
+    const cd = PrefixCooldownManager.checkCooldown(interaction.user.id, cmdGuildId || null, commandName, 2.5, isBotOwner);
+    if (cd.onCooldown) {
+      if (interaction.isRepliable()) {
+        await interaction.reply({
+          content: `⏳ **Slow down!** You can use \`/${commandName}\` again in **${cd.retryAfter}s**.`,
+          flags: 64
+        }).catch(() => {});
+      }
+      return;
+    }
+
     this.ctx.logSyncEvent(`Slash command executed: /${commandName}`, 'info');
     if (interaction.guildId) {
       AnalyticsService.trackCommand(interaction.guildId, commandName).catch(() => {});
@@ -183,7 +200,8 @@ export class InteractionRouter {
       // 2. User Permission Validation for Slash Commands
       const isDeveloper = interaction.user.id === process.env.OWNER_ID ||
                           interaction.user.id === interaction.guild?.ownerId ||
-                          interaction.user.id === interaction.client.application?.owner?.id;
+                          interaction.user.id === interaction.client.application?.owner?.id ||
+                          Boolean((interaction.client.application?.owner as any)?.members?.has?.(interaction.user.id));
 
       if (!isDeveloper && interaction.member) {
         const reqPerms = cmd.userPermissions || cmd.permissions || [];
@@ -281,6 +299,10 @@ export class InteractionRouter {
       interaction.customId === 'btn_sec_open_otp_modal' ||
       interaction.customId.startsWith('btn_sec_cat_custom_thresh_') ||
       interaction.customId === 'btn_disable_enter_code' ||
+      // Backup confirm/cancel use interaction.reply() — must not be auto-deferred
+      // or Discord will throw "interaction already acknowledged" on slow DB reads.
+      interaction.customId === 'backup_confirm' ||
+      interaction.customId === 'backup_cancel' ||
       interaction.customId.includes('modal');
 
     let deferred = false;
@@ -325,8 +347,10 @@ export class InteractionRouter {
         ['al_',          'button_al_generic']
       ];
 
+      const dispatched = new Set<string>();
       for (const [prefix, event] of genericPrefixes) {
-        if (interaction.customId.startsWith(prefix)) {
+        if (interaction.customId.startsWith(prefix) && !dispatched.has(event)) {
+          dispatched.add(event);
           await this.ctx.dispatchEvent(event, interaction);
         }
       }
@@ -374,15 +398,23 @@ export class InteractionRouter {
         ['tkmgr_',           'select_tickets_v2_generic'],
         ['ticket_select_',   'select_tickets_v2_generic'],
         ['select_sec_',      'button_sec_generic'],
+        ['btn_sec_',         'button_sec_generic'],
+        ['sec_',             'button_sec_generic'],
         ['select_social_',   'select_social_generic'],
         ['social_',          'select_social_generic'],
         ['select_al_',       'button_al_generic'],
         ['btn_al_',          'button_al_generic'],
-        ['al_',              'button_al_generic']
+        ['al_',              'button_al_generic'],
+        ['wl_',              'button_wl_generic'],
+        ['select_wl_',       'button_wl_generic'],
+        ['jtc_',             'button_jtc_generic'],
+        ['ver_',             'button_ver_generic']
       ];
 
+      const dispatched = new Set<string>();
       for (const [prefix, event] of genericPrefixes) {
-        if (interaction.customId.startsWith(prefix)) {
+        if (interaction.customId.startsWith(prefix) && !dispatched.has(event)) {
+          dispatched.add(event);
           await this.ctx.dispatchEvent(event, interaction);
         }
       }
@@ -406,6 +438,8 @@ export class InteractionRouter {
         ['set_user_limit_',  'modal_tickets_v2_generic'],
         ['set_admin_role_',  'modal_tickets_v2_generic'],
         ['add_moderator_',   'modal_tickets_v2_generic'],
+        ['modal_tkmgr_',     'modal_tickets_v2_generic'],
+        ['tkmgr_',           'modal_tickets_v2_generic'],
         ['modal_sec_',       'button_sec_generic'],
         ['sec_',             'button_sec_generic'],
         ['jtc_',             'button_jtc_generic'],
@@ -413,8 +447,10 @@ export class InteractionRouter {
         ['social_',          'modal_social_generic'],
       ];
 
+      const dispatched = new Set<string>();
       for (const [prefix, event] of genericPrefixes) {
-        if (interaction.customId.startsWith(prefix)) {
+        if (interaction.customId.startsWith(prefix) && !dispatched.has(event)) {
+          dispatched.add(event);
           await this.ctx.dispatchEvent(event, interaction);
         }
       }

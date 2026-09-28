@@ -57,8 +57,8 @@ export class InstagramProvider extends BaseProvider {
     };
   }
 
-  async fetchLatest(username: string, limit = 15): Promise<ContentItem[]> {
-    return InstagramFetcher.fetchLatestAsync(username, limit);
+  async fetchLatest(username: string, limit = 15, authCredential?: string): Promise<ContentItem[]> {
+    return InstagramFetcher.fetchLatestAsync(username, limit, authCredential);
   }
 
   override filterByContentType(items: ContentItem[], filter: any): ContentItem[] {

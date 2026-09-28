@@ -14,6 +14,7 @@ import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { PrefixResolver } from '../../core/prefix/PrefixResolver.js';
 import {
   buildLimeOverviewCard,
+  createLimeEmbed,
   Colors,
   VERIFIED_ICON,
   WRONG_ICON,
@@ -62,6 +63,172 @@ export const ALL_BACKUP_ROLE_NAMES = [
 ];
 
 export const LEGACY_BACKUP_ROLE_NAMES = ['Created by Rage', 'Rage Backup Authority'];
+
+export const MODULE_ALIASES: Record<string, string> = {
+  // Anti-Nuke & Security
+  antinuke: 'security',
+  'anti-nuke': 'security',
+  an: 'security',
+  sec: 'security',
+  nuke: 'security',
+  security: 'security',
+  threats: 'security',
+  quarantine: 'security',
+
+  // AutoMod
+  automod: 'automod',
+  'auto-mod': 'automod',
+  am: 'automod',
+  antilink: 'automod',
+  'anti-link': 'automod',
+  antispam: 'automod',
+  'anti-spam': 'automod',
+  filter: 'automod',
+  chatfilter: 'automod',
+
+  // Voice & JTC
+  voice: 'voice',
+  vc: 'voice',
+  'voice-protection': 'voice',
+  jointocreate: 'voice',
+  'join-to-create': 'voice',
+  jtc: 'voice',
+  '247': 'voice',
+  voicepresence: 'voice',
+  voicemanager: 'voice',
+  'voice-manager': 'voice',
+
+  // Backups
+  backup: 'backups',
+  backups: 'backups',
+  'backup-recovery': 'backups',
+  recovery: 'backups',
+  snapshot: 'backups',
+  snapshots: 'backups',
+
+  // Logging
+  logging: 'logging',
+  logs: 'logging',
+  log: 'logging',
+  audit: 'logging',
+  auditlog: 'logging',
+  auditlogs: 'logging',
+  'audit-logging': 'logging',
+  telemetry: 'logging',
+
+  // Tickets
+  ticket: 'tickets',
+  tickets: 'tickets',
+  ticketsystem: 'tickets',
+  'ticket-system': 'tickets',
+  tkmgr: 'tickets',
+  support: 'tickets',
+
+  // Verification
+  verification: 'verification',
+  verify: 'verification',
+  captcha: 'verification',
+  gatekeeper: 'verification',
+  'verification-gate': 'verification',
+
+  // Join Role Guard / AutoRole
+  autorole: 'join_role_guard',
+  'auto-role': 'join_role_guard',
+  joinrole: 'join_role_guard',
+  'join-role': 'join_role_guard',
+  joinroles: 'join_role_guard',
+  joinroleguard: 'join_role_guard',
+  'join-role-guard': 'join_role_guard',
+  join_role_guard: 'join_role_guard',
+
+  // Giveaway
+  giveaway: 'giveaway',
+  giveaways: 'giveaway',
+  gw: 'giveaway',
+  gstart: 'giveaway',
+
+  // Reaction Roles & Self Roles
+  reactionroles: 'reaction_roles',
+  'reaction-roles': 'reaction_roles',
+  reaction_roles: 'reaction_roles',
+  rr: 'reaction_roles',
+  selfroles: 'self-roles',
+  'self-roles': 'self-roles',
+  self_roles: 'self-roles',
+
+  // Leveling / Rank
+  leveling: 'leveling',
+  levels: 'leveling',
+  level: 'leveling',
+  rank: 'leveling',
+  xp: 'leveling',
+  economy: 'leveling',
+
+  // Social Updates
+  social: 'social_updates',
+  socials: 'social_updates',
+  'social-updates': 'social_updates',
+  social_updates: 'social_updates',
+  youtube: 'social_updates',
+  twitch: 'social_updates',
+  twitter: 'social_updates',
+
+  // Stats Counter
+  stats: 'stats-counter',
+  statscounter: 'stats-counter',
+  'stats-counter': 'stats-counter',
+  serverstats: 'stats-counter',
+  'server-stats': 'stats-counter',
+  membercount: 'stats-counter',
+
+  // Reminders
+  reminder: 'reminders',
+  reminders: 'reminders',
+  remind: 'reminders',
+
+  // Announcements
+  announcement: 'announcements',
+  announcements: 'announcements',
+  announce: 'announcements',
+
+  // Promotion
+  promotion: 'promotion',
+  promo: 'promotion',
+  bump: 'promotion',
+
+  // Moderation
+  moderation: 'moderation',
+  mod: 'moderation',
+  modtools: 'moderation',
+
+  // Embed Builder
+  embed: 'embed_builder',
+  embeds: 'embed_builder',
+  embedbuilder: 'embed_builder',
+  'embed-builder': 'embed_builder',
+  embed_builder: 'embed_builder',
+
+  // Bot Stats
+  botstats: 'botstats',
+  'bot-stats': 'botstats',
+  botinfo: 'botstats',
+
+  // Whitelists
+  prebot: 'prebot_whitelist',
+  prebot_whitelist: 'prebot_whitelist',
+  'prebot-whitelist': 'prebot_whitelist',
+  member_whitelist: 'member_whitelist',
+  'member-whitelist': 'member_whitelist',
+  whitelist: 'member_whitelist',
+
+  // Blacklist
+  blacklist: 'blacklist',
+
+  // All
+  all: 'all',
+  full: 'all',
+  everything: 'all'
+};
 
 export async function cleanupLegacyBackupRoles(guild: any): Promise<void> {
   if (!guild || !guild.roles) return;
@@ -1038,26 +1205,47 @@ export function registerEnableDisableCommands(): void {
       }
 
       const prefix = PrefixResolver.getPrefix(guildId);
-      const target = (args[0] || '').toLowerCase().trim();
+      const rawTarget = (args[0] || '').toLowerCase().trim();
+      const target = MODULE_ALIASES[rawTarget] || rawTarget;
 
-      if (!target) {
+      if (!rawTarget) {
         const usageEmbed = buildLimeOverviewCard({
           title: `${CONFIG_EMOJI} ONE-CLICK MODULE ACTIVATION CONTROL`,
           subtitle: 'ENABLE PROTECTION SUITES WITH OPTIMAL DEFAULT PARAMETERS',
           color: Colors.BRAND,
           sections: [
             {
-              title: `${SHIELD_EMOJI} AVAILABLE ACTIVATION TARGETS`,
+              title: `${SHIELD_EMOJI} SECURITY & DEFENSE SUITES`,
               items: [
-                `• \`${prefix}enable antinuke\` — Enable all Anti-Nuke & Unbypassable rules`,
+                `• \`${prefix}enable antinuke\` — Enable all 29 Anti-Nuke & Unbypassable rules`,
                 `• \`${prefix}enable automod\` — Enable Anti-Link, Anti-Spam & Chat Filters`,
-                `• \`${prefix}enable voice\` — Enable Voice Protection & Join-To-Create`,
-                `• \`${prefix}enable all\` — Enable complete enterprise security suite`,
-                `• \`${prefix}enable <module_id>\` — Enable a specific system module`
+                `• \`${prefix}enable voice\` — Enable Voice Protection, Dynamic JTC & 24/7`,
+                `• \`${prefix}enable logging [#channel]\` — Enable Server Audit Logging Center`,
+                `• \`${prefix}enable backups\` — Enable Disaster Recovery & Snapshots`
+              ]
+            },
+            {
+              title: `${VIP_ICON} SERVER FEATURES & COMMUNITY UTILITIES`,
+              items: [
+                `• \`${prefix}enable tickets\` — Enable interactive 5-category ticket system`,
+                `• \`${prefix}enable verify\` — Enable member captcha & verification gate`,
+                `• \`${prefix}enable autorole\` — Enable Join-Role Guard & onboarding roles`,
+                `• \`${prefix}enable giveaway\` — Enable interactive prize giveaways`,
+                `• \`${prefix}enable reactionroles\` — Enable button & reaction role menus`,
+                `• \`${prefix}enable leveling\` — Enable XP progression & rank rewards`,
+                `• \`${prefix}enable statscounter\` — Enable real-time metric counter channels`,
+                `• \`${prefix}enable socials\` — Enable YouTube & Twitch alert feeds`
+              ]
+            },
+            {
+              title: `${GOLD_CROWN_ICON} MASTER ENTERPRISE ACTIVATION`,
+              items: [
+                `• \`${prefix}enable all\` — Enable and configure complete enterprise security suite`,
+                `• \`${prefix}enable <module_id>\` — Enable any individual module by name or alias`
               ]
             }
           ],
-          footerText: 'Rage Optimiser Enterprise • Security Control'
+          footerText: 'Rage Optimiser Enterprise • Security & Utility Control'
         });
         return message.reply({ embeds: [usageEmbed] });
       }
@@ -1066,85 +1254,89 @@ export function registerEnableDisableCommands(): void {
       const toggleMod = context?.toggleModule;
       const modulesState = context?.getModulesState ? context.getModulesState() : [];
 
-      // High-Tech Enterprise Step Definitions
-      // Step Definitions matching video reference
-      const dbHash = Math.floor(1000000000000000 + Math.random() * 9000000000000000).toString();
-      const guildCleanName = message.guild.name.replace(/[*_`~|]/g, '');
+      // Only run High-Tech Antinuke animation for antinuke / security / all
+      const isAntinukeOrAll = target === 'security' || target === 'all';
+      let replyMsg: any = null;
 
-      const steps = [
-        {
-          label: 'Establishing Connection with Rage Security Cluster...',
-          detail: 'Connected'
-        },
-        {
-          label: 'Checking Minimum Requirements for Antinuke...'
-        },
-        {
-          label: `Creating DB for "${guildCleanName}"...`,
-          subLines: [
-            `└ Server Id : ${message.guild.id}`,
-            `└ Rage Security DB ID : ${dbHash.slice(0, 16)}`
-          ]
-        },
-        {
-          label: 'Starting Role Integrity Check...'
-        },
-        {
-          label: 'Checking Rage Unbypassable , Rage Antinuke , Rage Roles Created....'
-        },
-        {
-          label: 'Backup Admin Roles Created And Assigned To Bot.'
-        },
-        {
-          label: 'Establishing Gmail Connectors...'
-        }
-      ];
+      if (isAntinukeOrAll) {
+        const dbHash = Math.floor(1000000000000000 + Math.random() * 9000000000000000).toString();
+        const guildCleanName = message.guild.name.replace(/[*_`~|]/g, '');
 
-      const renderSetupCard = (currentIdx: number) => {
-        const lines: string[] = [];
-        for (let i = 0; i < steps.length; i++) {
-          const step = steps[i];
-          if (i < currentIdx) {
-            lines.push(`${SUCCESS_CHECK_ICON} ${step.label}${step.detail ? ` ${step.detail}` : ''}`);
-            if (step.subLines) {
-              for (const sub of step.subLines) {
-                lines.push(`   ${sub}`);
+        const steps = [
+          {
+            label: 'Establishing Connection with Rage Security Cluster...',
+            detail: 'Connected'
+          },
+          {
+            label: 'Checking Minimum Requirements for Antinuke...'
+          },
+          {
+            label: `Creating DB for "${guildCleanName}"...`,
+            subLines: [
+              `└ Server Id : ${message.guild.id}`,
+              `└ Rage Security DB ID : ${dbHash.slice(0, 16)}`
+            ]
+          },
+          {
+            label: 'Starting Role Integrity Check...'
+          },
+          {
+            label: 'Checking Rage Unbypassable , Rage Antinuke , Rage Roles Created....'
+          },
+          {
+            label: 'Backup Admin Roles Created And Assigned To Bot.'
+          },
+          {
+            label: 'Establishing Gmail Connectors...'
+          }
+        ];
+
+        const renderSetupCard = (currentIdx: number) => {
+          const lines: string[] = [];
+          for (let i = 0; i < steps.length; i++) {
+            const step = steps[i];
+            if (i < currentIdx) {
+              lines.push(`${SUCCESS_CHECK_ICON} ${step.label}${step.detail ? ` ${step.detail}` : ''}`);
+              if (step.subLines) {
+                for (const sub of step.subLines) {
+                  lines.push(`   ${sub}`);
+                }
               }
+            } else if (i === currentIdx) {
+              lines.push(`${LOADING_ANIMATED_ICON} ${step.label}`);
             }
-          } else if (i === currentIdx) {
-            lines.push(`${LOADING_ANIMATED_ICON} ${step.label}`);
           }
-        }
 
-        const embed = new EmbedBuilder()
-          .setColor(0x2B2D31)
-          .setTitle('Rage Optimiser • Antinuke Setup')
-          .setDescription([
-            '**Antinuke Setup Working...**',
-            '',
-            lines.length > 0 ? `>>> ${lines.join('\n')}` : `>>> ${LOADING_ANIMATED_ICON} Initializing Antinuke Engines...`
-          ].join('\n'))
-          .setFooter({
-            text: 'Rage Optimiser • Unbypassable Security',
-            iconURL: message.guild?.iconURL() || undefined
-          })
-          .setTimestamp();
+          const embed = new EmbedBuilder()
+            .setColor(0x2B2D31)
+            .setTitle('Rage Optimiser • Antinuke Setup')
+            .setDescription([
+              '**Antinuke Setup Working...**',
+              '',
+              lines.length > 0 ? `>>> ${lines.join('\n')}` : `>>> ${LOADING_ANIMATED_ICON} Initializing Antinuke Engines...`
+            ].join('\n'))
+            .setFooter({
+              text: 'Rage Optimiser • Unbypassable Security',
+              iconURL: message.guild?.iconURL() || undefined
+            })
+            .setTimestamp();
 
-        return embed;
-      };
+          return embed;
+        };
 
-      let replyMsg = await message.reply({ embeds: [renderSetupCard(0)] }).catch(() => null);
+        replyMsg = await message.reply({ embeds: [renderSetupCard(0)] }).catch(() => null);
 
-      if (replyMsg) {
-        let activeMsg: any = replyMsg;
-        for (let i = 1; i <= steps.length; i++) {
-          await new Promise(res => setTimeout(res, 280));
-          if (activeMsg) {
-            const updated: any = await activeMsg.edit({ embeds: [renderSetupCard(i)] }).catch(() => null);
-            if (updated) activeMsg = updated;
+        if (replyMsg) {
+          let activeMsg: any = replyMsg;
+          for (let i = 1; i <= steps.length; i++) {
+            await new Promise(res => setTimeout(res, 280));
+            if (activeMsg) {
+              const updated: any = await activeMsg.edit({ embeds: [renderSetupCard(i)] }).catch(() => null);
+              if (updated) activeMsg = updated;
+            }
           }
+          replyMsg = activeMsg;
         }
-        replyMsg = activeMsg;
       }
 
       // A. ENABLE ANTI-NUKE
@@ -1254,10 +1446,13 @@ export function registerEnableDisableCommands(): void {
       }
 
       // C. ENABLE VOICE
-      if (['voice', 'vc', 'voice-protection', 'jointocreate'].includes(target)) {
+      if (target === 'voice') {
         if (toggleMod) {
           toggleMod('voice-protection', true);
+          toggleMod('join_to_create', true);
           toggleMod('joinToCreate', true);
+          toggleMod('voice_manager', true);
+          toggleMod('voice', true);
         }
 
         const deployed = await deploySecurityDashboardToChannel(message.guild);
@@ -1265,15 +1460,24 @@ export function registerEnableDisableCommands(): void {
 
         const card = buildLimeOverviewCard({
           title: 'VOICE PROTECTION ACTIVATED',
-          subtitle: 'VOICE SECURITY & JOIN-TO-CREATE ONLINE',
+          subtitle: 'VOICE SECURITY, DYNAMIC JTC & 24/7 ONLINE',
           color: Colors.LIME,
           sections: [
             {
               title: 'PROTECTION STATUS',
               items: [
-                `• **Voice Protection**: Active`,
-                `• **Join-To-Create**: Online`,
+                `• **Voice Protection**: Active (Anti-spam & channel disconnect shields)`,
+                `• **Dynamic Join-To-Create**: Online (Temp voice channel engine)`,
+                `• **24/7 Voice Presence**: Available`,
                 `• **Live Dashboard**: ${dashChannel ? `<#${dashChannel.id}>` : '`#rage-dashboard`'}`
+              ]
+            },
+            {
+              title: 'VOICE CONTROLS & COMMANDS',
+              items: [
+                `• \`${prefix}jtc\` — Configure Dynamic Join-To-Create channels`,
+                `• \`${prefix}247 join <#channel>\` — Keep bot connected to voice 24/7`,
+                `• \`${prefix}vcmute <@user>\` / \`${prefix}vcdeafen <@user>\` — Voice moderation`
               ]
             }
           ],
@@ -1285,7 +1489,7 @@ export function registerEnableDisableCommands(): void {
       }
 
       // C2. ENABLE BACKUPS
-      if (['backups', 'backup', 'backup-recovery'].includes(target)) {
+      if (target === 'backups') {
         if (toggleMod) {
           toggleMod('backups', true);
         }
@@ -1311,8 +1515,481 @@ export function registerEnableDisableCommands(): void {
         return message.reply({ embeds: [card] });
       }
 
+      // C3. ENABLE LOGGING
+      if (['logging', 'logs', 'audit', 'auditlog', 'audit-logging'].includes(target)) {
+        if (toggleMod) {
+          toggleMod('logging', true);
+        }
+
+        const logMod = modulesState.find((m: any) => m.id === 'logging');
+        const logConfig = logMod?.config || {};
+        const LOG_CATEGORIES = ['security', 'moderation', 'antiNuke', 'botProtection', 'webhook', 'voice', 'audit', 'system'];
+
+        // Determine target channel:
+        // 1. Specified channel mention or ID in args[1]
+        // 2. Existing channel in config for any category
+        // 3. Existing channel in guild matching /logs?|audit|mod-log/i
+        // 4. Fallback: auto-create '#rage-logs' with private admin/bot permissions
+        let targetChannel: any = null;
+        if (args[1]) {
+          const cleanId = args[1].replace(/[<#>]/g, '').trim();
+          targetChannel = message.mentions.channels.first() || (cleanId ? await message.guild.channels.fetch(cleanId).catch(() => null) : null);
+        }
+
+        if (!targetChannel) {
+          const firstConfigured = LOG_CATEGORIES.map(c => logConfig[c]?.channelId).find(Boolean);
+          if (firstConfigured) {
+            targetChannel = await message.guild.channels.fetch(firstConfigured).catch(() => null);
+          }
+        }
+
+        if (!targetChannel) {
+          targetChannel = message.guild.channels.cache.find((c: any) =>
+            c.isTextBased() && /^(mod-?logs?|audit-?logs?|server-?logs?|rage-?logs?|logs?)$/i.test(c.name)
+          );
+        }
+
+        if (!targetChannel) {
+          try {
+            targetChannel = await message.guild.channels.create({
+              name: 'rage-logs',
+              type: ChannelType.GuildText,
+              topic: 'Rage Optimiser Enterprise • Advanced Audit & Telemetry Log Stream',
+              permissionOverwrites: [
+                {
+                  id: message.guild.roles.everyone.id,
+                  deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+                },
+                {
+                  id: message.client.user!.id,
+                  allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.EmbedLinks,
+                    PermissionFlagsBits.AttachFiles
+                  ]
+                }
+              ]
+            });
+          } catch (e) {
+            targetChannel = message.channel;
+          }
+        }
+
+        const updatedConfig = { ...logConfig };
+        LOG_CATEGORIES.forEach(cat => {
+          const currentCat = updatedConfig[cat] || { events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+          updatedConfig[cat] = {
+            ...currentCat,
+            enabled: true,
+            channelId: targetChannel.id
+          };
+        });
+
+        if (updateConfig) updateConfig('logging', updatedConfig);
+
+        const testEmbed = createLimeEmbed({
+          title: 'Advanced Logging Center Activated',
+          description: `${VERIFIED_ICON} Audit logging telemetry successfully armed for all **8 categories**!\nOutput routed to ${targetChannel}.`
+        });
+        await (targetChannel as any).send({ embeds: [testEmbed] }).catch(() => { });
+
+        const card = buildLimeOverviewCard({
+          title: 'ADVANCED LOGGING CENTER ACTIVATED',
+          subtitle: 'ALL 8 EVENT PIPELINES ARMED & ROUTED',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'AUDIT LOGGING STATUS',
+              items: [
+                `• **Module Status**: \`[ ACTIVE & LOGGING ]\``,
+                `• **Log Route Target**: <#${targetChannel.id}> (\`${targetChannel.name}\`)`,
+                `• **Active Categories**: Security, Moderation, Anti-Nuke, Bot Protection, Webhooks, Voice, Audit, System`
+              ]
+            },
+            {
+              title: 'LOGGING CONTROLS & COMMANDS',
+              items: [
+                `• \`${prefix}logs\` — Open real-time logging matrix status`,
+                `• \`${prefix}logs channel all <#channel>\` — Re-route all categories to another channel`,
+                `• \`${prefix}logs test all\` — Send test telemetry events`,
+                `• \`${prefix}logs roles add <@role>\` — Add logging manager role`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Logging Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C4. ENABLE TICKETS
+      if (target === 'tickets') {
+        if (toggleMod) toggleMod('tickets', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'TICKET SUPPORT SYSTEM ACTIVATED',
+          subtitle: 'INTERACTIVE MULTI-CATEGORY SUPPORT ENGINE ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'SUPPORT SYSTEM STATUS',
+              items: [
+                '• **Module Status**: `[ ACTIVE & READY ]`',
+                '• **Default Categories**: General Support, Moderation & Reports, VIP & Billing, Tech Help, Staff Applications',
+                '• **GUI Panels**: Dynamic Modal & Dropdown Creation Flow with Custom Embeds'
+              ]
+            },
+            {
+              title: 'RECOMMENDED SETUP COMMANDS',
+              items: [
+                `• \`${prefix}ticket deploy <#channel>\` — Deploy live 5-category support panel to channel`,
+                `• \`${prefix}tkmgr\` or \`${prefix}ticket\` — Open interactive Ticket Manager GUI`,
+                `• \`${prefix}ticket setup\` — Step-by-step interactive ticket configuration wizard`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Tickets Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C5. ENABLE VERIFICATION
+      if (target === 'verification') {
+        if (toggleMod) toggleMod('verification', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'MEMBER VERIFICATION GATEWAY ACTIVATED',
+          subtitle: 'ZERO-TRUST GATEKEEPER & CAPTCHA ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'VERIFICATION STATUS',
+              items: [
+                '• **Module Status**: `[ ACTIVE & ARMED ]`',
+                '• **Defense Mode**: Interactive Button & Captcha Verification Gate',
+                '• **Anti-Raid Protection**: Automatically isolates unverified user joins'
+              ]
+            },
+            {
+              title: 'RECOMMENDED SETUP COMMANDS',
+              items: [
+                `• \`${prefix}verify setup <#channel>\` — Deploy verification panel to channel`,
+                `• \`${prefix}verify role <@role>\` — Set the verified role granted upon passing`,
+                `• \`${prefix}verify status\` — Inspect current verification configuration`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Verification Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C6. ENABLE JOIN-ROLE GUARD / AUTOROLE
+      if (target === 'join_role_guard') {
+        if (toggleMod) {
+          toggleMod('join_role_guard', true);
+          toggleMod('join-role-guard', true);
+        }
+
+        const card = buildLimeOverviewCard({
+          title: 'AUTOROLE & JOIN-ROLE GUARD ACTIVATED',
+          subtitle: 'AUTOMATED MEMBER ONBOARDING & RAID GATE ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'AUTOROLE ENGINE STATUS',
+              items: [
+                '• **Module Status**: `[ ACTIVE & MONITORING ]`',
+                '• **Protected Role Assignment**: Safe onboarding without granting elevated permissions',
+                '• **Anti-Raid Separation**: Separate pipelines for human members and bot invites'
+              ]
+            },
+            {
+              title: 'RECOMMENDED COMMANDS',
+              items: [
+                `• \`${prefix}autorole add <@role>\` — Automatically assign role to new members on join`,
+                `• \`${prefix}autorole bot <@role>\` — Automatically assign role to authorized bot invites`,
+                `• \`${prefix}autorole list\` — Display all configured join roles`,
+                `• \`${prefix}autorole remove <@role>\` — Remove an existing auto-role`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • AutoRole Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C7. ENABLE GIVEAWAYS
+      if (target === 'giveaway') {
+        if (toggleMod) toggleMod('giveaway', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'GIVEAWAY SYSTEM ACTIVATED',
+          subtitle: 'INTERACTIVE PRIZE DISPATCH ENGINE ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'GIVEAWAY STATUS',
+              items: [
+                '• **Module Status**: `[ READY ]`',
+                '• **Features**: Reaction entry, automated winner selection, reroll capabilities'
+              ]
+            },
+            {
+              title: 'RECOMMENDED COMMANDS',
+              items: [
+                `• \`${prefix}gstart <duration> <winners> <prize>\` — Launch giveaway (e.g. \`${prefix}gstart 1h 1 Nitro Boost\`)`,
+                `• \`${prefix}gend <message_id>\` — End an active giveaway immediately`,
+                `• \`${prefix}reroll <message_id>\` — Select new winner(s) for a completed giveaway`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Giveaway Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C8. ENABLE REACTION ROLES & SELF ROLES
+      if (target === 'reaction_roles' || target === 'self-roles') {
+        if (toggleMod) {
+          toggleMod('reaction_roles', true);
+          toggleMod('self-roles', true);
+        }
+
+        const card = buildLimeOverviewCard({
+          title: 'REACTION & SELF-ROLES ENGINE ACTIVATED',
+          subtitle: 'INTERACTIVE ROLE MENUS & BUTTON SELECTION ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'ROLE SELECTOR STATUS',
+              items: [
+                '• **Module Status**: `[ ONLINE & READY ]`',
+                '• **Supported Formats**: Emoji reaction triggers, interactive button matrices, select menus'
+              ]
+            },
+            {
+              title: 'RECOMMENDED COMMANDS',
+              items: [
+                `• \`${prefix}rr create <#channel> <message_id> <emoji> <@role>\` — Bind reaction to role`,
+                `• \`${prefix}selfroles menu <#channel>\` — Deploy self-role dropdown menu`,
+                `• \`${prefix}rr list\` — View all active reaction-role assignments`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Roles Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C9. ENABLE LEVELING & ECONOMY
+      if (target === 'leveling') {
+        if (toggleMod) toggleMod('leveling', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'LEVELING & RANK REWARDS ACTIVATED',
+          subtitle: 'SERVER XP PROGRESSION & ECONOMY ENGINE ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'LEVELING ENGINE STATUS',
+              items: [
+                '• **Module Status**: `[ ACTIVE ]`',
+                '• **Tracking**: Dynamic text XP gain, rate-limited spam protection, customizable level curves'
+              ]
+            },
+            {
+              title: 'RECOMMENDED COMMANDS',
+              items: [
+                `• \`${prefix}rank [@user]\` — View member rank card, level, and XP progression`,
+                `• \`${prefix}leaderboard\` — View server top-ranked members leaderboard`,
+                `• \`${prefix}rewards add <level> <@role>\` — Configure automatic role reward for level`,
+                `• \`${prefix}daily\` / \`${prefix}work\` — Economy interaction commands`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Leveling Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C10. ENABLE SOCIAL UPDATES
+      if (target === 'social_updates') {
+        if (toggleMod) toggleMod('social_updates', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'SOCIAL FEEDS & STREAM NOTIFIER ACTIVATED',
+          subtitle: 'YOUTUBE, TWITCH & SOCIAL MEDIA SENTINEL ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'SOCIAL MONITOR STATUS',
+              items: [
+                '• **Module Status**: `[ MONITORING ]`',
+                '• **Platforms**: YouTube Video Alerts, Twitch Live Streams, Social Feeds'
+              ]
+            },
+            {
+              title: 'RECOMMENDED COMMANDS',
+              items: [
+                `• \`${prefix}social setup\` — Add YouTube or Twitch notification stream`,
+                `• \`${prefix}social list\` — List active creator subscriptions`,
+                `• \`${prefix}social test\` — Send test notification dispatch`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Social Feeds Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C11. ENABLE STATS COUNTER
+      if (target === 'stats-counter') {
+        if (toggleMod) toggleMod('stats-counter', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'SERVER STATS COUNTER ACTIVATED',
+          subtitle: 'AUTOMATED REAL-TIME METRIC CHANNELS ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'STATS COUNTER STATUS',
+              items: [
+                '• **Module Status**: `[ SYNCING ]`',
+                '• **Channels**: Member Count, Bot Count, Channel Total, Role Total'
+              ]
+            },
+            {
+              title: 'RECOMMENDED COMMANDS',
+              items: [
+                `• \`${prefix}statscounter setup\` — Auto-provision locked counter voice channels`,
+                `• \`${prefix}statscounter sync\` — Trigger immediate manual count synchronization`,
+                `• \`${prefix}statscounter delete\` — Clean up counter channels`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Stats Counter Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C12. ENABLE REMINDERS
+      if (target === 'reminders') {
+        if (toggleMod) toggleMod('reminders', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'SERVER REMINDERS ENGINE ACTIVATED',
+          subtitle: 'TIMED NOTIFICATIONS & ALERT DISPATCH ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'REMINDERS STATUS',
+              items: [
+                '• **Module Status**: `[ ACTIVE ]`',
+                `• **Usage**: \`${prefix}remind <time> <message>\` (e.g. \`${prefix}remind 30m Check server security\`)`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Reminders Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C13. ENABLE ANNOUNCEMENTS
+      if (target === 'announcements') {
+        if (toggleMod) toggleMod('announcements', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'ANNOUNCEMENTS MODULE ACTIVATED',
+          subtitle: 'RICH BROADCAST & ANNOUNCEMENT SUITE ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'ANNOUNCEMENTS STATUS',
+              items: [
+                '• **Module Status**: `[ ACTIVE ]`',
+                `• **Usage**: \`${prefix}announce <#channel> <message>\` — Broadcast formatted announcements`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Announcements Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C14. ENABLE PROMOTION
+      if (target === 'promotion') {
+        if (toggleMod) toggleMod('promotion', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'SERVER PROMOTION SYSTEM ACTIVATED',
+          subtitle: 'INTER-SERVER DISCOVERY & PROMOTION ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'PROMOTION STATUS',
+              items: [
+                '• **Module Status**: `[ ACTIVE ]`',
+                `• **Usage**: \`${prefix}promo status\` — Check server listing & bump status`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Promotion Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C15. ENABLE EMBED BUILDER
+      if (target === 'embed_builder') {
+        if (toggleMod) toggleMod('embed_builder', true);
+
+        const card = buildLimeOverviewCard({
+          title: 'CUSTOM EMBED BUILDER ACTIVATED',
+          subtitle: 'RICH EMBED DESIGNER & PRESET REPOSITORY ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'EMBED BUILDER STATUS',
+              items: [
+                '• **Module Status**: `[ ACTIVE ]`',
+                `• \`${prefix}embed create\` — Launch interactive embed designer modal`,
+                `• \`${prefix}embed send <#channel> <preset>\` — Post saved embed preset`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Embed Builder Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
       // D. ENABLE ALL
-      if (['all', 'full', 'everything'].includes(target)) {
+      if (target === 'all') {
         // 1. Audit pre-existing state of each subsystem to determine what is already running
         const secMod = modulesState.find((m: any) => m.id === 'security');
         const amMod = modulesState.find((m: any) => m.id === 'automod');
@@ -1341,12 +2018,12 @@ export function registerEnableDisableCommands(): void {
         if (isSecActive) {
           alreadyRunning.push(`> ${SECURITY_SHIELD_ICON} **Anti-Nuke Matrix**: \`[ ARMED ]\` — 29 Real-Time Defense Rules active`);
         } else {
-          newlyActivated.push(`> ${SECURITY_SHIELD_ICON} **Anti-Nuke Matrix**: \`[ ACTIVATED ]\` — Armed 29 Real-Time Defense Rules`);
+          newlyActivated.push(`> ${SECURITY_SHIELD_ICON} **Anti-Nuke Matrix**: \`[ ACTIVATED ]\` — Armed 29 Defense Rules`);
         }
 
         // Check PreBot Whitelist
         if (isPbActive) {
-          alreadyRunning.push(`> ${BOT_ICON} **PreBot Whitelist**: \`[ ACTIVE ]\` — Zero-Trust Bot Authorization Gate`);
+          alreadyRunning.push(`> ${BOT_ICON} **PreBot Whitelist**: \`[ ENFORCED ]\` — Zero-Trust Bot Quarantine active`);
         } else {
           newlyActivated.push(`> ${BOT_ICON} **PreBot Whitelist**: \`[ ACTIVATED ]\` — Zero-Trust Bot Neutralizer online`);
         }
@@ -1436,6 +2113,25 @@ export function registerEnableDisableCommands(): void {
           toggleMod('backups', true);
         }
 
+        // Auto-configure logging channel if none set
+        const currentLogConfig = logMod?.config || {};
+        const LOG_CATEGORIES = ['security', 'moderation', 'antiNuke', 'botProtection', 'webhook', 'voice', 'audit', 'system'];
+        let logChan = LOG_CATEGORIES.map(c => currentLogConfig[c]?.channelId).find(Boolean);
+        if (!logChan) {
+          const found = message.guild.channels.cache.find((c: any) =>
+            c.isTextBased() && /^(mod-?logs?|audit-?logs?|server-?logs?|rage-?logs?|logs?)$/i.test(c.name)
+          );
+          if (found) logChan = found.id;
+        }
+        if (logChan) {
+          const updatedLogConfig = { ...currentLogConfig };
+          LOG_CATEGORIES.forEach(cat => {
+            const currentCat = updatedLogConfig[cat] || { events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+            updatedLogConfig[cat] = { ...currentCat, enabled: true, channelId: logChan };
+          });
+          if (updateConfig) updateConfig('logging', updatedLogConfig);
+        }
+
         // Deploy/refresh Live Dashboard into dedicated private #rage-dashboard channel at position 0
         const deployed = await deploySecurityDashboardToChannel(message.guild);
         const dashChannel = deployed?.channel;
@@ -1511,7 +2207,12 @@ export function registerEnableDisableCommands(): void {
         }
       }
 
-      const errContent = `${WRONG_EMOJI} Unknown target **${target}**. Valid options: \`antinuke\`, \`automod\`, \`voice\`, \`backups\`, \`all\`.`;
+      const validCategoriesList = [
+        '**Security Suites**: `antinuke`, `automod`, `voice`, `logging`, `backups`',
+        '**Server Features**: `tickets`, `verification`, `autorole`, `giveaway`, `reactionroles`, `leveling`, `statscounter`, `socials`, `reminders`, `embed`',
+        '**Master**: `all`'
+      ].join('\n');
+      const errContent = `${WRONG_EMOJI} Unknown module target **${rawTarget}**.\n\n${validCategoriesList}\n\n> Run \`${prefix}enable <module>\` or \`${prefix}enable all\``;
       if (replyMsg) return replyMsg.edit({ content: errContent, embeds: [] });
       return message.reply({ content: errContent });
     }
@@ -1546,11 +2247,12 @@ export function registerEnableDisableCommands(): void {
       }
 
       const prefix = PrefixResolver.getPrefix(guildId);
-      const target = (args[0] || '').toLowerCase().trim();
+      const rawTarget = (args[0] || '').toLowerCase().trim();
+      const target = MODULE_ALIASES[rawTarget] || rawTarget;
 
-      if (!target) {
+      if (!rawTarget) {
         return message.reply({
-          content: `${WRONG_EMOJI} Please specify what to disable.\nUsage: \`${prefix}disable <antinuke | automod | voice | all | module_id>\``
+          content: `${WRONG_EMOJI} Please specify what to disable.\nUsage: \`${prefix}disable <module_id>\`\nExamples: \`${prefix}disable antinuke\`, \`${prefix}disable tickets\`, \`${prefix}disable voice\`, \`${prefix}disable all\``
         });
       }
 
@@ -1637,52 +2339,57 @@ export function registerEnableDisableCommands(): void {
       }
       // ── END 2FA GATE ────────────────────────────────────────────
 
-      // Step 1: Animated Deactivation Sequence
-      const deactSteps = [
-        { label: 'Stopping Role & Channel Protection Sensors...', detail: 'Stopped' },
-        { label: 'Disarming Webhook & Anti-Bot Quarantine Gate...' },
-        { label: 'Pausing Real-Time Disaster Recovery Snapshots...' },
-        { label: 'Deactivating Chat & AutoMod Filtering Engine...' },
-        { label: 'Dispatching Deactivation Alert to Gmail Sentinel...' }
-      ];
+      // Only run shutdown animation for antinuke / security / all
+      const isAntinukeOrAll = target === 'security' || target === 'all';
+      let replyMsg: any = null;
 
-      const renderShutdownCard = (currentIdx: number) => {
-        const lines: string[] = [];
-        for (let i = 0; i < deactSteps.length; i++) {
-          const s = deactSteps[i];
-          if (i < currentIdx) {
-            lines.push(`${SUCCESS_CHECK_ICON} ${s.label}${s.detail ? ` ${s.detail}` : ''}`);
-          } else if (i === currentIdx) {
-            lines.push(`${LOADING_ANIMATED_ICON} ${s.label}`);
+      if (isAntinukeOrAll) {
+        const deactSteps = [
+          { label: 'Stopping Role & Channel Protection Sensors...', detail: 'Stopped' },
+          { label: 'Disarming Webhook & Anti-Bot Quarantine Gate...' },
+          { label: 'Pausing Real-Time Disaster Recovery Snapshots...' },
+          { label: 'Deactivating Chat & AutoMod Filtering Engine...' },
+          { label: 'Dispatching Deactivation Alert to Gmail Sentinel...' }
+        ];
+
+        const renderShutdownCard = (currentIdx: number) => {
+          const lines: string[] = [];
+          for (let i = 0; i < deactSteps.length; i++) {
+            const s = deactSteps[i];
+            if (i < currentIdx) {
+              lines.push(`${SUCCESS_CHECK_ICON} ${s.label}${s.detail ? ` ${s.detail}` : ''}`);
+            } else if (i === currentIdx) {
+              lines.push(`${LOADING_ANIMATED_ICON} ${s.label}`);
+            }
           }
-        }
 
-        return new EmbedBuilder()
-          .setColor(0x2B2D31)
-          .setTitle('Rage Optimiser • Antinuke Deactivation')
-          .setDescription([
-            '**Antinuke Deactivation Working...**',
-            '',
-            lines.length > 0 ? `>>> ${lines.join('\n')}` : `>>> ${LOADING_ANIMATED_ICON} Halting Antinuke Engines...`
-          ].join('\n'))
-          .setFooter({ text: 'Rage Optimiser • Unbypassable Security', iconURL: message.guild?.iconURL() || undefined })
-          .setTimestamp();
-      };
+          return new EmbedBuilder()
+            .setColor(0x2B2D31)
+            .setTitle('Rage Optimiser • Antinuke Deactivation')
+            .setDescription([
+              '**Antinuke Deactivation Working...**',
+              '',
+              lines.length > 0 ? `>>> ${lines.join('\n')}` : `>>> ${LOADING_ANIMATED_ICON} Halting Antinuke Engines...`
+            ].join('\n'))
+            .setFooter({ text: 'Rage Optimiser • Unbypassable Security', iconURL: message.guild?.iconURL() || undefined })
+            .setTimestamp();
+        };
 
-      let replyMsg = await message.reply({ embeds: [renderShutdownCard(0)] }).catch(() => null);
-      if (replyMsg) {
-        let activeMsg: any = replyMsg;
-        for (let i = 1; i <= deactSteps.length; i++) {
-          await new Promise(res => setTimeout(res, 240));
-          if (activeMsg) {
-            const updated: any = await activeMsg.edit({ embeds: [renderShutdownCard(i)] }).catch(() => null);
-            if (updated) activeMsg = updated;
+        replyMsg = await message.reply({ embeds: [renderShutdownCard(0)] }).catch(() => null);
+        if (replyMsg) {
+          let activeMsg: any = replyMsg;
+          for (let i = 1; i <= deactSteps.length; i++) {
+            await new Promise(res => setTimeout(res, 240));
+            if (activeMsg) {
+              const updated: any = await activeMsg.edit({ embeds: [renderShutdownCard(i)] }).catch(() => null);
+              if (updated) activeMsg = updated;
+            }
           }
+          replyMsg = activeMsg;
         }
-        replyMsg = activeMsg;
       }
 
-      if (['antinuke', 'security', 'an'].includes(target)) {
+      if (target === 'security') {
         if (toggleMod) toggleMod('security', false);
         const secMod = modulesState.find((m: any) => m.id === 'security');
         if (updateConfig) updateConfig('security', { ...(secMod?.config || {}), antiNukeEnabled: false });
@@ -1708,7 +2415,7 @@ export function registerEnableDisableCommands(): void {
         return message.reply({ embeds: [card] });
       }
 
-      if (['automod', 'am', 'antilink', 'antispam'].includes(target)) {
+      if (target === 'automod') {
         if (toggleMod) toggleMod('automod', false);
         const amMod = modulesState.find((m: any) => m.id === 'automod');
         if (updateConfig) updateConfig('automod', { ...(amMod?.config || {}), autoModEnabled: false, blockLinks: false });
@@ -1734,8 +2441,39 @@ export function registerEnableDisableCommands(): void {
         return message.reply({ embeds: [card] });
       }
 
+      // C. DISABLE VOICE
+      if (target === 'voice') {
+        if (toggleMod) {
+          toggleMod('voice-protection', false);
+          toggleMod('join_to_create', false);
+          toggleMod('joinToCreate', false);
+          toggleMod('voice_manager', false);
+          toggleMod('voice', false);
+        }
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Voice Protection & Dynamic VC — Offline`)
+          .setDescription(
+            `**Suite**: \`VOICE PROTECTION & JOIN-TO-CREATE\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Dynamic Join-To-Create temp channel generator suspended.\n` +
+            `${SUCCESS_CHECK_ICON} Voice safeguards & connection monitors placed on standby.\n` +
+            `${WRONG_EMOJI} Automatic voice channel creation paused.\n\n` +
+            `> Use \`${prefix}enable voice\` to restore voice systems instantly.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Voice Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
       // C2. DISABLE BACKUPS
-      if (['backups', 'backup', 'backup-recovery'].includes(target)) {
+      if (target === 'backups') {
         if (toggleMod) {
           toggleMod('backups', false);
         }
@@ -1761,7 +2499,338 @@ export function registerEnableDisableCommands(): void {
         return message.reply({ embeds: [card] });
       }
 
-      if (['all', 'full', 'everything'].includes(target)) {
+      // C3. DISABLE LOGGING
+      if (target === 'logging') {
+        if (toggleMod) {
+          toggleMod('logging', false);
+        }
+
+        const logMod = modulesState.find((m: any) => m.id === 'logging');
+        const logConfig = logMod?.config || {};
+        const LOG_CATEGORIES = ['security', 'moderation', 'antiNuke', 'botProtection', 'webhook', 'voice', 'audit', 'system'];
+
+        const updatedConfig = { ...logConfig };
+        LOG_CATEGORIES.forEach(cat => {
+          if (updatedConfig[cat]) {
+            updatedConfig[cat] = { ...updatedConfig[cat], enabled: false };
+          }
+        });
+        if (updateConfig) updateConfig('logging', updatedConfig);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Advanced Logging Center — Offline`)
+          .setDescription(
+            `**Suite**: \`LOGGING & AUDIT TELEMETRY\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} All 8 server audit event pipelines have been paused.\n` +
+            `${SUCCESS_CHECK_ICON} Channel routing configurations preserved in database.\n` +
+            `${WRONG_EMOJI} Live event dispatching to log channels suspended.\n\n` +
+            `> Use \`${prefix}enable logging\` to restore audit event monitoring instantly.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Logging Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C4. DISABLE TICKETS
+      if (target === 'tickets') {
+        if (toggleMod) toggleMod('tickets', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Ticket Support System — Offline`)
+          .setDescription(
+            `**Suite**: \`TICKETS\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Ticket panel interaction listeners paused.\n` +
+            `${SUCCESS_CHECK_ICON} Existing open tickets and transcripts preserved in database.\n` +
+            `${WRONG_EMOJI} New ticket creation through panels or commands disabled.\n\n` +
+            `> Use \`${prefix}enable tickets\` to re-activate support systems instantly.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Tickets Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C5. DISABLE VERIFICATION
+      if (target === 'verification') {
+        if (toggleMod) toggleMod('verification', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Member Verification Gateway — Offline`)
+          .setDescription(
+            `**Suite**: \`VERIFICATION\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Captcha & button verification listeners paused.\n` +
+            `${SUCCESS_CHECK_ICON} Configured verified roles and channel bindings preserved.\n` +
+            `${WRONG_EMOJI} Automatic member gating disabled.\n\n` +
+            `> Use \`${prefix}enable verification\` to restore verification gate.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Verification Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C6. DISABLE JOIN-ROLE GUARD / AUTOROLE
+      if (target === 'join_role_guard') {
+        if (toggleMod) {
+          toggleMod('join_role_guard', false);
+          toggleMod('join-role-guard', false);
+        }
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} AutoRole & Join-Role Guard — Offline`)
+          .setDescription(
+            `**Suite**: \`AUTOROLE & JOIN GUARD\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Automated join role assignments suspended.\n` +
+            `${SUCCESS_CHECK_ICON} Configured role mappings preserved in database.\n` +
+            `${WRONG_EMOJI} Newly joining members will not receive automated roles.\n\n` +
+            `> Use \`${prefix}enable autorole\` to restore onboarding automation.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • AutoRole Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C7. DISABLE GIVEAWAYS
+      if (target === 'giveaway') {
+        if (toggleMod) toggleMod('giveaway', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Giveaway Engine — Offline`)
+          .setDescription(
+            `**Suite**: \`GIVEAWAYS\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Active giveaway timers paused.\n` +
+            `${WRONG_EMOJI} New giveaways cannot be launched.\n\n` +
+            `> Use \`${prefix}enable giveaway\` to re-activate prize giveaways.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Giveaway Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C8. DISABLE REACTION ROLES & SELF ROLES
+      if (target === 'reaction_roles' || target === 'self-roles') {
+        if (toggleMod) {
+          toggleMod('reaction_roles', false);
+          toggleMod('self-roles', false);
+        }
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Reaction & Self-Roles Engine — Offline`)
+          .setDescription(
+            `**Suite**: \`REACTION ROLES\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Emoji reaction listeners suspended.\n` +
+            `${SUCCESS_CHECK_ICON} Role bindings and menu presets preserved.\n` +
+            `${WRONG_EMOJI} Users clicking reactions or menus will not receive roles.\n\n` +
+            `> Use \`${prefix}enable reactionroles\` to re-activate role selection.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Roles Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C9. DISABLE LEVELING
+      if (target === 'leveling') {
+        if (toggleMod) toggleMod('leveling', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Leveling & Rank System — Offline`)
+          .setDescription(
+            `**Suite**: \`LEVELING & XP\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Chat XP calculation and level-up announcements suspended.\n` +
+            `${SUCCESS_CHECK_ICON} User XP progress and leaderboard data preserved.\n` +
+            `${WRONG_EMOJI} Members will not earn XP from messages while paused.\n\n` +
+            `> Use \`${prefix}enable leveling\` to re-activate rank progression.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Leveling Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C10. DISABLE SOCIAL UPDATES
+      if (target === 'social_updates') {
+        if (toggleMod) toggleMod('social_updates', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Social Updates Sentinel — Offline`)
+          .setDescription(
+            `**Suite**: \`SOCIAL UPDATES\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Polling for YouTube videos and Twitch streams paused.\n` +
+            `${WRONG_EMOJI} Feed notifications will not be sent to alert channels.\n\n` +
+            `> Use \`${prefix}enable socials\` to re-activate social monitoring.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Social Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C11. DISABLE STATS COUNTER
+      if (target === 'stats-counter') {
+        if (toggleMod) toggleMod('stats-counter', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Server Stats Counter — Offline`)
+          .setDescription(
+            `**Suite**: \`STATS COUNTER\` \`[ STANDBY ]\`\n\n` +
+            `${SUCCESS_CHECK_ICON} Real-time channel rename synchronization paused.\n` +
+            `${WRONG_EMOJI} Voice counter channels will not update on member joins/leaves.\n\n` +
+            `> Use \`${prefix}enable statscounter\` to re-activate live counters.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Stats Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C12. DISABLE REMINDERS
+      if (target === 'reminders') {
+        if (toggleMod) toggleMod('reminders', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Reminders Module — Offline`)
+          .setDescription(
+            `**Suite**: \`REMINDERS\` \`[ STANDBY ]\`\n\n` +
+            `> Use \`${prefix}enable reminders\` to re-activate.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Reminders Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C13. DISABLE ANNOUNCEMENTS
+      if (target === 'announcements') {
+        if (toggleMod) toggleMod('announcements', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Announcements Module — Offline`)
+          .setDescription(
+            `**Suite**: \`ANNOUNCEMENTS\` \`[ STANDBY ]\`\n\n` +
+            `> Use \`${prefix}enable announcements\` to re-activate.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Announcements Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C14. DISABLE PROMOTION
+      if (target === 'promotion') {
+        if (toggleMod) toggleMod('promotion', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Server Promotion System — Offline`)
+          .setDescription(
+            `**Suite**: \`PROMOTION\` \`[ STANDBY ]\`\n\n` +
+            `> Use \`${prefix}enable promo\` to re-activate server promotion.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Promotion Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // C15. DISABLE EMBED BUILDER
+      if (target === 'embed_builder') {
+        if (toggleMod) toggleMod('embed_builder', false);
+
+        const card = new EmbedBuilder()
+          .setColor(0xFF4444)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • DEACTIVATION COMPLETE',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Custom Embed Builder — Offline`)
+          .setDescription(
+            `**Suite**: \`EMBED BUILDER\` \`[ STANDBY ]\`\n\n` +
+            `> Use \`${prefix}enable embed\` to re-activate custom embed tools.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • Embed Standby', iconURL: message.guild.iconURL() || undefined })
+          .setTimestamp();
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
+      // D. DISABLE ALL
+      if (target === 'all') {
         if (toggleMod) {
           for (const m of modulesState) {
             toggleMod(m.id, false);
@@ -1803,7 +2872,12 @@ export function registerEnableDisableCommands(): void {
         }
       }
 
-      const errContent = `${WRONG_EMOJI} Unknown target **${target}**. Valid options: \`antinuke\`, \`automod\`, \`voice\`, \`backups\`, \`all\`.`;
+      const validCategoriesList = [
+        '**Security Suites**: `antinuke`, `automod`, `voice`, `logging`, `backups`',
+        '**Server Features**: `tickets`, `verification`, `autorole`, `giveaway`, `reactionroles`, `leveling`, `statscounter`, `socials`, `reminders`, `embed`',
+        '**Master**: `all`'
+      ].join('\n');
+      const errContent = `${WRONG_EMOJI} Unknown module target **${rawTarget}**.\n\n${validCategoriesList}\n\n> Run \`${prefix}disable <module>\` or \`${prefix}disable all\``;
       if (replyMsg) return replyMsg.edit({ content: errContent, embeds: [] });
       return message.reply({ content: errContent });
     }

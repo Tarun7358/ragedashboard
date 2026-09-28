@@ -106,6 +106,8 @@ export class PrefixRegistry {
     'vc': 'voice',
     'jointocreate': 'jtc',
     'j2c': 'jtc',
+    'jg': 'joinguard',
+    'jguard': 'joinguard',
     'automations': 'automation',
     'auto': 'automation',
 
@@ -337,10 +339,13 @@ export class PrefixRegistry {
       'bulk_ops': 'Bulk Operations',
       'diagnostics': 'Diagnostics',
       'join-role-guard': 'Security',
+      'join_role_guard': 'Security',
       'social-updates': 'Social Updates',
+      'social_updates': 'Social Updates',
       'analytics': 'Analytics',
       'audit': 'Audit',
-      'rage-enterprise': 'Enterprise'
+      'rage-enterprise': 'Enterprise',
+      'rage_enterprise': 'Enterprise'
     };
 
     return map[moduleId] || 'System';

@@ -385,7 +385,6 @@ export const CommunityManifest: ModuleManifest = {
     { name: 'avatar', description: 'Get a user\'s avatar', options: [{ name: 'user', type: 6, description: 'User to check', required: false }] },
     { name: 'userinfo', description: 'Get info about a user', options: [{ name: 'user', type: 6, description: 'User to check', required: false }] },
     { name: 'serverinfo', description: 'Get info about the server' },
-    { name: 'ping', description: 'Check bot latency' },
     { name: 'help', description: 'List all bot commands' },
     { name: 'invite', description: 'Get the bot invite link' },
     { name: 'poll', description: 'Create a poll', options: [{ name: 'question', type: 3, description: 'Poll question', required: true }] },
@@ -634,54 +633,7 @@ export const CommunityManifest: ModuleManifest = {
         await interaction.reply({ embeds: [embed] });
       }
     },
-    {
-      name: 'command_ping',
-      handler: async (client: any, interaction: any, context: any) => {
-        if (!interaction.deferred && !interaction.replied) {
-          await interaction.deferReply().catch(() => {});
-        }
 
-        const wsPing = Math.round(client.ws.ping);
-        const uptimeSec = process.uptime();
-        const startTime = Math.floor((Date.now() - uptimeSec * 1000) / 1000);
-        const heapMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
-
-        const getStatus = (ms: number) => {
-          if (ms < 100) return `${VERIFIED_ICON} Ultra Fast`;
-          if (ms < 250) return `${TIMER_ICON} Normal Speed`;
-          if (ms < 500) return `${TIMER_ICON} Moderate Lag`;
-          return `${WRONG_ICON} High Latency`;
-        };
-
-        const pingColor = wsPing < 150 ? Colors.LIME : wsPing < 300 ? Colors.WARN : Colors.DANGER;
-
-        const embed = buildLimeOverviewCard({
-          title: 'LATENCY & SPEED MONITOR',
-          subtitle: 'LIVE SYSTEM PERFORMANCE',
-          color: pingColor,
-          sections: [
-            {
-              title: `${SHIELD_ICON} GATEWAY & API LATENCY`,
-              items: [
-                `WebSocket Latency: \`${wsPing}ms\` — ${getStatus(wsPing)}`,
-                `Online Since: <t:${startTime}:R>`
-              ]
-            },
-            {
-              title: `${CONFIG_ICON} HARDWARE & NODE ENVIRONMENT`,
-              items: [
-                `RAM Heap: \`${heapMb} MB\``,
-                `Shard: \`#0 ONLINE\``,
-                `Runtime: \`Node.js ${process.version}\``
-              ]
-            }
-          ],
-          footerText: 'Rage Optimiser Enterprise • Speed Test'
-        });
-
-        await interaction.editReply({ embeds: [embed] }).catch(() => {});
-      }
-    },
     {
       name: 'command_help',
       handler: async (client: any, interaction: any, context: any) => {

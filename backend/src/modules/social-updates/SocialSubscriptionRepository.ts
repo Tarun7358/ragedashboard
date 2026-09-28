@@ -29,6 +29,7 @@ export interface SocialSubscription {
   validationError?: string;
   totalNotificationsSent: number;
   totalDeliveryTimeMs: number;    // For average calculation
+  authCredential?: string;        // Encrypted user-specific Instagram session_id / token (AES-256-GCM)
   createdAt: string;
   updatedAt: string;
 }
@@ -79,6 +80,7 @@ export class SocialSubscriptionRepository {
         validationError TEXT,
         totalNotificationsSent INTEGER NOT NULL DEFAULT 0,
         totalDeliveryTimeMs INTEGER NOT NULL DEFAULT 0,
+        authCredential TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -97,6 +99,12 @@ export class SocialSubscriptionRepository {
     if (!columnNames.includes('validationError')) {
       await Database.exec(`
         ALTER TABLE social_subscriptions ADD COLUMN validationError TEXT
+      `).catch(() => {});
+    }
+
+    if (!columnNames.includes('authCredential')) {
+      await Database.exec(`
+        ALTER TABLE social_subscriptions ADD COLUMN authCredential TEXT
       `).catch(() => {});
     }
 
@@ -182,15 +190,15 @@ export class SocialSubscriptionRepository {
         pollingMode, contentTypes, enabled,
         lastProcessedId, lastSyncTimestamp, failedAttempts, lastError,
         validationStatus, validationError,
-        totalNotificationsSent, totalDeliveryTimeMs, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, null, 'valid', null, 0, 0, ?, ?)`,
+        totalNotificationsSent, totalDeliveryTimeMs, authCredential, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, null, 'valid', null, 0, 0, ?, ?, ?)`,
       [
         sub.id, sub.guildId, sub.provider, sub.sourceId, sub.sourceName,
         sub.sourceAvatar || null, sub.discordChannelId,
         sub.embedConfig, sub.notificationTemplate || null,
         sub.mentionRoles, sub.pollingMode, sub.contentTypes,
         sub.enabled ? 1 : 0, sub.lastProcessedId || null,
-        sub.lastSyncTimestamp || null, now, now
+        sub.lastSyncTimestamp || null, sub.authCredential || null, now, now
       ]
     );
   }
@@ -204,7 +212,7 @@ export class SocialSubscriptionRepository {
       'discordChannelId', 'embedConfig', 'notificationTemplate', 'mentionRoles',
       'pollingMode', 'contentTypes', 'enabled', 'lastProcessedId',
       'lastSyncTimestamp', 'failedAttempts', 'lastError', 'validationStatus', 'validationError',
-      'totalNotificationsSent', 'totalDeliveryTimeMs', 'sourceName', 'sourceAvatar'
+      'totalNotificationsSent', 'totalDeliveryTimeMs', 'sourceName', 'sourceAvatar', 'authCredential'
     ];
 
     for (const key of allowed) {

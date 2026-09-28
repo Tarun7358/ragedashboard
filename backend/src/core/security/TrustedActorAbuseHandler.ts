@@ -1,4 +1,4 @@
-﻿import { Guild, GuildMember, EmbedBuilder } from 'discord.js';
+import { Guild, GuildMember, EmbedBuilder } from 'discord.js';
 import { Database } from '../Database.js';
 import { removeExtraOwnerFromCache, getExtraOwnerFromCache, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import { TrustedActorStateSnapshot, SnapshotRecord } from './TrustedActorStateSnapshot.js';
@@ -122,18 +122,18 @@ export class TrustedActorAbuseHandler {
     const dmEmbed = new EmbedBuilder()
       .setColor(0xF59E0B)
       .setAuthor({ name: 'Rage Optimiser • Behavioral Security Gate' })
-      .setTitle('<:timer:1532620491662037123> TRUSTED ACTOR BEHAVIORAL WARNING')
+      .setTitle('<a:Timer:1546231426863730728> TRUSTED ACTOR BEHAVIORAL WARNING')
       .setDescription([
         `You are registered as a **${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'}** in **${guild.name}**.\n`,
-        `> <:security:1546142576984203336> **Rapid Actions Detected**: Our sub-millisecond behavioral firewall detected rapid operations:`,
+        `> <a:success_check:1546134620087783526> **Rapid Actions Detected**: Our sub-millisecond behavioral firewall detected rapid operations:`,
         ...summary,
-        `\n<:timer:1532620491662037123> **WARNING**: You are currently at **${warnCount}/${punishCount} events** in the ${winSec}-second window.`,
+        `\n<a:Timer:1546231426863730728> **WARNING**: You are currently at **${warnCount}/${punishCount} events** in the ${winSec}-second window.`,
         `If rapid destructive actions continue, your trusted status will be **AUTOMATICALLY REVOKED**, you will be **QUARANTINED**, and all changes will be **REVERSED**.`
       ].join('\n'))
       .setFooter({ text: 'Rage Optimiser • Unbypassable Security Engine' })
       .setTimestamp();
 
-    await member.send({ embeds: [dmEmbed] }).catch(() => {});
+    await (typeof (member as any)?.send === 'function' ? (member as any).send({ embeds: [dmEmbed] }) : (member as any)?.user?.send?.({ embeds: [dmEmbed] }))?.catch?.(() => {});
 
     // 2. Log Channel Warning Entry with Custom UI
     const targetChanId = await this.resolveSecurityLogChannel(guild, logChannelId);
@@ -143,7 +143,7 @@ export class TrustedActorAbuseHandler {
         const logEmbed = new EmbedBuilder()
           .setColor(0xF59E0B)
           .setAuthor({ name: 'Rage Optimiser • Security Log' })
-          .setTitle('<:timer:1532620491662037123> TRUSTED ACTOR WARNING ISSUED')
+          .setTitle('<a:Timer:1546231426863730728> TRUSTED ACTOR WARNING ISSUED')
           .setDescription([
             `**Actor**: ${member} (\`${member.id}\`)`,
             `**Trust Level**: ${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'}`,
@@ -255,10 +255,10 @@ export class TrustedActorAbuseHandler {
           `**Punishment**: Quarantined & Revoked`,
           `\n**TRIGGERING ACTIONS (10s Window)**:`,
           ...summary,
-          `\n<a:approved:1532390590707142956> **RESTORATION REPORT (${restoreReport.durationMs}ms)**:`,
-          ...(restoreReport.restored.length > 0 ? restoreReport.restored.map(r => `> <a:approved:1532390590707142956> ${r}`) : ['> *No assets required restoration*']),
+          `\n<:ticks:1532620580266836148> **RESTORATION REPORT (${restoreReport.durationMs}ms)**:`,
+          ...(restoreReport.restored.length > 0 ? restoreReport.restored.map(r => `> <:ticks:1532620580266836148> ${r}`) : ['> *No assets required restoration*']),
           ...(restoreReport.failed.length > 0 ? restoreReport.failed.map(f => `> <a:wrong:1546155193303957504> ${f}`) : []),
-          `\n<:security:1546142576984203336> *Trusted status permanently revoked. Server state restored to pre-abuse conditions.*`
+          `\n<a:success_check:1546134620087783526> *Trusted status permanently revoked. Server state restored to pre-abuse conditions.*`
         ].join('\n'))
         .setFooter({ text: 'Rage Optimiser • Sub-Millisecond Firewall' })
         .setTimestamp();
@@ -278,12 +278,12 @@ export class TrustedActorAbuseHandler {
         .setDescription([
           `Your **${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted'}** status in **${guild.name}** has been **AUTOMATICALLY REVOKED**.`,
           `\n**Reason**: Exceeded trusted actor threshold (2+ destructive actions under 10 seconds).`,
-          `\n<a:approved:1532390590707142956> **Restoration**: All deleted or created channels/roles have been **reversed and restored** to their original state.`
+          `\n<:ticks:1532620580266836148> **Restoration**: All deleted or created channels/roles have been **reversed and restored** to their original state.`
         ].join('\n'))
         .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
         .setTimestamp();
 
-      await member.send({ embeds: [dmEmbed] }).catch(() => {});
+      await (typeof (member as any)?.send === 'function' ? (member as any).send({ embeds: [dmEmbed] }) : (member as any)?.user?.send?.({ embeds: [dmEmbed] }))?.catch?.(() => {});
 
       // Clear state
       TrustedActorRateLimiter.clear(guild.id, member.id);

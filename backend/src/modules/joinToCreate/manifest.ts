@@ -1,4 +1,4 @@
-﻿import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import {
   EmbedBuilder,
   PermissionFlagsBits,
@@ -168,7 +168,7 @@ export async function handleJtcInteraction(interaction: any, context: any) {
       const activeData = activeChannels.find((c: any) => c.channelId === channelId);
       if (activeData) activeData.name = newName;
       saveConfig({ activeChannels });
-      return interaction.reply({ content: `<a:approved:1532390590707142956> Renamed room to **${newName}**!`, flags: 64 });
+      return interaction.reply({ content: `<:ticks:1532620580266836148> Renamed room to **${newName}**!`, flags: 64 });
     }
     return interaction.reply({ content: `${WRONG_ICON} Failed to rename room.`, flags: 64 });
   }
@@ -274,7 +274,7 @@ export async function handleJtcInteraction(interaction: any, context: any) {
       const activeData = activeChannels.find((c: any) => c.channelId === currentVoice.id);
       const { embed, components } = buildJTCVoiceControllerGUI(currentVoice, activeData);
       await interaction.channel?.send({ embeds: [embed], components });
-      return interaction.reply({ content: `<a:approved:1532390590707142956> Posted Voice Controller for ${currentVoice}!`, flags: 64 });
+      return interaction.reply({ content: `<:ticks:1532620580266836148> Posted Voice Controller for ${currentVoice}!`, flags: 64 });
     } else {
       return interaction.reply({ content: `${WRONG_ICON} Please join your temporary voice channel first, or run \`r!vc\` while inside the room.`, flags: 64 });
     }
@@ -413,7 +413,7 @@ export async function handleJtcInteraction(interaction: any, context: any) {
       return interaction.reply({ content: `${WRONG_ICON} Only the channel owner or admin can delete this room.`, flags: 64 });
     }
     await targetChannel.delete('JTC: Room deleted by owner');
-    return interaction.reply({ content: `<a:approved:1532390590707142956> Voice room **${targetChannel.name}** deleted.`, flags: 64 });
+    return interaction.reply({ content: `<:ticks:1532620580266836148> Voice room **${targetChannel.name}** deleted.`, flags: 64 });
   }
 
   // In-Voice: Refresh
@@ -681,7 +681,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           });
 
           context.logSyncEvent(`[JTC] Trigger ${existingIdx >= 0 ? 'updated' : 'added'}: #${(channel as any).name} (${existingTriggers.length} total).`, 'success');
-          return interaction.reply({ content: `<a:approved:1532390590707142956> **JTC Trigger ${existingIdx >= 0 ? 'Updated' : 'Added'}!**\n- **Channel:** ${channel}\n- **Label:** \`${label}\`\n- **Default Name:** \`${defaultName}\`\n- **Privacy:** \`${privacy}\`\n- **Total Triggers:** ${existingTriggers.length}`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> **JTC Trigger ${existingIdx >= 0 ? 'Updated' : 'Added'}!**\n- **Channel:** ${channel}\n- **Label:** \`${label}\`\n- **Default Name:** \`${defaultName}\`\n- **Privacy:** \`${privacy}\`\n- **Total Triggers:** ${existingTriggers.length}`, flags: 64 });
         }
 
         if (sub === 'remove') {
@@ -696,7 +696,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           }
           saveConfig({ triggers: filtered });
           context.logSyncEvent(`[JTC] Trigger removed: #${(channel as any).name} (${filtered.length} remaining).`, 'info');
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Removed **${(channel as any).name}** as a JTC trigger. **${filtered.length}** trigger(s) remaining.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Removed **${(channel as any).name}** as a JTC trigger. **${filtered.length}** trigger(s) remaining.`, flags: 64 });
         }
 
         // Find user's active channel
@@ -710,7 +710,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           await channel.setName(name).catch(() => {});
           myChannel.name = name;
           saveConfig({ activeChannels });
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Renamed your channel to **${name}**.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Renamed your channel to **${name}**.`, flags: 64 });
         }
 
         if (sub === 'limit') {
@@ -719,7 +719,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
           await channel.setUserLimit(limit).catch(() => {});
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Set user limit to **${limit === 0 ? 'unlimited' : limit}**.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Set user limit to **${limit === 0 ? 'unlimited' : limit}**.`, flags: 64 });
         }
 
         if (sub === 'lock') {
@@ -733,7 +733,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           }).catch(() => {});
           myChannel.locked = true;
           saveConfig({ activeChannels });
-          return interaction.reply({ content: '<:security:1546142576984203336> Your channel is now **locked**. Use `/jtc unlock` to reopen.', flags: 64 });
+          return interaction.reply({ content: '<a:success_check:1546134620087783526> Your channel is now **locked**. Use `/jtc unlock` to reopen.', flags: 64 });
         }
 
         if (sub === 'unlock') {
@@ -754,7 +754,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           }
           myChannel.locked = false;
           saveConfig({ activeChannels });
-          return interaction.reply({ content: '<a:approved:1532390590707142956> Your channel is now **unlocked**.', flags: 64 });
+          return interaction.reply({ content: '<:ticks:1532620580266836148> Your channel is now **unlocked**.', flags: 64 });
         }
 
         if (sub === 'transfer') {
@@ -764,7 +764,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           myChannel.ownerTag = user.username;
           saveConfig({ activeChannels });
           context.logSyncEvent(`[JTC] ${interaction.user.username} transferred channel to ${user.username}.`, 'info');
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Transferred channel ownership to ${user}.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Transferred channel ownership to ${user}.`, flags: 64 });
         }
 
         if (sub === 'kick') {
@@ -777,7 +777,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           }
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (channel) await channel.permissionOverwrites.edit(user.id, { Connect: false }).catch(() => {});
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Kicked ${user} from your channel.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Kicked ${user} from your channel.`, flags: 64 });
         }
 
         if (sub === 'invite') {
@@ -786,7 +786,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
           await channel.permissionOverwrites.edit(user.id, { Connect: true, ViewChannel: true }).catch(() => {});
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Invited ${user} to your channel.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Invited ${user} to your channel.`, flags: 64 });
         }
 
         if (sub === 'info') {
@@ -799,11 +799,11 @@ export const JoinToCreateManifest: ModuleManifest = {
             .addFields(
               { name: '<:voicechannelgreen:1532425750278438962> Channel', value: `<#${myChannel.channelId}>`, inline: true },
               { name: '<a:lovemail:1527647157371535420> Name', value: myChannel.name, inline: true },
-              { name: '<:security:1546142576984203336> Status', value: myChannel.locked ? 'Locked' : 'Open', inline: true },
+              { name: '<a:success_check:1546134620087783526> Status', value: myChannel.locked ? 'Locked' : 'Open', inline: true },
               { name: '<:config:1532425712844144701> Privacy Mode', value: privacyLabel[originTrigger?.privacy || 'public'] || 'Public', inline: true },
               { name: '<:member:1532621317487071426> User Limit', value: (myChannel.limit || 0) === 0 ? '∞ Unlimited' : `${myChannel.limit} max`, inline: true },
               { name: '<:link:1532620952087826602> Trigger', value: originTrigger ? originTrigger.label : 'Legacy', inline: true },
-              { name: '<:timer:1532620491662037123> Created', value: `<t:${Math.floor(new Date(myChannel.createdAt).getTime() / 1000)}:R>`, inline: true }
+              { name: '<a:Timer:1546231426863730728> Created', value: `<t:${Math.floor(new Date(myChannel.createdAt).getTime() / 1000)}:R>`, inline: true }
             );
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -858,7 +858,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
           await channel.setBitrate(bitrate * 1000).catch(() => {});
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Set bitrate to **${bitrate}kbps**.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Set bitrate to **${bitrate}kbps**.`, flags: 64 });
         }
 
         if (sub === 'region') {
@@ -868,7 +868,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
           const rtcRegion = region?.toLowerCase() === 'auto' ? null : (region || null);
           await (channel as any).setRTCRegion(rtcRegion).catch(() => {});
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Set voice region to **${rtcRegion ?? 'Automatic'}**.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Set voice region to **${rtcRegion ?? 'Automatic'}**.`, flags: 64 });
         }
 
         if (sub === 'reset') {
@@ -898,7 +898,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           myChannel.name = defaultName;
           myChannel.locked = false;
           saveConfig({ activeChannels });
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Reset your channel to **${defaultPrivacy}** defaults.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Reset your channel to **${defaultPrivacy}** defaults.`, flags: 64 });
         }
 
         if (sub === 'hide') {
@@ -906,7 +906,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
           await channel.permissionOverwrites.edit(interaction.guild?.roles.everyone.id!, { ViewChannel: false });
-          return interaction.reply({ content: '<a:approved:1532390590707142956> Channel successfully hidden.', flags: 64 });
+          return interaction.reply({ content: '<:ticks:1532620580266836148> Channel successfully hidden.', flags: 64 });
         }
 
         if (sub === 'unhide') {
@@ -914,7 +914,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
           await channel.permissionOverwrites.edit(interaction.guild?.roles.everyone.id!, { ViewChannel: true });
-          return interaction.reply({ content: '<a:approved:1532390590707142956> Channel successfully unhidden.', flags: 64 });
+          return interaction.reply({ content: '<:ticks:1532620580266836148> Channel successfully unhidden.', flags: 64 });
         }
 
         if (sub === 'permit') {
@@ -923,7 +923,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
           const target = interaction.options.getUser('user');
           await channel.permissionOverwrites.edit(target.id, { Connect: true, ViewChannel: true });
-          return interaction.reply({ content: `<a:approved:1532390590707142956> Allowed ${target} to join your channel.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Allowed ${target} to join your channel.`, flags: 64 });
         }
 
         if (sub === 'reject') {
@@ -1161,6 +1161,12 @@ export const JoinToCreateManifest: ModuleManifest = {
         if (changed) {
           context.updateModuleConfig('join_to_create', updates);
         }
+      }
+    },
+    {
+      name: 'button_jtc_generic',
+      handler: async (client: any, interaction: any, context: any) => {
+        return handleJtcInteraction(interaction, context);
       }
     }
   ],

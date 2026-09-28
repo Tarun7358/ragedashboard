@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node ../start.js",
     "dev": "vite",
-    "build": "vite build",
+    "build": "npx --no-install vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },

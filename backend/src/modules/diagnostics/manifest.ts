@@ -157,7 +157,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: errorMods > 0 ? Colors.DANGER : Colors.BRAND,
             sections: [
               {
-                title: '<:security:1546142576984203336> CORE SECURITY ENGINE STATUS',
+                title: '<a:success_check:1546134620087783526> CORE SECURITY ENGINE STATUS',
                 items: [
                   `Engine Health: ${healthStatus}`,
                   `WebSocket Ping: \`${client.ws.ping}ms\``,
@@ -221,7 +221,7 @@ export const DiagnosticsManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '<:timer:1532620491662037123> RUNTIME DURATION',
+                title: '<a:Timer:1546231426863730728> RUNTIME DURATION',
                 items: [
                   `Running Duration: <t:${startSec}:R>`,
                   `Initial Launch Time: <t:${startSec}:F>`
@@ -287,7 +287,7 @@ export const DiagnosticsManifest: ModuleManifest = {
               color: db ? Colors.BRAND : Colors.DANGER,
               sections: [
                 {
-                  title: '<:security:1546142576984203336> PERSISTENCE STATE',
+                  title: '<a:success_check:1546134620087783526> PERSISTENCE STATE',
                   items: [
                     `Database Connection: ${status}`,
                     `Engine Type: \`SQLite 3 (Hardened WAL Mode)\``

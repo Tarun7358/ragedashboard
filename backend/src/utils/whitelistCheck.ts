@@ -14,10 +14,14 @@ export const protections = [
   { key: 'anti_role_grant', label: 'Anti Role Assign' },
   { key: 'anti_role_remove', label: 'Anti Role Remove' },
   { key: 'anti_member_update', label: 'Anti Member Update' },
-  { key: 'anti_emoji_create', label: 'Anti Emoji/Sticker Create' },
-  { key: 'anti_emoji_delete', label: 'Anti Emoji/Sticker Delete' },
-  { key: 'anti_emoji_update', label: 'Anti Emoji/Sticker Update' },
-  { key: 'anti_everyone_ping', label: 'Anti Everyone/Here Ping' },
+  { key: 'anti_emoji_create', label: 'Anti Emoji Create' },
+  { key: 'anti_emoji_delete', label: 'Anti Emoji Delete' },
+  { key: 'anti_emoji_update', label: 'Anti Emoji Update' },
+  { key: 'anti_sticker_create', label: 'Anti Sticker Create' },
+  { key: 'anti_sticker_delete', label: 'Anti Sticker Delete' },
+  { key: 'anti_sticker_update', label: 'Anti Sticker Update' },
+  { key: 'anti_everyone_here', label: 'Anti Everyone/Here Ping' },
+  { key: 'anti_everyone_ping', label: 'Anti Everyone Ping' },
   { key: 'anti_role_ping', label: 'Anti Role Ping' },
   { key: 'anti_integration', label: 'Anti Integration' },
   { key: 'anti_guild_update', label: 'Anti Guild Update' },
@@ -39,45 +43,52 @@ export function isModuleBypassed(enabledModules: string[] | undefined, ruleId?: 
   // If the exact key or name is enabled
   if (enabledModules.includes(cleanRule) || enabledModules.includes(ruleId)) return true;
 
-  // Anti-Nuke mapping
+  // Anti-Nuke category mapping
   const antiNukeRules = [
-    'anti_ban', 'anti_unban', 'anti_kick', 'anti_prune', 'anti_bot_add',
+    'anti_ban', 'anti_unban', 'anti_kick', 'anti_prune', 'anti_bot_add', 'anti_bot_remove',
     'anti_channel_create', 'anti_channel_delete', 'anti_channel_update',
     'anti_role_create', 'anti_role_delete', 'anti_role_update',
     'anti_role_grant', 'anti_role_remove', 'anti_member_update',
     'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update',
+    'anti_sticker_create', 'anti_sticker_delete', 'anti_sticker_update',
     'anti_integration', 'anti_guild_update',
     'anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update',
-    'anti_invite_create', 'anti_invite_delete', 'anti_timeout', 'anti_link'
+    'anti_invite_create', 'anti_invite_delete', 'anti_timeout',
+    'anti_everyone_here', 'anti_everyone_ping', 'anti_role_ping'
   ];
   if (antiNukeRules.includes(cleanRule)) {
-    return enabledModules.includes('Anti-Nuke') || enabledModules.includes('anti-nuke');
+    if (enabledModules.includes('Anti-Nuke') || enabledModules.includes('anti-nuke')) return true;
   }
 
   // Anti-Link mapping
   if (cleanRule === 'anti_link' || cleanRule === 'antilink') {
-    return enabledModules.includes('anti_link') || enabledModules.includes('antilink') || enabledModules.includes('Automod') || enabledModules.includes('automod');
+    if (enabledModules.includes('anti_link') || enabledModules.includes('antilink') || enabledModules.includes('Automod') || enabledModules.includes('automod') || enabledModules.includes('Anti-Nuke') || enabledModules.includes('anti-nuke')) return true;
   }
 
   // Anti-Spam mapping
-  const antiSpamRules = ['anti_everyone_ping', 'anti_role_ping', 'anti_spam'];
+  const antiSpamRules = ['anti_everyone_ping', 'anti_everyone_here', 'anti_role_ping', 'anti_spam'];
   if (antiSpamRules.includes(cleanRule)) {
-    return enabledModules.includes('Anti-Spam') || enabledModules.includes('anti-spam');
+    if (enabledModules.includes('Anti-Spam') || enabledModules.includes('anti-spam') || enabledModules.includes('Automod') || enabledModules.includes('automod')) return true;
+  }
+
+  // Attachment / file upload mapping
+  if (cleanRule === 'anti_attachment' || cleanRule === 'antiattachment' || cleanRule === 'attachments') {
+    if (enabledModules.includes('anti_attachment') || enabledModules.includes('antiattachment') || enabledModules.includes('Automod') || enabledModules.includes('automod')) return true;
   }
 
   // Voice protection mapping
   if (cleanRule === 'voice_protection' || cleanRule === 'voice-protection') {
-    return enabledModules.includes('Voice-Protection') || enabledModules.includes('voice-protection');
+    if (enabledModules.includes('Voice-Protection') || enabledModules.includes('voice-protection') || enabledModules.includes('voice_protection')) return true;
   }
 
   // Automod mapping
   if (cleanRule === 'automod') {
-    return enabledModules.includes('Automod') || enabledModules.includes('automod');
+    if (enabledModules.includes('Automod') || enabledModules.includes('automod')) return true;
   }
 
   // Verification mapping
   if (cleanRule === 'verification') {
-    return enabledModules.includes('Verification') || enabledModules.includes('verification');
+    if (enabledModules.includes('Verification') || enabledModules.includes('verification')) return true;
   }
 
   return false;
@@ -240,7 +251,7 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
     const antiSpamOnlyRules = ['anti_everyone_ping', 'anti_role_ping', 'anti_link', 'automod', 'anti_spam'];
     const isAntiSpamOnlyRule = ruleId ? antiSpamOnlyRules.includes(ruleId) : false;
 
-    if (isAntiSpamOnlyRule || !ruleId) {
+    if (isAntiSpamOnlyRule) {
       const exceptionRoleIds: string[] = secConfig.exceptionRoleIds || secConfig.whitelistRoles || [];
       if (exceptionRoleIds.length > 0 && member.roles?.cache?.some((r: any) => r && exceptionRoleIds.includes(r.id))) {
         return true;
@@ -649,20 +660,20 @@ export async function getGuildAndCheckPermission(userOrId: string | any, context
 }
 
 export const WHITELIST_MENU_OPTIONS = [
-  { value: 'all', label: 'All Protections (Full Whitelist)', desc: 'Bypass all anti-nuke, anti-spam, anti-link, and voice checks', emoji: '<:security:1546142576984203336>' },
-  { value: 'antinuke', label: 'All Anti-Nuke Rules', desc: 'Bypass all administrative and server-modifying rules', emoji: '<:security:1546142576984203336>' },
-  { value: 'antispam', label: 'All Anti-Spam Rules', desc: 'Bypass everyone/here and role ping protections', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_link', label: 'Content: Anti Link Filter', desc: 'Bypass anti-link filter & URL blocking', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_ban', label: 'Moderation: Ban & Unban', desc: 'Bypass anti-ban and anti-unban rules', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_kick', label: 'Moderation: Kick & Prune', desc: 'Bypass anti-kick and anti-prune rules', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_bot_add', label: 'Security: Anti Bot Add', desc: 'Bypass anti-bot addition rule', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_channel', label: 'Structure: Channels', desc: 'Bypass channel create, delete, and update rules', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_role', label: 'Structure: Roles & Grants', desc: 'Bypass role modify and assignment rules', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_webhook', label: 'Access: Webhooks & Integrations', desc: 'Bypass webhook and integration rules', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_emoji', label: 'Assets: Emojis & Stickers', desc: 'Bypass emoji/sticker modify rules', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_invite', label: 'Invites: Create & Delete', desc: 'Bypass invite modify rules', emoji: '<:security:1546142576984203336>' },
-  { value: 'anti_timeout', label: 'Moderation: Anti Timeout Abuse', desc: 'Bypass anti-timeout abuse rule', emoji: '<:security:1546142576984203336>' },
-  { value: 'voice_protection', label: 'Utilities: Voice Protection', desc: 'Bypass voice connection limitations', emoji: '<:security:1546142576984203336>' }
+  { value: 'all', label: 'All Protections (Full Whitelist)', desc: 'Bypass all anti-nuke, anti-spam, anti-link, and voice checks', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'antinuke', label: 'All Anti-Nuke Rules', desc: 'Bypass all administrative and server-modifying rules', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'antispam', label: 'All Anti-Spam Rules', desc: 'Bypass everyone/here and role ping protections', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_link', label: 'Content: Anti Link Filter', desc: 'Bypass anti-link filter & URL blocking', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_ban', label: 'Moderation: Ban & Unban', desc: 'Bypass anti-ban and anti-unban rules', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_kick', label: 'Moderation: Kick & Prune', desc: 'Bypass anti-kick and anti-prune rules', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_bot_add', label: 'Security: Anti Bot Add', desc: 'Bypass anti-bot addition rule', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_channel', label: 'Structure: Channels', desc: 'Bypass channel create, delete, and update rules', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_role', label: 'Structure: Roles & Grants', desc: 'Bypass role modify and assignment rules', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_webhook', label: 'Access: Webhooks & Integrations', desc: 'Bypass webhook and integration rules', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_emoji', label: 'Assets: Emojis & Stickers', desc: 'Bypass emoji/sticker modify rules', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_invite', label: 'Invites: Create & Delete', desc: 'Bypass invite modify rules', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'anti_timeout', label: 'Moderation: Anti Timeout Abuse', desc: 'Bypass anti-timeout abuse rule', emoji: '<a:success_check:1546134620087783526>' },
+  { value: 'voice_protection', label: 'Utilities: Voice Protection', desc: 'Bypass voice connection limitations', emoji: '<a:success_check:1546134620087783526>' }
 ];
 
 export function mapSelectedOptionsToRules(selectedOptions: string[]): string[] {
@@ -672,18 +683,22 @@ export function mapSelectedOptionsToRules(selectedOptions: string[]): string[] {
       [...protections.map(p => p.key), 'voice_protection'].forEach(k => rules.add(k));
     } else if (opt === 'antinuke') {
       [
-        'anti_ban', 'anti_unban', 'anti_kick', 'anti_prune', 'anti_bot_add',
+        'anti_ban', 'anti_unban', 'anti_kick', 'anti_prune', 'anti_bot_add', 'anti_bot_remove',
         'anti_channel_create', 'anti_channel_delete', 'anti_channel_update',
         'anti_role_create', 'anti_role_delete', 'anti_role_update',
         'anti_role_grant', 'anti_role_remove', 'anti_member_update',
         'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update',
+        'anti_sticker_create', 'anti_sticker_delete', 'anti_sticker_update',
         'anti_integration', 'anti_guild_update',
         'anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update',
-        'anti_invite_create', 'anti_invite_delete', 'anti_timeout', 'anti_link'
+        'anti_invite_create', 'anti_invite_delete', 'anti_timeout', 'anti_link',
+        'anti_everyone_here'
       ].forEach(k => rules.add(k));
     } else if (opt === 'antispam') {
       rules.add('anti_everyone_ping');
+      rules.add('anti_everyone_here');
       rules.add('anti_role_ping');
+      rules.add('anti_spam');
     } else if (opt === 'anti_link') {
       rules.add('anti_link');
     } else if (opt === 'anti_ban') {
@@ -694,6 +709,7 @@ export function mapSelectedOptionsToRules(selectedOptions: string[]): string[] {
       rules.add('anti_prune');
     } else if (opt === 'anti_bot_add') {
       rules.add('anti_bot_add');
+      rules.add('anti_bot_remove');
     } else if (opt === 'anti_channel') {
       rules.add('anti_channel_create');
       rules.add('anti_channel_delete');
@@ -713,6 +729,9 @@ export function mapSelectedOptionsToRules(selectedOptions: string[]): string[] {
       rules.add('anti_emoji_create');
       rules.add('anti_emoji_delete');
       rules.add('anti_emoji_update');
+      rules.add('anti_sticker_create');
+      rules.add('anti_sticker_delete');
+      rules.add('anti_sticker_update');
     } else if (opt === 'anti_invite') {
       rules.add('anti_invite_create');
       rules.add('anti_invite_delete');
@@ -736,11 +755,12 @@ export function resolveSelectedOptions(enabledModules: string[] | undefined): st
   }
 
   const antiNukeKeys = [
-    'anti_ban', 'anti_unban', 'anti_kick', 'anti_prune', 'anti_bot_add',
+    'anti_ban', 'anti_unban', 'anti_kick', 'anti_prune', 'anti_bot_add', 'anti_bot_remove',
     'anti_channel_create', 'anti_channel_delete', 'anti_channel_update',
     'anti_role_create', 'anti_role_delete', 'anti_role_update',
     'anti_role_grant', 'anti_role_remove', 'anti_member_update',
     'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update',
+    'anti_sticker_create', 'anti_sticker_delete', 'anti_sticker_update',
     'anti_integration', 'anti_guild_update',
     'anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update',
     'anti_invite_create', 'anti_invite_delete', 'anti_timeout', 'anti_link'
@@ -760,7 +780,7 @@ export function resolveSelectedOptions(enabledModules: string[] | undefined): st
     if (enabledModules.includes('anti_link')) selected.push('anti_link');
     if (['anti_ban', 'anti_unban'].every(k => enabledModules.includes(k))) selected.push('anti_ban');
     if (['anti_kick', 'anti_prune'].every(k => enabledModules.includes(k))) selected.push('anti_kick');
-    if (enabledModules.includes('anti_bot_add')) selected.push('anti_bot_add');
+    if (['anti_bot_add', 'anti_bot_remove'].every(k => enabledModules.includes(k)) || enabledModules.includes('anti_bot_add')) selected.push('anti_bot_add');
     if (['anti_channel_create', 'anti_channel_delete', 'anti_channel_update'].every(k => enabledModules.includes(k))) selected.push('anti_channel');
     if (['anti_role_create', 'anti_role_delete', 'anti_role_update', 'anti_role_grant', 'anti_role_remove'].every(k => enabledModules.includes(k))) selected.push('anti_role');
     if (['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_integration'].every(k => enabledModules.includes(k))) selected.push('anti_webhook');

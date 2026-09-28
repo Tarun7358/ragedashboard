@@ -102,6 +102,7 @@ export interface ModuleManifest {
   routes?: Array<{
     path: string;
     method: 'get' | 'post';
+    isPublic?: boolean;
     handler: (req: any, res: any, context: any) => Promise<void> | void;
   }>;
 }

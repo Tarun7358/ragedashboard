@@ -1,6 +1,7 @@
-﻿import { AuditLogEvent, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { AuditLogEvent, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { checkBypassImmunity } from '../../utils/whitelistCheck.js';
+import { SUCCESS_CHECK_ICON, WRONG_ICON, SHIELD_ICON, CONFIG_ICON } from '../../core/UIFactory.js';
 
 export async function checkRoleAssignment(
   client: any,
@@ -44,19 +45,27 @@ export async function checkRoleAssignment(
     return 'ALLOW_CHECK';
   }
 
-  // Check for dangerous permissions
+  // Check for dangerous permissions safely
+  const DANGEROUS_FLAGS = [
+    PermissionFlagsBits.Administrator,
+    PermissionFlagsBits.ManageGuild,
+    PermissionFlagsBits.ManageRoles,
+    PermissionFlagsBits.ManageChannels,
+    PermissionFlagsBits.KickMembers,
+    PermissionFlagsBits.BanMembers,
+    PermissionFlagsBits.ManageWebhooks
+  ];
   const hasDangerousPerms = addedRoles.some((r: any) => {
     if (!r.permissions) return false;
-    const bitfield = BigInt(r.permissions.bitfield ?? r.permissions);
-    return (
-      (bitfield & BigInt(PermissionFlagsBits.Administrator)) !== 0n ||
-      (bitfield & BigInt(PermissionFlagsBits.ManageGuild)) !== 0n ||
-      (bitfield & BigInt(PermissionFlagsBits.ManageRoles)) !== 0n ||
-      (bitfield & BigInt(PermissionFlagsBits.ManageChannels)) !== 0n ||
-      (bitfield & BigInt(PermissionFlagsBits.KickMembers)) !== 0n ||
-      (bitfield & BigInt(PermissionFlagsBits.BanMembers)) !== 0n ||
-      (bitfield & BigInt(PermissionFlagsBits.ManageWebhooks)) !== 0n
-    );
+    if (typeof r.permissions.has === 'function') {
+      return DANGEROUS_FLAGS.some(flag => r.permissions.has(flag));
+    }
+    try {
+      const bitfield = BigInt(r.permissions.bitfield ?? r.permissions);
+      return DANGEROUS_FLAGS.some(flag => (bitfield & BigInt(flag)) !== 0n);
+    } catch {
+      return false;
+    }
   });
 
   const fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.MemberRoleUpdate }).catch((err: any) => {
@@ -250,18 +259,19 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
       name: 'command_joinguard',
       handler: async (client: any, interaction: any, context: any) => {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-          return interaction.reply({ content: '<:security:1546142576984203336> Administrator permissions required.', flags: 64 });
+          return interaction.reply({ content: `${WRONG_ICON} Administrator permissions required.`, flags: 64 });
         }
 
-        const modules = context.getModulesState ? context.getModulesState() : [];
-        const mod = modules.find((m: any) => m.id === 'join_role_guard');
+        const guildId = interaction.guild?.id || interaction.guildId;
+        const modules = context.getModulesState ? context.getModulesState(guildId) : [];
+        const mod = modules.find((m: any) => m.id === 'join_role_guard' || m.id === 'join-role-guard');
         if (!mod) {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Join Guard module not found.', flags: 64 });
+          return interaction.reply({ content: `${WRONG_ICON} Join Guard module not found.`, flags: 64 });
         }
 
         const sub = interaction.options.getSubcommand(false);
         if (!sub) {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Please specify a subcommand (status, config, or view).', flags: 64 });
+          return interaction.reply({ content: `${WRONG_ICON} Please specify a subcommand (status, config, or view).`, flags: 64 });
         }
         const config = mod.config || {};
 
@@ -270,7 +280,7 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
           config.enableJoinGuard = enabled;
           context.updateModuleConfig('join_role_guard', config);
           return interaction.reply({
-            content: `<a:approved:1532390590707142956> Join Guard has been **${enabled ? 'enabled' : 'disabled'}**.`,
+            content: `${SUCCESS_CHECK_ICON} Join Guard has been **${enabled ? 'enabled' : 'disabled'}**.`,
             flags: 64
           });
         }
@@ -290,24 +300,24 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
 
           context.updateModuleConfig('join_role_guard', config);
           return interaction.reply({
-            content: '<a:approved:1532390590707142956> Join Guard configuration updated successfully.',
+            content: `${SUCCESS_CHECK_ICON} Join Guard configuration updated successfully.`,
             flags: 64
           });
         }
 
         if (sub === 'view') {
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Join Role Guard Configuration')
-            .setColor(0x99CC00)
+            .setTitle(`${SHIELD_ICON} Join Role Guard Configuration`)
+            .setColor(0x84cc16)
             .addFields(
-              { name: 'Status', value: config.enableJoinGuard !== false ? '<a:approved:1532390590707142956> Enabled' : '<a:wrong:1546155193303957504> Disabled', inline: true },
+              { name: 'Status', value: config.enableJoinGuard !== false ? `${SUCCESS_CHECK_ICON} Enabled` : `${WRONG_ICON} Disabled`, inline: true },
               { name: 'Grace Period', value: `\`${config.joinGracePeriod ?? 20} seconds\``, inline: true },
-              { name: 'Ignore Onboarding', value: config.ignoreOnboarding !== false ? '<a:approved:1532390590707142956> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
-              { name: 'Ignore Screening', value: config.ignoreScreening !== false ? '<a:approved:1532390590707142956> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
-              { name: 'Ignore Trusted Bots', value: config.ignoreTrustedBots !== false ? '<a:approved:1532390590707142956> Yes' : '<a:wrong:1546155193303957504> No', inline: true },
-              { name: 'Debug Mode', value: config.debugMode ? '<a:approved:1532390590707142956> Enabled' : '<a:wrong:1546155193303957504> Disabled', inline: true }
+              { name: 'Ignore Onboarding', value: config.ignoreOnboarding !== false ? `${SUCCESS_CHECK_ICON} Yes` : `${WRONG_ICON} No`, inline: true },
+              { name: 'Ignore Screening', value: config.ignoreScreening !== false ? `${SUCCESS_CHECK_ICON} Yes` : `${WRONG_ICON} No`, inline: true },
+              { name: 'Ignore Trusted Bots', value: config.ignoreTrustedBots !== false ? `${SUCCESS_CHECK_ICON} Yes` : `${WRONG_ICON} No`, inline: true },
+              { name: 'Debug Mode', value: config.debugMode ? `${SUCCESS_CHECK_ICON} Enabled` : `${WRONG_ICON} Disabled`, inline: true }
             )
-            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
+            .setFooter({ text: 'Rage Optimiser Enterprise • Unbypassable Security' })
             .setTimestamp();
           return interaction.reply({ embeds: [embed], flags: 64 });
         }

@@ -327,6 +327,15 @@ const handleGracefulShutdown = async (signal: string) => {
 process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
 
+process.on('unhandledRejection', (reason: any) => {
+  const errMsg = reason instanceof Error ? (reason.stack || reason.message) : String(reason);
+  Logger.error(`[Process] Unhandled Promise Rejection: ${errMsg}`, 'process');
+});
+
+process.on('uncaughtException', (err: Error, origin: string) => {
+  Logger.error(`[Process] Uncaught Exception (${origin}): ${err.stack || err.message}`, 'process');
+});
+
 const isMainFile = () => {
   try {
     if (!process.argv[1]) return false;

@@ -1,4 +1,4 @@
-﻿import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { Embeds, Colors, VERIFIED_ICON, WRONG_ICON, buildLimeOverviewCard, progressBar } from '../../core/UIFactory.js';
 import { AnalyticsService } from '../../core/AnalyticsService.js';
 import { getUnifiedWhitelistEntries } from '../../utils/whitelistCheck.js';
@@ -19,13 +19,13 @@ export class RageEnterpriseService {
     const config = secMod.config || {};
 
     const isAntiNukeActive = config.antiNukeEnabled !== false;
-    const antiNukeStatus = isAntiNukeActive ? '<a:approved:1532390590707142956> `Active (Protected)`' : '<a:wrong:1546155193303957504> `Inactive (Disabled)`';
-    const raidModeStatus = config.raidModeEnabled ? '<:security:1546142576984203336> `RAID MODE ENABLED`' : '<:security:1546142576984203336> `Normal Protection`';
+    const antiNukeStatus = isAntiNukeActive ? '<:ticks:1532620580266836148> `Active (Protected)`' : '<a:wrong:1546155193303957504> `Inactive (Disabled)`';
+    const raidModeStatus = config.raidModeEnabled ? '<a:success_check:1546134620087783526> `RAID MODE ENABLED`' : '<a:success_check:1546134620087783526> `Normal Protection`';
     const { userSet, roleSet } = getUnifiedWhitelistEntries(modules);
     const whitelistCount = userSet.size + roleSet.size;
     const quarantineCount = (config.quarantinedUsers || []).length;
-    const antiSpamStatus = config.antiSpamEnabled ? '<a:approved:1532390590707142956> `Enabled`' : '<a:wrong:1546155193303957504> `Disabled`';
-    const antiLinkStatus = config.antiLinkEnabled ? '<a:approved:1532390590707142956> `Enabled`' : '<a:wrong:1546155193303957504> `Disabled`';
+    const antiSpamStatus = config.antiSpamEnabled ? '<:ticks:1532620580266836148> `Enabled`' : '<a:wrong:1546155193303957504> `Disabled`';
+    const antiLinkStatus = config.antiLinkEnabled ? '<:ticks:1532620580266836148> `Enabled`' : '<a:wrong:1546155193303957504> `Disabled`';
 
     const embed = buildLimeOverviewCard({
       title: 'SECURITY & ANTI-NUKE OVERVIEW',
@@ -33,7 +33,7 @@ export class RageEnterpriseService {
       thumbnail: guild.iconURL({ size: 256 }) ?? undefined,
       sections: [
         {
-          title: '<:security:1546142576984203336> PROTECTION ENGINE STATUS',
+          title: '<a:success_check:1546134620087783526> PROTECTION ENGINE STATUS',
           items: [
             `Anti-Nuke Protection: ${antiNukeStatus}`,
             `Raid Mode Status: ${raidModeStatus}`,
@@ -46,8 +46,8 @@ export class RageEnterpriseService {
           items: [
             `Anti-Spam Filter: ${antiSpamStatus}`,
             `Anti-Link Filter: ${antiLinkStatus}`,
-            `Join-Role Assignment Guard: <a:approved:1532390590707142956> \`Active\``,
-            `Voice Guard Protection: <a:approved:1532390590707142956> \`Active\``
+            `Join-Role Assignment Guard: <:ticks:1532620580266836148> \`Active\``,
+            `Voice Guard Protection: <:ticks:1532620580266836148> \`Active\``
           ]
         }
       ],
@@ -55,8 +55,8 @@ export class RageEnterpriseService {
     });
 
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('sec_toggle_antinuke').setLabel('Toggle Anti-Nuke').setStyle(isAntiNukeActive ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<:security:1546142576984203336>'),
-      new ButtonBuilder().setCustomId('sec_toggle_raidmode').setLabel('Toggle Raid Mode').setStyle(config.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji('<:security:1546142576984203336>'),
+      new ButtonBuilder().setCustomId('sec_toggle_antinuke').setLabel('Toggle Anti-Nuke').setStyle(isAntiNukeActive ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<a:success_check:1546134620087783526>'),
+      new ButtonBuilder().setCustomId('sec_toggle_raidmode').setLabel('Toggle Raid Mode').setStyle(config.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji('<a:success_check:1546134620087783526>'),
       new ButtonBuilder().setCustomId('sec_view_whitelist').setLabel('View Whitelist').setStyle(ButtonStyle.Secondary).setEmoji('<:member:1532621317487071426>'),
       new ButtonBuilder().setCustomId('sec_view_quarantine').setLabel('Quarantine Queue').setStyle(ButtonStyle.Secondary).setEmoji('<:gavel:1532621057318584380>')
     );
@@ -64,7 +64,7 @@ export class RageEnterpriseService {
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('sec_toggle_antispam').setLabel('Toggle Anti-Spam').setStyle(ButtonStyle.Primary).setEmoji('<:bot:1532621107746570391>'),
       new ButtonBuilder().setCustomId('sec_toggle_antilink').setLabel('Toggle Anti-Link').setStyle(ButtonStyle.Primary).setEmoji('<:link:1532620952087826602>'),
-      new ButtonBuilder().setCustomId('sec_trigger_lockdown').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger).setEmoji('<:security:1546142576984203336>')
+      new ButtonBuilder().setCustomId('sec_trigger_lockdown').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger).setEmoji('<a:success_check:1546134620087783526>')
     );
 
     return { embeds: [embed], components: [row1, row2] };
@@ -94,7 +94,7 @@ export class RageEnterpriseService {
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('mod_btn_ban').setLabel('Ban Member').setStyle(ButtonStyle.Danger).setEmoji('<:gavel:1532621057318584380>'),
       new ButtonBuilder().setCustomId('mod_btn_kick').setLabel('Kick Member').setStyle(ButtonStyle.Danger).setEmoji('<:member:1532621317487071426>'),
-      new ButtonBuilder().setCustomId('mod_btn_timeout').setLabel('Timeout Member').setStyle(ButtonStyle.Secondary).setEmoji('<:timer:1532620491662037123>'),
+      new ButtonBuilder().setCustomId('mod_btn_timeout').setLabel('Timeout Member').setStyle(ButtonStyle.Secondary).setEmoji('<a:Timer:1546231426863730728>'),
       new ButtonBuilder().setCustomId('mod_btn_purge').setLabel('Purge Messages').setStyle(ButtonStyle.Secondary).setEmoji('<:config:1532425712844144701>'),
       new ButtonBuilder().setCustomId('mod_btn_notes').setLabel('User Notes').setStyle(ButtonStyle.Primary).setEmoji('<a:lovemail:1527647157371535420>')
     );
@@ -111,7 +111,7 @@ export class RageEnterpriseService {
     const welcMod = modules.find((m: any) => m.id === 'community' || m.id === 'welcome-v2') || {};
     const config = welcMod.config || {};
 
-    const status = welcMod.status === 'enabled' ? '<a:approved:1532390590707142956> `Active`' : '<a:wrong:1546155193303957504> `Disabled`';
+    const status = welcMod.status === 'enabled' ? '<:ticks:1532620580266836148> `Active`' : '<a:wrong:1546155193303957504> `Disabled`';
     const channelName = config.channelId ? `<#${config.channelId}>` : '`Not Set`';
     const autoRoles = (config.autoroleIds || []).map((r: string) => `<@&${r}>`).join(', ') || '`None`';
 
@@ -203,7 +203,7 @@ export class RageEnterpriseService {
       .setCustomId('config_category_select')
       .setPlaceholder('Select a Module Category to Configure...')
       .addOptions([
-        { label: 'Security & Anti-Nuke', value: 'security', emoji: '<:security:1546142576984203336>', description: 'Configure Anti-Nuke, Whitelist, Quarantine' },
+        { label: 'Security & Anti-Nuke', value: 'security', emoji: '<a:success_check:1546134620087783526>', description: 'Configure Anti-Nuke, Whitelist, Quarantine' },
         { label: 'Moderation & Logs', value: 'moderation', emoji: '<:gavel:1532621057318584380>', description: 'Ban, Mute, Purge, Audit logging' },
         { label: 'Welcome & Onboarding', value: 'welcome', emoji: '<:member:1532621317487071426>', description: 'Welcome channel, autoroles, DM greetings' },
         { label: 'Music & Audio', value: 'music', emoji: '<:voicechannelgreen:1532425750278438962>', description: 'Audio engine, queue settings, filters' },
@@ -269,7 +269,7 @@ export class RageEnterpriseService {
       thumbnail: client.user?.displayAvatarURL({ size: 256 }) ?? undefined,
       sections: [
         {
-          title: '<:security:1546142576984203336> EXECUTIVE ACTIONS',
+          title: '<a:success_check:1546134620087783526> EXECUTIVE ACTIONS',
           items: [
             `Emergency Lock: Lock all server text channels globally`,
             `Diagnostics: Dump active memory and process state`,
@@ -282,7 +282,7 @@ export class RageEnterpriseService {
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('owner_emergency_lock').setLabel('Emergency Lock').setStyle(ButtonStyle.Danger).setEmoji('<:security:1546142576984203336>'),
+      new ButtonBuilder().setCustomId('owner_emergency_lock').setLabel('Emergency Lock').setStyle(ButtonStyle.Danger).setEmoji('<a:success_check:1546134620087783526>'),
       new ButtonBuilder().setCustomId('owner_deploy_cmds').setLabel('Sync Slash Commands').setStyle(ButtonStyle.Primary).setEmoji('<:bot:1532621107746570391>'),
       new ButtonBuilder().setCustomId('owner_run_diag').setLabel('Diagnostics Board').setStyle(ButtonStyle.Secondary).setEmoji('<a:lovemail:1527647157371535420>'),
       new ButtonBuilder().setCustomId('owner_toggle_debug').setLabel('Toggle Debug').setStyle(ButtonStyle.Secondary).setEmoji('<:config:1532425712844144701>')

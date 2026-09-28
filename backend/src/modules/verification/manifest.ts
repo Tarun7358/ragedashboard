@@ -1,4 +1,4 @@
-﻿import {
+import {
   EmbedBuilder,
   ButtonBuilder,
   ActionRowBuilder,
@@ -224,7 +224,7 @@ export async function handleVerificationGuiInteraction(interaction: any, context
   if (customId === 'ver_btn_send_card') {
     const payload = buildPublicVerificationCard(interaction.guild);
     await interaction.channel?.send(payload);
-    return interaction.reply({ content: `<a:approved:1532390590707142956> Posted interactive Verification Card to ${interaction.channel}!`, flags: 64 });
+    return interaction.reply({ content: `<:ticks:1532620580266836148> Posted interactive Verification Card to ${interaction.channel}!`, flags: 64 });
   }
 
   // 5. Reset Verification DB
@@ -484,7 +484,7 @@ export const VerificationManifest: ModuleManifest = {
 
         try {
           const embed = new EmbedBuilder()
-            .setTitle('<:security:1546142576984203336> Member Verification Required')
+            .setTitle('<a:success_check:1546134620087783526> Member Verification Required')
             .setDescription('To gain access to the channels and features of this server, please click the verification button below.')
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -494,7 +494,7 @@ export const VerificationManifest: ModuleManifest = {
             .setCustomId('verify_btn_click')
             .setLabel('Verify Me')
             .setStyle(ButtonStyle.Success)
-            .setEmoji('<a:approved:1532390590707142956>');
+            .setEmoji('<:ticks:1532620580266836148>');
 
           const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btn);
 
@@ -555,7 +555,7 @@ export const VerificationManifest: ModuleManifest = {
               
               if (showAlreadyVerifiedMessage) {
                 return interaction.reply({ 
-                  content: '<a:approved:1532390590707142956> **Verification Confirmed**\n\nYou have already completed verification.\nYour verification role was missing and has now been restored.', 
+                  content: '<:ticks:1532620580266836148> **Verification Confirmed**\n\nYou have already completed verification.\nYour verification role was missing and has now been restored.', 
                   flags: 64 
                 });
               } else {
@@ -570,7 +570,7 @@ export const VerificationManifest: ModuleManifest = {
 
             if (showAlreadyVerifiedMessage) {
               return interaction.reply({ 
-                content: '<a:approved:1532390590707142956> **You\'re Already Verified**\n\nYou have already completed the verification process and successfully claimed your verification role.\nNo further action is required.', 
+                content: '<:ticks:1532620580266836148> **You\'re Already Verified**\n\nYou have already completed the verification process and successfully claimed your verification role.\nNo further action is required.', 
                 flags: 64 
               });
             } else {
@@ -586,7 +586,7 @@ export const VerificationManifest: ModuleManifest = {
 
           await markUserVerified(guildId, member.user.id);
 
-          await interaction.reply({ content: '<a:approved:1532390590707142956> **Verification Succeeded!** Welcome to the server.', flags: 64 });
+          await interaction.reply({ content: '<:ticks:1532620580266836148> **Verification Succeeded!** Welcome to the server.', flags: 64 });
           context.logSyncEvent(`Verification Service: Verified member "${userTag(member.user)}" successfully.`, 'success');
         } catch (err) {
           console.error(err);

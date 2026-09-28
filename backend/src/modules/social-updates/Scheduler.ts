@@ -11,6 +11,7 @@ import { ProviderManager } from './ProviderManager.js';
 import { ComparisonEngine, PendingQueueCache } from './ComparisonEngine.js';
 import { NotificationQueue } from './NotificationQueue.js';
 import { SubscriptionManager } from './SubscriptionManager.js';
+import { SecurityService } from '../../core/SecurityService.js';
 
 const POLLING_INTERVALS: Record<string, number> = {
   fast:   30 * 1000,        // 30 seconds
@@ -170,7 +171,20 @@ export class Scheduler {
   private async pollAccountGroup(group: AccountGroup): Promise<void> {
     try {
       const provider = ProviderManager.getProvider(group.provider);
-      const items = await provider.fetchLatest(group.sourceId, 15);
+
+      // Extract user-specific decrypted credential if configured on any subscription in the group
+      let decryptedAuth: string | undefined = undefined;
+      const subWithAuth = group.subscriptions.find(s => !!s.authCredential);
+      if (subWithAuth?.authCredential) {
+        try {
+          decryptedAuth = SecurityService.decrypt(subWithAuth.authCredential);
+        } catch {
+          // Fallback to raw string in case stored unencrypted during legacy setups
+          decryptedAuth = subWithAuth.authCredential;
+        }
+      }
+
+      const items = await provider.fetchLatest(group.sourceId, 15, decryptedAuth);
 
       // Perform caching & deduplication checks once for the account
       const newItems = await ComparisonEngine.computeNew(group.provider, group.sourceId, items);

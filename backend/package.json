@@ -13,6 +13,9 @@
     "build": "tsc",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "deploy:commands": "tsx src/scripts/deploy-all-commands.ts",
+    "verify:modules": "tsx src/scripts/verify_all_modules.ts",
+    "audit:system": "tsx src/scripts/comprehensive_system_audit.ts",
+    "test:antinuke": "tsx src/scripts/test_antinuke_simulation.ts",
     "upm:snapshot": "tsx src/scripts/upm-snapshot.ts",
     "upm:restore": "tsx src/scripts/upm-restore.ts",
     "upm:rollback": "tsx src/scripts/upm-rollback.ts"

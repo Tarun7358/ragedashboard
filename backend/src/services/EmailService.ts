@@ -52,7 +52,7 @@ function getTransporter(): Transporter | null {
 // ─── Custom Server Emojis for HTML Email (Discord CDN) ────────────────────────
 
 export const EMOJI_IMG = {
-  SHIELD:   '<img src="https://cdn.discordapp.com/emojis/1546142576984203336.gif?size=48" width="18" height="18" style="vertical-align:middle;display:inline-block;margin-right:4px;" alt="🛡️" />',
+  SHIELD:   '<img src="https://cdn.discordapp.com/emojis/1546134620087783526.gif?size=48" width="18" height="18" style="vertical-align:middle;display:inline-block;margin-right:4px;" alt="🛡️" />',
   APPROVED: '<img src="https://cdn.discordapp.com/emojis/1546134304625528882.gif?size=48" width="18" height="18" style="vertical-align:middle;display:inline-block;margin-right:4px;" alt="✅" />',
   WRONG:    '<img src="https://cdn.discordapp.com/emojis/1546155193303957504.gif?size=48" width="18" height="18" style="vertical-align:middle;display:inline-block;margin-right:4px;" alt="❌" />',
   WARNING:  '<img src="https://cdn.discordapp.com/emojis/1546155457981452441.gif?size=48" width="18" height="18" style="vertical-align:middle;display:inline-block;margin-right:4px;" alt="⚠️" />',
@@ -121,7 +121,7 @@ function wrapHtml(
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td style="background-color:#161c28;border:1px solid #283247;border-radius:8px;padding:6px 10px;line-height:0;">
-                          <img src="https://cdn.discordapp.com/emojis/1546142576984203336.gif?size=48" width="24" height="24" style="vertical-align:middle;display:block;" alt="Shield" />
+                          <img src="https://cdn.discordapp.com/emojis/1546134620087783526.gif?size=48" width="24" height="24" style="vertical-align:middle;display:block;" alt="Shield" />
                         </td>
                         <td style="padding-left:12px;">
                           <span style="font-size:15px;font-weight:800;color:#FFFFFF;letter-spacing:1.5px;text-transform:uppercase;display:block;">RAGE OPTIMISER</span>

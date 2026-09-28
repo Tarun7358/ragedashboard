@@ -195,7 +195,7 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
       `>>> ${[
         `${isEnabled ? VERIFIED_ICON : WRONG_ICON} Anti-Link Interceptor & Threat Neutralizer • \`${isEnabled ? 'ACTIVE' : 'DISABLED'}\``,
         `${allowInvites ? VERIFIED_ICON : WRONG_ICON} Discord Invites Filter • \`${allowInvites ? 'ALLOWED' : 'BLOCKED'}\``,
-        `<:security:1546142576984203336> Violation Enforcement Threshold • \`${limit} Violations\``,
+        `<a:success_check:1546134620087783526> Violation Enforcement Threshold • \`${limit} Violations\``,
         `<:gavel:1532621057318584380> Threat Mitigation Policy • \`${actionLabel}\``
       ].join('\n')}`,
       '',
@@ -216,7 +216,7 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
       .setCustomId('btn_al_toggle')
       .setLabel(isEnabled ? 'Disable Anti-Link' : 'Enable Anti-Link')
       .setStyle(isEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary)
-      .setEmoji(isEnabled ? '1546155193303957504' : '1546142576984203336'),
+      .setEmoji(isEnabled ? '1546155193303957504' : '1546134620087783526'),
     new ButtonBuilder()
       .setCustomId('btn_al_action_cycle')
       .setLabel(`Action: ${action.toUpperCase()}`)
@@ -226,12 +226,12 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
       .setCustomId('btn_al_limit_cycle')
       .setLabel(`Limit: ${limit} Violations`)
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1546142576984203336'),
+      .setEmoji('1546134620087783526'),
     new ButtonBuilder()
       .setCustomId('btn_al_toggle_invites')
       .setLabel(allowInvites ? 'Block Invites' : 'Allow Invites')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji(allowInvites ? '1546155193303957504' : '1546142576984203336')
+      .setEmoji(allowInvites ? '1546155193303957504' : '1546134620087783526')
   );
 
   // Row 2: Management & Reset Actions
@@ -255,7 +255,7 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
       .setCustomId('btn_al_refresh')
       .setLabel('Refresh GUI')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1546142576984203336')
+      .setEmoji('1546134620087783526')
   );
 
   // Row 3: Action Dropdown Selector
@@ -606,7 +606,7 @@ export const AutomodManifest: ModuleManifest = {
           saveConfig(config);
           context.logSyncEvent(`AntiLink: Enabled filter by ${interaction.user.tag}`, 'success');
           return interaction.reply({
-            content: `<a:approved:1532390590707142956> **Anti-Link Protection Enabled**\n• Default Limit: \`${config.antiLinkLimit || 5} Violations\`\n• Punishment Action: \`${(config.punishment || 'warn').toUpperCase()}\``,
+            content: `<:ticks:1532620580266836148> **Anti-Link Protection Enabled**\n• Default Limit: \`${config.antiLinkLimit || 5} Violations\`\n• Punishment Action: \`${(config.punishment || 'warn').toUpperCase()}\``,
             flags: 64
           });
         }
@@ -645,7 +645,7 @@ export const AutomodManifest: ModuleManifest = {
           saveConfig(config);
           context.logSyncEvent(`AntiLink: Violation threshold updated to ${count} by ${interaction.user.tag}`, 'info');
           return interaction.reply({
-            content: `<a:approved:1532390590707142956> **Anti-Link Violation Limit Set**\n• Users will receive warnings on violations 1 to ${count - 1}.\n• Violation #${count} will trigger **\`${(config.punishment || 'warn').toUpperCase()}\`**.`,
+            content: `<:ticks:1532620580266836148> **Anti-Link Violation Limit Set**\n• Users will receive warnings on violations 1 to ${count - 1}.\n• Violation #${count} will trigger **\`${(config.punishment || 'warn').toUpperCase()}\`**.`,
             flags: 64
           });
         }
@@ -664,7 +664,7 @@ export const AutomodManifest: ModuleManifest = {
           saveConfig(config);
           context.logSyncEvent(`AntiLink: Punishment updated to ${config.punishment} by ${interaction.user.tag}`, 'info');
           return interaction.reply({
-            content: `<a:approved:1532390590707142956> **Anti-Link Punishment Action Set**\n• Punishment on limit reach (**${config.antiLinkLimit || 5} violations**): **\`${config.punishment.toUpperCase()}\`**`,
+            content: `<:ticks:1532620580266836148> **Anti-Link Punishment Action Set**\n• Punishment on limit reach (**${config.antiLinkLimit || 5} violations**): **\`${config.punishment.toUpperCase()}\`**`,
             flags: 64
           });
         }
@@ -681,7 +681,7 @@ export const AutomodManifest: ModuleManifest = {
           saveConfig(config);
           context.logSyncEvent(`AntiLink: Discord invites set to ${allow ? 'ALLOWED' : 'BLOCKED'} by ${interaction.user.tag}`, 'info');
           return interaction.reply({
-            content: `<a:approved:1532390590707142956> **Discord Invite Links**: ${allow ? '<a:approved:1532390590707142956> **Allowed**' : '<a:wrong:1546155193303957504> **Blocked (Deleted)**'}`,
+            content: `<:ticks:1532620580266836148> **Discord Invite Links**: ${allow ? '<:ticks:1532620580266836148> **Allowed**' : '<a:wrong:1546155193303957504> **Blocked (Deleted)**'}`,
             flags: 64
           });
         }
@@ -700,7 +700,7 @@ export const AutomodManifest: ModuleManifest = {
           resetRateLimit(guild.id, targetUser.id, 'anti_link');
           context.logSyncEvent(`AntiLink: Cleared link warnings for ${targetUser.tag}`, 'info');
           return interaction.reply({
-            content: `<a:approved:1532390590707142956> Cleared all Anti-Link violations for ${targetUser} (\`${targetUser.id}\`). Current violations: \`0/${config.antiLinkLimit || 5}\``,
+            content: `<:ticks:1532620580266836148> Cleared all Anti-Link violations for ${targetUser} (\`${targetUser.id}\`). Current violations: \`0/${config.antiLinkLimit || 5}\``,
             flags: 64
           });
         }
@@ -717,7 +717,7 @@ export const AutomodManifest: ModuleManifest = {
                 `> **Member**: ${targetUser} (\`${userTag(targetUser)}\` • \`ID: ${targetUser.id}\`)`,
                 ``,
                 `• **Violations Logged**: \`${currentCount} / ${maxLimit}\``,
-                `• **Threshold Status**: ${currentCount > 0 ? `<a:wrong:1546155193303957504> **${currentCount} Active Violation(s)**` : '<a:approved:1532390590707142956> **No Violations (Clean)**'}`,
+                `• **Threshold Status**: ${currentCount > 0 ? `<a:wrong:1546155193303957504> **${currentCount} Active Violation(s)**` : '<:ticks:1532620580266836148> **No Violations (Clean)**'}`,
                 `• **Punishment on Limit**: **\`${(config.punishment || 'warn').toUpperCase()}\`**`
               ].join('\n')
             })],
@@ -742,14 +742,14 @@ export const AutomodManifest: ModuleManifest = {
               ignoredChannels.push(targetChannel.id);
               saveConfig({ ignoredChannels });
             }
-            return interaction.reply({ content: `<a:approved:1532390590707142956> Added ${targetChannel} to AntiLink **ignored channels**. Links posted here are bypassed.`, flags: 64 });
+            return interaction.reply({ content: `<:ticks:1532620580266836148> Added ${targetChannel} to AntiLink **ignored channels**. Links posted here are bypassed.`, flags: 64 });
           }
 
           if (action === 'remove') {
             if (!targetChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please mention a text channel to remove.', flags: 64 });
             ignoredChannels = ignoredChannels.filter((id: string) => id !== targetChannel.id);
             saveConfig({ ignoredChannels });
-            return interaction.reply({ content: `<a:approved:1532390590707142956> Removed ${targetChannel} from AntiLink **ignored channels**.`, flags: 64 });
+            return interaction.reply({ content: `<:ticks:1532620580266836148> Removed ${targetChannel} from AntiLink **ignored channels**.`, flags: 64 });
           }
 
           // list
@@ -774,18 +774,18 @@ export const AutomodManifest: ModuleManifest = {
               ignoredRoles.push(targetRole.id);
               saveConfig({ ignoredRoles });
             }
-            return interaction.reply({ content: `<a:security:1546142576984203336> Added ${targetRole} to AntiLink **ignored roles**. Members with this role can post links.`, flags: 64 });
+            return interaction.reply({ content: `<a:success_check:1546134620087783526> Added ${targetRole} to AntiLink **ignored roles**. Members with this role can post links.`, flags: 64 });
           }
 
           if (action === 'remove') {
             if (!targetRole) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please mention a role to remove.', flags: 64 });
             ignoredRoles = ignoredRoles.filter((id: string) => id !== targetRole.id);
             saveConfig({ ignoredRoles });
-            return interaction.reply({ content: `<a:security:1546142576984203336> Removed ${targetRole} from AntiLink **ignored roles**.`, flags: 64 });
+            return interaction.reply({ content: `<a:success_check:1546134620087783526> Removed ${targetRole} from AntiLink **ignored roles**.`, flags: 64 });
           }
 
           const list = ignoredRoles.map((id: string) => `<@&${id}>`).join(', ') || '**No ignored roles.**';
-          return interaction.reply({ content: `<a:security:1546142576984203336> **AntiLink Ignored Roles**:\n${list}`, flags: 64 });
+          return interaction.reply({ content: `<a:success_check:1546134620087783526> **AntiLink Ignored Roles**:\n${list}`, flags: 64 });
         }
 
         // DEFAULT: OPEN CONFIGURABLE GUI DASHBOARD
@@ -855,7 +855,7 @@ export const AutomodManifest: ModuleManifest = {
             .setTitle('Anti-Spam Rate Limiter Configuration')
             .setDescription([
               `>>> ${[
-                `• **Status**: ${config.antiSpamEnabled !== false ? '<a:security:1546142576984203336> **Enabled**' : '<a:wrong:1546155193303957504> **Disabled**'}`,
+                `• **Status**: ${config.antiSpamEnabled !== false ? '<a:success_check:1546134620087783526> **Enabled**' : '<a:wrong:1546155193303957504> **Disabled**'}`,
                 `• **Max Message Burst**: \`${config.maxSpamMessages || 5} messages\``,
                 `• **Time Window**: \`${config.spamWindowSeconds || 5} seconds\``,
                 `• **Punishment Action**: \`${(config.spamAction || 'mute').toUpperCase()}\``
@@ -885,7 +885,7 @@ export const AutomodManifest: ModuleManifest = {
               config.badWords = badWords;
               context.updateModuleConfig('automod', config);
             }
-            return interaction.reply({ content: `<a:security:1546142576984203336> Added \`${targetWord}\` to AutoMod blacklisted words.`, flags: 64 });
+            return interaction.reply({ content: `<a:success_check:1546134620087783526> Added \`${targetWord}\` to AutoMod blacklisted words.`, flags: 64 });
           }
 
           if (action === 'remove' || action === 'del') {
@@ -893,7 +893,7 @@ export const AutomodManifest: ModuleManifest = {
             badWords = badWords.filter((w: string) => w.toLowerCase() !== targetWord);
             config.badWords = badWords;
             context.updateModuleConfig('automod', config);
-            return interaction.reply({ content: `<a:security:1546142576984203336> Removed \`${targetWord}\` from AutoMod blacklisted words.`, flags: 64 });
+            return interaction.reply({ content: `<a:success_check:1546134620087783526> Removed \`${targetWord}\` from AutoMod blacklisted words.`, flags: 64 });
           }
 
           // list
@@ -926,7 +926,7 @@ export const AutomodManifest: ModuleManifest = {
 
           context.updateModuleConfig('automod', config);
           return interaction.reply({
-            content: `<a:security:1546142576984203336> Caps Spam Filter is now **${config.preventCapsSpam ? 'ENABLED' : 'DISABLED'}**.`,
+            content: `<a:success_check:1546134620087783526> Caps Spam Filter is now **${config.preventCapsSpam ? 'ENABLED' : 'DISABLED'}**.`,
             flags: 64
           });
         }
@@ -940,13 +940,13 @@ export const AutomodManifest: ModuleManifest = {
             config.maxMentions = count;
             context.updateModuleConfig('automod', config);
             return interaction.reply({
-              content: `<a:security:1546142576984203336> Max allowed mentions set to **${count === 0 ? 'Disabled (No limit)' : `${count} mentions`}**.`,
+              content: `<a:success_check:1546134620087783526> Max allowed mentions set to **${count === 0 ? 'Disabled (No limit)' : `${count} mentions`}**.`,
               flags: 64
             });
           }
 
           return interaction.reply({
-            content: `<a:security:1546142576984203336> Current Max Mentions threshold: **\`${config.maxMentions || 0}\`** **(0 = disabled)**. Set with \`r!automod mentions <number>\``,
+            content: `<a:success_check:1546134620087783526> Current Max Mentions threshold: **\`${config.maxMentions || 0}\`** **(0 = disabled)**. Set with \`r!automod mentions <number>\``,
             flags: 64
           });
         }
@@ -960,13 +960,13 @@ export const AutomodManifest: ModuleManifest = {
             config.maxEmojis = count;
             context.updateModuleConfig('automod', config);
             return interaction.reply({
-              content: `<a:security:1546142576984203336> Max allowed emojis per message set to **${count === 0 ? 'Disabled (No limit)' : `${count} emojis`}**.`,
+              content: `<a:success_check:1546134620087783526> Max allowed emojis per message set to **${count === 0 ? 'Disabled (No limit)' : `${count} emojis`}**.`,
               flags: 64
             });
           }
 
           return interaction.reply({
-            content: `<a:security:1546142576984203336> Current Max Emojis threshold: **\`${config.maxEmojis || 0}\`** **(0 = disabled)**. Set with \`r!automod emojis <number>\``,
+            content: `<a:success_check:1546134620087783526> Current Max Emojis threshold: **\`${config.maxEmojis || 0}\`** **(0 = disabled)**. Set with \`r!automod emojis <number>\``,
             flags: 64
           });
         }
@@ -986,14 +986,14 @@ export const AutomodManifest: ModuleManifest = {
               if (!exists) config.blockedAttachmentChannels.push(channelId);
               context.updateModuleConfig('automod', config);
               return interaction.reply({
-                content: `<a:security:1546142576984203336> File & Image attachments are now **BLOCKED** in <#${channelId}>.`,
+                content: `<a:success_check:1546134620087783526> File & Image attachments are now **BLOCKED** in <#${channelId}>.`,
                 flags: 64
               });
             } else {
               config.blockedAttachmentChannels = config.blockedAttachmentChannels.filter((id: string) => id !== channelId);
               context.updateModuleConfig('automod', config);
               return interaction.reply({
-                content: `<a:security:1546142576984203336> File & Image attachments are now **ALLOWED** in <#${channelId}>.`,
+                content: `<a:success_check:1546134620087783526> File & Image attachments are now **ALLOWED** in <#${channelId}>.`,
                 flags: 64
               });
             }
@@ -1008,7 +1008,7 @@ export const AutomodManifest: ModuleManifest = {
 
             context.updateModuleConfig('automod', config);
             return interaction.reply({
-              content: `<a:security:1546142576984203336> Server-wide File & Image attachments filter is now **${config.blockAttachments ? 'ENABLED (Files/Images Blocked)' : 'DISABLED (Files Allowed)'}**.`,
+              content: `<a:success_check:1546134620087783526> Server-wide File & Image attachments filter is now **${config.blockAttachments ? 'ENABLED (Files/Images Blocked)' : 'DISABLED (Files Allowed)'}**.`,
               flags: 64
             });
           }
@@ -1141,7 +1141,7 @@ export const AutomodManifest: ModuleManifest = {
           if (customId === 'btn_al_roles') {
             const list = (config.ignoredRoles || []).map((id: string) => `<@&${id}>`).join(', ') || '**No ignored roles.**';
             return interaction.reply({
-              content: `<:security:1546142576984203336> **AntiLink Ignored Roles**:\n${list}\n\n> **To Add**: \`r!antilink ignore-role add @Role\`\n> **To Remove**: \`r!antilink ignore-role remove @Role\``,
+              content: `<a:success_check:1546134620087783526> **AntiLink Ignored Roles**:\n${list}\n\n> **To Add**: \`r!antilink ignore-role add @Role\`\n> **To Remove**: \`r!antilink ignore-role remove @Role\``,
               flags: 64,
               ephemeral: true
             }).catch(() => { });
@@ -1152,7 +1152,7 @@ export const AutomodManifest: ModuleManifest = {
             resetAllLinkViolationsForGuild(guild.id);
             context.logSyncEvent(`AntiLink: Reset all active user link violation records in ${guild.name}`, 'info');
             return interaction.reply({
-              content: `<a:approved:1532390590707142956> **All User Violation Records Reset!** All members in **${guild.name}** now have 0 active link violation warnings.`,
+              content: `<:ticks:1532620580266836148> **All User Violation Records Reset!** All members in **${guild.name}** now have 0 active link violation warnings.`,
               flags: 64,
               ephemeral: true
             }).catch(() => { });
@@ -1368,7 +1368,7 @@ export const AutomodManifest: ModuleManifest = {
               } else {
                 // THRESHOLD REACHED (Violation limit hit!)
                 const punishEmbed = createLimeEmbed({
-                  title: `<:security:1546142576984203336> Anti-Link Punishment Enforced (${currentCount}/${maxLimit})`,
+                  title: `<a:success_check:1546134620087783526> Anti-Link Punishment Enforced (${currentCount}/${maxLimit})`,
                   description: [
                     `> ${message.author} has reached the maximum Anti-Link violation limit (**${currentCount}/${maxLimit}**).`,
                     ``,

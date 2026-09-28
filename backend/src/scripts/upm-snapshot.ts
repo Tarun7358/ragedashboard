@@ -13,7 +13,11 @@ if (!guildId) {
 }
 
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+if (!process.env.JWT_SECRET) {
+  console.error("❌ Error: JWT_SECRET environment variable is missing. Please configure it in your .env file.");
+  process.exit(1);
+}
+const JWT_SECRET: string = process.env.JWT_SECRET;
 
 async function updateSecurityConfigInDb(guildId: string, updates: Record<string, any>) {
   const db = Database.getDb();

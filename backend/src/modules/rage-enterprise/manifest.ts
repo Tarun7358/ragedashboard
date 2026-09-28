@@ -110,7 +110,7 @@ export const RageEnterpriseManifest: ModuleManifest = {
           return interaction.reply({ content: `${WRONG_ICON} Only Administrators can trigger emergency lockdown.`, flags: 64 });
         }
         await interaction.reply({
-          content: `<:security:1546142576984203336> **Initiating Emergency Lockdown across server text channels...**`
+          content: `<a:success_check:1546134620087783526> **Initiating Emergency Lockdown across server text channels...**`
         });
       }
     },
@@ -276,7 +276,7 @@ export const RageEnterpriseManifest: ModuleManifest = {
         const embed = new EmbedBuilder()
           .setTitle('Interactive Server Setup Wizard (Completed)')
           .setDescription([
-            `<a:approved:1532390590707142956> **Setup Wizard Complete!**`,
+            `<:ticks:1532620580266836148> **Setup Wizard Complete!**`,
             ``,
             `Your server configuration has been updated. All modules are initialized and running with optimal settings.`
           ].join('\n'))
@@ -298,7 +298,7 @@ export const RageEnterpriseManifest: ModuleManifest = {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
           return interaction.reply({ content: `${WRONG_ICON} Restricted to Administrators / System Owner.`, flags: 64 });
         }
-        await interaction.reply({ content: `<:security:1546142576984203336> **Executing Emergency Lock across all server channels!**` });
+        await interaction.reply({ content: `<a:success_check:1546134620087783526> **Executing Emergency Lock across all server channels!**` });
       }
     },
     {
@@ -414,7 +414,7 @@ export const RageEnterpriseManifest: ModuleManifest = {
           return interaction.reply({ content: `${WRONG_ICON} Permission missing: \`ModerateMembers\``, flags: 64 });
         }
         const embed = new EmbedBuilder()
-          .setTitle('<:timer:1532620491662037123> Member Timeout Controls')
+          .setTitle('<a:Timer:1546231426863730728> Member Timeout Controls')
           .setDescription('Use `/rage timeout target:@member duration:1h reason:reason` to temporarily mute a user.')
           .setColor(0x84cc16);
         await interaction.reply({ embeds: [embed], flags: 64 });

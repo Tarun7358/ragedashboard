@@ -11,9 +11,9 @@ import { PrefixResolver } from '../../core/prefix/PrefixResolver.js';
 import { NoPrefixManager } from '../../core/security/NoPrefixManager.js';
 import { buildLimeOverviewCard, Colors, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, CONFIG_ICON } from '../../core/UIFactory.js';
 
-const APPROVED_ICON = '<a:approved:1532390590707142956>';
+const APPROVED_ICON = '<:ticks:1532620580266836148>';
 const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
-const SHIELD_EMOJI = '<:security:1546142576984203336>';
+const SHIELD_EMOJI = '<a:success_check:1546134620087783526>';
 const VIP_ICON = '<:vip:1532620837117759508>';
 const MEMBER_ICON = '<:member:1532621317487071426>';
 
