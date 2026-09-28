@@ -2,6 +2,7 @@ import { ModuleState, DiscordResourceRegistry, ModuleManifest, LogEntry } from '
 import { Database } from './Database.js';
 import { migrateToUnifiedWhitelist, loadExtraOwnersCache } from '../utils/whitelistCheck.js';
 import { EmbedBuilder } from 'discord.js';
+import { DashboardSyncService } from '../services/DashboardSyncService.js';
 
 
 export class ModuleRegistry {
@@ -387,6 +388,7 @@ export class ModuleRegistry {
     state.globalSettings = { ...state.globalSettings, ...settings };
     this.saveGuildState(id, state);
     this.broadcast({ type: 'GLOBAL_SETTINGS_UPDATE', settings: state.globalSettings, guildId: id });
+    DashboardSyncService.triggerSync(id);
   }
 
   public reevaluateAllModules(guildId?: string) {
@@ -474,6 +476,7 @@ export class ModuleRegistry {
     }
 
     this.broadcast({ type: 'STATE_UPDATE', modules: state.modules, registry: state.registry, guildId: gId });
+    DashboardSyncService.triggerSync(gId);
     return mod;
   }
 
@@ -491,6 +494,7 @@ export class ModuleRegistry {
 
     this.saveGuildState(gId, state);
     this.broadcast({ type: 'STATE_UPDATE', modules: state.modules, registry: state.registry, guildId: gId });
+    DashboardSyncService.triggerSync(gId);
     return mod;
   }
 

@@ -134,16 +134,18 @@ export class WebServer {
 
           const handler = async (req: Request, res: Response) => {
             try {
+              const reqGuildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || (req.body?.guildId as string) || undefined;
               await route.handler(req, res, {
                 registry: this.registry,
+                guildId: reqGuildId,
                 client: this.getDiscordClient ? this.getDiscordClient() : null,
                 broadcast: this.broadcast.bind(this),
-                getModulesState: () => this.registry ? this.registry.getModulesState() : [],
+                getModulesState: () => this.registry ? this.registry.getModulesState(reqGuildId) : [],
                 updateModuleConfig: (id: string, config: Record<string, any>) => {
-                  if (this.registry) this.registry.updateModuleConfig(undefined, id, config);
+                  if (this.registry) this.registry.updateModuleConfig(reqGuildId, id, config);
                 },
                 logSyncEvent: (msg: string, type: 'info' | 'warn' | 'success') => {
-                  if (this.registry) this.registry.logSyncEvent(undefined, msg, type);
+                  if (this.registry) this.registry.logSyncEvent(reqGuildId, msg, type);
                 }
               });
             } catch (err) {
@@ -192,15 +194,17 @@ export class WebServer {
 
         this.clients.add(ws);
 
+        const targetGuildId = urlObj.searchParams.get('guildId') || (req.headers['x-guild-id'] as string) || undefined;
         const metrics = this.getBotMetrics ? this.getBotMetrics() : { latency: 0, uptime: '0s' };
         const payload = {
           type: 'INIT',
-          modules: this.registry ? this.registry.getModulesState() : [],
-          registry: this.registry ? this.registry.getRegistry() : {},
-          syncLogs: this.registry ? this.registry.getSyncLogs() : [],
-          globalSettings: this.registry ? this.registry.getGlobalSettings() : {},
+          modules: this.registry ? this.registry.getModulesState(targetGuildId) : [],
+          registry: this.registry ? this.registry.getRegistry(targetGuildId) : {},
+          syncLogs: this.registry ? this.registry.getSyncLogs(targetGuildId) : [],
+          globalSettings: this.registry ? this.registry.getGlobalSettings(targetGuildId) : {},
           latency: metrics.latency,
-          uptime: metrics.uptime
+          uptime: metrics.uptime,
+          guildId: targetGuildId
         };
 
         if (ws.readyState === WebSocket.OPEN) {
@@ -339,14 +343,16 @@ export class WebServer {
 
     // State endpoint (BUG-05 fix: require authentication)
     this.app.get('/api/state', authenticateToken, (req: Request, res: Response) => {
+      const targetGuildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || undefined;
       const metrics = this.getBotMetrics ? this.getBotMetrics() : { latency: 0, uptime: '0s' };
       res.json({
-        modules: this.registry ? this.registry.getModulesState() : [],
-        registry: this.registry ? this.registry.getRegistry() : {},
-        syncLogs: this.registry ? this.registry.getSyncLogs() : [],
-        globalSettings: this.registry ? this.registry.getGlobalSettings() : {},
+        modules: this.registry ? this.registry.getModulesState(targetGuildId) : [],
+        registry: this.registry ? this.registry.getRegistry(targetGuildId) : {},
+        syncLogs: this.registry ? this.registry.getSyncLogs(targetGuildId) : [],
+        globalSettings: this.registry ? this.registry.getGlobalSettings(targetGuildId) : {},
         latency: metrics.latency,
-        uptime: metrics.uptime
+        uptime: metrics.uptime,
+        guildId: targetGuildId
       });
     });
 
@@ -502,15 +508,17 @@ export class WebServer {
     // Module management endpoints
     this.app.post('/api/modules/:id', authenticateToken, (req: Request, res: Response) => {
       if (!this.registry) return res.status(503).json({ error: 'Registry not initialized' });
-      const mod = this.registry.updateModuleConfig(undefined, req.params.id, req.body);
+      const targetGuildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || (req.body?.guildId as string) || undefined;
+      const mod = this.registry.updateModuleConfig(targetGuildId, req.params.id, req.body);
       if (!mod) return res.status(404).json({ error: 'Module not found' });
       res.json(mod);
     });
 
     this.app.post('/api/modules/:id/toggle', authenticateToken, (req: Request, res: Response) => {
       if (!this.registry) return res.status(530).json({ error: 'Registry not initialized' });
+      const targetGuildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || (req.body?.guildId as string) || undefined;
       const { enabledOverride } = req.body;
-      const mod = this.registry.toggleModule(undefined, req.params.id, enabledOverride);
+      const mod = this.registry.toggleModule(targetGuildId, req.params.id, enabledOverride);
       if (!mod) return res.status(400).json({ error: 'Module validation failed. Cannot toggle.' });
       res.json(mod);
     });
@@ -518,8 +526,9 @@ export class WebServer {
     // Settings endpoint
     this.app.post('/api/settings', authenticateToken, (req: Request, res: Response) => {
       if (!this.registry) return res.status(503).json({ error: 'Registry not initialized' });
+      const targetGuildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || (req.body?.guildId as string) || undefined;
       const data = req.body;
-      const currentReg = this.registry.getRegistry();
+      const currentReg = this.registry.getRegistry(targetGuildId);
       const newReg = {
         ...currentReg,
         globalSettings: {
@@ -527,8 +536,8 @@ export class WebServer {
           ...data
         }
       };
-      this.registry.setRegistry(undefined, newReg);
-      this.registry.logSyncEvent(undefined, 'Global settings updated from dashboard.', 'success');
+      this.registry.setRegistry(targetGuildId, newReg);
+      this.registry.logSyncEvent(targetGuildId, 'Global settings updated from dashboard.', 'success');
       res.json({ success: true, globalSettings: newReg.globalSettings });
     });
 
@@ -752,7 +761,8 @@ export class WebServer {
 
     // Refresh sync endpoint
     this.app.post('/api/sync/refresh', authenticateToken, (req: Request, res: Response) => {
-      if (this.registry) this.registry.reevaluateAllModules();
+      const targetGuildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || undefined;
+      if (this.registry) this.registry.reevaluateAllModules(targetGuildId);
       res.json({ success: true });
     });
 
