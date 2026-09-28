@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, Shield, Gavel, Users, Zap, FileText, 
   LineChart, Settings, ShieldAlert, Bell, Search, Play, Pause, 
-  Terminal, Server, Activity, ChevronDown, Menu, X, AlertTriangle,
+  Terminal, Server, Activity, ChevronDown, ChevronRight, Menu, X, AlertTriangle,
   Volume2, ShieldCheck, LogOut, LayoutTemplate, RefreshCw,
   Gift, Send, Sparkles, Award, Radio, MessageSquare, Bot, Layers, Database, History, Cpu
 } from 'lucide-react';
@@ -43,6 +43,7 @@ export function Layout({
 }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [navSearch, setNavSearch] = useState('');
   const { user, activeGuildId, managedGuilds, setActiveGuildId, guildApprovals } = useAuth();
 
   const isGuildManager = user?.role === 'guild_manager';
@@ -51,51 +52,92 @@ export function Layout({
     ? `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png`
     : null;
 
-  const overviewItems = [
-    { id: 'dashboard', label: 'Web Dashboard', icon: <LayoutDashboard size={18} /> },
-    { id: 'discord-dashboard', label: 'Discord Interactive Dashboard', icon: <LayoutTemplate size={18} /> },
-    { id: 'enterprise-health', label: 'Enterprise System Health', icon: <Activity size={18} /> },
-    { id: 'health', label: 'Config Health', icon: <AlertTriangle size={18} /> },
+  // Streamlined, punchy navigation sections
+  const navSections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
+        { id: 'discord-dashboard', label: 'Discord Embed', icon: <LayoutTemplate size={16} /> },
+        { id: 'enterprise-health', label: 'System Health', icon: <Activity size={16} /> },
+        { id: 'health', label: 'Config Health', icon: <AlertTriangle size={16} /> },
+      ]
+    },
+    {
+      id: 'security',
+      title: 'Security & Defense',
+      items: [
+        { id: 'security', label: 'Security SOC', icon: <Shield size={16} /> },
+        { id: 'anti-nuke', label: 'Anti-Nuke Rules', icon: <ShieldCheck size={16} /> },
+        { id: 'upm', label: 'Disaster Recovery', icon: <Zap size={16} /> },
+        { id: 'whitelist-overview', label: 'Smart Whitelist', icon: <ShieldCheck size={16} /> },
+        { id: 'vulnerability-scan', label: 'Vulnerability Scan', icon: <Activity size={16} /> },
+        { id: 'security-logs', label: 'Security Logs', icon: <FileText size={16} /> },
+      ]
+    },
+    {
+      id: 'management',
+      title: 'Server Management',
+      items: [
+        { id: 'automod', label: 'AI AutoMod', icon: <Bot size={16} /> },
+        { id: 'backups', label: 'Server Snapshots', icon: <Database size={16} /> },
+        { id: 'roles', label: 'Role Manager', icon: <Layers size={16} /> },
+        { id: 'bulk_ops', label: 'Bulk Operations', icon: <Zap size={16} /> },
+      ]
+    },
+    {
+      id: 'automations',
+      title: 'Automations',
+      items: [
+        { id: 'automation', label: 'Automation Studio', icon: <Zap size={16} /> },
+        { id: 'welcome', label: 'Welcome & Gate', icon: <Sparkles size={16} /> },
+        { id: 'tickets', label: 'Ticket Desk', icon: <MessageSquare size={16} /> },
+        { id: 'reaction_roles', label: 'Reaction Roles', icon: <Sparkles size={16} /> },
+        { id: 'leveling', label: 'Leveling & XP', icon: <Award size={16} /> },
+        { id: 'giveaway', label: 'Giveaways', icon: <Gift size={16} /> },
+        { id: 'announcements', label: 'Announcements', icon: <Send size={16} /> },
+        { id: 'reminders', label: 'Reminders', icon: <Bell size={16} /> },
+        { id: 'social_updates', label: 'Social Feeds', icon: <Radio size={16} /> },
+      ]
+    },
+    {
+      id: 'system',
+      title: 'Voice & System',
+      items: [
+        { id: 'voice', label: 'Voice Presence', icon: <Volume2 size={16} /> },
+        { id: 'join-to-create', label: 'Dynamic Voice', icon: <Volume2 size={16} /> },
+        { id: 'voice-protection', label: 'Voice Protection', icon: <ShieldAlert size={16} /> },
+        { id: 'logs', label: 'System Logs', icon: <FileText size={16} /> },
+        { id: 'audit', label: 'Audit Trail', icon: <History size={16} /> },
+        { id: 'diagnostics', label: 'Diagnostics', icon: <Cpu size={16} /> },
+        { id: 'analytics', label: 'Analytics', icon: <LineChart size={16} /> },
+        { id: 'settings', label: 'Server Settings', icon: <Settings size={16} /> },
+      ]
+    }
   ];
 
-  const securitySectorItems = [
-    { id: 'security', label: 'Security Threat Analysis & SOC', icon: <Shield size={18} /> },
-    { id: 'anti-nuke', label: 'Anti-Nuke & Threat Rules', icon: <ShieldCheck size={18} /> },
-    { id: 'upm', label: 'Ultra Protection (UPM)', icon: <Zap size={18} /> },
-    { id: 'whitelist-overview', label: 'Smart Whitelist & Trust', icon: <ShieldCheck size={18} /> },
-    { id: 'vulnerability-scan', label: 'Vulnerability Scanner', icon: <Activity size={18} /> },
-    { id: 'security-logs', label: 'Security Timeline Logs', icon: <FileText size={18} /> },
-  ];
+  // Collapsible category states
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    overview: true,
+    security: true,
+    management: false,
+    automations: false,
+    system: false
+  });
 
-  const serverManagementItems = [
-    { id: 'automod', label: 'AI Automod & Anti-Link', icon: <Bot size={18} /> },
-    { id: 'backups', label: '5-Min Disaster Snapshots', icon: <Database size={18} /> },
-    { id: 'roles', label: 'Roles & Temp-Role Manager', icon: <Layers size={18} /> },
-    { id: 'bulk_ops', label: 'Bulk Operations & Cleanup', icon: <Zap size={18} /> },
-  ];
+  // Automatically expand the section that contains the active page
+  useEffect(() => {
+    navSections.forEach(sec => {
+      if (sec.items.some(item => item.id === activePage)) {
+        setOpenSections(prev => ({ ...prev, [sec.id]: true }));
+      }
+    });
+  }, [activePage]);
 
-  const automationItems = [
-    { id: 'automation', label: 'Automation Studio', icon: <Zap size={18} /> },
-    { id: 'welcome', label: 'Welcome & Gate Verification', icon: <Sparkles size={18} /> },
-    { id: 'tickets', label: 'Tickets System V2', icon: <MessageSquare size={18} /> },
-    { id: 'reaction_roles', label: 'Reaction Roles', icon: <Sparkles size={18} /> },
-    { id: 'leveling', label: 'Leveling & XP Engine', icon: <Award size={18} /> },
-    { id: 'giveaway', label: 'Giveaways Manager', icon: <Gift size={18} /> },
-    { id: 'announcements', label: 'Announcements Engine', icon: <Send size={18} /> },
-    { id: 'reminders', label: 'Scheduled Reminders', icon: <Bell size={18} /> },
-    { id: 'social_updates', label: 'Social Feeds (YT & IG)', icon: <Radio size={18} /> },
-  ];
-
-  const systemItems = [
-    { id: 'voice', label: 'Voice Presence & Hubs', icon: <Volume2 size={18} /> },
-    { id: 'join-to-create', label: 'Join to Create Dynamic Voice', icon: <Volume2 size={18} /> },
-    { id: 'voice-protection', label: 'Voice Protection Guard', icon: <ShieldAlert size={18} /> },
-    { id: 'logs', label: 'System Logs & Audits', icon: <FileText size={18} /> },
-    { id: 'audit', label: 'Discord Audit Trail', icon: <History size={18} /> },
-    { id: 'diagnostics', label: 'Diagnostics & Health', icon: <Cpu size={18} /> },
-    { id: 'analytics', label: 'Telemetry & Analytics', icon: <LineChart size={18} /> },
-    { id: 'settings', label: 'Global Server Settings', icon: <Settings size={18} /> },
-  ];
+  const toggleSection = (secId: string) => {
+    setOpenSections(prev => ({ ...prev, [secId]: !prev[secId] }));
+  };
 
   const handleNavClick = (pageId: string) => {
     onPageChange(pageId);
@@ -116,11 +158,11 @@ export function Layout({
             justifyContent: 'center', 
             backgroundColor: 'rgba(239,68,68,0.15)', 
             borderRadius: '50%', 
-            width: '16px', 
-            height: '16px' 
+            width: '14px', 
+            height: '14px' 
           }}
         >
-          <AlertTriangle size={10} color="#EF4444" />
+          <AlertTriangle size={9} color="#EF4444" />
         </span>
       );
     }
@@ -147,13 +189,14 @@ export function Layout({
     <div className="app-container">
       {/* Sidebar navigation */}
       <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-        <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Logo Header */}
+        <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px' }}>
           <img 
             src="/rglogo.png" 
             alt="Rage Optimiser Logo" 
             style={{ 
-              width: '36px', 
-              height: '36px', 
+              width: '32px', 
+              height: '32px', 
               borderRadius: '8px', 
               objectFit: 'contain', 
               flexShrink: 0 
@@ -161,136 +204,183 @@ export function Layout({
           />
           <div className="logo-text" style={{ textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.04em', color: '#09090B', display: 'flex', flexDirection: 'column' }}>
             RAGE OPTIMISER
-            <span style={{ fontSize: '9px', color: '#71717A', fontWeight: 700, letterSpacing: '0.12em' }}>V3 ENTERPRISE</span>
+            <span style={{ fontSize: '9px', color: '#71717A', fontWeight: 700, letterSpacing: '0.1em' }}>V3 ENTERPRISE</span>
           </div>
           <button 
             style={{ marginLeft: 'auto' }} 
             className="menu-toggle"
             onClick={() => setMobileMenuOpen(false)}
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
+        {/* Server Context Banner */}
+        {isGuildManager && activeGuild && (
+          <div style={{ 
+            padding: '10px 14px', 
+            borderBottom: '1px solid var(--border-color)', 
+            backgroundColor: 'var(--bg-secondary)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            gap: '8px' 
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              {activeGuild.icon ? (
+                <img 
+                  src={`https://cdn.discordapp.com/icons/${activeGuild.id}/${activeGuild.icon}.png`} 
+                  alt={activeGuild.name} 
+                  style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} 
+                />
+              ) : (
+                <div style={{ width: '26px', height: '26px', borderRadius: '6px', backgroundColor: '#09090B', color: '#FFF', fontSize: '10px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {activeGuild.name.substring(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {activeGuild.name}
+                </div>
+                <div style={{ fontSize: '10px', color: '#16A34A', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#16A34A' }} />
+                  Active Server
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setActiveGuildId(null)}
+              title="Switch Server"
+              style={{
+                padding: '3px 8px',
+                fontSize: '11px',
+                fontWeight: 600,
+                backgroundColor: '#FFFFFF',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)',
+                flexShrink: 0
+              }}
+            >
+              Switch
+            </button>
+          </div>
+        )}
+
+        {/* Quick Nav Search Input */}
+        <div style={{ padding: '8px 12px 0' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              placeholder="Quick jump..."
+              value={navSearch}
+              onChange={e => setNavSearch(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '6px 10px 6px 30px',
+                fontSize: '11px',
+                borderRadius: '6px',
+                border: '1px solid var(--border-color)',
+                backgroundColor: 'var(--bg-secondary)',
+                color: 'var(--text-primary)',
+                outline: 'none'
+              }}
+            />
+            {navSearch && (
+              <button 
+                onClick={() => setNavSearch('')} 
+                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Collapsible Navigation Stream */}
         <nav className="sidebar-nav">
-          <div className="nav-section-title">Overview & Control</div>
-          {overviewItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => handleNavClick(item.id)}
-              className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-              {getModuleBadge(item.id)}
-            </button>
-          ))}
+          {navSections.map(section => {
+            const isSectionOpen = openSections[section.id] || Boolean(navSearch.trim());
+            const filteredItems = section.items.filter(item => 
+              !navSearch.trim() || item.label.toLowerCase().includes(navSearch.toLowerCase())
+            );
 
-          <div className="nav-section-title">Security Operations & Defense</div>
-          {securitySectorItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => handleNavClick(item.id)}
-              className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-              {getModuleBadge(item.id)}
-            </button>
-          ))}
+            if (filteredItems.length === 0) return null;
 
-          <div className="nav-section-title">Server Management & Defense</div>
-          {serverManagementItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => handleNavClick(item.id)}
-              className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-              {getModuleBadge(item.id)}
-            </button>
-          ))}
+            return (
+              <div key={section.id} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {/* Collapsible Section Header */}
+                <div 
+                  className="nav-section-header" 
+                  onClick={() => toggleSection(section.id)}
+                >
+                  <div className="nav-section-title">
+                    <span>{section.title}</span>
+                    <span style={{ fontSize: '9px', padding: '1px 5px', borderRadius: '4px', backgroundColor: '#F4F4F5', color: '#71717A', fontWeight: 600 }}>
+                      {filteredItems.length}
+                    </span>
+                  </div>
+                  {isSectionOpen ? <ChevronDown size={12} color="#71717A" /> : <ChevronRight size={12} color="#71717A" />}
+                </div>
 
-          <div className="nav-section-title">Automations & Community</div>
-          {automationItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => handleNavClick(item.id)}
-              className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-              {getModuleBadge(item.id)}
-            </button>
-          ))}
-
-          <div className="nav-section-title">System & Voice Suite</div>
-          {systemItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => handleNavClick(item.id)}
-              className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-              {getModuleBadge(item.id)}
-            </button>
-          ))}
+                {/* Section Items */}
+                {isSectionOpen && filteredItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    className={`nav-item ${activePage === item.id ? 'active' : ''}`}
+                    title={item.label}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                    {getModuleBadge(item.id)}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
 
         {/* User profile footer */}
-        <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)' }}>
-          {/* Switch server button for guild managers */}
-          {isGuildManager && (
-            // M-8 FIX: Use proper state management — setActiveGuildId(null) causes
-            // App.tsx to re-render the guild selector screen without a hard reload.
-            <button
-              onClick={() => { setActiveGuildId(null); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '7px 10px', borderRadius: 8, width: '100%',
-                background: '#F4F4F5', border: '1px solid #E4E4E7',
-                color: '#09090B', fontSize: 12, fontWeight: 600, cursor: 'pointer'
-              }}
-            >
-              <RefreshCw size={12} /> Switch Server
-            </button>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div className="user-avatar" style={{ padding: 0, overflow: 'hidden', backgroundColor: 'transparent', flexShrink: 0 }}>
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={user?.username} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-              ) : (
-                <img src="/rglogo.png" alt="Admin" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              )}
-            </div>
-            <div className="user-info" style={{ flex: 1, minWidth: 0 }}>
-              <span className="user-name" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.username || 'Administrator'}</span>
-              <span className="user-role" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isGuildManager ? 'Guild Manager' : 'Server Owner'}</span>
-            </div>
-            <button
-              onClick={onLogout}
-              title="Logout"
-              style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                borderRadius: '8px',
-                color: '#f87171',
-                cursor: 'pointer',
-                padding: '7px 8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.25)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.1)'; }}
-            >
-              <LogOut size={15} />
-            </button>
+        <div className="sidebar-footer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderTop: '1px solid var(--border-color)', backgroundColor: '#FAFAFA' }}>
+          <div className="user-avatar" style={{ padding: 0, overflow: 'hidden', backgroundColor: 'transparent', flexShrink: 0, width: '32px', height: '32px' }}>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={user?.username} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+            ) : (
+              <img src="/rglogo.png" alt="Admin" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            )}
           </div>
+          <div className="user-info" style={{ flex: 1, minWidth: 0 }}>
+            <span className="user-name" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 700 }}>
+              {user?.username || 'Administrator'}
+            </span>
+            <span className="user-role" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '10px', color: 'var(--text-muted)' }}>
+              {isGuildManager ? 'Guild Manager' : 'Server Owner'}
+            </span>
+          </div>
+          <button
+            onClick={onLogout}
+            title="Logout"
+            style={{
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '6px',
+              color: '#dc2626',
+              cursor: 'pointer',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.2)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.08)'; }}
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </aside>
 
