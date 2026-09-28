@@ -8,9 +8,10 @@
     "frontend"
   ],
   "scripts": {
-    "build": "node build-netlify.js",
-    "build:frontend": "node build-netlify.js",
+    "build": "npm run build --workspace=backend",
     "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "node build-netlify.js",
+    "build:netlify": "node build-netlify.js",
     "build:all": "npm run build --workspace=backend && node build-netlify.js",
     "start": "node start.js",
     "health": "node health.js"
