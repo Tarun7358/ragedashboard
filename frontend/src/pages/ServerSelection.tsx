@@ -4,13 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server, Users, Clock, Shield, ShieldCheck, ShieldAlert, ShieldX,
   ExternalLink, LogOut, CheckCircle2, XCircle, AlertTriangle, RefreshCw,
-  ChevronRight, Loader2, Bot, Music
+  ChevronRight, Loader2, Bot
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import type { ManagedGuild, ApprovalInfo } from '../hooks/useAuth';
-
-const MUSIC_CLIENT_ID = '1520323151928623125';
-const MUSIC_BOT_PERMISSIONS = '36700160';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ReactNode; canAccess: boolean }> = {
   'Approved': {
@@ -94,7 +91,6 @@ function GuildCard({
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG['Not Registered'];
   const iconUrl = getGuildIconUrl(guild.id, guild.icon);
   const BOT_INVITE_URL = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&permissions=8&scope=bot%20applications.commands&guild_id=${guild.id}`;
-  const MUSIC_INVITE_URL = `https://discord.com/api/oauth2/authorize?client_id=${MUSIC_CLIENT_ID}&permissions=${MUSIC_BOT_PERMISSIONS}&scope=bot%20applications.commands&guild_id=${guild.id}`;
 
   return (
     <motion.div
@@ -200,23 +196,6 @@ function GuildCard({
             }}
           >
             Invite Rage <ExternalLink size={14} />
-          </a>
-        )}
-        {status !== 'Blacklisted' && status !== 'Not Registered' && (
-          <a 
-            href={MUSIC_INVITE_URL} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            title="Optional: Add separate music player bot"
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '11px 16px', borderRadius: 8,
-              background: '#FFFFFF', border: '1px solid #E4E4E7',
-              color: '#52525B', fontSize: 12, fontWeight: 600, textDecoration: 'none',
-              flexShrink: 0
-            }}
-          >
-            <Music size={14} /> Music
           </a>
         )}
       </div>

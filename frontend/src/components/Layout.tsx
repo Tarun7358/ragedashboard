@@ -3,8 +3,8 @@ import {
   LayoutDashboard, Shield, Gavel, Users, Zap, FileText, 
   LineChart, Settings, ShieldAlert, Bell, Search, Play, Pause, 
   Terminal, Server, Activity, ChevronDown, Menu, X, AlertTriangle,
-  Volume2, ShieldCheck, LogOut, LayoutTemplate, Music, RefreshCw,
-  Gift, Send, Sparkles, Award, Radio, MessageSquare, CreditCard, Bot, Layers
+  Volume2, ShieldCheck, LogOut, LayoutTemplate, RefreshCw,
+  Gift, Send, Sparkles, Award, Radio, MessageSquare, Bot, Layers, Database, History, Cpu
 } from 'lucide-react';
 import type { NotificationItem } from '../hooks/useActivityFeed';
 import { NotificationsMenu } from './NotificationsMenu';
@@ -53,47 +53,48 @@ export function Layout({
 
   const overviewItems = [
     { id: 'dashboard', label: 'Web Dashboard', icon: <LayoutDashboard size={18} /> },
-    { id: 'discord-dashboard', label: 'Discord Dashboard', icon: <LayoutTemplate size={18} /> },
-    { id: 'enterprise-health', label: 'Enterprise System Health', icon: <Activity size={18} color="#10b981" /> },
-    { id: 'health', label: 'Config Health', icon: <AlertTriangle size={18} color="var(--color-warning)" /> },
+    { id: 'discord-dashboard', label: 'Discord Interactive Dashboard', icon: <LayoutTemplate size={18} /> },
+    { id: 'enterprise-health', label: 'Enterprise System Health', icon: <Activity size={18} /> },
+    { id: 'health', label: 'Config Health', icon: <AlertTriangle size={18} /> },
   ];
-
 
   const securitySectorItems = [
-    { id: 'security', label: 'Security Threat Analysis & SOC', icon: <Shield size={18} color="#ef4444" /> },
-    { id: 'anti-nuke', label: 'Anti-Nuke & Threat Rules', icon: <ShieldCheck size={18} color="#7c5cfc" /> },
-    { id: 'upm', label: 'Ultra Protection (UPM)', icon: <Zap size={18} color="#ef4444" /> },
-    { id: 'whitelist-overview', label: 'Smart Whitelist & Trust', icon: <ShieldCheck size={18} color="#10b981" /> },
-    { id: 'vulnerability-scan', label: 'Vulnerability Scanner', icon: <Activity size={18} color="#3b82f6" /> },
-    { id: 'security-logs', label: 'Security Timeline Logs', icon: <FileText size={18} color="#a855f7" /> },
+    { id: 'security', label: 'Security Threat Analysis & SOC', icon: <Shield size={18} /> },
+    { id: 'anti-nuke', label: 'Anti-Nuke & Threat Rules', icon: <ShieldCheck size={18} /> },
+    { id: 'upm', label: 'Ultra Protection (UPM)', icon: <Zap size={18} /> },
+    { id: 'whitelist-overview', label: 'Smart Whitelist & Trust', icon: <ShieldCheck size={18} /> },
+    { id: 'vulnerability-scan', label: 'Vulnerability Scanner', icon: <Activity size={18} /> },
+    { id: 'security-logs', label: 'Security Timeline Logs', icon: <FileText size={18} /> },
   ];
 
-  const modProtectionItems = [
-    { id: 'automod', label: 'AI Automod & AntiLink', icon: <Bot size={18} color="#7c5cfc" /> },
-    { id: 'whitelist-overview', label: 'Whitelist & Trust Center', icon: <ShieldCheck size={18} color="#10b981" /> },
-    { id: 'payment', label: 'Enterprise Payment QR', icon: <CreditCard size={18} color="#f59e0b" /> },
-    { id: 'roles', label: 'Roles Manager', icon: <span style={{ fontSize: 14 }}>🎭</span> },
+  const serverManagementItems = [
+    { id: 'automod', label: 'AI Automod & Anti-Link', icon: <Bot size={18} /> },
+    { id: 'backups', label: '5-Min Disaster Snapshots', icon: <Database size={18} /> },
+    { id: 'roles', label: 'Roles & Temp-Role Manager', icon: <Layers size={18} /> },
+    { id: 'bulk_ops', label: 'Bulk Operations & Cleanup', icon: <Zap size={18} /> },
   ];
 
   const automationItems = [
-    { id: 'automation', label: 'Automation Studio', icon: <Zap size={18} color="#3b82f6" /> },
-    { id: 'welcome', label: 'Welcome System V2', icon: <Sparkles size={18} color="#d4af37" /> },
-    { id: 'tickets', label: 'Tickets System V2', icon: <MessageSquare size={18} color="#d4af37" /> },
+    { id: 'automation', label: 'Automation Studio', icon: <Zap size={18} /> },
+    { id: 'welcome', label: 'Welcome & Gate Verification', icon: <Sparkles size={18} /> },
+    { id: 'tickets', label: 'Tickets System V2', icon: <MessageSquare size={18} /> },
     { id: 'reaction_roles', label: 'Reaction Roles', icon: <Sparkles size={18} /> },
-    { id: 'leveling', label: 'Leveling & XP', icon: <Award size={18} color="#ec4899" /> },
-    { id: 'giveaway', label: 'Giveaways', icon: <Gift size={18} /> },
-    { id: 'announcements', label: 'Announcements', icon: <Send size={18} /> },
-    { id: 'reminders', label: 'Reminder System', icon: <Bell size={18} /> },
-    { id: 'social_updates', label: 'Social Updates', icon: <Radio size={18} /> },
+    { id: 'leveling', label: 'Leveling & XP Engine', icon: <Award size={18} /> },
+    { id: 'giveaway', label: 'Giveaways Manager', icon: <Gift size={18} /> },
+    { id: 'announcements', label: 'Announcements Engine', icon: <Send size={18} /> },
+    { id: 'reminders', label: 'Scheduled Reminders', icon: <Bell size={18} /> },
+    { id: 'social_updates', label: 'Social Feeds (YT & IG)', icon: <Radio size={18} /> },
   ];
 
-  const systemAudioItems = [
-    { id: 'voice', label: 'Voice Presence & Audio', icon: <Volume2 size={18} color="#a855f7" /> },
-    { id: 'music', label: 'Music System', icon: <Music size={18} color="#6366f1" /> },
-    { id: 'logs', label: 'System Logs & Audits', icon: <FileText size={18} color="#60a5fa" /> },
-    { id: 'bulk_ops', label: 'Bulk Operations', icon: <Layers size={18} color="#f59e0b" /> },
-    { id: 'analytics', label: 'Analytics & Health', icon: <LineChart size={18} color="#10b981" /> },
-    { id: 'settings', label: 'Global Settings', icon: <Settings size={18} /> },
+  const systemItems = [
+    { id: 'voice', label: 'Voice Presence & Hubs', icon: <Volume2 size={18} /> },
+    { id: 'join-to-create', label: 'Join to Create Dynamic Voice', icon: <Volume2 size={18} /> },
+    { id: 'voice-protection', label: 'Voice Protection Guard', icon: <ShieldAlert size={18} /> },
+    { id: 'logs', label: 'System Logs & Audits', icon: <FileText size={18} /> },
+    { id: 'audit', label: 'Discord Audit Trail', icon: <History size={18} /> },
+    { id: 'diagnostics', label: 'Diagnostics & Health', icon: <Cpu size={18} /> },
+    { id: 'analytics', label: 'Telemetry & Analytics', icon: <LineChart size={18} /> },
+    { id: 'settings', label: 'Global Server Settings', icon: <Settings size={18} /> },
   ];
 
   const handleNavClick = (pageId: string) => {
@@ -198,8 +199,8 @@ export function Layout({
             </button>
           ))}
 
-          <div className="nav-section-title">Moderation & Security</div>
-          {modProtectionItems.map(item => (
+          <div className="nav-section-title">Server Management & Defense</div>
+          {serverManagementItems.map(item => (
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}
@@ -211,7 +212,7 @@ export function Layout({
             </button>
           ))}
 
-          <div className="nav-section-title">Automations & Features</div>
+          <div className="nav-section-title">Automations & Community</div>
           {automationItems.map(item => (
             <button
               key={item.id}
@@ -224,8 +225,8 @@ export function Layout({
             </button>
           ))}
 
-          <div className="nav-section-title">System & Audio Suite</div>
-          {systemAudioItems.map(item => (
+          <div className="nav-section-title">System & Voice Suite</div>
+          {systemItems.map(item => (
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}

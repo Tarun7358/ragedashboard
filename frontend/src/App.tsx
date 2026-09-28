@@ -25,7 +25,6 @@ const Tickets = React.lazy(() => import('./pages/Tickets').then(m => ({ default:
 const Backups = React.lazy(() => import('./pages/Backups').then(m => ({ default: m.Backups })));
 const VoicePresence = React.lazy(() => import('./pages/VoicePresence').then(m => ({ default: m.VoicePresence })));
 const VoiceProtection = React.lazy(() => import('./pages/VoiceProtection').then(m => ({ default: m.VoiceProtection })));
-const Music = React.lazy(() => import('./pages/Music').then(m => ({ default: m.Music })));
 const Roles = React.lazy(() => import('./pages/Roles').then(m => ({ default: m.Roles })));
 const WhitelistOverview = React.lazy(() => import('./pages/whitelist/Overview').then(m => ({ default: m.WhitelistOverview })));
 const BotWhitelist = React.lazy(() => import('./pages/whitelist/BotWhitelist').then(m => ({ default: m.BotWhitelist })));
@@ -332,14 +331,15 @@ function App() {
             registry={registry}
           />
         );
-      case 'music':
+      case 'join-to-create':
+      case 'joinToCreate':
+      case 'jtc':
         return (
-          <Music
+          <JoinToCreate
             onSaveConfig={triggerToast}
             modules={modules}
             registry={registry}
             onUpdateConfig={updateModuleConfig}
-            musicPlayerState={musicPlayerState}
           />
         );
 

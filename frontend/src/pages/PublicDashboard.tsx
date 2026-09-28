@@ -1,15 +1,12 @@
 import { API_BASE, WS_BASE } from '../config';
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Mic, MessageSquare, Server, Music, Ticket, Calendar, Search, RefreshCw, ChevronLeft, ChevronRight, Hash } from 'lucide-react';
-
-
+import { Users, Mic, MessageSquare, Server, Ticket, Calendar, Search, RefreshCw, ChevronLeft, ChevronRight, Hash } from 'lucide-react';
 
 const CATEGORIES = [
   { id: 'Members', icon: Users, label: 'Members' },
   { id: 'Voice', icon: Mic, label: 'Voice' },
   { id: 'Messages', icon: MessageSquare, label: 'Messages' },
   { id: 'Server', icon: Server, label: 'Server' },
-  { id: 'Music', icon: Music, label: 'Music' },
   { id: 'Tickets', icon: Ticket, label: 'Tickets' },
   { id: 'Events', icon: Calendar, label: 'Events' }
 ];
