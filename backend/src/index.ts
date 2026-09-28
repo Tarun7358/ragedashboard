@@ -256,12 +256,15 @@ async function bootstrap() {
     registerBlacklistCommands();
     registerSelfRolesCommands();
 
-    await gateway.connect();
-    console.log(`✅ Rage Optimiser booted with ${ALL_MANIFESTS.length} modules registered.`);
-
-    // 5-a. Initialize Rage Brain (schemas + interceptor — always after gateway.connect)
-    await BrainStore.initSchemas().catch(console.error);
-    BrainEventInterceptor.init(gateway.client.user?.id ?? 'unknown');
+    try {
+      await gateway.connect();
+      console.log(`✅ Rage Optimiser booted with ${ALL_MANIFESTS.length} modules registered.`);
+      await BrainStore.initSchemas().catch(console.error);
+      BrainEventInterceptor.init(gateway.client.user?.id ?? 'unknown');
+    } catch (gatewayErr: any) {
+      console.error(`⚠️ Discord Gateway connection failed: ${gatewayErr?.message || gatewayErr}`);
+      console.warn(`[WebServer] WebServer & API remain active. Set valid DISCORD_TOKEN in .env to connect to Discord.`);
+    }
 
     // 5. Start 30-Second Temporary Role Auto-Revocation Ticker
     setInterval(async () => {
