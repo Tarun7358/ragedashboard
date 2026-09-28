@@ -80,8 +80,14 @@ export function PublicDashboard() {
 
   useEffect(() => {
     const connectWS = () => {
-      const socket = new WebSocket(WS_BASE);
-      wsRef.current = socket;
+      let socket: WebSocket;
+      try {
+        socket = new WebSocket(WS_BASE);
+        wsRef.current = socket;
+      } catch (err) {
+        console.warn('[PublicDashboard] WebSocket connection prevented crash:', err);
+        return;
+      }
 
 
       socket.onmessage = (event) => {

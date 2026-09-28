@@ -101,7 +101,12 @@ export function useActivityFeed() {
     const connectWS = () => {
       if (cleanedUp || !token) return;
       const url = wsUrl({ token });
-      socket = new WebSocket(url);
+      try {
+        socket = new WebSocket(url);
+      } catch (err) {
+        console.warn('[useActivityFeed] WebSocket connection prevented crash:', err);
+        return;
+      }
 
       socket.onmessage = (event) => {
         try {

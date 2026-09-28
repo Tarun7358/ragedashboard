@@ -176,8 +176,14 @@ export function useDiscordSync() {
 
       // M-1: Use VITE_WS_URL env var instead of hardcoded localhost
       const wsUrl = `${WS_BASE}?token=${currentToken}${currentGuild ? `&guildId=${currentGuild}` : ''}`;
-      const socket = new WebSocket(wsUrl);
-      wsRef.current = socket;
+      let socket: WebSocket;
+      try {
+        socket = new WebSocket(wsUrl);
+        wsRef.current = socket;
+      } catch (err) {
+        console.warn('[useDiscordSync] WebSocket initialization prevented crash:', err);
+        return;
+      }
 
       socket.onmessage = (event) => {
         try {
