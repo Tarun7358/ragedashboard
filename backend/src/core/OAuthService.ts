@@ -96,21 +96,38 @@ export class OAuthService {
     return (process.env.CLIENT_SECRET || '').trim();
   }
 
-  private static getRedirectUri(): string {
-    return (process.env.OAUTH_REDIRECT_URI || 'http://localhost:5000/api/auth/discord/callback').trim();
+  private static getRedirectUri(override?: string): string {
+    if (override) return override.trim();
+    return (process.env.OAUTH_REDIRECT_URI || 'https://apirageoptimisercom.altvr.in/api/auth/discord/callback').trim();
   }
 
   /**
-   * Generate an HMAC-signed, expiring, cryptographic OAuth2 state parameter.
+   * Generate an HMAC-signed, expiring, cryptographic OAuth2 state parameter with optional embedded return URL.
    */
-  public static generateState(): string {
+  public static generateState(returnUrl?: string): string {
     const timestamp = Date.now().toString();
     const nonce = crypto.randomBytes(16).toString('hex');
+    const returnBase64 = returnUrl ? Buffer.from(returnUrl).toString('base64url') : '';
     const secret = process.env.JWT_SECRET || 'oauth_hmac_secret';
     const hmac = crypto.createHmac('sha256', secret)
-      .update(`${timestamp}:${nonce}`)
+      .update(`${timestamp}:${nonce}:${returnBase64}`)
       .digest('hex');
-    return `${timestamp}:${nonce}:${hmac}`;
+    return `${timestamp}:${nonce}:${returnBase64}:${hmac}`;
+  }
+
+  /**
+   * Extract return frontend URL embedded in signed state.
+   */
+  public static extractReturnUrl(state?: string): string | null {
+    if (!state || typeof state !== 'string') return null;
+    const parts = state.split(':');
+    if (parts.length === 4 && parts[2]) {
+      try {
+        const decoded = Buffer.from(parts[2], 'base64url').toString('utf8');
+        if (decoded.startsWith('http://') || decoded.startsWith('https://')) return decoded;
+      } catch {}
+    }
+    return null;
   }
 
   /**
@@ -119,32 +136,42 @@ export class OAuthService {
   public static validateState(state?: string): boolean {
     if (!state || typeof state !== 'string') return false;
     const parts = state.split(':');
-    if (parts.length !== 3) return false;
-    const [timestampStr, nonce, receivedHmac] = parts;
-    const timestamp = parseInt(timestampStr, 10);
-    if (isNaN(timestamp)) return false;
+    const secret = process.env.JWT_SECRET || 'oauth_hmac_secret';
 
-    // Check expiration: valid for 10 minutes
-    if (Date.now() - timestamp > 10 * 60 * 1000 || timestamp > Date.now() + 60000) {
-      return false;
+    if (parts.length === 4) {
+      const [timestampStr, nonce, returnBase64, receivedHmac] = parts;
+      const timestamp = parseInt(timestampStr, 10);
+      if (isNaN(timestamp)) return false;
+      if (Date.now() - timestamp > 10 * 60 * 1000 || timestamp > Date.now() + 60000) return false;
+      const expectedHmac = crypto.createHmac('sha256', secret)
+        .update(`${timestampStr}:${nonce}:${returnBase64}`)
+        .digest('hex');
+      if (receivedHmac.length !== expectedHmac.length) return false;
+      return crypto.timingSafeEqual(Buffer.from(receivedHmac, 'hex'), Buffer.from(expectedHmac, 'hex'));
     }
 
-    const secret = process.env.JWT_SECRET || 'oauth_hmac_secret';
-    const expectedHmac = crypto.createHmac('sha256', secret)
-      .update(`${timestampStr}:${nonce}`)
-      .digest('hex');
+    if (parts.length === 3) {
+      const [timestampStr, nonce, receivedHmac] = parts;
+      const timestamp = parseInt(timestampStr, 10);
+      if (isNaN(timestamp)) return false;
+      if (Date.now() - timestamp > 10 * 60 * 1000 || timestamp > Date.now() + 60000) return false;
+      const expectedHmac = crypto.createHmac('sha256', secret)
+        .update(`${timestampStr}:${nonce}`)
+        .digest('hex');
+      if (receivedHmac.length !== expectedHmac.length) return false;
+      return crypto.timingSafeEqual(Buffer.from(receivedHmac, 'hex'), Buffer.from(expectedHmac, 'hex'));
+    }
 
-    if (receivedHmac.length !== expectedHmac.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(receivedHmac, 'hex'), Buffer.from(expectedHmac, 'hex'));
+    return false;
   }
 
   /**
    * Build the Discord OAuth2 authorization URL (includes guilds.join for auto-rejoin capability)
    */
-  public static getAuthorizationUrl(state?: string): string {
+  public static getAuthorizationUrl(state?: string, redirectUri?: string): string {
     const params = new URLSearchParams({
       client_id: this.getClientId(),
-      redirect_uri: this.getRedirectUri(),
+      redirect_uri: this.getRedirectUri(redirectUri),
       response_type: 'code',
       scope: 'identify guilds guilds.join',
       ...(state ? { state } : {})
@@ -155,13 +182,13 @@ export class OAuthService {
   /**
    * Exchange authorization code for access token
    */
-  public static async exchangeCode(code: string): Promise<{ access_token: string; token_type: string }> {
+  public static async exchangeCode(code: string, redirectUri?: string): Promise<{ access_token: string; token_type: string }> {
     const body = new URLSearchParams({
       client_id: this.getClientId(),
       client_secret: this.getClientSecret(),
       grant_type: 'authorization_code',
       code,
-      redirect_uri: this.getRedirectUri()
+      redirect_uri: this.getRedirectUri(redirectUri)
     });
 
     const res = await fetch(`${DISCORD_API}/oauth2/token`, {

@@ -37,6 +37,9 @@ export default defineConfig({
           if (id.includes('node_modules/date-fns')) {
             return 'date-fns';
           }
+          if (id.includes('/src/config') || id.includes('\\src\\config')) {
+            return 'app-config';
+          }
         },
       },
     },
