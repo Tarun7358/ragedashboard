@@ -6,9 +6,9 @@ console.log('[build-netlify] Starting dashboard build...');
 
 // 1. Build frontend
 try {
-  execSync('npm run build --workspace=frontend', { stdio: 'inherit' });
+  execSync('npm --prefix frontend run build', { stdio: 'inherit' });
 } catch (err) {
-  console.warn('[build-netlify] Workspace build failed, falling back to direct vite build...');
+  console.warn('[build-netlify] npm --prefix build failed, falling back to direct vite build...');
   execSync('cd frontend && npx vite build', { stdio: 'inherit' });
 }
 
