@@ -360,8 +360,15 @@ export class WebServer {
           returnUrl = new URL(req.get('referer')!).origin;
         } catch {}
       }
+
+      const host = req.get('host') || '';
+      const isRemote = host.includes('altvr.in') || req.protocol === 'https' || (!host.includes('localhost') && !host.includes('127.0.0.1'));
+      const redirectUri = isRemote
+        ? 'https://apirageoptimisercom.altvr.in/api/auth/discord/callback'
+        : OAuthService.getRedirectUri();
+
       const state = OAuthService.generateState(returnUrl);
-      const url = OAuthService.getAuthorizationUrl(state);
+      const url = OAuthService.getAuthorizationUrl(state, redirectUri);
       res.json({ url, state });
     });
 
@@ -375,6 +382,11 @@ export class WebServer {
       const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
       const defaultFrontend = isLocal ? 'http://localhost:4680' : `${req.protocol}://${host}`;
       const frontendUrl = (dynamicReturnUrl || process.env.FRONTEND_URL || defaultFrontend).replace(/\/$/, '');
+
+      const isRemote = host.includes('altvr.in') || req.protocol === 'https' || !isLocal;
+      const redirectUri = isRemote
+        ? 'https://apirageoptimisercom.altvr.in/api/auth/discord/callback'
+        : OAuthService.getRedirectUri();
 
       if (error) {
         if (req.method === 'GET') {
@@ -399,7 +411,7 @@ export class WebServer {
 
       try {
         const client = this.getDiscordClient ? this.getDiscordClient() : null;
-        const result = await OAuthService.processCallback(code, client);
+        const result = await OAuthService.processCallback(code, client, redirectUri);
 
         if (req.method === 'GET') {
           const encoded = encodeURIComponent(JSON.stringify(result));

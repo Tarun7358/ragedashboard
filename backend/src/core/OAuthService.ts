@@ -96,9 +96,13 @@ export class OAuthService {
     return (process.env.CLIENT_SECRET || '').trim();
   }
 
-  private static getRedirectUri(override?: string): string {
-    if (override) return override.trim();
-    return (process.env.OAUTH_REDIRECT_URI || 'https://apirageoptimisercom.altvr.in/api/auth/discord/callback').trim();
+  public static getRedirectUri(override?: string): string {
+    if (override && override.trim()) return override.trim();
+    const envUri = (process.env.OAUTH_REDIRECT_URI || '').trim();
+    if (envUri && !envUri.includes('localhost') && !envUri.includes('127.0.0.1')) {
+      return envUri;
+    }
+    return 'https://apirageoptimisercom.altvr.in/api/auth/discord/callback';
   }
 
   /**
@@ -242,14 +246,14 @@ export class OAuthService {
   /**
    * Full OAuth2 flow: exchange code → fetch user + guilds → save session → return JWT
    */
-  public static async processCallback(code: string, discordClient?: any): Promise<{ 
+  public static async processCallback(code: string, discordClient?: any, redirectUri?: string): Promise<{ 
     token: string; 
     user: DiscordUser; 
     managedGuilds: DiscordGuild[];
     approvals: Record<string, { status: string; guildName: string }>;
   }> {
     // 1. Exchange code for access token
-    const tokenData = await this.exchangeCode(code);
+    const tokenData = await this.exchangeCode(code, redirectUri);
     const { access_token } = tokenData;
 
     // 2. Fetch user info
