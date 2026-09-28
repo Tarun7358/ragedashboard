@@ -199,7 +199,7 @@ async function bootstrap() {
     // 3. Initialize Express Web Server & API Router
     webServer = new WebServer(registry);
 
-    const PORT = Number(process.env.PORT || 5000);
+    const PORT = Number(process.env.SERVER_PORT || process.env.PORT || 5000);
     webServer.listen(PORT);
 
     // 4. Initialize Discord Bot Gateway Client
