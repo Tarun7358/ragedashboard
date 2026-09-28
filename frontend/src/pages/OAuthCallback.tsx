@@ -41,10 +41,19 @@ export function OAuthCallback({ onSuccess }: { onSuccess: () => void }) {
 
       // Short success animation before redirecting to server selection
       setTimeout(() => {
-        // Clear the URL params so the data doesn't linger
-        window.history.replaceState({}, '', '/');
-        onSuccess();
-      }, 1200);
+        try {
+          window.history.replaceState({}, '', '/');
+        } catch {}
+        if (onSuccess) {
+          onSuccess();
+        }
+        // Fallback navigation in case router or state does not immediately swap
+        setTimeout(() => {
+          if (window.location.pathname === '/auth/callback') {
+            window.location.replace('/');
+          }
+        }, 500);
+      }, 1000);
     } catch (err: any) {
       setErrorMsg('Failed to process login. Please try again.');
       setStatus('error');
