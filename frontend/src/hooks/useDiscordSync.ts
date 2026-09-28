@@ -49,21 +49,17 @@ export const INITIAL_MODULES: ModuleState[] = [
   { id: 'security', name: 'Security Guard', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'moderation', name: 'Moderation Console', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'welcome-v2', name: 'Welcome System V2', status: 'enabled', progress: 100, errors: [], config: {} },
-  { id: 'tickets', name: 'Ticket Management', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'tickets-v2', name: 'Tickets System V2', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'verification', name: 'Verification Gate', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'logging', name: 'System Logs Timeline', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'backups', name: 'Backup Hub', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'automation', name: 'Automation Studio', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'voice', name: 'Voice Presence', status: 'enabled', progress: 100, errors: [], config: {} },
-  { id: 'bot_whitelist', name: 'Bot Whitelist', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'member_whitelist', name: 'Member Whitelist', status: 'enabled', progress: 100, errors: [], config: {} },
-  { id: 'role_whitelist', name: 'Role Whitelist', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'reaction_roles', name: 'Reaction Roles', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'leveling', name: 'Leveling & XP', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'reminders', name: 'Reminder System', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'automod', name: 'AI Automod & AntiLink', status: 'enabled', progress: 100, errors: [], config: {} },
-  { id: 'music', name: 'Music System', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'voice-protection', name: 'Voice Protection', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'discord-dashboard', name: 'Discord Dashboard', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'join_role_guard', name: 'Join Role Guard', status: 'enabled', progress: 100, errors: [], config: {} },
@@ -75,8 +71,7 @@ export const INITIAL_MODULES: ModuleState[] = [
   { id: 'bulk_ops', name: 'Bulk Operations', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'diagnostics', name: 'System Diagnostics', status: 'enabled', progress: 100, errors: [], config: {} },
   { id: 'analytics', name: 'Analytics Tracker', status: 'enabled', progress: 100, errors: [], config: {} },
-  { id: 'audit', name: 'Audit Timeline', status: 'enabled', progress: 100, errors: [], config: {} },
-  { id: 'payment', name: 'Enterprise Payment QR', status: 'enabled', progress: 100, errors: [], config: {} }
+  { id: 'audit', name: 'Audit Timeline', status: 'enabled', progress: 100, errors: [], config: {} }
 ];
 
 export function useDiscordSync() {

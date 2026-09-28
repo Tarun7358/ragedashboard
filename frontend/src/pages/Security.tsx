@@ -268,7 +268,7 @@ export function Security({
       <div className="section-panel" style={{ padding: '24px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
               Real-Time Security Feature Analysis & Status
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px', margin: 0 }}>
@@ -286,25 +286,35 @@ export function Security({
             style={{
               padding: '18px',
               borderRadius: '12px',
-              backgroundColor: 'rgba(124, 92, 252, 0.08)',
-              border: '1px solid rgba(124, 92, 252, 0.3)',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--border-color)',
+              boxShadow: 'var(--shadow-sm)',
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
-              gap: '12px'
+              gap: '12px',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#09090B';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>
-                <Shield size={16} color="#7c5cfc" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                <Shield size={16} color="var(--accent-primary)" />
                 <span>Anti-Nuke Defense</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#10b981' }}>🟢 ACTIVE</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#16a34a' }}>● ACTIVE</span>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
               Monitors rapid bans, kicks, channel purges, role deletion, webhook creation, and bot invites.
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--accent-primary)', fontWeight: 600, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600, borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
               <span>Configure Thresholds & Rules</span>
               <ArrowRight size={14} />
             </div>
@@ -316,25 +326,35 @@ export function Security({
             style={{
               padding: '18px',
               borderRadius: '12px',
-              backgroundColor: 'rgba(239, 68, 68, 0.08)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--border-color)',
+              boxShadow: 'var(--shadow-sm)',
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
-              gap: '12px'
+              gap: '12px',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#09090B';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>
-                <Zap size={16} color="#ef4444" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                <Zap size={16} color="var(--accent-primary)" />
                 <span>Ultra Protection (UPM)</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#10b981' }}>🟢 SNAPSHOT READY</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#16a34a' }}>● SNAPSHOT READY</span>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
               Automated live snapshot capture, auto-quarantine, auto-lockdown, and instant server restoration.
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#ef4444', fontWeight: 600, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600, borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
               <span>Manage UPM Snapshots</span>
               <ArrowRight size={14} />
             </div>
@@ -346,25 +366,35 @@ export function Security({
             style={{
               padding: '18px',
               borderRadius: '12px',
-              backgroundColor: 'rgba(16, 185, 129, 0.08)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--border-color)',
+              boxShadow: 'var(--shadow-sm)',
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
-              gap: '12px'
+              gap: '12px',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#09090B';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>
-                <ShieldCheck size={16} color="#10b981" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                <ShieldCheck size={16} color="var(--accent-primary)" />
                 <span>AntiLink & AutoMod</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#10b981' }}>🟢 FILTERING</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#16a34a' }}>● FILTERING</span>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
               Deletes unauthorized links (`http/https/discord.gg`), with ignored channels ({amConfig.ignoredChannels?.length || 0}) and roles ({amConfig.ignoredRoles?.length || 0}).
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#10b981', fontWeight: 600, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600, borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
               <span>Manage AntiLink Bypasses</span>
               <ArrowRight size={14} />
             </div>
@@ -376,25 +406,35 @@ export function Security({
             style={{
               padding: '18px',
               borderRadius: '12px',
-              backgroundColor: 'rgba(245, 158, 11, 0.08)',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--border-color)',
+              boxShadow: 'var(--shadow-sm)',
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
-              gap: '12px'
+              gap: '12px',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#09090B';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>
-                <Key size={16} color="#f59e0b" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                <Key size={16} color="var(--accent-primary)" />
                 <span>Smart Whitelist</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b' }}>{whitelist.length} TRUSTED</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>{whitelist.length} TRUSTED</span>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
               Grants temporary or permanent security bypasses to trusted administrators, bots, and integrations.
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#f59e0b', fontWeight: 600, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600, borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
               <span>Manage Whitelisted Accounts</span>
               <ArrowRight size={14} />
             </div>
@@ -406,25 +446,35 @@ export function Security({
             style={{
               padding: '18px',
               borderRadius: '12px',
-              backgroundColor: 'rgba(59, 130, 246, 0.08)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--border-color)',
+              boxShadow: 'var(--shadow-sm)',
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
-              gap: '12px'
+              gap: '12px',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#09090B';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>
-                <Activity size={16} color="#3b82f6" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                <Activity size={16} color="var(--accent-primary)" />
                 <span>Vulnerability Scanner</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#3b82f6' }}>{scanResult.score}% HEALTH</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: scanResult.score > 80 ? '#16a34a' : '#d97706' }}>{scanResult.score}% HEALTH</span>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
               Scans Administrator permissions, quarantine role binding, and alert channel setups for vulnerabilities.
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#3b82f6', fontWeight: 600, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600, borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
               <span>Run Vulnerability Audit</span>
               <ArrowRight size={14} />
             </div>
@@ -436,25 +486,35 @@ export function Security({
             style={{
               padding: '18px',
               borderRadius: '12px',
-              backgroundColor: 'rgba(168, 85, 247, 0.08)',
-              border: '1px solid rgba(168, 85, 247, 0.3)',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--border-color)',
+              boxShadow: 'var(--shadow-sm)',
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
-              gap: '12px'
+              gap: '12px',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#09090B';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>
-                <FileText size={16} color="#a855f7" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                <FileText size={16} color="var(--accent-primary)" />
                 <span>Security Timeline Logs</span>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#a855f7' }}>LIVE STREAM</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>LIVE STREAM</span>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
               Real-time event stream logging gateway activity, rate limit triggers, and security interventions.
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#a855f7', fontWeight: 600, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600, borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
               <span>View Full Security Logs</span>
               <ArrowRight size={14} />
             </div>
@@ -466,7 +526,7 @@ export function Security({
       {/* Real-Time Security Event Stream Table */}
       <div className="section-panel" style={{ padding: '24px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Radio size={18} color="var(--accent-primary)" />
             Real-Time Gateway Security Process Stream
           </h3>

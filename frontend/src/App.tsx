@@ -166,6 +166,7 @@ function App() {
             onManualTrigger={pushManualEvent}
             modules={modules}
             registry={registry}
+            syncLogs={syncLogs}
           />
         );
       case 'enterprise-health':
