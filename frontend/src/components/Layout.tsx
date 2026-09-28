@@ -146,25 +146,21 @@ export function Layout({
     <div className="app-container">
       {/* Sidebar navigation */}
       <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-        <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div className="brand-badge-icon" style={{
-            width: '34px',
-            height: '34px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #99CC00 0%, #10B981 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#080A0E',
-            fontWeight: 900,
-            fontSize: '15px',
-            boxShadow: '0 0 16px rgba(153, 204, 0, 0.35)',
-            flexShrink: 0,
-            letterSpacing: '-0.05em'
-          }}>RO</div>
-          <div className="logo-text" style={{ textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.04em', color: '#F8FAFC', display: 'flex', flexDirection: 'column' }}>
+        <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <img 
+            src="/rglogo.png" 
+            alt="Rage Optimiser Logo" 
+            style={{ 
+              width: '36px', 
+              height: '36px', 
+              borderRadius: '8px', 
+              objectFit: 'contain', 
+              flexShrink: 0 
+            }} 
+          />
+          <div className="logo-text" style={{ textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.04em', color: '#09090B', display: 'flex', flexDirection: 'column' }}>
             RAGE OPTIMISER
-            <span style={{ fontSize: '9px', color: '#99CC00', fontWeight: 700, letterSpacing: '0.12em' }}>V3 ENTERPRISE</span>
+            <span style={{ fontSize: '9px', color: '#71717A', fontWeight: 700, letterSpacing: '0.12em' }}>V3 ENTERPRISE</span>
           </div>
           <button 
             style={{ marginLeft: 'auto' }} 
@@ -253,8 +249,8 @@ export function Layout({
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '7px 10px', borderRadius: 8, width: '100%',
-                background: 'rgba(124,92,252,0.08)', border: '1px solid rgba(124,92,252,0.2)',
-                color: '#7C5CFC', fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                background: '#F4F4F5', border: '1px solid #E4E4E7',
+                color: '#09090B', fontSize: 12, fontWeight: 600, cursor: 'pointer'
               }}
             >
               <RefreshCw size={12} /> Switch Server
@@ -265,7 +261,7 @@ export function Layout({
               {avatarUrl ? (
                 <img src={avatarUrl} alt={user?.username} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
               ) : (
-                <img src="/ro-logo.png" alt="Admin" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                <img src="/rglogo.png" alt="Admin" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               )}
             </div>
             <div className="user-info" style={{ flex: 1, minWidth: 0 }}>
@@ -321,7 +317,7 @@ export function Layout({
                 />
               ) : (
                 <div className="server-icon" style={{ padding: 0, overflow: 'hidden', backgroundColor: 'transparent' }}>
-                  <img src="/ro-logo.png" alt="RO" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  <img src="/rglogo.png" alt="RO" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 </div>
               )}
               <span style={{ fontWeight: 600 }}>{activeGuild?.name || 'Rage Optimiser'}</span>

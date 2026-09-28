@@ -1,7 +1,7 @@
 import { API_BASE } from '../config';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ShieldAlert, Server, Activity, Database, Lock, Globe, Loader2 } from 'lucide-react';
+import { Shield, ShieldAlert, Server, Activity, Database, Lock, Globe, Loader2, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 // Discord brand SVG icon
@@ -103,91 +103,86 @@ export function Login() {
   };
 
   return (
-    <div className="login-container">
-      {/* Animated Background Particles */}
-      <div className="particles-overlay">
-        {[...Array(20)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="particle"
-            animate={{
-              y: [Math.random() * 1000, Math.random() * -1000],
-              x: [Math.random() * 100, Math.random() * -100],
-              opacity: [0, 0.5, 0]
-            }}
-            transition={{
-              duration: Math.random() * 10 + 10,
-              repeat: Infinity,
-              ease: "linear"
-            }}
-            style={{
-              position: 'absolute',
-              width: Math.random() * 4 + 2 + 'px',
-              height: Math.random() * 4 + 2 + 'px',
-              backgroundColor: 'var(--accent-primary)',
-              borderRadius: '50%',
-              left: Math.random() * 100 + '%',
-              top: Math.random() * 100 + '%',
-              filter: 'blur(1px)'
-            }}
-          />
-        ))}
-      </div>
-
-      <div className="login-layout">
+    <div className="login-page-root">
+      <div className="login-layout-wrap">
         {/* Left Side: Branding & Status */}
         <motion.div 
-          initial={{ opacity: 0, x: -50 }}
+          initial={{ opacity: 0, x: -30 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8 }}
-          className="login-branding"
+          transition={{ duration: 0.6 }}
+          className="login-left-col"
         >
-          <div className="branding-header">
-            <img src="/ro-logo.png" alt="Rage Optimiser Logo" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
+          <div className="login-brand-header">
+            <img 
+              src="/rglogo.png" 
+              alt="Rage Optimiser Logo" 
+              className="login-logo-img"
+            />
             <div>
-              <h1 className="branding-title">RAGE OPTIMISER</h1>
-              <h2 className="branding-subtitle">Enterprise Discord Security Platform</h2>
+              <h1 className="login-brand-name">RAGE OPTIMISER</h1>
+              <span className="login-brand-tag">ENTERPRISE V3 SECURITY PLATFORM</span>
             </div>
           </div>
           
-          <p className="branding-desc">Protect • Monitor • Automate • Secure</p>
+          <p className="login-brand-description">
+            Protect, automate, and scale your Discord community with sub-millisecond threat neutralization, continuous 5-minute disaster recovery backups, and unified bot operations.
+          </p>
 
-          <div className="features-grid">
-            <div className="feature-item"><Shield size={16} /> Anti-Nuke Protection</div>
-            <div className="feature-item"><Lock size={16} /> Bot Protection</div>
-            <div className="feature-item"><Globe size={16} /> Real-Time Monitoring</div>
-            <div className="feature-item"><Activity size={16} /> Live Analytics</div>
+          <div className="features-checklist">
+            <div className="feature-check-item">
+              <CheckCircle2 size={16} className="text-black" />
+              <span>Enterprise Anti-Nuke & Quarantine</span>
+            </div>
+            <div className="feature-check-item">
+              <CheckCircle2 size={16} className="text-black" />
+              <span>5-Minute Automated Server Snapshots</span>
+            </div>
+            <div className="feature-check-item">
+              <CheckCircle2 size={16} className="text-black" />
+              <span>Join-to-Create Dynamic Voice Hubs</span>
+            </div>
+            <div className="feature-check-item">
+              <CheckCircle2 size={16} className="text-black" />
+              <span>Multi-Queue Support Desk System</span>
+            </div>
           </div>
 
-          <div className="status-card glass-panel">
-            <h3 className="status-title">Live System Status</h3>
+          <div className="login-status-card">
+            <div className="login-status-header">
+              <span className="status-header-title">LIVE SYSTEM TELEMETRY</span>
+              <span className="live-dot-green" />
+            </div>
+
             {status ? (
-              <div className="status-grid">
-                <div className="status-metric">
-                  <span className="metric-label">Protected Servers</span>
-                  <span className="metric-value">{status.protectedServers}</span>
+              <div className="status-metrics-body">
+                <div className="status-stat-row">
+                  <span className="stat-row-label">Protected Servers</span>
+                  <span className="stat-row-val">{status.protectedServers}</span>
                 </div>
-                <div className="status-metric">
-                  <span className="metric-label">Threats Blocked Today</span>
-                  <span className="metric-value" style={{ color: 'var(--color-success)' }}>{status.threatsBlocked}</span>
+                <div className="status-stat-row">
+                  <span className="stat-row-label">Threats Blocked</span>
+                  <span className="stat-row-val text-green">{status.threatsBlocked}</span>
                 </div>
-                <div className="status-divider"></div>
-                <div className="status-row">
-                  <Server size={14} /> <span>Bot Status</span>
-                  <span className="status-indicator success">🟢 {status.bot.status}</span>
+                <div className="status-rule-line" />
+                <div className="status-item-line">
+                  <Server size={14} />
+                  <span>Bot Gateway</span>
+                  <span className="status-pill-ok">🟢 {status.bot?.status || 'Online'}</span>
                 </div>
-                <div className="status-row">
-                  <Database size={14} /> <span>Database</span>
-                  <span className="status-indicator success">🟢 {status.database.status}</span>
+                <div className="status-item-line">
+                  <Database size={14} />
+                  <span>Backup Database</span>
+                  <span className="status-pill-ok">🟢 {status.database?.status || 'Connected'}</span>
                 </div>
-                <div className="status-row">
-                  <Activity size={14} /> <span>API & WebSockets</span>
-                  <span className="status-indicator success">🟢 {status.api.status}</span>
+                <div className="status-item-line">
+                  <Activity size={14} />
+                  <span>Telemetry WebSocket</span>
+                  <span className="status-pill-ok">🟢 {status.api?.status || 'Healthy'}</span>
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
-                <Loader2 size={24} className="spin" color="var(--accent-primary)" />
+              <div className="status-loading-box">
+                <Loader2 size={24} className="spin" />
               </div>
             )}
           </div>
@@ -195,449 +190,401 @@ export function Login() {
 
         {/* Right Side: Login Panel */}
         <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="login-form-container"
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="login-right-col"
         >
-          <div className="login-card glass-panel">
-            <div className="login-card-header">
-              <h2>Access Dashboard</h2>
-              <p>Sign in to manage your Discord server</p>
+          <div className="auth-card">
+            <div className="auth-card-top">
+              <img src="/rglogo.png" alt="Rage" className="auth-card-logo" />
+              <h2 className="auth-card-title">Sign In to Dashboard</h2>
+              <p className="auth-card-subtitle">Authorize with Discord to access and configure your servers</p>
             </div>
 
-            <AnimatePresence mode="wait">
-              <motion.div
-                key="form"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
-              >
-                {errorMsg && (
-                  <div className="login-error-container">
-                    <div className="login-error">
-                      <ShieldAlert size={16} />
-                      <div>
-                        <strong>Backend Server Unreachable</strong>
-                        <p style={{ margin: '4px 0 0 0', fontSize: '12px', opacity: 0.9 }}>
-                          {errorMsg}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Primary Local Dashboard Button */}
-                <button
-                  type="button"
-                  onClick={handleLocalLogin}
-                  disabled={discordLoading}
-                  className="login-submit"
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    gap: '10px', 
-                    padding: '14px', 
-                    background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)', 
-                    boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)',
-                    border: 'none', 
-                    borderRadius: '10px', 
-                    color: '#FFFFFF', 
-                    fontSize: '15px',
-                    fontWeight: 700, 
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {discordLoading ? (
-                    <Loader2 size={18} className="spin" />
-                  ) : (
-                    <Lock size={18} />
-                  )}
-                  {discordLoading ? 'Opening Dashboard...' : '⚡ Launch Local Dashboard'}
-                </button>
-
-                <div className="auth-divider">
-                  <span>OR</span>
+            {errorMsg && (
+              <div className="login-error-alert">
+                <ShieldAlert size={16} />
+                <div>
+                  <strong>Authentication Notice</strong>
+                  <p>{errorMsg}</p>
                 </div>
+              </div>
+            )}
 
-                {/* Secondary Discord OAuth Button */}
-                <button
-                  type="button"
-                  onClick={handleDiscordLogin}
-                  disabled={discordLoading}
-                  className="btn-discord-login"
-                  style={{ opacity: 0.8 }}
-                >
+            <div className="auth-buttons-group">
+              {/* Primary Discord OAuth Login */}
+              <button
+                type="button"
+                onClick={handleDiscordLogin}
+                disabled={discordLoading}
+                className="btn-discord-auth"
+              >
+                {discordLoading ? (
+                  <Loader2 size={18} className="spin" />
+                ) : (
                   <DiscordIcon />
-                  Login with Discord (OAuth)
-                </button>
-              </motion.div>
-            </AnimatePresence>
+                )}
+                <span>{discordLoading ? 'Connecting to Discord...' : 'Login with Discord (OAuth)'}</span>
+              </button>
 
+              <div className="or-divider">
+                <span>OR</span>
+              </div>
 
-            <div className="login-footer">
-              <span>v1.0.0</span>
-              <span>Powered by Rage Optimiser</span>
+              {/* Secondary Local Launcher Session */}
+              <button
+                type="button"
+                onClick={handleLocalLogin}
+                disabled={discordLoading}
+                className="btn-local-auth"
+              >
+                <Lock size={16} />
+                <span>Launch Local Dashboard Session</span>
+              </button>
+            </div>
+
+            <div className="auth-card-footer">
+              <span>Rage Optimiser v3 Enterprise</span>
+              <span>•</span>
+              <a href="/public" target="_blank" rel="noopener noreferrer">System Status</a>
             </div>
           </div>
         </motion.div>
       </div>
 
       <style>{`
-        .login-container {
+        .login-page-root {
           min-height: 100vh;
-          width: 100vw;
-          background-color: #0B0F19;
-          background-image: 
-            radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-            radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
+          width: 100%;
+          background-color: #FAFAFA;
+          background-image: radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+          background-size: 24px 24px;
           display: flex;
           align-items: center;
           justify-content: center;
-          position: relative;
-          overflow: hidden;
+          padding: 40px 20px;
+          font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          color: #09090B;
         }
 
-        .particles-overlay {
-          position: absolute;
-          top: 0; left: 0; right: 0; bottom: 0;
-          pointer-events: none;
-          z-index: 0;
-        }
-
-        .login-layout {
-          position: relative;
-          z-index: 10;
-          display: flex;
-          width: 100%;
-          max-width: 1200px;
-          padding: 40px;
+        .login-layout-wrap {
+          display: grid;
+          grid-template-columns: 1fr 440px;
           gap: 60px;
+          max-width: 1140px;
+          width: 100%;
           align-items: center;
         }
 
-        @media (max-width: 900px) {
-          .login-layout {
-            flex-direction: column;
-            gap: 40px;
-            padding: 20px;
-          }
-        }
-
-        /* LEFT SIDE BRANDING */
-        .login-branding {
-          flex: 1;
+        /* ── LEFT BRANDING ───────────────────────────────────────── */
+        .login-left-col {
           display: flex;
           flex-direction: column;
           gap: 24px;
         }
 
-        .branding-header {
+        .login-brand-header {
           display: flex;
           align-items: center;
           gap: 16px;
         }
 
-        .branding-title {
-          font-size: 32px;
+        .login-logo-img {
+          width: 52px;
+          height: 52px;
+          border-radius: 12px;
+          object-fit: contain;
+        }
+
+        .login-brand-name {
+          font-size: 28px;
           font-weight: 800;
-          letter-spacing: -0.5px;
-          color: white;
+          letter-spacing: -0.02em;
+          color: #09090B;
+          margin: 0;
+          line-height: 1.1;
+        }
+
+        .login-brand-tag {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          color: #71717A;
+        }
+
+        .login-brand-description {
+          font-size: 15px;
+          line-height: 1.6;
+          color: #52525B;
           margin: 0;
         }
 
-        .branding-subtitle {
-          font-size: 16px;
-          font-weight: 500;
-          color: var(--accent-primary);
-          margin: 4px 0 0 0;
-        }
-
-        .branding-desc {
-          font-size: 15px;
-          color: var(--text-secondary);
-        }
-
-        .features-grid {
+        .features-checklist {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 12px;
-          margin-top: 10px;
         }
 
-        .feature-item {
+        .feature-check-item {
           display: flex;
           align-items: center;
-          gap: 8px;
-          color: var(--text-primary);
-          font-size: 14px;
-          background: rgba(255, 255, 255, 0.03);
-          padding: 8px 12px;
-          border-radius: 6px;
-          border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .glass-panel {
-          background: rgba(15, 23, 42, 0.6);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 16px;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-
-        .status-card {
-          margin-top: 20px;
-          padding: 24px;
-        }
-
-        .status-title {
+          gap: 10px;
           font-size: 13px;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          color: var(--text-muted);
-          margin: 0 0 16px 0;
+          font-weight: 600;
+          color: #09090B;
+          background: #FFFFFF;
+          border: 1px solid #E4E4E7;
+          padding: 10px 14px;
+          border-radius: 8px;
         }
 
-        .status-grid {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
+        .text-black {
+          color: #09090B;
         }
 
-        .status-metric {
+        /* ── TELEMETRY CARD ──────────────────────────────────────── */
+        .login-status-card {
+          background: #FFFFFF;
+          border: 1px solid #E4E4E7;
+          border-radius: 14px;
+          padding: 22px;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+        }
+
+        .login-status-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          margin-bottom: 16px;
         }
 
-        .metric-label {
-          color: var(--text-secondary);
-          font-size: 14px;
-        }
-
-        .metric-value {
-          font-size: 20px;
-          font-weight: 700;
-          color: white;
-        }
-
-        .status-divider {
-          height: 1px;
-          background: rgba(255, 255, 255, 0.05);
-          margin: 8px 0;
-        }
-
-        .status-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 13px;
-          color: var(--text-primary);
-        }
-
-        .status-indicator.success {
-          margin-left: auto;
-          font-family: monospace;
-          color: var(--color-success);
-        }
-
-        /* RIGHT SIDE FORM */
-        .login-form-container {
-          flex: 1;
-          max-width: 440px;
-          width: 100%;
-        }
-
-        .login-card {
-          padding: 40px;
-          display: flex;
-          flex-direction: column;
-          gap: 32px;
-        }
-
-        .login-card-header h2 {
-          font-size: 24px;
-          color: white;
-          margin: 0 0 8px 0;
-        }
-
-        .login-card-header p {
-          color: var(--text-secondary);
-          font-size: 14px;
-          margin: 0;
-        }
-
-        .login-form {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .login-error {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: rgba(239, 68, 68, 0.1);
-          color: var(--color-danger);
-          padding: 12px;
-          border-radius: 8px;
-          font-size: 13px;
-          border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        .input-with-icon {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .input-with-icon svg:first-child {
-          position: absolute;
-          left: 14px;
-          color: var(--text-muted);
-        }
-
-        .input-with-icon input {
-          width: 100%;
-          padding: 12px 14px 12px 40px;
-          background: rgba(0, 0, 0, 0.2);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 8px;
-          color: white;
-          font-size: 14px;
-          transition: all 0.2s ease;
-        }
-
-        .input-with-icon input:focus {
-          border-color: var(--accent-primary);
-          outline: none;
-          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-        }
-
-        .reveal-btn {
-          position: absolute;
-          right: 14px;
-          background: none;
-          border: none;
-          color: var(--text-muted);
-          cursor: pointer;
-          padding: 0;
-        }
-
-        .reveal-btn:hover {
-          color: white;
-        }
-
-        /* Discord OAuth Button */
-        .btn-discord-login {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          padding: 14px;
-          background: #5865F2;
-          border: none;
-          border-radius: 10px;
-          color: white;
-          font-size: 15px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          font-family: inherit;
-          box-shadow: 0 4px 15px rgba(88,101,242,0.3);
-        }
-        .btn-discord-login:hover:not(:disabled) {
-          background: #4752C4;
-          transform: translateY(-1px);
-          box-shadow: 0 6px 20px rgba(88,101,242,0.4);
-        }
-        .btn-discord-login:active:not(:disabled) {
-          transform: translateY(0);
-        }
-        .btn-discord-login:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-        }
-
-        /* Or Divider */
-        .auth-divider {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          color: var(--text-muted);
-          font-size: 12px;
-        }
-        .auth-divider::before, .auth-divider::after {
-          content: '';
-          flex: 1;
-          height: 1px;
-          background: rgba(255,255,255,0.06);
-        }
-        .auth-divider span {
-          text-transform: uppercase;
+        .status-header-title {
+          font-size: 11px;
+          font-weight: 800;
           letter-spacing: 0.1em;
-          font-weight: 500;
+          color: #71717A;
         }
 
-        /* Spin animation */
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .spin { animation: spin 1s linear infinite; }
-
-        .login-submit {
-          width: 100%;
-          padding: 12px;
-          font-size: 14px;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.1);
-          color: white;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
-          font-family: inherit;
+        .live-dot-green {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #16A34A;
+          box-shadow: 0 0 8px #16A34A;
         }
 
-        .login-submit:hover {
-          transform: translateY(-1px);
-          background: rgba(255,255,255,0.1);
-        }
-
-        .login-submit:active {
-          transform: translateY(1px);
-        }
-
-        .login-footer {
-          display: flex;
-          justify-content: space-between;
-          font-size: 12px;
-          color: var(--text-muted);
-          border-top: 1px solid rgba(255, 255, 255, 0.05);
-          padding-top: 20px;
-        }
-
-        .login-loading-state {
+        .status-metrics-body {
           display: flex;
           flex-direction: column;
+          gap: 10px;
+        }
+
+        .status-stat-row {
+          display: flex;
+          justify-content: space-between;
           align-items: center;
+        }
+
+        .stat-row-label {
+          font-size: 13px;
+          color: #52525B;
+        }
+
+        .stat-row-val {
+          font-size: 18px;
+          font-weight: 800;
+          color: #09090B;
+          font-family: 'JetBrains Mono', monospace;
+        }
+
+        .text-green {
+          color: #16A34A !important;
+        }
+
+        .status-rule-line {
+          height: 1px;
+          background: #F4F4F5;
+          margin: 6px 0;
+        }
+
+        .status-item-line {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 13px;
+          color: #52525B;
+        }
+
+        .status-pill-ok {
+          margin-left: auto;
+          font-size: 12px;
+          font-weight: 600;
+          color: #16A34A;
+        }
+
+        .status-loading-box {
+          display: flex;
           justify-content: center;
-          height: 250px;
+          padding: 20px;
+          color: #71717A;
+        }
+
+        /* ── RIGHT AUTH PANEL ────────────────────────────────────── */
+        .auth-card {
+          background: #FFFFFF;
+          border: 1px solid #E4E4E7;
+          border-radius: 18px;
+          padding: 36px 32px;
+          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.06);
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+
+        .auth-card-top {
           text-align: center;
         }
 
-        .success-mark {
+        .auth-card-logo {
+          width: 44px;
+          height: 44px;
+          border-radius: 10px;
+          object-fit: contain;
+          margin-bottom: 14px;
+        }
+
+        .auth-card-title {
+          font-size: 22px;
+          font-weight: 800;
+          color: #09090B;
+          margin: 0 0 6px;
+        }
+
+        .auth-card-subtitle {
+          font-size: 13px;
+          color: #71717A;
+          margin: 0;
+          line-height: 1.5;
+        }
+
+        .login-error-alert {
+          display: flex;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 8px;
+          background: #FEE2E2;
+          border: 1px solid #FECACA;
+          color: #B91C1C;
+          font-size: 12px;
+        }
+
+        .auth-buttons-group {
           display: flex;
           flex-direction: column;
+          gap: 14px;
+        }
+
+        .btn-discord-auth {
+          display: flex;
           align-items: center;
-          gap: 12px;
+          justify-content: center;
+          gap: 10px;
+          padding: 14px 20px;
+          border-radius: 10px;
+          border: 1px solid #09090B;
+          background: #09090B;
+          color: #FFFFFF;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-discord-auth:hover {
+          background: #27272A;
+          transform: translateY(-1px);
+        }
+
+        .or-divider {
+          display: flex;
+          align-items: center;
+          text-align: center;
+          color: #A1A1AA;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .or-divider::before, .or-divider::after {
+          content: '';
+          flex: 1;
+          border-bottom: 1px solid #E4E4E7;
+        }
+
+        .or-divider span {
+          padding: 0 10px;
+        }
+
+        .btn-local-auth {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          padding: 12px 20px;
+          border-radius: 10px;
+          border: 1px solid #E4E4E7;
+          background: #FFFFFF;
+          color: #09090B;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .btn-local-auth:hover {
+          background: #F4F4F5;
+          border-color: #09090B;
+        }
+
+        .auth-card-footer {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          font-size: 12px;
+          color: #A1A1AA;
+          border-top: 1px solid #F4F4F5;
+          padding-top: 18px;
+        }
+
+        .auth-card-footer a {
+          color: #71717A;
+          text-decoration: none;
+        }
+
+        .auth-card-footer a:hover {
+          color: #09090B;
+        }
+
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+          .login-layout-wrap {
+            grid-template-columns: 1fr;
+            gap: 40px;
+          }
+          .features-checklist {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </div>
