@@ -352,6 +352,9 @@ export class WebServer {
 
     // Auth endpoints (OAuth Login CSRF protected via signed state with dynamic returnUrl)
     this.app.get('/api/auth/discord/login', (req: Request, res: Response) => {
+      const host = req.get('host') || '';
+      const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+
       let returnUrl: string | undefined = undefined;
       if (typeof req.query.returnUrl === 'string' && req.query.returnUrl) {
         returnUrl = req.query.returnUrl;
@@ -361,14 +364,30 @@ export class WebServer {
         } catch {}
       }
 
-      const host = req.get('host') || '';
-      const isRemote = host.includes('altvr.in') || req.protocol === 'https' || (!host.includes('localhost') && !host.includes('127.0.0.1'));
+      // If no returnUrl provided and remote, default to the live Netlify production dashboard
+      if (!returnUrl && !isLocal) {
+        returnUrl = 'https://ragesecuredashboard.netlify.app';
+      }
+
+      const isRemote = host.includes('altvr.in') || req.protocol === 'https' || !isLocal;
       const redirectUri = isRemote
         ? 'https://apirageoptimisercom.altvr.in/api/auth/discord/callback'
         : OAuthService.getRedirectUri();
 
       const state = OAuthService.generateState(returnUrl);
       const url = OAuthService.getAuthorizationUrl(state, redirectUri);
+
+      // If requested by a browser (direct navigation or link click), automatically redirect to Discord
+      const wantsJson = req.query.format === 'json' || (
+        req.headers.accept &&
+        req.headers.accept.includes('application/json') &&
+        !req.headers.accept.includes('text/html')
+      );
+
+      if (!wantsJson) {
+        return res.redirect(url);
+      }
+
       res.json({ url, state });
     });
 
@@ -380,8 +399,14 @@ export class WebServer {
       const dynamicReturnUrl = OAuthService.extractReturnUrl(state);
       const host = req.get('host') || 'localhost:5000';
       const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
-      const defaultFrontend = isLocal ? 'http://localhost:4680' : `${req.protocol}://${host}`;
-      const frontendUrl = (dynamicReturnUrl || process.env.FRONTEND_URL || defaultFrontend).replace(/\/$/, '');
+      const defaultFrontend = isLocal ? 'http://localhost:4680' : 'https://ragesecuredashboard.netlify.app';
+      let frontendUrl = dynamicReturnUrl || process.env.FRONTEND_URL || defaultFrontend;
+
+      // In production/remote environments, never redirect to localhost or the backend API host
+      if (!isLocal && (frontendUrl.includes('localhost') || frontendUrl.includes('127.0.0.1') || frontendUrl.includes('altvr.in'))) {
+        frontendUrl = 'https://ragesecuredashboard.netlify.app';
+      }
+      frontendUrl = frontendUrl.replace(/\/$/, '');
 
       const isRemote = host.includes('altvr.in') || req.protocol === 'https' || !isLocal;
       const redirectUri = isRemote
