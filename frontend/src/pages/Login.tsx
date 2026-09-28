@@ -57,23 +57,11 @@ export function Login() {
     };
   }, []);
 
-  const handleDiscordLogin = async () => {
+  const handleDiscordLogin = () => {
     setDiscordLoading(true);
     setErrorMsg('');
-    try {
-      const returnUrl = encodeURIComponent(window.location.origin);
-      const res = await fetch(`${API_BASE}/api/auth/discord/login?returnUrl=${returnUrl}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.url && typeof data.url === 'string' && data.url.startsWith('http')) {
-          window.location.href = data.url;
-          return;
-        }
-      }
-      await handleLocalLogin();
-    } catch (err) {
-      await handleLocalLogin();
-    }
+    const returnUrl = encodeURIComponent(window.location.origin);
+    window.location.href = `${API_BASE}/api/auth/discord/login?returnUrl=${returnUrl}`;
   };
 
   const handleLocalLogin = async () => {

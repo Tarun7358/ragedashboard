@@ -31,7 +31,12 @@ export function OAuthCallback({ onSuccess }: { onSuccess: () => void }) {
     }
 
     try {
-      const decoded = JSON.parse(decodeURIComponent(rawData));
+      let decoded: any;
+      try {
+        decoded = JSON.parse(rawData);
+      } catch {
+        decoded = JSON.parse(decodeURIComponent(rawData));
+      }
       const { token, user, managedGuilds, approvals } = decoded;
 
       if (!token || !user) throw new Error('Malformed session data');
@@ -49,12 +54,13 @@ export function OAuthCallback({ onSuccess }: { onSuccess: () => void }) {
         }
         // Fallback navigation in case router or state does not immediately swap
         setTimeout(() => {
-          if (window.location.pathname === '/auth/callback') {
+          if (window.location.pathname.startsWith('/auth/callback')) {
             window.location.replace('/');
           }
-        }, 500);
-      }, 1000);
+        }, 300);
+      }, 700);
     } catch (err: any) {
+      console.error('[OAuthCallback] Parse error:', err);
       setErrorMsg('Failed to process login. Please try again.');
       setStatus('error');
     }

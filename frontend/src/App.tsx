@@ -77,7 +77,7 @@ interface ToastItem {
 
 function App() {
   const isPublicRoute = window.location.pathname === '/public';
-  const [isOAuthCallback, setIsOAuthCallback] = useState(() => window.location.pathname === '/auth/callback');
+  const [isOAuthCallback, setIsOAuthCallback] = useState(() => window.location.pathname.startsWith('/auth/callback'));
   const isDownloadRoute = window.location.pathname === '/download' || window.location.pathname === '/downloads';
   const isTermsRoute = window.location.pathname === '/terms' || window.location.pathname === '/tos';
   const isPrivacyRoute = window.location.pathname === '/privacy' || window.location.pathname === '/privacy-policy';

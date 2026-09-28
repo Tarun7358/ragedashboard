@@ -258,7 +258,8 @@ const COMMANDS_DATA = [
   }
 ];
 
-export function Landing({ onGetStarted }: { onGetStarted: () => void }) {
+export function Landing({ onGetStarted, onOpenDashboard }: { onGetStarted?: () => void; onOpenDashboard?: () => void }) {
+  const handleLaunch = onGetStarted || onOpenDashboard || (() => { window.location.href = '/login'; });
   const [liveStatus, setLiveStatus] = useState<{ latency?: number; online?: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState('anti-nuke');
   const [searchQuery, setSearchQuery] = useState('');
@@ -332,7 +333,7 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void }) {
               <Bot size={15} />
               <span>Invite Bot</span>
             </a>
-            <button onClick={onGetStarted} className="btn-solid-black">
+            <button onClick={handleLaunch} className="btn-solid-black">
               <span>Launch Dashboard</span>
               <ArrowRight size={15} />
             </button>
@@ -378,7 +379,7 @@ export function Landing({ onGetStarted }: { onGetStarted: () => void }) {
             transition={{ duration: 0.7, delay: 0.3 }}
             className="hero-cta-group"
           >
-            <button onClick={onGetStarted} className="hero-primary-btn">
+            <button onClick={handleLaunch} className="hero-primary-btn">
               <span>Open Dashboard</span>
               <ArrowRight size={18} />
             </button>
