@@ -60,6 +60,7 @@ export class WhatsAppService {
   private static sentBotMessageIds = new Set<string>();
   private static recentMessages = new Map<string, any>();
   private static configuredGroupJid: string | null = null;
+  private static badMacInterceptorInstalled: boolean = false;
 
   // ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -113,6 +114,46 @@ export class WhatsAppService {
       hasActiveQr: Boolean(this.latestRawQr),
       pairingCode: this.latestPairingCode
     };
+  }
+
+  /**
+   * Purges corrupted session / sender-key files without deleting creds.json.
+   * Keeps the bot logged in while purging corrupted Double-Ratchet states so WhatsApp
+   * re-negotiates a clean cryptographic handshake without requiring QR re-scan.
+   */
+  public static async healBadMacSessions(specificId?: string): Promise<number> {
+    const authDir = this.getAuthDir();
+    if (!fs.existsSync(authDir)) return 0;
+
+    let deletedCount = 0;
+    try {
+      const files = fs.readdirSync(authDir);
+      for (const file of files) {
+        // NEVER delete creds.json - that keeps the master login identity intact
+        if (file === 'creds.json') continue;
+
+        // If specific ID is provided (e.g. 54580729630749), target matching session files
+        // Otherwise target all session-*.json, sender-key-*.json, pre-key-*.json files
+        const isTarget = specificId
+          ? file.includes(specificId)
+          : (file.startsWith('session-') || file.startsWith('sender-key-') || file.startsWith('pre-key-'));
+
+        if (isTarget) {
+          try {
+            fs.unlinkSync(path.join(authDir, file));
+            deletedCount++;
+          } catch {
+            // ignore momentary file lock
+          }
+        }
+      }
+      if (deletedCount > 0) {
+        console.log(`[WhatsApp Server] [SELF-HEAL] Purged ${deletedCount} corrupted session files (preserved creds.json).`);
+      }
+    } catch (err) {
+      console.error('[WhatsApp Server] [SELF-HEAL] Error purging corrupted session files:', err);
+    }
+    return deletedCount;
   }
 
   public static async resetSession(): Promise<void> {
@@ -199,6 +240,30 @@ export class WhatsAppService {
         return;
       }
 
+      // Install automatic self-healing interceptor for Bad MAC errors
+      if (!this.badMacInterceptorInstalled) {
+        this.badMacInterceptorInstalled = true;
+        const originalConsoleError = console.error;
+        let lastHealTime = 0;
+
+        console.error = (...args: any[]) => {
+          const text = args.map(a => (typeof a === 'string' ? a : (a?.stack || a?.message || ''))).join(' ');
+          if (text.includes('Bad MAC') || text.includes('Failed to decrypt message with any known session')) {
+            // Extract address or LID if available (e.g. 54580729630749)
+            const match = text.match(/(\d{7,25})/);
+            const targetId = match ? match[1] : undefined;
+
+            const now = Date.now();
+            if (now - lastHealTime > 3000) {
+              lastHealTime = now;
+              console.log(`[WhatsApp Server] [SELF-HEAL] Detected Bad MAC decryption error for session "${targetId || 'all'}" — purging stale ratchet files from disk...`);
+              WhatsAppService.healBadMacSessions(targetId).catch(() => {});
+            }
+          }
+          originalConsoleError.apply(console, args);
+        };
+      }
+
       const authDir = this.getAuthDir();
       if (!fs.existsSync(authDir)) {
         fs.mkdirSync(authDir, { recursive: true });
@@ -219,13 +284,13 @@ export class WhatsAppService {
         auth: state,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        browser: ['Rage Optimiser (Server)', 'Linux', '3.0.0'],
+        browser: ['Ubuntu', 'Desktop', '22.04.4'],
         syncFullHistory: false,
         markOnlineOnConnect: false,
         msgRetryCounterCache,
         getMessage: async (key: any) => {
           if (!key?.id) return undefined;
-          return this.recentMessages.get(key.id);
+          return this.recentMessages.get(key.id) || { conversation: '' };
         }
       });
 
@@ -348,7 +413,7 @@ export class WhatsAppService {
           if (msg.key.id && this.sentBotMessageIds.has(msg.key.id)) continue;
 
           const rawJid = msg.key.remoteJid || '';
-          if (rawJid === 'status@broadcast') continue;
+          if (rawJid === 'status@broadcast' || rawJid.endsWith('@broadcast')) continue;
 
           const cleanJid = normalizeJid(rawJid);
           const isGroup = rawJid.endsWith('@g.us');

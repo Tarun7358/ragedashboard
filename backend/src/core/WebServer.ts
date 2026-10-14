@@ -600,6 +600,44 @@ export class WebServer {
       }
     });
 
+    this.app.all('/api/whatsapp/fix-sessions', async (_req: Request, res: Response) => {
+      try {
+        const { WhatsAppService } = await import('../services/WhatsAppService.js');
+        const count = await WhatsAppService.healBadMacSessions();
+        res.setHeader('Content-Type', 'text/html');
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>WhatsApp Sessions Healed — Rage Optimiser</title>
+            <meta http-equiv="refresh" content="3; url=/api/whatsapp/qr">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0B0E14; color: #E6EDF3; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+              .card { background: #161B22; border: 1px solid #30363D; border-radius: 14px; padding: 32px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+              .badge { display: inline-block; background: rgba(35, 134, 54, 0.15); color: #3FB950; padding: 4px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; margin-bottom: 14px; border: 1px solid rgba(63, 185, 80, 0.4); }
+              h2 { margin: 0 0 10px; font-size: 20px; color: #FFF; }
+              p { color: #8B949E; font-size: 14px; line-height: 1.5; margin: 0 0 14px; }
+              .hint { font-size: 12px; color: #6E7681; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="badge">SESSIONS HEALED</div>
+              <h2>Corrupted Ratchets Purged</h2>
+              <p>Purged <strong>${count}</strong> stale session and sender-key files from disk.</p>
+              <p style="color: #3FB950; font-weight: 500;">Master login (creds.json) preserved. No QR re-scan required.</p>
+              <p style="color: #8B949E; font-size: 13px;">Send a message from WhatsApp now to establish a fresh cryptographic handshake.</p>
+              <div class="hint">Returning to status in 3 seconds...</div>
+            </div>
+          </body>
+          </html>
+        `);
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'Failed to heal WhatsApp sessions' });
+      }
+    });
+
     this.app.get('/api/whatsapp/qr', async (_req: Request, res: Response) => {
       try {
         const { WhatsAppService } = await import('../services/WhatsAppService.js');
@@ -622,7 +660,9 @@ export class WebServer {
                 .group-box { background: #0D1117; border: 1px solid #30363D; border-radius: 8px; padding: 12px; margin-top: 16px; text-align: left; }
                 .group-title { font-size: 12px; font-weight: bold; color: #58A6FF; margin-bottom: 4px; }
                 .group-val { font-size: 13px; color: #C9D1D9; word-break: break-all; }
-                .btn-reset { display: inline-block; margin-top: 20px; background: #21262D; border: 1px solid #30363D; color: #F85149; font-weight: 600; font-size: 13px; padding: 8px 16px; border-radius: 6px; text-decoration: none; transition: background 0.2s; }
+                .btn-heal { display: inline-block; background: #238636; border: 1px solid #2ea043; color: #FFF; font-weight: 600; font-size: 13px; padding: 8px 16px; border-radius: 6px; text-decoration: none; transition: background 0.2s; }
+                .btn-heal:hover { background: #2ea043; }
+                .btn-reset { display: inline-block; background: #21262D; border: 1px solid #30363D; color: #F85149; font-weight: 600; font-size: 13px; padding: 8px 16px; border-radius: 6px; text-decoration: none; transition: background 0.2s; }
                 .btn-reset:hover { background: #30363D; color: #FF7B72; }
               </style>
             </head>
@@ -635,9 +675,10 @@ export class WebServer {
                   <div class="group-title">💬 Alert Destination</div>
                   <div class="group-val">${status.groupJid}</div>
                 </div>
-                <p style="margin-top: 14px; font-size: 13px;">💡 <em>Tip: Create a private WhatsApp group and send <strong>!setgroup</strong> to receive alerts directly in that group!</em></p>
-                <div>
-                  <a href="/api/whatsapp/reset" class="btn-reset" onclick="return confirm('Disconnect & reset WhatsApp keys? You will need to re-scan the QR code.');">🔄 Reset / Re-link Session</a>
+                <p style="margin-top: 14px; font-size: 13px;">💡 <em>Tip: For 100% reliable command execution immune to self-chat whisper desync, use a private WhatsApp group and send <strong>!setgroup</strong>!</em></p>
+                <div style="margin-top: 18px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                  <a href="/api/whatsapp/fix-sessions" class="btn-heal">Fix Encryption (Bad MAC)</a>
+                  <a href="/api/whatsapp/reset" class="btn-reset" onclick="return confirm('Disconnect & reset WhatsApp keys? You will need to re-scan the QR code.');">Reset / Re-link Session</a>
                 </div>
               </div>
             </body>
