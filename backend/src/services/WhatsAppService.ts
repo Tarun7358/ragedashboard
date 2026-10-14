@@ -116,7 +116,7 @@ export class WhatsAppService {
   }
 
   public static async resetSession(): Promise<void> {
-    console.log('[WhatsApp Server] 🔄 Resetting WhatsApp session (clearing corrupt keys/ratchets)...');
+    console.log('[WhatsApp Server] [RESET] Resetting WhatsApp session (clearing corrupt keys/ratchets)...');
     await this.shutdown();
     const authDir = this.getAuthDir();
     if (fs.existsSync(authDir)) {
@@ -170,7 +170,7 @@ export class WhatsAppService {
 
     const ownerNumber = this.getOwnerNumber();
     if (!ownerNumber) {
-      console.warn('[WhatsApp] ⚠️ WHATSAPP_ENABLED is true, but WHATSAPP_OWNER_NUMBER is not set.');
+      console.warn('[WhatsApp] [WARN] WHATSAPP_ENABLED is true, but WHATSAPP_OWNER_NUMBER is not set.');
       return;
     }
 
@@ -193,8 +193,8 @@ export class WhatsAppService {
         pino = (await import('pino')).default;
         qrcode = (await import('qrcode-terminal')).default;
       } catch (modErr) {
-        console.warn('⚠️ [WhatsApp] Optional packages (@whiskeysockets/baileys, pino, qrcode-terminal) not found.');
-        console.warn('⚠️ [WhatsApp] Run `npm install` in your backend directory to activate the WhatsApp hotline.');
+        console.warn('[WhatsApp] [WARN] Optional packages (@whiskeysockets/baileys, pino, qrcode-terminal) not found.');
+        console.warn('[WhatsApp] [WARN] Run `npm install` in your backend directory to activate the WhatsApp hotline.');
         this.isInitializing = false;
         return;
       }
@@ -243,7 +243,7 @@ export class WhatsAppService {
             const code = await sock.requestPairingCode(ownerNumber);
             this.latestPairingCode = code;
             console.log('\n======================================================');
-            console.log(`📱 [WhatsApp Server Hotline] 8-DIGIT PAIRING CODE: ${code}`);
+            console.log(`[WhatsApp Server Hotline] [PAIRING CODE] 8-DIGIT PAIRING CODE: ${code}`);
             console.log(`In WhatsApp: Linked Devices > Link with phone number instead`);
             console.log(`Enter the code above (No camera scanning needed!)`);
             console.log('======================================================\n');
@@ -261,7 +261,7 @@ export class WhatsAppService {
           this.latestRawQr = qr;
           // Display in terminal for direct terminal viewers
           console.log('\n======================================================');
-          console.log('📱 [WhatsApp Server Hotline] QR CODE GENERATED:');
+          console.log('[WhatsApp Server Hotline] [QR CODE] QR CODE GENERATED:');
           console.log('Scan via Terminal OR open your browser at: /api/whatsapp/qr');
           qrcode.generate(qr, { small: true });
           console.log('======================================================\n');
@@ -313,14 +313,16 @@ export class WhatsAppService {
           this.reconnectAttempts = 0;
           this.latestRawQr = null;
           this.latestPairingCode = null;
-          console.log(`[WhatsApp Server] ✅ Hotline connected! Active for owner: +${ownerNumber}`);
+          console.log(`[WhatsApp Server] [ONLINE] Hotline connected! Active for owner: +${ownerNumber}`);
 
           // Send welcome handshake to owner
           this.sendAlert(
-            `🟢 *RAGE OPTIMISER (SERVER) — HOTLINE ONLINE*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `Your Linux server WhatsApp hotline is active.\n` +
-            `Type *!help* or *!stats* anytime for server metrics.`
+            `> *[RAGE OPTIMISER — HOTLINE ONLINE]*\n` +
+            `────────────────────────────\n` +
+            `Server WhatsApp hotline connected.\n` +
+            `Active Owner: +${ownerNumber}\n` +
+            `────────────────────────────\n` +
+            `_Type *!help* or *!stats* for system controls._`
           ).catch(() => { });
         }
       });
@@ -380,7 +382,7 @@ export class WhatsAppService {
 
           const trimmed = rawText.trim();
           if (trimmed.startsWith('!')) {
-            console.log(`[WhatsApp Server] 📩 Executing owner command: "${trimmed}" in ${rawJid}`);
+            console.log(`[WhatsApp Server] [COMMAND] Executing owner command: "${trimmed}" in ${rawJid}`);
             // Reply directly in the same conversation (group -> group, DM -> DM)
             await this.handleOwnerCommand(trimmed, rawJid);
           }
@@ -406,14 +408,14 @@ export class WhatsAppService {
         case '!help':
         case '!menu': {
           const helpText =
-            `🤖 *RAGE OPTIMISER — MASTER HOTLINE COMMANDS*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `📊 *MONITORING & METRICS*\n` +
+            `> *[RAGE OPTIMISER — MASTER HOTLINE CONSOLE]*\n` +
+            `────────────────────────────\n` +
+            `*MONITORING & METRICS*\n` +
             `• *!stats* — Server uptime, RAM, latency & member counts\n` +
             `• *!security* — Anti-Nuke state & quarantined count\n` +
             `• *!tickets* — Active support tickets summary\n` +
             `• *!ping* — Discord gateway & hotline latency check\n\n` +
-            `🛡️ *EMERGENCY & DEFENSE*\n` +
+            `*EMERGENCY & DEFENSE*\n` +
             `• *!lockdown [reason]* — Lock all text channels\n` +
             `• *!unlock* — Lift emergency lockdown\n` +
             `• *!ban <userId> [reason]* — Ban member from Discord\n` +
@@ -425,39 +427,41 @@ export class WhatsAppService {
             `• *!unquarantine <userId>* — Restore roles & release\n` +
             `• *!whitelist <add/remove> <userId>* — Anti-Nuke whitelist\n` +
             `• *!raid <on/off>* — Toggle high-threat join protection\n\n` +
-            `📢 *BROADCAST & ANNOUNCEMENTS*\n` +
+            `*BROADCAST & ANNOUNCEMENTS*\n` +
             `• *!say <#channel> <message>* — Send message to Discord\n` +
             `• *!embed <#channel> <title> | <desc>* — Send rich embed\n\n` +
-            `🎫 *TICKETS*\n` +
+            `*TICKETS*\n` +
             `• *!closeticket <id> [reason]* — Close & delete ticket\n` +
             `• *!ticketinfo <id>* — View ticket creator & details\n\n` +
-            `💾 *BACKUPS & RECOVERY*\n` +
+            `*BACKUPS & RECOVERY*\n` +
             `• *!backup* — Snapshot channels, roles & permissions\n` +
             `• *!backups* — List saved server snapshots\n\n` +
-            `🔍 *INTELLIGENCE LOOKUPS*\n` +
+            `*INTELLIGENCE LOOKUPS*\n` +
             `• *!whois <userId>* — Account age, join date & roles\n` +
             `• *!logs [count]* — View recent Discord audit logs\n\n` +
-            `⚙️ *SYSTEM CONTROL*\n` +
+            `*SYSTEM CONTROL*\n` +
             `• *!setgroup* — Bind current group for all alerts\n` +
             `• *!clearcache* — Free RAM & purge message cache\n` +
             `• *!restart* — Reboot bot process on host\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+            `────────────────────────────\n` +
+            `_Type any command above directly in this chat._`;
           await this.sendRaw(replyJid, helpText);
           break;
         }
 
         case '!setgroup': {
           if (!replyJid.endsWith('@g.us')) {
-            await this.sendRaw(replyJid, '⚠️ *!setgroup* must be used inside a WhatsApp group.');
+            await this.sendRaw(replyJid, '[USAGE] !setgroup must be executed inside a WhatsApp group.');
             return;
           }
           this.configuredGroupJid = replyJid;
           await this.sendRaw(
             replyJid,
-            `✅ *[HOTLINE GROUP CONFIGURED]*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `This group is now set as the official alert channel.\n` +
-            `All anti-nuke alerts, ticket pings, and security notices will be sent here!`
+            `> *[HOTLINE GROUP CONFIGURED]*\n` +
+            `────────────────────────────\n` +
+            `This group is now set as the primary alert channel.\n` +
+            `All anti-nuke alerts, ticket pings, and security notices will be routed here.\n` +
+            `────────────────────────────`
           );
           break;
         }
@@ -467,7 +471,8 @@ export class WhatsAppService {
           const pingStr = discordPing >= 0 ? `${discordPing}ms` : 'Connecting';
           await this.sendRaw(
             replyJid,
-            `🏓 *PONG!* Latency: *${pingStr}*\nWhatsApp Hotline: *ACTIVE & SECURE*`
+            `> *[PONG]* Latency: *${pingStr}*\n` +
+            `Hotline Status: *CONNECTED & SECURE*`
           );
           break;
         }
@@ -492,16 +497,16 @@ export class WhatsAppService {
           }
 
           const statsText =
-            `🤖 *RAGE OPTIMISER — LIVE SYSTEM METRICS*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `⏱️ *Uptime:* ${metrics.uptime}\n` +
-            `📡 *Discord Latency:* ${metrics.latency}ms\n` +
-            `💾 *RAM (RSS):* ${rssMB} MB (Heap: ${heapMB} MB)\n` +
-            `🏛️ *Guilds:* ${guildCount}\n` +
-            `👥 *Total Members:* ${memberCount.toLocaleString()}\n` +
-            `🎫 *Open Tickets:* ${openTickets}\n` +
-            `🟢 *Core Status:* ONLINE & PROTECTED\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+            `> *[LIVE SYSTEM METRICS]*\n` +
+            `────────────────────────────\n` +
+            `*Uptime:* ${metrics.uptime}\n` +
+            `*Discord Latency:* ${metrics.latency}ms\n` +
+            `*RAM (RSS):* ${rssMB} MB (Heap: ${heapMB} MB)\n` +
+            `*Guilds:* ${guildCount}\n` +
+            `*Total Members:* ${memberCount.toLocaleString()}\n` +
+            `*Open Tickets:* ${openTickets}\n` +
+            `*Status:* ONLINE & PROTECTED\n` +
+            `────────────────────────────`;
           await this.sendRaw(replyJid, statsText);
           break;
         }
@@ -512,31 +517,31 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!guildId || !this.moduleRegistry) {
-            await this.sendRaw(replyJid, `⚠️ Security module state not ready or guild not cached.`);
+            await this.sendRaw(replyJid, '[NOTICE] Security module state not ready or guild not cached.');
             return;
           }
 
           const secMod = this.moduleRegistry.getModulesState(guildId)?.find((m: any) => m.id === 'security');
           const cfg = secMod?.config || {};
 
-          const antiNuke = cfg.antiNukeEnabled !== false ? '✅ Active' : '❌ Inactive';
-          const raidMode = cfg.raidModeEnabled ? '🚨 RAID MODE ENABLED' : '🟢 Normal';
-          const emergency = cfg.emergencyMode ? '🛑 EMERGENCY LOCKED' : '🟢 Normal';
+          const antiNuke = cfg.antiNukeEnabled !== false ? 'ACTIVE' : 'INACTIVE';
+          const raidMode = cfg.raidModeEnabled ? 'RAID MODE ENABLED' : 'NORMAL';
+          const emergency = cfg.emergencyMode ? 'EMERGENCY LOCKED' : 'NORMAL';
           const quarantineCount = (cfg.quarantinedUsers || []).length;
-          const antiSpam = cfg.antiSpamEnabled ? 'Enabled' : 'Disabled';
-          const antiLink = cfg.antiLinkEnabled ? 'Enabled' : 'Disabled';
+          const antiSpam = cfg.antiSpamEnabled ? 'ENABLED' : 'DISABLED';
+          const antiLink = cfg.antiLinkEnabled ? 'ENABLED' : 'DISABLED';
 
           const secText =
-            `🛡️ *SECURITY & ANTI-NUKE OVERVIEW*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `🏛️ *Server:* ${guild?.name || 'Clutch Nation'}\n` +
-            `🛡️ *Anti-Nuke:* ${antiNuke}\n` +
-            `⚡ *Raid Mode:* ${raidMode}\n` +
-            `🔒 *Emergency Lock:* ${emergency}\n` +
-            `🛑 *Quarantined Users:* ${quarantineCount}\n` +
-            `🚫 *Anti-Spam Filter:* ${antiSpam}\n` +
-            `🔗 *Anti-Link Filter:* ${antiLink}\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+            `> *[SECURITY & DEFENSE OVERVIEW]*\n` +
+            `────────────────────────────\n` +
+            `*Server:* ${guild?.name || 'Clutch Nation'}\n` +
+            `*Anti-Nuke:* ${antiNuke}\n` +
+            `*Raid Mode:* ${raidMode}\n` +
+            `*Emergency Lock:* ${emergency}\n` +
+            `*Quarantined Accounts:* ${quarantineCount}\n` +
+            `*Anti-Spam Filter:* ${antiSpam}\n` +
+            `*Anti-Link Filter:* ${antiLink}\n` +
+            `────────────────────────────`;
           await this.sendRaw(replyJid, secText);
           break;
         }
@@ -546,7 +551,7 @@ export class WhatsAppService {
           const guildId = process.env.GUILD_ID || client?.guilds?.cache?.first()?.id;
 
           if (!guildId || !this.moduleRegistry) {
-            await this.sendRaw(replyJid, `⚠️ Ticket registry not available.`);
+            await this.sendRaw(replyJid, '[NOTICE] Ticket registry not available.');
             return;
           }
 
@@ -556,19 +561,20 @@ export class WhatsAppService {
           if (activeList.length === 0) {
             await this.sendRaw(
               replyJid,
-              `🎫 *SUPPORT TICKETS*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n✅ No open tickets. All clear!`
+              `> *[SUPPORT TICKETS]*\n────────────────────────────\nNo open tickets. All clear.`
             );
             return;
           }
 
           let summary =
-            `🎫 *ACTIVE SUPPORT TICKETS (${activeList.length})*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            `> *[ACTIVE SUPPORT TICKETS: ${activeList.length}]*\n` +
+            `────────────────────────────\n`;
 
           const recent = activeList.slice(-5);
           for (const t of recent) {
-            summary += `• *#${t.id.replace('ticket_', '')}* | *${t.category || 'General'}*\n  👤 ${t.userTag}: "${(t.subject || 'No subject').slice(0, 40)}"\n`;
+            summary += `• *#${t.id.replace('ticket_', '')}* | *${t.category || 'General'}*\n  User: ${t.userTag}\n  Subject: "${(t.subject || 'No subject').slice(0, 40)}"\n`;
           }
+          summary += `────────────────────────────`;
 
           await this.sendRaw(replyJid, summary);
           break;
@@ -581,7 +587,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!guild || !this.moduleRegistry) {
-            await this.sendRaw(replyJid, `❌ Failed to initiate lockdown: Guild not found.`);
+            await this.sendRaw(replyJid, '[ERROR] Failed to initiate lockdown: Guild not found.');
             return;
           }
 
@@ -603,13 +609,14 @@ export class WhatsAppService {
 
           await this.sendRaw(
             replyJid,
-            `🛑 *EMERGENCY LOCKDOWN ENGAGED!*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `🏛️ *Server:* ${guild.name}\n` +
-            `🔒 *Channels Locked:* ${lockedCount}\n` +
-            `⚡ *Raid Mode:* FORCED ON\n` +
-            `📝 *Reason:* ${reason}\n` +
-            `Type *!unlock* when the incident is resolved.`
+            `> *[EMERGENCY LOCKDOWN ENGAGED]*\n` +
+            `────────────────────────────\n` +
+            `*Server:* ${guild.name}\n` +
+            `*Channels Locked:* ${lockedCount}\n` +
+            `*Raid Mode:* FORCED ON\n` +
+            `*Reason:* ${reason}\n` +
+            `────────────────────────────\n` +
+            `_Type *!unlock* when the incident is resolved._`
           );
           break;
         }
@@ -620,7 +627,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!guild || !this.moduleRegistry) {
-            await this.sendRaw(replyJid, `❌ Failed to lift lockdown: Guild not found.`);
+            await this.sendRaw(replyJid, '[ERROR] Failed to lift lockdown: Guild not found.');
             return;
           }
 
@@ -641,11 +648,12 @@ export class WhatsAppService {
 
           await this.sendRaw(
             replyJid,
-            `🟢 *EMERGENCY LOCKDOWN LIFTED*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `🏛️ *Server:* ${guild.name}\n` +
-            `🔓 *Channels Restored:* ${restoredCount}\n` +
-            `⚡ *Raid Mode:* RESTORED TO NORMAL`
+            `> *[EMERGENCY LOCKDOWN LIFTED]*\n` +
+            `────────────────────────────\n` +
+            `*Server:* ${guild.name}\n` +
+            `*Channels Restored:* ${restoredCount}\n` +
+            `*Raid Mode:* RESTORED TO NORMAL\n` +
+            `────────────────────────────`
           );
           break;
         }
@@ -660,7 +668,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!targetId || !guild) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!ban <userId> [reason]*');
+            await this.sendRaw(replyJid, '[USAGE] !ban <userId> [reason]');
             return;
           }
 
@@ -668,14 +676,15 @@ export class WhatsAppService {
             await guild.members.ban(targetId, { reason });
             await this.sendRaw(
               replyJid,
-              `🔨 *[MEMBER BANNED FROM DISCORD]*\n` +
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-              `👤 *User ID:* \`${targetId}\`\n` +
-              `🏛️ *Server:* ${guild.name}\n` +
-              `📝 *Reason:* ${reason}`
+              `> *[MEMBER BANNED]*\n` +
+              `────────────────────────────\n` +
+              `*User ID:* \`${targetId}\`\n` +
+              `*Server:* ${guild.name}\n` +
+              `*Reason:* ${reason}\n` +
+              `────────────────────────────`
             );
           } catch (banErr: any) {
-            await this.sendRaw(replyJid, `❌ Failed to ban \`${targetId}\`: ${banErr?.message || 'Permission error'}`);
+            await this.sendRaw(replyJid, `[ERROR] Failed to ban \`${targetId}\`: ${banErr?.message || 'Permission error'}`);
           }
           break;
         }
@@ -687,15 +696,15 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!targetId || !guild) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!unban <userId>*');
+            await this.sendRaw(replyJid, '[USAGE] !unban <userId>');
             return;
           }
 
           try {
             await guild.bans.remove(targetId, 'Unbanned via WhatsApp Hotline');
-            await this.sendRaw(replyJid, `🟢 *[USER UNBANNED]*\nUser ID \`${targetId}\` unbanned successfully.`);
+            await this.sendRaw(replyJid, `> *[USER UNBANNED]*\nUser ID \`${targetId}\` unbanned successfully.`);
           } catch (unbanErr: any) {
-            await this.sendRaw(replyJid, `❌ Failed to unban: ${unbanErr?.message || 'Ban not found'}`);
+            await this.sendRaw(replyJid, `[ERROR] Failed to unban: ${unbanErr?.message || 'Ban not found'}`);
           }
           break;
         }
@@ -708,7 +717,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!targetId || !guild) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!kick <userId> [reason]*');
+            await this.sendRaw(replyJid, '[USAGE] !kick <userId> [reason]');
             return;
           }
 
@@ -717,13 +726,14 @@ export class WhatsAppService {
             await member.kick(reason);
             await this.sendRaw(
               replyJid,
-              `👢 *[MEMBER KICKED]*\n` +
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-              `👤 *User:* ${member.user.tag} (\`${targetId}\`)\n` +
-              `📝 *Reason:* ${reason}`
+              `> *[MEMBER KICKED]*\n` +
+              `────────────────────────────\n` +
+              `*User:* ${member.user.tag} (\`${targetId}\`)\n` +
+              `*Reason:* ${reason}\n` +
+              `────────────────────────────`
             );
           } catch (kickErr: any) {
-            await this.sendRaw(replyJid, `❌ Failed to kick: ${kickErr?.message || 'Member not found or higher role'}`);
+            await this.sendRaw(replyJid, `[ERROR] Failed to kick: ${kickErr?.message || 'Member not found or higher role'}`);
           }
           break;
         }
@@ -738,7 +748,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!targetId || !guild) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!timeout <userId> [minutes] [reason]*');
+            await this.sendRaw(replyJid, '[USAGE] !timeout <userId> [minutes] [reason]');
             return;
           }
 
@@ -747,14 +757,15 @@ export class WhatsAppService {
             await member.timeout(minutes * 60 * 1000, reason);
             await this.sendRaw(
               replyJid,
-              `⏳ *[MEMBER TIMED OUT]*\n` +
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-              `👤 *User:* ${member.user.tag} (\`${targetId}\`)\n` +
-              `⏱️ *Duration:* ${minutes} minute(s)\n` +
-              `📝 *Reason:* ${reason}`
+              `> *[MEMBER TIMED OUT]*\n` +
+              `────────────────────────────\n` +
+              `*User:* ${member.user.tag} (\`${targetId}\`)\n` +
+              `*Duration:* ${minutes} minute(s)\n` +
+              `*Reason:* ${reason}\n` +
+              `────────────────────────────`
             );
           } catch (tErr: any) {
-            await this.sendRaw(replyJid, `❌ Failed to timeout: ${tErr?.message || 'Error or higher role'}`);
+            await this.sendRaw(replyJid, `[ERROR] Failed to timeout: ${tErr?.message || 'Error or higher role'}`);
           }
           break;
         }
@@ -767,16 +778,16 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!targetId || !guild) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!untimeout <userId>*');
+            await this.sendRaw(replyJid, '[USAGE] !untimeout <userId>');
             return;
           }
 
           try {
             const member = await guild.members.fetch(targetId);
             await member.timeout(null, 'Timeout lifted via WhatsApp');
-            await this.sendRaw(replyJid, `🟢 *[TIMEOUT REMOVED]*\nTimeout lifted for ${member.user.tag} (\`${targetId}\`).`);
+            await this.sendRaw(replyJid, `> *[TIMEOUT REMOVED]*\nTimeout lifted for ${member.user.tag} (\`${targetId}\`).`);
           } catch (tErr: any) {
-            await this.sendRaw(replyJid, `❌ Failed: ${tErr?.message}`);
+            await this.sendRaw(replyJid, `[ERROR] Failed: ${tErr?.message}`);
           }
           break;
         }
@@ -789,7 +800,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!targetId || !guild || !this.moduleRegistry) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!quarantine <userId> [reason]*');
+            await this.sendRaw(replyJid, '[USAGE] !quarantine <userId> [reason]');
             return;
           }
 
@@ -824,14 +835,15 @@ export class WhatsAppService {
             this.moduleRegistry.updateModuleConfig(guildId, 'security', { quarantinedUsers });
             await this.sendRaw(
               replyJid,
-              `🛑 *[MEMBER ISOLATED IN QUARANTINE]*\n` +
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-              `👤 *User:* ${member.user.tag} (\`${targetId}\`)\n` +
-              `🔒 *Roles Stripped:* ${originalRoleIds.length}\n` +
-              `📝 *Reason:* ${reason}`
+              `> *[MEMBER QUARANTINED]*\n` +
+              `────────────────────────────\n` +
+              `*User:* ${member.user.tag} (\`${targetId}\`)\n` +
+              `*Roles Stripped:* ${originalRoleIds.length}\n` +
+              `*Reason:* ${reason}\n` +
+              `────────────────────────────`
             );
           } catch (qErr: any) {
-            await this.sendRaw(replyJid, `❌ Quarantine failed: ${qErr?.message}`);
+            await this.sendRaw(replyJid, `[ERROR] Quarantine failed: ${qErr?.message}`);
           }
           break;
         }
@@ -843,7 +855,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!targetId || !guild || !this.moduleRegistry) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!unquarantine <userId>*');
+            await this.sendRaw(replyJid, '[USAGE] !unquarantine <userId>');
             return;
           }
 
@@ -869,12 +881,14 @@ export class WhatsAppService {
 
             await this.sendRaw(
               replyJid,
-              `🟢 *[MEMBER RELEASED FROM QUARANTINE]*\n` +
-              `👤 *User:* ${member.user.tag} (\`${targetId}\`)\n` +
-              `Roles successfully restored.`
+              `> *[MEMBER RELEASED]*\n` +
+              `────────────────────────────\n` +
+              `*User:* ${member.user.tag} (\`${targetId}\`)\n` +
+              `Roles successfully restored.\n` +
+              `────────────────────────────`
             );
           } catch (uqErr: any) {
-            await this.sendRaw(replyJid, `❌ Unquarantine failed: ${uqErr?.message}`);
+            await this.sendRaw(replyJid, `[ERROR] Unquarantine failed: ${uqErr?.message}`);
           }
           break;
         }
@@ -886,7 +900,7 @@ export class WhatsAppService {
           const guildId = process.env.GUILD_ID || client?.guilds?.cache?.first()?.id;
 
           if (!guildId || !this.moduleRegistry || (sub !== 'add' && sub !== 'remove') || !targetId) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!whitelist add <userId>* OR *!whitelist remove <userId>*');
+            await this.sendRaw(replyJid, '[USAGE] !whitelist add <userId> OR !whitelist remove <userId>');
             return;
           }
 
@@ -897,11 +911,11 @@ export class WhatsAppService {
           if (sub === 'add') {
             if (!list.includes(targetId)) list.push(targetId);
             this.moduleRegistry.updateModuleConfig(guildId, 'security', { whitelistedUsers: list });
-            await this.sendRaw(replyJid, `🛡️ *[WHITELIST UPDATED]*\nUser \`${targetId}\` added to Anti-Nuke Whitelist.`);
+            await this.sendRaw(replyJid, `> *[WHITELIST UPDATED]*\nUser \`${targetId}\` added to Anti-Nuke Whitelist.`);
           } else {
             list = list.filter((id: string) => id !== targetId);
             this.moduleRegistry.updateModuleConfig(guildId, 'security', { whitelistedUsers: list });
-            await this.sendRaw(replyJid, `🛡️ *[WHITELIST UPDATED]*\nUser \`${targetId}\` removed from Anti-Nuke Whitelist.`);
+            await this.sendRaw(replyJid, `> *[WHITELIST UPDATED]*\nUser \`${targetId}\` removed from Anti-Nuke Whitelist.`);
           }
           break;
         }
@@ -912,12 +926,12 @@ export class WhatsAppService {
           const guildId = process.env.GUILD_ID || client?.guilds?.cache?.first()?.id;
 
           if (mode !== 'on' && mode !== 'off') {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!raid on* OR *!raid off*');
+            await this.sendRaw(replyJid, '[USAGE] !raid on OR !raid off');
             return;
           }
 
           if (!guildId || !this.moduleRegistry) {
-            await this.sendRaw(replyJid, '⚠️ Security module not available.');
+            await this.sendRaw(replyJid, '[ERROR] Security module not available.');
             return;
           }
 
@@ -928,8 +942,8 @@ export class WhatsAppService {
           await this.sendRaw(
             replyJid,
             isEnabled
-              ? `⚡ *[RAID MODE ENGAGED]*\nHigh-threat join protection is now ACTIVE on Discord.`
-              : `🟢 *[RAID MODE DEACTIVATED]*\nRaid defense returned to normal mode.`
+              ? `> *[RAID MODE ENGAGED]*\nHigh-threat join protection is now ACTIVE on Discord.`
+              : `> *[RAID MODE DEACTIVATED]*\nRaid defense returned to normal mode.`
           );
           break;
         }
@@ -944,7 +958,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!chanTarget || !message || !guild) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!say <#channel or channelId> <message>*');
+            await this.sendRaw(replyJid, '[USAGE] !say <#channel or channelId> <message>');
             return;
           }
 
@@ -952,15 +966,15 @@ export class WhatsAppService {
             guild.channels.cache.find((c: any) => c.name.toLowerCase() === chanTarget.toLowerCase() && c.isTextBased());
 
           if (!channel || !channel.isTextBased()) {
-            await this.sendRaw(replyJid, `❌ Text channel "${chanTarget}" not found.`);
+            await this.sendRaw(replyJid, `[ERROR] Text channel "${chanTarget}" not found.`);
             return;
           }
 
           try {
             await (channel as any).send({ content: message });
-            await this.sendRaw(replyJid, `📢 *[MESSAGE SENT]*\nDispatched to #${channel.name}: "${message.slice(0, 50)}..."`);
+            await this.sendRaw(replyJid, `> *[MESSAGE DISPATCHED]*\nSent to #${channel.name}: "${message.slice(0, 50)}..."`);
           } catch (sendErr: any) {
-            await this.sendRaw(replyJid, `❌ Failed to send message: ${sendErr?.message}`);
+            await this.sendRaw(replyJid, `[ERROR] Failed to send message: ${sendErr?.message}`);
           }
           break;
         }
@@ -975,7 +989,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!chanTarget || !title || !description || !guild) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!embed <#channel> <title> | <message>*');
+            await this.sendRaw(replyJid, '[USAGE] !embed <#channel> <title> | <message>');
             return;
           }
 
@@ -983,7 +997,7 @@ export class WhatsAppService {
             guild.channels.cache.find((c: any) => c.name.toLowerCase() === chanTarget.toLowerCase() && c.isTextBased());
 
           if (!channel || !channel.isTextBased()) {
-            await this.sendRaw(replyJid, `❌ Text channel "${chanTarget}" not found.`);
+            await this.sendRaw(replyJid, `[ERROR] Text channel "${chanTarget}" not found.`);
             return;
           }
 
@@ -997,9 +1011,9 @@ export class WhatsAppService {
               .setFooter({ text: 'Broadcasted via Rage Hotline' });
 
             await (channel as any).send({ embeds: [embed] });
-            await this.sendRaw(replyJid, `📢 *[EMBED DISPATCHED]*\nSent to #${channel.name} with title: *${title.trim()}*`);
+            await this.sendRaw(replyJid, `> *[EMBED DISPATCHED]*\nSent to #${channel.name} with title: *${title.trim()}*`);
           } catch (embErr: any) {
-            await this.sendRaw(replyJid, `❌ Failed to dispatch embed: ${embErr?.message}`);
+            await this.sendRaw(replyJid, `[ERROR] Failed to dispatch embed: ${embErr?.message}`);
           }
           break;
         }
@@ -1014,7 +1028,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!ticketId || !guild || !this.moduleRegistry) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!closeticket <ticketId> [reason]*');
+            await this.sendRaw(replyJid, '[USAGE] !closeticket <ticketId> [reason]');
             return;
           }
 
@@ -1028,7 +1042,7 @@ export class WhatsAppService {
           );
 
           if (!ticket) {
-            await this.sendRaw(replyJid, `❌ Ticket \`#${ticketId}\` not found in active registry.`);
+            await this.sendRaw(replyJid, `[ERROR] Ticket \`#${ticketId}\` not found in active registry.`);
             return;
           }
 
@@ -1039,18 +1053,19 @@ export class WhatsAppService {
           // Notify channel & schedule delete
           const ch = guild.channels.cache.get(ticket.channelId);
           if (ch) {
-            await (ch as any).send?.({ content: `🔒 **Ticket closed remotely via WhatsApp Hotline.**\n📝 Reason: *${reason}*\n*Channel deleting in 5 seconds...*` }).catch(() => {});
+            await (ch as any).send?.({ content: `**Ticket closed remotely via WhatsApp Hotline.**\nReason: *${reason}*\n*Channel deleting in 5 seconds...*` }).catch(() => {});
             setTimeout(() => ch.delete('Closed via WhatsApp Hotline').catch(() => {}), 5000);
           }
 
           await this.sendRaw(
             replyJid,
-            `🎫 *[TICKET CLOSED]*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `📂 *Ticket:* #${ticket.id.replace('ticket_', '')}\n` +
-            `👤 *User:* ${ticket.userTag}\n` +
-            `📝 *Reason:* ${reason}\n` +
-            `Discord channel scheduled for deletion.`
+            `> *[TICKET CLOSED]*\n` +
+            `────────────────────────────\n` +
+            `*Ticket:* #${ticket.id.replace('ticket_', '')}\n` +
+            `*User:* ${ticket.userTag}\n` +
+            `*Reason:* ${reason}\n` +
+            `Discord channel scheduled for deletion.\n` +
+            `────────────────────────────`
           );
           break;
         }
@@ -1061,7 +1076,7 @@ export class WhatsAppService {
           const guildId = process.env.GUILD_ID || client?.guilds?.cache?.first()?.id;
 
           if (!ticketId || !this.moduleRegistry) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!ticketinfo <ticketId>*');
+            await this.sendRaw(replyJid, '[USAGE] !ticketinfo <ticketId>');
             return;
           }
 
@@ -1074,19 +1089,20 @@ export class WhatsAppService {
           );
 
           if (!ticket) {
-            await this.sendRaw(replyJid, `❌ Ticket \`#${ticketId}\` not found.`);
+            await this.sendRaw(replyJid, `[ERROR] Ticket \`#${ticketId}\` not found.`);
             return;
           }
 
           await this.sendRaw(
             replyJid,
-            `🎫 *[TICKET DETAILS: #${ticket.id.replace('ticket_', '')}]*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `📂 *Category:* ${ticket.category || 'General'}\n` +
-            `👤 *User:* ${ticket.userTag} (\`${ticket.userId}\`)\n` +
-            `📝 *Subject:* ${ticket.subject || 'No subject'}\n` +
-            `🟢 *Status:* ${ticket.status.toUpperCase()}\n` +
-            `🕒 *Created:* ${new Date(ticket.createdAt || Date.now()).toLocaleString()}`
+            `> *[TICKET DETAILS: #${ticket.id.replace('ticket_', '')}]*\n` +
+            `────────────────────────────\n` +
+            `*Category:* ${ticket.category || 'General'}\n` +
+            `*User:* ${ticket.userTag} (\`${ticket.userId}\`)\n` +
+            `*Subject:* ${ticket.subject || 'No subject'}\n` +
+            `*Status:* ${ticket.status.toUpperCase()}\n` +
+            `*Created:* ${new Date(ticket.createdAt || Date.now()).toLocaleString()}\n` +
+            `────────────────────────────`
           );
           break;
         }
@@ -1099,28 +1115,29 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!guild) {
-            await this.sendRaw(replyJid, '❌ Discord Guild not available for backup.');
+            await this.sendRaw(replyJid, '[ERROR] Discord Guild not available for backup.');
             return;
           }
 
           try {
-            await this.sendRaw(replyJid, '💾 *[CREATING BACKUP]*\nCapturing live server snapshot & anti-nuke state...');
+            await this.sendRaw(replyJid, '> *[CREATING BACKUP]*\nCapturing live server snapshot & anti-nuke state...');
             const { captureLiveSnapshot, saveLiveSnapshotToDb } = await import('../modules/security/manifest.js');
             const liveSnap = await captureLiveSnapshot(guild);
             await saveLiveSnapshotToDb(guild.id, liveSnap);
 
             await this.sendRaw(
               replyJid,
-              `✅ *[BACKUP COMPLETED]*\n` +
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-              `🏛️ *Server:* ${guild.name}\n` +
-              `📁 *Channels Synced:* ${guild.channels.cache.size}\n` +
-              `🎭 *Roles Synced:* ${guild.roles.cache.size}\n` +
-              `🛡️ *Anti-Nuke Restoration:* READY & SECURED\n` +
-              `🕒 *Time:* ${new Date().toLocaleTimeString()}`
+              `> *[BACKUP COMPLETED]*\n` +
+              `────────────────────────────\n` +
+              `*Server:* ${guild.name}\n` +
+              `*Channels Synced:* ${guild.channels.cache.size}\n` +
+              `*Roles Synced:* ${guild.roles.cache.size}\n` +
+              `*Anti-Nuke Restoration:* READY & SECURED\n` +
+              `*Time:* ${new Date().toLocaleTimeString()}\n` +
+              `────────────────────────────`
             );
           } catch (bErr: any) {
-            await this.sendRaw(replyJid, `❌ Backup failed: ${bErr?.message}`);
+            await this.sendRaw(replyJid, `[ERROR] Backup failed: ${bErr?.message}`);
           }
           break;
         }
@@ -1133,7 +1150,7 @@ export class WhatsAppService {
             const guildId = process.env.GUILD_ID || client?.guilds?.cache?.first()?.id;
 
             if (!db) {
-              await this.sendRaw(replyJid, '❌ Database not connected.');
+              await this.sendRaw(replyJid, '[ERROR] Database not connected.');
               return;
             }
 
@@ -1143,18 +1160,19 @@ export class WhatsAppService {
             ).catch(() => []);
 
             if (!rows || rows.length === 0) {
-              await this.sendRaw(replyJid, `💾 *SERVER BACKUPS*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nNo backups saved yet. Type *!backup* to create one.`);
+              await this.sendRaw(replyJid, `> *[SERVER BACKUPS]*\n────────────────────────────\nNo backups saved yet. Type *!backup* to create one.`);
               return;
             }
 
-            let text = `💾 *SAVED SERVER BACKUPS (${rows.length})*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            let text = `> *[SAVED SERVER BACKUPS: ${rows.length}]*\n────────────────────────────\n`;
             for (const b of rows) {
               const dt = new Date(b.timestamp).toLocaleDateString();
-              text += `• *${b.id}* | ${dt}\n  📁 Channels: ${b.channelsCount} | 🎭 Roles: ${b.rolesCount}\n`;
+              text += `• *${b.id}* | ${dt}\n  Channels: ${b.channelsCount} | Roles: ${b.rolesCount}\n`;
             }
+            text += `────────────────────────────`;
             await this.sendRaw(replyJid, text);
           } catch (err: any) {
-            await this.sendRaw(replyJid, `❌ Failed to list backups: ${err?.message}`);
+            await this.sendRaw(replyJid, `[ERROR] Failed to list backups: ${err?.message}`);
           }
           break;
         }
@@ -1168,7 +1186,7 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!targetId || !guild) {
-            await this.sendRaw(replyJid, '⚠️ Usage: *!whois <userId>*');
+            await this.sendRaw(replyJid, '[USAGE] !whois <userId>');
             return;
           }
 
@@ -1177,7 +1195,7 @@ export class WhatsAppService {
             const user = member?.user || await client.users.fetch(targetId).catch(() => null);
 
             if (!user) {
-              await this.sendRaw(replyJid, `❌ User with ID \`${targetId}\` not found.`);
+              await this.sendRaw(replyJid, `[ERROR] User with ID \`${targetId}\` not found.`);
               return;
             }
 
@@ -1189,16 +1207,17 @@ export class WhatsAppService {
 
             await this.sendRaw(
               replyJid,
-              `🔍 *[USER INTELLIGENCE: ${user.tag || user.username}]*\n` +
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-              `🆔 *ID:* \`${user.id}\`\n` +
-              `🤖 *Bot:* ${user.bot ? 'Yes' : 'No'}\n` +
-              `🎂 *Account Age:* ${daysOld} days old (${user.createdAt.toLocaleDateString()})\n` +
-              `📥 *Joined Server:* ${joinStr}\n` +
-              `🎭 *Roles:* ${rolesStr}`
+              `> *[USER INTELLIGENCE: ${user.tag || user.username}]*\n` +
+              `────────────────────────────\n` +
+              `*ID:* \`${user.id}\`\n` +
+              `*Account Type:* ${user.bot ? 'Bot' : 'Human User'}\n` +
+              `*Account Age:* ${daysOld} days old (${user.createdAt.toLocaleDateString()})\n` +
+              `*Joined Server:* ${joinStr}\n` +
+              `*Roles:* ${rolesStr}\n` +
+              `────────────────────────────`
             );
           } catch (wErr: any) {
-            await this.sendRaw(replyJid, `❌ Failed to fetch user: ${wErr?.message}`);
+            await this.sendRaw(replyJid, `[ERROR] Failed to fetch user: ${wErr?.message}`);
           }
           break;
         }
@@ -1210,23 +1229,23 @@ export class WhatsAppService {
           const guild = client?.guilds?.cache?.get(guildId);
 
           if (!guild) {
-            await this.sendRaw(replyJid, '❌ Guild not available.');
+            await this.sendRaw(replyJid, '[ERROR] Guild not available.');
             return;
           }
 
           try {
             const logs = await guild.fetchAuditLogs({ limit: count });
-            let text = `📜 *RECENT DISCORD AUDIT LOGS (${logs.entries.size})*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            let text = `> *[RECENT DISCORD AUDIT LOGS: ${logs.entries.size}]*\n────────────────────────────\n`;
 
             for (const [, entry] of logs.entries) {
               const execTag = entry.executor?.tag || entry.executor?.username || 'Unknown';
               const targetName = (entry.target as any)?.tag || (entry.target as any)?.name || (entry.target as any)?.id || 'None';
-              text += `• *${entry.action}*\n  👤 By: ${execTag} ➔ 🎯 Target: ${targetName}\n  📝 Reason: ${entry.reason || 'None'}\n`;
+              text += `• *${entry.action}*\n  Executor: ${execTag}\n  Target: ${targetName}\n  Reason: ${entry.reason || 'None'}\n`;
             }
-
+            text += `────────────────────────────`;
             await this.sendRaw(replyJid, text);
           } catch (logErr: any) {
-            await this.sendRaw(replyJid, `❌ Audit log fetch failed: ${logErr?.message}`);
+            await this.sendRaw(replyJid, `[ERROR] Audit log fetch failed: ${logErr?.message}`);
           }
           break;
         }
@@ -1248,10 +1267,11 @@ export class WhatsAppService {
           const rssMB = Math.round(mem.rss / 1024 / 1024);
           await this.sendRaw(
             replyJid,
-            `🧹 *[MEMORY CACHE CLEARED]*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `🗑️ *Messages Swept:* ${swept}\n` +
-            `💾 *Current RAM (RSS):* ${rssMB} MB`
+            `> *[MEMORY CACHE CLEARED]*\n` +
+            `────────────────────────────\n` +
+            `*Messages Swept:* ${swept}\n` +
+            `*Current RAM (RSS):* ${rssMB} MB\n` +
+            `────────────────────────────`
           );
           break;
         }
@@ -1259,10 +1279,11 @@ export class WhatsAppService {
         case '!restart': {
           await this.sendRaw(
             replyJid,
-            `🔄 *[SERVER REBOOT INITIATED]*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `Gracefully stopping Rage Optimiser process on container...\n` +
-            `Pterodactyl will reboot the bot in ~15-20 seconds.`
+            `> *[SERVER REBOOT INITIATED]*\n` +
+            `────────────────────────────\n` +
+            `Stopping Rage Optimiser process on container.\n` +
+            `Host will reboot the bot in ~15-20 seconds.\n` +
+            `────────────────────────────`
           );
           setTimeout(() => {
             process.exit(0);
@@ -1273,14 +1294,14 @@ export class WhatsAppService {
         default: {
           await this.sendRaw(
             replyJid,
-            `❓ Unknown command: *${cmd}*\nType *!help* to view available commands.`
+            `[NOTICE] Unknown command: *${cmd}*\nType *!help* to view available commands.`
           );
           break;
         }
       }
     } catch (cmdErr: any) {
       console.error('[WhatsApp] Command handling error:', cmdErr);
-      await this.sendRaw(replyJid, `⚠️ Error executing *${cmd}*: ${cmdErr?.message || 'Internal error'}`);
+      await this.sendRaw(replyJid, `[ERROR] Execution failed for *${cmd}*: ${cmdErr?.message || 'Internal error'}`);
     }
   }
 
@@ -1294,53 +1315,53 @@ export class WhatsAppService {
 
   public static async sendSecurityAlert(payload: SecurityAlertPayload): Promise<boolean> {
     const text =
-      ` *[SECURITY THREAT DETECTED]*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      ` *Event:* ${payload.type}\n` +
-      ` *Server:* ${payload.guildName || 'Protected Guild'}\n` +
-      ` *Executor:* ${payload.executor || 'Unknown'}\n` +
-      (payload.target ? ` *Target:* ${payload.target}\n` : '') +
-      ` *Action Taken:* ${payload.actionTaken || 'Quarantined & Mitigated'}\n` +
-      (payload.details ? ` *Details:* ${payload.details}\n` : '') +
-      ` *Time:* ${new Date().toLocaleTimeString()}\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `_Type !lockdown to freeze the server if needed._`;
+      `> *[SECURITY THREAT DETECTED]*\n` +
+      `────────────────────────────\n` +
+      `*Event:* ${payload.type}\n` +
+      `*Server:* ${payload.guildName || 'Protected Guild'}\n` +
+      `*Executor:* ${payload.executor || 'Unknown'}\n` +
+      (payload.target ? `*Target:* ${payload.target}\n` : '') +
+      `*Action Taken:* ${payload.actionTaken || 'Quarantined & Mitigated'}\n` +
+      (payload.details ? `*Details:* ${payload.details}\n` : '') +
+      `*Time:* ${new Date().toLocaleTimeString()}\n` +
+      `────────────────────────────\n` +
+      `_Type *!lockdown* to freeze the server if needed._`;
     return this.sendAlert(text);
   }
 
   public static async sendTicketAlert(ticket: TicketAlertPayload): Promise<boolean> {
     const text =
-      `🎫 *[NEW SUPPORT TICKET OPENED]*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `📂 *Category:* ${ticket.category || 'General'}\n` +
-      `👤 *User:* ${ticket.userTag}\n` +
-      `📝 *Subject:* ${ticket.subject}\n` +
-      (ticket.channelName ? `💬 *Channel:* #${ticket.channelName}\n` : '') +
-      `🕒 *Time:* ${new Date().toLocaleTimeString()}\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+      `> *[NEW SUPPORT TICKET OPENED]*\n` +
+      `────────────────────────────\n` +
+      `*Category:* ${ticket.category || 'General'}\n` +
+      `*User:* ${ticket.userTag}\n` +
+      `*Subject:* ${ticket.subject}\n` +
+      (ticket.channelName ? `*Channel:* #${ticket.channelName}\n` : '') +
+      `*Time:* ${new Date().toLocaleTimeString()}\n` +
+      `────────────────────────────`;
     return this.sendAlert(text);
   }
 
   public static async send2FAVerificationCode(code: string, purpose: string, guildName?: string): Promise<boolean> {
     const text =
-      `🔐 *[RAGE OPTIMISER — 2FA OTP]*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `🔑 *Verification Code:* *${code}*\n` +
-      `🛡️ *Purpose:* ${purpose}\n` +
-      `🏛️ *Server:* ${guildName || 'Protected Guild'}\n` +
-      `⏰ *Expires:* In 5 minutes\n` +
-      `⚠️ *Do not share this code with anyone.*`;
+      `> *[2FA VERIFICATION CODE]*\n` +
+      `────────────────────────────\n` +
+      `*Code:* *${code}*\n` +
+      `*Purpose:* ${purpose}\n` +
+      `*Server:* ${guildName || 'Protected Guild'}\n` +
+      `*Expires:* In 5 minutes\n` +
+      `────────────────────────────\n` +
+      `_Do not share this code with anyone._`;
     return this.sendAlert(text);
   }
 
   public static async sendSystemAlert(title: string, message: string): Promise<boolean> {
     const text =
-      `⚙️ *[RAGE SYSTEM ALERT]*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `📌 *${title}*\n` +
+      `> *[SYSTEM ALERT: ${title.toUpperCase()}]*\n` +
+      `────────────────────────────\n` +
       `${message}\n` +
-      `🕒 *Time:* ${new Date().toLocaleTimeString()}\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+      `*Time:* ${new Date().toLocaleTimeString()}\n` +
+      `────────────────────────────`;
     return this.sendAlert(text);
   }
 
