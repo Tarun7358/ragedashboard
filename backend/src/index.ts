@@ -112,6 +112,8 @@ import { StatsCounterManifest, syncGuildStatCounters, registerStatsCounterComman
 import { PromotionManifest, registerPromotionCommands } from './modules/promotion/manifest.js';
 import { TicketsManifest, registerTicketsCommands } from './modules/tickets/manifest.js';
 import { EmailService } from './services/EmailService.js';
+import { WhatsAppService } from './services/WhatsAppService.js';
+import { registerUptimeCommands } from './services/UptimeBroadcaster.js';
 
 // All manifests in one place
 export const ALL_MANIFESTS = [
@@ -231,6 +233,11 @@ async function bootstrap() {
     gateway.registerModuleManifests(ALL_MANIFESTS);
     webServer.registerModuleManifests(ALL_MANIFESTS);
 
+    // 4-b. Initialize WhatsApp Owner Hotline (non-fatal if disabled)
+    WhatsAppService.init(gateway, registry).catch((waErr) => {
+      console.error('[WhatsApp] Failed to initialize hotline:', waErr);
+    });
+
     // Register Prefix & Slash Control Suites (must be invoked after initialize to avoid map clear)
     registerTempRoleCommands();
     registerExtraOwnerCommands();
@@ -241,6 +248,7 @@ async function bootstrap() {
     registerConfigCommands();
     registerPrebotCommands();
     registerBotStatsCommands();
+    registerUptimeCommands();
     registerWelcomeCommands();
     registerLoggingCommands();
     registerBrainCommands();
@@ -312,6 +320,13 @@ const handleGracefulShutdown = async (signal: string) => {
     }
   } catch (e: any) {
     console.error('Error disconnecting Discord client:', e.message);
+  }
+
+  try {
+    console.log('[Shutdown] Closing WhatsApp socket...');
+    await WhatsAppService.shutdown();
+  } catch (e: any) {
+    console.error('Error closing WhatsApp socket:', e.message);
   }
   
   try {

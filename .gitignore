@@ -42,6 +42,8 @@ yt-dlp.exe
 *.exe.old
 *.old
 *.gif
+!backend/assets/*.gif
+!gemini_generated_video_0c54a55f-ezgif.com-crop (1).gif
 ffmpeg
 ffprobe
 
@@ -76,3 +78,9 @@ clutch-music/src/verifications.json
 
 # Scratch files
 backend/scratch/
+
+# WhatsApp Auth & Sessions
+whatsapp_session/
+whatsapp_auth/
+**/whatsapp_session/
+**/whatsapp_auth/

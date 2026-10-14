@@ -21,6 +21,7 @@ import { Client, Guild, GuildMember, PermissionFlagsBits, TextChannel, GuildVeri
 import { isOwnerOrExtraOwner, checkBypassImmunity } from '../utils/whitelistCheck.js';
 import { activeQuarantines } from '../modules/security/manifest.js';
 import { SECURITY_SHIELD_ICON } from '../core/UIFactory.js';
+import { CentralLogger } from '../core/security/CentralLogger.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IN-MEMORY TRACKING STORES
@@ -212,6 +213,17 @@ async function quarantineMember(guild: Guild, executorId: string, reason: string
       reason
     });
   }).catch(() => {});
+
+  // WhatsApp alert (fire-and-forget, never blocks)
+  import('../services/WhatsAppService.js').then(({ WhatsAppService }) => {
+    WhatsAppService.sendSecurityAlert({
+      type: 'QUARANTINE EXECUTED',
+      guildName: guild.name,
+      executor: `${member.user.username} (${executorId})`,
+      actionTaken: 'Dangerous roles revoked + 28d timeout applied',
+      details: reason
+    });
+  }).catch(() => {});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -299,78 +311,382 @@ export async function handleThreadDelete(client: Client, thread: any, context: a
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. RAID WAVE DETECTION (JOIN VELOCITY LOCKDOWN)
+// 2. ADAPTIVE ANTI-RAID ENGINE (GRADUATED VERIFICATION & PATTERN CORRELATION)
 // ─────────────────────────────────────────────────────────────────────────────
-// >10 joins in 60s → VERY_HIGH verification + disable invites + alert
-// Auto-unlocks after 10 minutes
+// Tier 1 (Soft Surge: >=5 joins in 30s) -> Medium/High verification + joiner restriction
+// Tier 2 (Raid Wave: >=10 joins in 60s or Pattern Match) -> VERY_HIGH verification + invite revocation + quarantine
+// Tier 3 (Critical Flood: >=20 joins in 60s) -> Emergency Lockdown + sweep
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Track recent joiners per guild: guildId -> (userId -> joinTimestamp) */
+const recentJoinersStore = new Map<string, Map<string, number>>();
+
+/** Track recent message fingerprints from fresh joiners: guildId -> PatternEntry[] */
+interface RaidPatternEntry {
+  userId: string;
+  messageId: string;
+  channelId: string;
+  fingerprint: string;
+  timestamp: number;
+}
+const raidPatternBuffer = new Map<string, RaidPatternEntry[]>();
+
+export function isRaidLockdownActive(guildId: string): boolean {
+  return raidLockdownActive.has(guildId);
+}
+
+/**
+ * Owner-Controlled Raid Lockdown
+ * Allows server owner or authorized administrators to manually engage/disengage lockdown.
+ */
+export async function setOwnerRaidLockdown(
+  guild: Guild,
+  enable: boolean,
+  operatorId: string,
+  context?: any
+): Promise<{ success: boolean; message: string }> {
+  if (!guild) return { success: false, message: 'Invalid guild' };
+  const { config } = getSecConfig(context, guild.id);
+
+  if (enable) {
+    raidLockdownActive.add(guild.id);
+    await guild.edit({ verificationLevel: GuildVerificationLevel.VeryHigh }).catch(() => {});
+
+    for (const [, channel] of guild.channels.cache) {
+      if (channel.type !== 0 && channel.type !== 2 && channel.type !== 5) continue;
+      await (channel as any).permissionOverwrites?.edit?.(
+        guild.roles.everyone,
+        { CreateInstantInvite: false },
+        { reason: `Owner Raid Lockdown enabled by ${operatorId}` }
+      ).catch(() => {});
+    }
+
+    CentralLogger.antinuke({
+      guild,
+      title: 'OWNER-CONTROLLED RAID LOCKDOWN ENGAGED',
+      details: `Raid lockdown manually activated by operator <@${operatorId}>. Verification set to Very High, invites revoked.`,
+      severity: 'high'
+    });
+
+    await sendSecurityAlert(guild, config.alertChannelId,
+      `${SECURITY_SHIELD_ICON} **OWNER RAID LOCKDOWN ENGAGED** by <@${operatorId}>.\n` +
+      `> Verification set to **Very High**. Channel invites disabled for \`@everyone\`.\n` +
+      `> Use \`r!lockdown disable\` to lift lockdown.`
+    );
+
+    return { success: true, message: 'Raid lockdown enabled.' };
+  } else {
+    raidLockdownActive.delete(guild.id);
+    const existing = raidLockdownTimers.get(guild.id);
+    if (existing) {
+      clearTimeout(existing);
+      raidLockdownTimers.delete(guild.id);
+    }
+
+    await guild.edit({ verificationLevel: GuildVerificationLevel.Medium }).catch(() => {});
+
+    for (const [, channel] of guild.channels.cache) {
+      if (channel.type !== 0 && channel.type !== 2 && channel.type !== 5) continue;
+      await (channel as any).permissionOverwrites?.edit?.(
+        guild.roles.everyone,
+        { CreateInstantInvite: null },
+        { reason: `Owner Raid Lockdown lifted by ${operatorId}` }
+      ).catch(() => {});
+    }
+
+    CentralLogger.antinuke({
+      guild,
+      title: 'OWNER-CONTROLLED RAID LOCKDOWN LIFTED',
+      details: `Raid lockdown manually deactivated by operator <@${operatorId}>. Server verification & invite creation restored.`,
+      severity: 'low'
+    });
+
+    await sendSecurityAlert(guild, config.alertChannelId,
+      `<:ticks:1532620580266836148> **Raid Lockdown Lifted** by <@${operatorId}>. Verification restored to Medium and invite permissions re-enabled.`
+    );
+
+    return { success: true, message: 'Raid lockdown lifted.' };
+  }
+}
+
+/**
+ * Evaluates join bursts with a 3-tier graduated verification and restriction model.
+ */
 export async function handleMemberJoinRaidCheck(client: Client, member: GuildMember, context: any): Promise<void> {
   try {
     const guild = member.guild;
     const { config, enabled } = getSecConfig(context, guild.id);
     if (!enabled || raidLockdownActive.has(guild.id)) return;
 
+    const now = Date.now();
+
+    // Register joiner in recent joiner map (retained for 30 mins)
+    if (!recentJoinersStore.has(guild.id)) recentJoinersStore.set(guild.id, new Map());
+    const gJoiners = recentJoinersStore.get(guild.id)!;
+    gJoiners.set(member.id, now);
+
+    // Prune entries older than 30 mins
+    for (const [mId, joinTs] of gJoiners.entries()) {
+      if (now - joinTs > 30 * 60 * 1000) gJoiners.delete(mId);
+    }
+
     if (!joinTracker.has(guild.id)) joinTracker.set(guild.id, []);
     const timestamps = joinTracker.get(guild.id)!;
-    const now = Date.now();
 
     const fresh = timestamps.filter(ts => now - ts < 60_000);
     fresh.push(now);
     joinTracker.set(guild.id, fresh);
 
-    if (fresh.length >= 10) {
+    const fresh30s = fresh.filter(ts => now - ts < 30_000);
+
+    // TIER 3: CRITICAL MASS FLOOD (>=20 joins in 60s)
+    if (fresh.length >= 20) {
       raidLockdownActive.add(guild.id);
 
-      context.logSyncEvent?.(guild.id, `[AdvSec] RAID DETECTED: ${fresh.length} members joined in 60s. Locking server.`, 'warn');
+      context.logSyncEvent?.(guild.id, `[AdvSec] CRITICAL RAID FLOOD: ${fresh.length} joins in 60s. Maximum lockdown.`, 'warn');
+      CentralLogger.attack({
+        guild,
+        action: 'CRITICAL RAID FLOOD LOCKDOWN (TIER 3)',
+        reason: `Extreme join surge: ${fresh.length} accounts joined within 60s`,
+        executorId: member.id,
+        executorName: member.user.username,
+        result: 'success',
+        note: `Verification -> Very High, invites closed, auto-quarantine for recent joiners.`,
+        severity: 'critical'
+      });
 
-      // Set verification to VERY HIGH
       await guild.edit({ verificationLevel: GuildVerificationLevel.VeryHigh }).catch(() => {});
 
-      // Disable CreateInstantInvite for @everyone in all text/voice channels
+      // Quarantine recent joiners from past 15 mins
+      for (const [recentId, joinTime] of gJoiners.entries()) {
+        if (now - joinTime < 15 * 60 * 1000) {
+          quarantineMember(guild, recentId, 'AdvSec: Tier 3 Mass Raid Surge Quarantine', config).catch(() => {});
+        }
+      }
+
       for (const [, channel] of guild.channels.cache) {
         if (channel.type !== 0 && channel.type !== 2 && channel.type !== 5) continue;
         await (channel as any).permissionOverwrites?.edit?.(
           guild.roles.everyone,
           { CreateInstantInvite: false },
-          { reason: 'AdvSec: Raid lockdown' }
+          { reason: 'AdvSec: Tier 3 Raid flood lockdown' }
         ).catch(() => {});
       }
 
       await sendSecurityAlert(guild, config.alertChannelId,
-        `${SECURITY_SHIELD_ICON} **RAID WAVE DETECTED** — **${fresh.length} members** joined in under 60 seconds.\n` +
+        `<a:warning:1546155193303957504> **CRITICAL RAID FLOOD (TIER 3)** — **${fresh.length} accounts joined in 60s**!\n` +
+        `> Emergency containment engaged. Verification set to **Very High**.\n` +
+        `> All invites revoked and recent joiners quarantined.\n` +
+        `> Auto-unlock in **15 minutes** or use \`r!lockdown disable\`.`
+      );
+
+      armAutoUnlockTimer(guild, config, context, 15);
+      return;
+    }
+
+    // TIER 2: RAID WAVE (>=10 joins in 60s)
+    if (fresh.length >= 10) {
+      raidLockdownActive.add(guild.id);
+
+      context.logSyncEvent?.(guild.id, `[AdvSec] RAID WAVE DETECTED (TIER 2): ${fresh.length} joins in 60s.`, 'warn');
+      CentralLogger.attack({
+        guild,
+        action: 'RAID LOCKDOWN TRIGGERED (TIER 2)',
+        reason: `Raid Wave Detected: ${fresh.length} accounts joined within 60 seconds`,
+        executorId: member.id,
+        executorName: member.user.username,
+        result: 'success',
+        note: `Verification bumped to Very High, invites revoked for @everyone. Auto-unlock in 10 mins.`,
+        severity: 'critical'
+      });
+
+      await guild.edit({ verificationLevel: GuildVerificationLevel.VeryHigh }).catch(() => {});
+
+      for (const [, channel] of guild.channels.cache) {
+        if (channel.type !== 0 && channel.type !== 2 && channel.type !== 5) continue;
+        await (channel as any).permissionOverwrites?.edit?.(
+          guild.roles.everyone,
+          { CreateInstantInvite: false },
+          { reason: 'AdvSec: Raid lockdown Tier 2' }
+        ).catch(() => {});
+      }
+
+      await sendSecurityAlert(guild, config.alertChannelId,
+        `${SECURITY_SHIELD_ICON} **RAID WAVE DETECTED (TIER 2)** — **${fresh.length} members** joined in under 60 seconds.\n` +
         `> Server verification set to **Very High**. All new invites disabled.\n` +
         `> Auto-unlocking in **10 minutes**. Use \`r!lockdown disable\` to manually unlock.`
       );
 
-      // Auto-unlock after 10 minutes
-      const existing = raidLockdownTimers.get(guild.id);
-      if (existing) clearTimeout(existing);
-      const timer = setTimeout(async () => {
-        raidLockdownActive.delete(guild.id);
-        raidLockdownTimers.delete(guild.id);
-        await guild.edit({ verificationLevel: GuildVerificationLevel.Medium }).catch(() => {});
+      armAutoUnlockTimer(guild, config, context, 10);
+      return;
+    }
 
-        // BUG-5 FIX: Restore CreateInstantInvite permissions that were disabled during lockdown
-        for (const [, channel] of guild.channels.cache) {
-          if (channel.type !== 0 && channel.type !== 2 && channel.type !== 5) continue;
-          await (channel as any).permissionOverwrites?.edit?.(
-            guild.roles.everyone,
-            { CreateInstantInvite: null }, // null = reset to inherit from parent
-            { reason: 'AdvSec: Raid lockdown expiry — restoring invite permissions' }
-          ).catch(() => {});
-        }
+    // TIER 1: SOFT SURGE (>=5 joins in 30s)
+    if (fresh30s.length >= 5) {
+      context.logSyncEvent?.(guild.id, `[AdvSec] Soft Join Surge (Tier 1): ${fresh30s.length} joins in 30s. Graduated verification engaged.`, 'info');
 
-        context.logSyncEvent?.(guild.id, '[AdvSec] Raid lockdown expired. Verification + invite permissions restored.', 'info');
-        await sendSecurityAlert(guild, config.alertChannelId,
-          `<:ticks:1532620580266836148> **Raid Lockdown Lifted** — Verification restored to Medium and invite permissions re-enabled. Monitor activity closely.`
-        );
-      }, 10 * 60 * 1000);
-      raidLockdownTimers.set(guild.id, timer);
+      // Escalate verification to High if lower
+      if (guild.verificationLevel === GuildVerificationLevel.None || guild.verificationLevel === GuildVerificationLevel.Low) {
+        await guild.edit({ verificationLevel: GuildVerificationLevel.High }).catch(() => {});
+      }
+
+      // Temporary joiner restriction: 5 min timeout on fresh joiner
+      await member.timeout(5 * 60 * 1000, 'AdvSec Tier 1: Soft join surge rate-gate').catch(() => {});
+
+      await sendSecurityAlert(guild, config.alertChannelId,
+        `${SECURITY_SHIELD_ICON} **Join Surge Detected (Tier 1)** — **${fresh30s.length} accounts** joined in 30s. Verification elevated and joiner restricted for 5m.`
+      );
     }
   } catch (err: any) {
     console.error('[AdvSec] handleMemberJoinRaidCheck:', err?.message);
   }
+}
+
+/**
+ * Correlated Cross-Account Raid Message Check
+ * Detects identical or coordinated spam patterns posted across distinct newly joined accounts.
+ */
+export async function handleRaidMessageCheck(
+  message: any,
+  context: any
+): Promise<{ isRaid: boolean; reason: string }> {
+  try {
+    const guild = message.guild;
+    if (!guild || !message.author || message.author.bot) return { isRaid: false, reason: '' };
+
+    const member = message.member;
+    const joinedAt = member?.joinedTimestamp || 0;
+    const now = Date.now();
+
+    // Only inspect accounts joined in the last 30 minutes
+    if (now - joinedAt > 30 * 60 * 1000 && joinedAt > 0) {
+      return { isRaid: false, reason: '' };
+    }
+
+    // Exclude immune owners / whitelisted actors
+    if (await isBotOrBypassed(message.author.id, guild, context, 'anti_raid')) {
+      return { isRaid: false, reason: '' };
+    }
+
+    // Clean text to create normalized pattern fingerprint
+    const raw = (message.content || '').toLowerCase();
+    const clean = raw
+      .replace(/https?:\/\/[^\s]+/g, '')
+      .replace(/<a?:[a-zA-Z0-9_]+:\d+>/g, '')
+      .replace(/<@!?[0-9]+>/g, '')
+      .replace(/<@&[0-9]+>/g, '')
+      .replace(/[^a-z0-9]/g, '');
+
+    // If fingerprint is too short to be a distinct raid pattern, skip
+    if (clean.length < 6) return { isRaid: false, reason: '' };
+
+    if (!raidPatternBuffer.has(guild.id)) raidPatternBuffer.set(guild.id, []);
+    const buffer = raidPatternBuffer.get(guild.id)!;
+
+    // Prune entries older than 30s
+    const valid = buffer.filter(e => now - e.timestamp < 30_000);
+    valid.push({
+      userId: message.author.id,
+      messageId: message.id,
+      channelId: message.channel.id,
+      fingerprint: clean,
+      timestamp: now
+    });
+    raidPatternBuffer.set(guild.id, valid);
+
+    // Look for matching fingerprints across DISTINCT user IDs
+    const matching = valid.filter(e => e.fingerprint === clean);
+    const distinctUsers = new Set(matching.map(e => e.userId));
+
+    if (distinctUsers.size >= 3) {
+      // CORRELATED RAID ATTACK CONFIRMED! (>= 3 distinct new accounts posting same content in 30s)
+      const { config } = getSecConfig(context, guild.id);
+
+      context.logSyncEvent?.(guild.id, `[AdvSec] CORRELATED RAID DETECTED: ${distinctUsers.size} accounts repeating pattern "${clean.substring(0, 20)}...". Purging & Locking.`, 'warn');
+
+      CentralLogger.attack({
+        guild,
+        action: 'CORRELATED RAID PATTERN INTERCEPTED',
+        reason: `Multi-Account Raid Attack: ${distinctUsers.size} distinct accounts posted matching pattern in under 30 seconds`,
+        executorId: message.author.id,
+        executorName: message.author.username,
+        result: 'success',
+        note: `All matching messages purged. Perpetrators quarantined. Server elevated to Tier 2 raid lockdown.`,
+        severity: 'critical'
+      });
+
+      // Quarantine all participating raid accounts
+      for (const uId of distinctUsers) {
+        quarantineMember(guild, uId, 'AdvSec: Correlated multi-account raid attack pattern', config).catch(() => {});
+      }
+
+      // Engage Tier 2 Raid Lockdown if not already active
+      if (!raidLockdownActive.has(guild.id)) {
+        raidLockdownActive.add(guild.id);
+        await guild.edit({ verificationLevel: GuildVerificationLevel.VeryHigh }).catch(() => {});
+
+        for (const [, ch] of guild.channels.cache) {
+          if (ch.type !== 0 && ch.type !== 2 && ch.type !== 5) continue;
+          await (ch as any).permissionOverwrites?.edit?.(
+            guild.roles.everyone,
+            { CreateInstantInvite: false },
+            { reason: 'AdvSec: Correlated raid pattern lockdown' }
+          ).catch(() => {});
+        }
+
+        armAutoUnlockTimer(guild, config, context, 10);
+      }
+
+      await sendSecurityAlert(guild, config.alertChannelId,
+        `<a:warning:1546155193303957504> **CORRELATED RAID PATTERN DETECTED**\n` +
+        `> **${distinctUsers.size} distinct new accounts** coordinated spamming matching content in under 30s.\n` +
+        `> All participating accounts have been **quarantined**, messages suppressed, and server elevated to **Tier 2 Lockdown**.`
+      );
+
+      return {
+        isRaid: true,
+        reason: `Correlated multi-account raid pattern (${distinctUsers.size} accounts)`
+      };
+    }
+
+    return { isRaid: false, reason: '' };
+  } catch (err: any) {
+    console.error('[AdvSec] handleRaidMessageCheck:', err?.message);
+    return { isRaid: false, reason: '' };
+  }
+}
+
+function armAutoUnlockTimer(guild: Guild, config: any, context: any, minutes: number): void {
+  const existing = raidLockdownTimers.get(guild.id);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(async () => {
+    raidLockdownActive.delete(guild.id);
+    raidLockdownTimers.delete(guild.id);
+    await guild.edit({ verificationLevel: GuildVerificationLevel.Medium }).catch(() => {});
+
+    for (const [, channel] of guild.channels.cache) {
+      if (channel.type !== 0 && channel.type !== 2 && channel.type !== 5) continue;
+      await (channel as any).permissionOverwrites?.edit?.(
+        guild.roles.everyone,
+        { CreateInstantInvite: null },
+        { reason: 'AdvSec: Raid lockdown expiry — restoring invite permissions' }
+      ).catch(() => {});
+    }
+
+    context?.logSyncEvent?.(guild.id, '[AdvSec] Raid lockdown expired. Verification + invite permissions restored.', 'info');
+    CentralLogger.antinuke({
+      guild,
+      title: 'RAID LOCKDOWN EXPIRED',
+      details: `Automatic ${minutes}-minute raid lockdown timer completed. Server verification & invite creation restored.`,
+      severity: 'low'
+    });
+    await sendSecurityAlert(guild, config.alertChannelId,
+      `<:ticks:1532620580266836148> **Raid Lockdown Lifted** — Verification restored to Medium and invite permissions re-enabled. Monitor activity closely.`
+    );
+  }, minutes * 60 * 1000);
+
+  raidLockdownTimers.set(guild.id, timer);
 }
 
 const reportedDriftGuilds = new Set<string>();

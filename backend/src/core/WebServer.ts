@@ -69,6 +69,16 @@ export class WebServer {
 
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+    // ── Block Sensitive File Probes (.env, .git, .sqlite, package.json, etc.) ──
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
+      const p = req.path.toLowerCase();
+      if (p.includes('.env') || p.includes('.git') || p.includes('.sqlite') || p.includes('.bak') || p.includes('package.json')) {
+        return res.status(404).json({ error: 'Endpoint not found.' });
+      }
+      next();
+    });
+
     this.app.use('/assets', express.static(path.join(process.cwd(), 'public/assets')));
 
     // ── Rate Limiting (BUG-10 fix: tight limits per endpoint class) ──────────
@@ -541,6 +551,172 @@ export class WebServer {
       this.registry.setRegistry(targetGuildId, newReg);
       this.registry.logSyncEvent(targetGuildId, 'Global settings updated from dashboard.', 'success');
       res.json({ success: true, globalSettings: newReg.globalSettings });
+    });
+
+    // ── WhatsApp Hotline Status, Web QR & Session Reset (Server Deployment Support) ────────
+    this.app.get('/api/whatsapp/status', async (_req: Request, res: Response) => {
+      try {
+        const { WhatsAppService } = await import('../services/WhatsAppService.js');
+        res.json(WhatsAppService.getStatus());
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'Failed to get WhatsApp status' });
+      }
+    });
+
+    this.app.all('/api/whatsapp/reset', async (_req: Request, res: Response) => {
+      try {
+        const { WhatsAppService } = await import('../services/WhatsAppService.js');
+        await WhatsAppService.resetSession();
+        res.setHeader('Content-Type', 'text/html');
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>WhatsApp Session Reset — Rage Optimiser</title>
+            <meta http-equiv="refresh" content="3; url=/api/whatsapp/qr">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0B0E14; color: #E6EDF3; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+              .card { background: #161B22; border: 1px solid #30363D; border-radius: 14px; padding: 32px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+              .badge { display: inline-block; background: rgba(56, 139, 253, 0.15); color: #58A6FF; padding: 4px 14px; border-radius: 20px; font-weight: 600; font-size: 13px; margin-bottom: 14px; border: 1px solid rgba(56, 139, 253, 0.4); }
+              h2 { margin: 0 0 10px; font-size: 20px; color: #FFF; }
+              p { color: #8B949E; font-size: 14px; line-height: 1.5; margin: 0 0 14px; }
+              .hint { font-size: 12px; color: #6E7681; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <div class="badge">SESSION RESET</div>
+              <h2>Session Reset Successfully</h2>
+              <p>Stale encryption keys, pre-keys, and ratchet sessions have been cleared.</p>
+              <p style="color: #F0883E; font-weight: 500;">Make sure you unlinked "Rage Optimiser" in WhatsApp on your phone (Linked Devices).</p>
+              <div class="hint">Redirecting to fresh QR code in 3 seconds...</div>
+            </div>
+          </body>
+          </html>
+        `);
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'Failed to reset WhatsApp session' });
+      }
+    });
+
+    this.app.get('/api/whatsapp/qr', async (_req: Request, res: Response) => {
+      try {
+        const { WhatsAppService } = await import('../services/WhatsAppService.js');
+        const status = WhatsAppService.getStatus();
+
+        if (status.connected) {
+          res.setHeader('Content-Type', 'text/html');
+          return res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>WhatsApp Hotline — Connected</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0B0E14; color: #E6EDF3; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+                .card { background: #161B22; border: 1px solid #30363D; border-radius: 14px; padding: 32px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+                .status-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(35, 134, 54, 0.2); color: #3FB950; padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 14px; margin-bottom: 16px; border: 1px solid rgba(63, 185, 80, 0.4); }
+                h2 { margin: 0 0 10px; font-size: 22px; }
+                p { color: #8B949E; font-size: 14px; line-height: 1.5; margin: 0; }
+                .group-box { background: #0D1117; border: 1px solid #30363D; border-radius: 8px; padding: 12px; margin-top: 16px; text-align: left; }
+                .group-title { font-size: 12px; font-weight: bold; color: #58A6FF; margin-bottom: 4px; }
+                .group-val { font-size: 13px; color: #C9D1D9; word-break: break-all; }
+                .btn-reset { display: inline-block; margin-top: 20px; background: #21262D; border: 1px solid #30363D; color: #F85149; font-weight: 600; font-size: 13px; padding: 8px 16px; border-radius: 6px; text-decoration: none; transition: background 0.2s; }
+                .btn-reset:hover { background: #30363D; color: #FF7B72; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="status-badge">● HOTLINE ONLINE</div>
+                <h2>WhatsApp Connected</h2>
+                <p>Linked to Owner: <strong>${status.ownerNumber}</strong></p>
+                <div class="group-box">
+                  <div class="group-title">💬 Alert Destination</div>
+                  <div class="group-val">${status.groupJid}</div>
+                </div>
+                <p style="margin-top: 14px; font-size: 13px;">💡 <em>Tip: Create a private WhatsApp group and send <strong>!setgroup</strong> to receive alerts directly in that group!</em></p>
+                <div>
+                  <a href="/api/whatsapp/reset" class="btn-reset" onclick="return confirm('Disconnect & reset WhatsApp keys? You will need to re-scan the QR code.');">🔄 Reset / Re-link Session</a>
+                </div>
+              </div>
+            </body>
+            </html>
+          `);
+        }
+
+        const rawQr = WhatsAppService.getLatestQr();
+        const pairingCode = WhatsAppService.getLatestPairingCode();
+
+        if (!rawQr) {
+          res.setHeader('Content-Type', 'text/html');
+          return res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>WhatsApp Hotline — Initializing</title>
+              <meta http-equiv="refresh" content="3">
+              <style>
+                body { font-family: -apple-system, sans-serif; background: #0B0E14; color: #E6EDF3; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+                .card { background: #161B22; border: 1px solid #30363D; border-radius: 12px; padding: 32px; text-align: center; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h2>Generating WhatsApp QR...</h2>
+                <p style="color: #8B949E;">Initializing session. Page will auto-refresh in 3 seconds.</p>
+                <div style="margin-top: 16px;"><a href="/api/whatsapp/reset" style="color: #58A6FF; font-size: 12px; text-decoration: none;">Force Reset Session</a></div>
+              </div>
+            </body>
+            </html>
+          `);
+        }
+
+        const QRCode = (await import('qrcode')).default;
+        const qrDataUrl = await QRCode.toDataURL(rawQr, { width: 320, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+
+        const pairingHtml = pairingCode
+          ? '<div class="code-box"><div class="code-label">Or link with pairing code</div><div class="code-val">' + pairingCode + '</div></div>'
+          : '';
+
+        const html = '<!DOCTYPE html>' +
+          '<html><head><title>Link WhatsApp Hotline — Rage Optimiser</title>' +
+          '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+          '<meta http-equiv="refresh" content="20">' +
+          '<style>' +
+          'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B0E14; color: #E6EDF3; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }' +
+          '.card { background: #161B22; border: 1px solid #30363D; border-radius: 16px; padding: 32px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 12px 32px rgba(0,0,0,0.6); }' +
+          'h1 { font-size: 20px; margin: 0 0 8px; color: #FFF; }' +
+          '.desc { font-size: 13px; color: #8B949E; margin-bottom: 20px; }' +
+          '.qr-box { background: #FFF; padding: 14px; border-radius: 12px; display: inline-block; margin-bottom: 20px; }' +
+          '.qr-box img { display: block; max-width: 100%; height: auto; }' +
+          '.code-box { background: #0D1117; border: 1px dashed #30363D; border-radius: 8px; padding: 12px; margin-bottom: 20px; }' +
+          '.code-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8B949E; margin-bottom: 4px; }' +
+          '.code-val { font-family: monospace; font-size: 20px; font-weight: bold; color: #58A6FF; letter-spacing: 2px; }' +
+          'ol { text-align: left; font-size: 13px; color: #8B949E; line-height: 1.6; padding-left: 20px; margin: 0; }' +
+          '.refresh-hint { margin-top: 16px; font-size: 11px; color: #6E7681; }' +
+          '.reset-link { margin-top: 14px; font-size: 12px; color: #F85149; text-decoration: none; display: inline-block; }' +
+          '.reset-link:hover { text-decoration: underline; }' +
+          '</style></head><body>' +
+          '<div class="card">' +
+          '<h1>Link WhatsApp Hotline</h1>' +
+          '<div class="desc">Scan with your phone to connect the server alert hotline.</div>' +
+          '<div class="qr-box"><img src="' + qrDataUrl + '" alt="WhatsApp QR Code" /></div>' +
+          pairingHtml +
+          '<ol>' +
+          '<li>Open <strong>WhatsApp</strong> on your phone</li>' +
+          '<li>Tap <strong>Settings / Menu (⋮) > Linked Devices</strong></li>' +
+          '<li>Tap <strong>Link a Device</strong> and point at the QR code above</li>' +
+          '</ol>' +
+          '<div class="refresh-hint">Page refreshes every 20s for security.</div>' +
+          '<div><a href="/api/whatsapp/reset" class="reset-link" onclick="return confirm(\'Clear current session files?\')">🔄 Reset Session & Generate Fresh QR</a></div>' +
+          '</div></body></html>';
+
+        res.setHeader('Content-Type', 'text/html');
+        return res.send(html);
+      } catch (err: any) {
+        res.status(500).send('Failed to generate WhatsApp QR: ' + (err?.message || err));
+      }
     });
 
     // Approvals endpoints (BUG-11 fix: scope by JWT role)
