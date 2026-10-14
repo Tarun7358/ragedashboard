@@ -85,9 +85,10 @@ export const RageEnterpriseManifest: ModuleManifest = {
     ...[
       'notes', 'warn', 'purge', 'clear', 'lockdown', 'quarantine', 'raidmode', 'antispam', 'antilink',
       'welcome', 'autorole', 'goodbye', 'birthday', 'boost', 'milestones',
-      'player', 'queue', 'skip', 'shuffle', 'autoplay', 'filters', 'lyrics', 'volume',
+      'player', 'play', 'pause', 'resume', 'stop', 'back', 'loop', 'nowplaying', 'queue', 'skip', 'shuffle', 'autoplay', 'filters', 'lyrics', 'volume',
       'status', 'performance', 'telemetry', 'health', 'uptime', 'cache', 'memory',
-      'emergency', 'diagnostics', 'developer', 'reload', 'restart', 'sync', 'debug'
+      'emergency', 'diagnostics', 'developer', 'reload', 'restart', 'sync', 'debug',
+      'permissions', 'modules', 'premium'
     ].map(cmdName => ({
       name: `command_${cmdName}`,
       handler: async (client: any, interaction: any, context: any) => {
@@ -414,7 +415,7 @@ export const RageEnterpriseManifest: ModuleManifest = {
           return interaction.reply({ content: `${WRONG_ICON} Permission missing: \`ModerateMembers\``, flags: 64 });
         }
         const embed = new EmbedBuilder()
-          .setTitle('<a:Timer:1546231426863730728> Member Timeout Controls')
+          .setTitle('<a:loading:1546134304625528882> Member Timeout Controls')
           .setDescription('Use `/rage timeout target:@member duration:1h reason:reason` to temporarily mute a user.')
           .setColor(0x84cc16);
         await interaction.reply({ embeds: [embed], flags: 64 });
@@ -635,6 +636,12 @@ async function handleEnterpriseAction(action: string, client: any, interaction: 
     case 'music':
     case 'player':
     case 'play':
+    case 'pause':
+    case 'resume':
+    case 'stop':
+    case 'back':
+    case 'loop':
+    case 'nowplaying':
     case 'queue':
     case 'skip':
     case 'shuffle':

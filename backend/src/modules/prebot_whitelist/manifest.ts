@@ -254,95 +254,111 @@ async function launchPrebotBuilder(
     return [rowSelect1, rowSelect2, rowButtons];
   };
 
-  const responseMsg = await interaction.editReply({
+  let responseMsg = await interaction.editReply({
     embeds: [buildEmbed()],
     components: buildComponents()
-  });
+  }).catch(() => null);
+
+  if (!responseMsg && interaction.channel) {
+    responseMsg = await interaction.channel.send({
+      embeds: [buildEmbed()],
+      components: buildComponents()
+    }).catch(() => null);
+  }
+
+  if (!responseMsg) {
+    console.error('[launchPrebotBuilder] Failed to dispatch builder message to channel.');
+    return;
+  }
 
   const collector = responseMsg.createMessageComponentCollector({
     time: 600000 // 10 minutes
   });
 
   collector.on('collect', async (rawI: any) => {
-    const i = wrapInteraction(rawI);
-    const isAuthorized = await isOwnerOrExtraOwner(i.user.id, guild);
-    if (!isAuthorized) {
-      const errEmbed = new EmbedBuilder()
-        .setTitle('🔒 Access Denied')
-        .setColor(Colors.DANGER)
-        .setDescription('PreBot Whitelist management is strictly restricted to the **Server Owner** and **Extra Owners**.')
-        .setTimestamp();
-      return i.reply({ embeds: [errEmbed], flags: 64 });
-    }
-
-    if (i.isStringSelectMenu()) {
-      const menuId = i.customId;
-      const values = i.values || [];
-
-      if (menuId.startsWith('prebot_perm_sel1_')) {
-        const part1Keys = PREBOT_PERMISSIONS.slice(0, Math.ceil(PREBOT_PERMISSIONS.length / 2)).map(p => p.key);
-        // Retain selections from part 2, replace part 1
-        selectedPerms = [...selectedPerms.filter(p => !part1Keys.includes(p)), ...values];
-      } else if (menuId.startsWith('prebot_perm_sel2_')) {
-        const part2Keys = PREBOT_PERMISSIONS.slice(Math.ceil(PREBOT_PERMISSIONS.length / 2)).map(p => p.key);
-        // Retain selections from part 1, replace part 2
-        selectedPerms = [...selectedPerms.filter(p => !part2Keys.includes(p)), ...values];
+    try {
+      const i = wrapInteraction(rawI);
+      const isAuthorized = await isOwnerOrExtraOwner(i.user.id, guild);
+      if (!isAuthorized) {
+        const errEmbed = new EmbedBuilder()
+          .setTitle('🔒 Access Denied')
+          .setColor(Colors.DANGER)
+          .setDescription('PreBot Whitelist management is strictly restricted to the **Server Owner** and **Extra Owners**.')
+          .setTimestamp();
+        return i.reply({ embeds: [errEmbed], flags: 64 }).catch(() => {});
       }
 
-      await i.update({
-        embeds: [buildEmbed()],
-        components: buildComponents()
-      });
-    } else if (i.isButton()) {
-      const btnId = i.customId;
+      if (i.isStringSelectMenu()) {
+        const menuId = i.customId;
+        const values = i.values || [];
 
-      if (btnId.startsWith('prebot_btn_role_')) {
-        createRole = !createRole;
+        if (menuId.startsWith('prebot_perm_sel1_')) {
+          const part1Keys = PREBOT_PERMISSIONS.slice(0, Math.ceil(PREBOT_PERMISSIONS.length / 2)).map(p => p.key);
+          // Retain selections from part 2, replace part 1
+          selectedPerms = [...selectedPerms.filter(p => !part1Keys.includes(p)), ...values];
+        } else if (menuId.startsWith('prebot_perm_sel2_')) {
+          const part2Keys = PREBOT_PERMISSIONS.slice(Math.ceil(PREBOT_PERMISSIONS.length / 2)).map(p => p.key);
+          // Retain selections from part 1, replace part 2
+          selectedPerms = [...selectedPerms.filter(p => !part2Keys.includes(p)), ...values];
+        }
+
         await i.update({
           embeds: [buildEmbed()],
           components: buildComponents()
-        });
-      } else if (btnId.startsWith('prebot_btn_cancel_')) {
-        collector.stop('cancelled');
-        const cancelEmbed = new EmbedBuilder()
-          .setTitle('❌ Setup Cancelled')
-          .setColor(Colors.DANGER)
-          .setDescription(`PreBot Whitelist setup for **<@${botId}>** was cancelled.`)
-          .setTimestamp();
-        await i.update({ embeds: [cancelEmbed], components: [] });
-      } else if (btnId.startsWith('prebot_btn_save_')) {
-        collector.stop('saved');
+        }).catch(() => {});
+      } else if (i.isButton()) {
+        const btnId = i.customId;
 
-        const newEntry: PreBotEntry = {
-          guildId: guild.id,
-          botId,
-          botName,
-          allowedPerms: selectedPerms,
-          createRole,
-          roleName: createRole ? roleName : undefined,
-          roleColor: createRole ? roleColor : undefined,
-          addedBy: interaction.user.id,
-          addedAt: Date.now(),
-          notes
-        };
+        if (btnId.startsWith('prebot_btn_role_')) {
+          createRole = !createRole;
+          await i.update({
+            embeds: [buildEmbed()],
+            components: buildComponents()
+          }).catch(() => {});
+        } else if (btnId.startsWith('prebot_btn_cancel_')) {
+          collector.stop('cancelled');
+          const cancelEmbed = new EmbedBuilder()
+            .setTitle('❌ Setup Cancelled')
+            .setColor(Colors.DANGER)
+            .setDescription(`PreBot Whitelist setup for **<@${botId}>** was cancelled.`)
+            .setTimestamp();
+          await i.update({ embeds: [cancelEmbed], components: [] }).catch(() => {});
+        } else if (btnId.startsWith('prebot_btn_save_')) {
+          collector.stop('saved');
 
-        await savePrebotEntry(newEntry);
-        context.logSyncEvent(guild.id, `✅ [PreBot Whitelist]: Pre-approved bot ${botName} (${botId}) with ${selectedPerms.length} allowed permissions.`, 'success');
+          const newEntry: PreBotEntry = {
+            guildId: guild.id,
+            botId,
+            botName,
+            allowedPerms: selectedPerms,
+            createRole,
+            roleName: createRole ? roleName : undefined,
+            roleColor: createRole ? roleColor : undefined,
+            addedBy: interaction.user.id,
+            addedAt: Date.now(),
+            notes
+          };
 
-        const successEmbed = new EmbedBuilder()
-          .setColor(Colors.SUCCESS)
-          .setTitle(`${BOT_ICON} PreBot Whitelist — Saved`)
-          .setDescription([
-            `${VERIFIED_ICON} **Bot <@${botId}>** (\`${botName}\`) has been successfully registered in the **PreBot Whitelist**.`,
-            `When this bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser will instantly verify it, strip unauthorized roles, and enforce this custom profile.`,
-            `\n${ARROW_ICON} **Allowed Permissions**: ${selectedPerms.length > 0 ? selectedPerms.map(p => `\`${p}\``).join(', ') : '`None`'}`,
-            `${ARROW_ICON} **Dedicated Trusted Role**: ${createRole ? `\`${roleName}\`` : '`Disabled`'}`
-          ].join('\n'))
-          .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
-          .setTimestamp();
+          await savePrebotEntry(newEntry);
+          context.logSyncEvent(guild.id, `✅ [PreBot Whitelist]: Pre-approved bot ${botName} (${botId}) with ${selectedPerms.length} allowed permissions.`, 'success');
 
-        await i.update({ embeds: [successEmbed], components: [] });
+          const successEmbed = new EmbedBuilder()
+            .setColor(Colors.SUCCESS)
+            .setTitle(`${BOT_ICON} PreBot Whitelist — Saved`)
+            .setDescription([
+              `${VERIFIED_ICON} **Bot <@${botId}>** (\`${botName}\`) has been successfully registered in the **PreBot Whitelist**.`,
+              `When this bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser will instantly verify it, strip unauthorized roles, and enforce this custom profile.`,
+              `\n${ARROW_ICON} **Allowed Permissions**: ${selectedPerms.length > 0 ? selectedPerms.map(p => `\`${p}\``).join(', ') : '`None`'}`,
+              `${ARROW_ICON} **Dedicated Trusted Role**: ${createRole ? `\`${roleName}\`` : '`Disabled`'}`
+            ].join('\n'))
+            .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
+            .setTimestamp();
+
+          await i.update({ embeds: [successEmbed], components: [] }).catch(() => {});
+        }
       }
+    } catch (err: any) {
+      console.warn('[prebot_whitelist] Collector error:', err?.message || err);
     }
   });
 }
@@ -360,8 +376,16 @@ export function registerPrebotCommands(): void {
     dangerLevel: 'High',
     hidden: true, // Confidential — Excluded from r!help, autocomplete & public listings
     execute: async (message: Message, args: string[], extra?: any) => {
+      const safeReply = async (opts: any) => {
+        try {
+          return await message.reply(opts);
+        } catch {
+          return await (message.channel as any)?.send(opts).catch(() => null);
+        }
+      };
+
       const guild = message.guild;
-      if (!guild) return message.reply('This command can only be executed in a server.');
+      if (!guild) return safeReply('This command can only be executed in a server.');
 
       const isAuthorized = await isOwnerOrExtraOwner(message.author.id, guild);
       if (!isAuthorized) {
@@ -369,14 +393,14 @@ export function registerPrebotCommands(): void {
           title: 'Confidential Command Access Denied',
           description: `${WRONG_ICON} **Confidential Security Feature**: PreBot Whitelist management is strictly restricted to the **Server Owner** (<@${guild.ownerId}>) and designated **Extra Owners**.\n\n*This secret management suite is not accessible by regular members or administrators.*`
         });
-        return message.reply({ embeds: [denEmbed] });
+        return safeReply({ embeds: [denEmbed] });
       }
 
       const sub = args[0]?.toLowerCase() || 'list';
 
       if (sub === '2fa') {
         if (message.author.id !== guild.ownerId) {
-          return message.reply({
+          return safeReply({
             embeds: [new EmbedBuilder()
               .setTitle(`${WRONG_ICON} Server Owner Access Restricted`)
               .setColor(Colors.DANGER)
@@ -391,7 +415,7 @@ export function registerPrebotCommands(): void {
         if (['set', 'setup', 'on', 'create'].includes(action)) {
           const pinArg = args[2] || args.find(a => /^\d{6}$/.test(a.trim()));
           if (!pinArg || !/^\d{6}$/.test(pinArg.trim())) {
-            return message.reply(`${WRONG_ICON} Please specify a valid 6-digit passcode. Example: \`r!prebot 2fa set 123456\``);
+            return safeReply(`${WRONG_ICON} Please specify a valid 6-digit passcode. Example: \`r!prebot 2fa set 123456\``);
           }
 
           await TwoFactorManager.savePrebot2FAConfig(guild.id, message.author.id, pinArg.trim(), true);
@@ -401,11 +425,10 @@ export function registerPrebotCommands(): void {
             new ButtonBuilder()
               .setCustomId(`btn_dismiss_${message.author.id}`)
               .setLabel('Dismiss Message')
-              .setEmoji('🗑️')
               .setStyle(ButtonStyle.Danger)
           );
 
-          return message.reply({
+          return safeReply({
             embeds: [new EmbedBuilder()
               .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Set & Activated!`)
               .setColor(Colors.SUCCESS)
@@ -424,18 +447,18 @@ export function registerPrebotCommands(): void {
         if (['change', 'update', 'edit'].includes(action)) {
           const cfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
           if (!cfg || !cfg.pin) {
-            return message.reply(`${WRONG_ICON} No passcode is currently set. Use \`r!prebot 2fa set <6-digit-pin>\` to set one.`);
+            return safeReply(`${WRONG_ICON} No passcode is currently set. Use \`r!prebot 2fa set <6-digit-pin>\` to set one.`);
           }
 
           const oldPin = args[2];
           const newPin = args[3];
 
           if (!oldPin || !newPin || !/^\d{6}$/.test(oldPin.trim()) || !/^\d{6}$/.test(newPin.trim())) {
-            return message.reply(`${WRONG_ICON} Please specify both your current passcode and your new 6-digit passcode. Example: \`r!prebot 2fa change <old-pin> <new-pin>\``);
+            return safeReply(`${WRONG_ICON} Please specify both your current passcode and your new 6-digit passcode. Example: \`r!prebot 2fa change <old-pin> <new-pin>\``);
           }
 
           if (!TwoFactorManager.verifyPin(cfg.pin, oldPin)) {
-            return message.reply(`${WRONG_ICON} Existing passcode verification failed. Incorrect current passcode.`);
+            return safeReply(`${WRONG_ICON} Existing passcode verification failed. Incorrect current passcode.`);
           }
 
           await TwoFactorManager.savePrebot2FAConfig(guild.id, message.author.id, newPin.trim(), true);
@@ -445,11 +468,10 @@ export function registerPrebotCommands(): void {
             new ButtonBuilder()
               .setCustomId(`btn_dismiss_${message.author.id}`)
               .setLabel('Dismiss Message')
-              .setEmoji('🗑️')
               .setStyle(ButtonStyle.Danger)
           );
 
-          return message.reply({
+          return safeReply({
             embeds: [new EmbedBuilder()
               .setTitle(`${VERIFIED_ICON} PreBot 2FA Passcode Updated!`)
               .setColor(Colors.SUCCESS)
@@ -463,16 +485,16 @@ export function registerPrebotCommands(): void {
         if (['off', 'disable'].includes(action)) {
           const cfg = await TwoFactorManager.getPrebot2FAConfig(guild.id);
           if (!cfg || !cfg.isEnabled) {
-            return message.reply(`${WRONG_ICON} PreBot Whitelist 2FA protection is not currently enabled for this server.`);
+            return safeReply(`${WRONG_ICON} PreBot Whitelist 2FA protection is not currently enabled for this server.`);
           }
 
           const pinArg = args[2] || args.find(a => /^\d{6}$/.test(a.trim()));
           if (!pinArg) {
-            return message.reply(`${WRONG_ICON} Please provide your 6-digit passcode to disable 2FA. Example: \`r!prebot 2fa off 123456\``);
+            return safeReply(`${WRONG_ICON} Please provide your 6-digit passcode to disable 2FA. Example: \`r!prebot 2fa off 123456\``);
           }
 
           if (!TwoFactorManager.verifyPin(cfg.pin, pinArg)) {
-            return message.reply({
+            return safeReply({
               embeds: [new EmbedBuilder()
                 .setTitle(`${WRONG_ICON} 2FA Verification Failed`)
                 .setColor(Colors.DANGER)
@@ -482,7 +504,7 @@ export function registerPrebotCommands(): void {
           }
 
           await TwoFactorManager.setPrebot2FAEnabled(guild.id, false);
-          return message.reply({
+          return safeReply({
             embeds: [new EmbedBuilder()
               .setTitle(`${VERIFIED_ICON} PreBot Whitelist 2FA Disabled`)
               .setColor(Colors.SUCCESS)
@@ -497,7 +519,7 @@ export function registerPrebotCommands(): void {
         const isEnabled = cfg ? cfg.isEnabled : false;
         const hasPin = cfg ? Boolean(cfg.pin) : false;
 
-        return message.reply({
+        return safeReply({
           embeds: [new EmbedBuilder()
             .setTitle(`${SHIELD_ICON} PreBot Whitelist 2FA Security Status`)
             .setColor(isEnabled ? Colors.SUCCESS : Colors.INFO)
@@ -523,7 +545,7 @@ export function registerPrebotCommands(): void {
           const codeArg = args.find(a => /^\d{6}$/.test(a.trim()));
           if (!codeArg) {
             const targetMention = args[1] || '@BotName';
-            return message.reply({
+            return safeReply({
               embeds: [new EmbedBuilder()
                 .setTitle(`${SHIELD_ICON} 2FA Passcode Required`)
                 .setColor(Colors.WARN)
@@ -541,7 +563,7 @@ export function registerPrebotCommands(): void {
 
           const isValid = TwoFactorManager.verifyPin(tfaCfg.pin, codeArg);
           if (!isValid) {
-            return message.reply({
+            return safeReply({
               embeds: [new EmbedBuilder()
                 .setTitle(`${WRONG_ICON} 2FA Passcode Verification Failed`)
                 .setColor(Colors.DANGER)
@@ -556,18 +578,19 @@ export function registerPrebotCommands(): void {
       if (sub === 'add' || sub === 'edit') {
         const targetUser = message.mentions.users.first() || (args[1] ? await message.client.users.fetch(args[1]).catch(() => null) : null);
         if (!targetUser) {
-          return message.reply(`${WRONG_ICON} Please specify a bot user. Example: \`r!prebot add @BotName\` or \`r!prebot add 1234567890\``);
+          return safeReply(`${WRONG_ICON} Please specify a bot user. Example: \`r!prebot add @BotName\` or \`r!prebot add 1234567890\``);
         }
         if (!targetUser.bot) {
-          return message.reply(`${WRONG_ICON} Target user **<@${targetUser.id}>** is not a Discord bot application.`);
+          return safeReply(`${WRONG_ICON} Target user **<@${targetUser.id}>** is not a Discord bot application.`);
         }
 
         const syntheticInteraction = {
           guild,
           user: message.author,
+          channel: message.channel,
           deferReply: async () => { },
-          editReply: async (opts: any) => message.reply(opts),
-          reply: async (opts: any) => message.reply(opts),
+          editReply: async (opts: any) => safeReply(opts),
+          reply: async (opts: any) => safeReply(opts),
           options: {
             getSubcommand: () => sub,
             getUser: () => targetUser
@@ -581,10 +604,10 @@ export function registerPrebotCommands(): void {
       if (sub === 'quickadd' || sub === 'quick') {
         const targetUser = message.mentions.users.first() || (args[1] ? await message.client.users.fetch(args[1]).catch(() => null) : null);
         if (!targetUser) {
-          return message.reply(`${WRONG_ICON} Please specify a bot user to quick-add. Example: \`r!prebot quickadd @BotName\``);
+          return safeReply(`${WRONG_ICON} Please specify a bot user to quick-add. Example: \`r!prebot quickadd @BotName\``);
         }
         if (!targetUser.bot) {
-          return message.reply(`${WRONG_ICON} Target user **<@${targetUser.id}>** is not a Discord bot application.`);
+          return safeReply(`${WRONG_ICON} Target user **<@${targetUser.id}>** is not a Discord bot application.`);
         }
 
         const defaultPerms = ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'EmbedLinks', 'AttachFiles'];
@@ -613,18 +636,18 @@ export function registerPrebotCommands(): void {
           ].join('\n'))
           .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
           .setTimestamp();
-        return message.reply({ embeds: [successEmbed] });
+        return safeReply({ embeds: [successEmbed] });
       }
 
       if (sub === 'remove') {
         const targetUser = message.mentions.users.first() || (args[1] ? await message.client.users.fetch(args[1]).catch(() => null) : null);
         if (!targetUser) {
-          return message.reply(`${WRONG_ICON} Please specify a bot to remove. Example: \`r!prebot remove @BotName\``);
+          return safeReply(`${WRONG_ICON} Please specify a bot to remove. Example: \`r!prebot remove @BotName\``);
         }
 
         const removed = await deletePrebotEntry(guild.id, targetUser.id);
         if (!removed) {
-          return message.reply(`${WRONG_ICON} Bot **<@${targetUser.id}>** is not in the PreBot Whitelist.`);
+          return safeReply(`${WRONG_ICON} Bot **<@${targetUser.id}>** is not in the PreBot Whitelist.`);
         }
 
         const removeEmbed = new EmbedBuilder()
@@ -636,13 +659,13 @@ export function registerPrebotCommands(): void {
           ].join('\n'))
           .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
           .setTimestamp();
-        return message.reply({ embeds: [removeEmbed] });
+        return safeReply({ embeds: [removeEmbed] });
       }
 
       if (['list', 'show', 'view', 'all'].includes(sub)) {
         const entries = await getPrebotEntries(guild.id);
         if (entries.length === 0) {
-          return message.reply({
+          return safeReply({
             embeds: [new EmbedBuilder()
               .setTitle(`${BOT_ICON} PreBot Whitelist — Registry`)
               .setColor(Colors.SUCCESS)
@@ -670,7 +693,7 @@ export function registerPrebotCommands(): void {
           ].join('\n');
         }).join('\n\n');
 
-        return message.reply({
+        return safeReply({
           embeds: [new EmbedBuilder()
             .setTitle(`${BOT_ICON} PreBot Whitelist — Registry (${entries.length})`)
             .setColor(Colors.SUCCESS)
@@ -688,15 +711,15 @@ export function registerPrebotCommands(): void {
       if (sub === 'info') {
         const targetUser = message.mentions.users.first() || (args[1] ? await message.client.users.fetch(args[1]).catch(() => null) : null);
         if (!targetUser) {
-          return message.reply(`${WRONG_ICON} Please specify a bot. Example: \`r!prebot info @BotName\``);
+          return safeReply(`${WRONG_ICON} Please specify a bot. Example: \`r!prebot info @BotName\``);
         }
 
         const entry = await getPrebotEntry(guild.id, targetUser.id);
         if (!entry) {
-          return message.reply(`${WRONG_ICON} Bot **<@${targetUser.id}>** is not registered in the PreBot Whitelist.`);
+          return safeReply(`${WRONG_ICON} Bot **<@${targetUser.id}>** is not registered in the PreBot Whitelist.`);
         }
 
-        return message.reply({
+        return safeReply({
           embeds: [new EmbedBuilder()
             .setTitle(`${BOT_ICON} PreBot Whitelist — ${entry.botName}`)
             .setColor(Colors.SUCCESS)
@@ -715,7 +738,7 @@ export function registerPrebotCommands(): void {
       }
 
       // Fallback: Help & Command Syntax Manual
-      return message.reply({
+      return safeReply({
         embeds: [new EmbedBuilder()
           .setTitle(`${SHIELD_ICON} PreBot Whitelist — Command Manual`)
           .setColor(Colors.SUCCESS)
@@ -847,7 +870,6 @@ export const PrebotWhitelistManifest: ModuleManifest = {
               new ButtonBuilder()
                 .setCustomId(`btn_dismiss_${interaction.user.id}`)
                 .setLabel('Dismiss Message')
-                .setEmoji('🗑️')
                 .setStyle(ButtonStyle.Danger)
             );
 
@@ -901,7 +923,6 @@ export const PrebotWhitelistManifest: ModuleManifest = {
               new ButtonBuilder()
                 .setCustomId(`btn_dismiss_${interaction.user.id}`)
                 .setLabel('Dismiss Message')
-                .setEmoji('🗑️')
                 .setStyle(ButtonStyle.Danger)
             );
 

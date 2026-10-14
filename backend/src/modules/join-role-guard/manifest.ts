@@ -20,30 +20,11 @@ export async function checkRoleAssignment(
   }
 
   const config = guardModule.config || {};
-  const gracePeriodSeconds = config.joinGracePeriod ?? 20;
+  const gracePeriodSeconds = config.joinGracePeriod ?? 300;
   const ignoreOnboarding = config.ignoreOnboarding !== false;
   const ignoreScreening = config.ignoreScreening !== false;
   const ignoreTrustedBots = config.ignoreTrustedBots !== false;
   const debugMode = config.debugMode === true;
-
-  const joinedAt = newMember.joinedTimestamp;
-  if (!joinedAt) {
-    if (debugMode) {
-      console.log(`[JoinGuard Debug] [Guild ${newMember.guild.id}] Member ${newMember.user.username} does not have a joined timestamp. Allowing check.`);
-    }
-    return 'ALLOW_CHECK';
-  }
-
-  const elapsedMs = Date.now() - joinedAt;
-  const gracePeriodMs = gracePeriodSeconds * 1000;
-  const recentlyJoined = elapsedMs <= gracePeriodMs;
-
-  if (!recentlyJoined) {
-    if (debugMode) {
-      console.log(`[JoinGuard Debug] [Guild ${newMember.guild.id}] Member ${newMember.user.username} is outside the join grace period (${Math.round(elapsedMs / 1000)}s > ${gracePeriodSeconds}s). Allowing check.`);
-    }
-    return 'ALLOW_CHECK';
-  }
 
   // Check for dangerous permissions safely
   const DANGEROUS_FLAGS = [
@@ -68,6 +49,11 @@ export async function checkRoleAssignment(
     }
   });
 
+  const joinedAt = newMember.joinedTimestamp;
+  const elapsedMs = joinedAt ? Date.now() - joinedAt : Infinity;
+  const gracePeriodMs = gracePeriodSeconds * 1000;
+  const recentlyJoined = elapsedMs <= gracePeriodMs;
+
   const fetchedLogs = await guild.fetchAuditLogs({ limit: 5, type: AuditLogEvent.MemberRoleUpdate }).catch((err: any) => {
     if (debugMode) {
       console.error(`[JoinGuard Debug] [Guild ${guild.id}] Failed to fetch audit logs:`, err);
@@ -75,7 +61,7 @@ export async function checkRoleAssignment(
     return null;
   });
 
-  const isRecentAuditEntry = (entry: any, maxAgeMs = 15000) => {
+  const isRecentAuditEntry = (entry: any, maxAgeMs = 30000) => {
     if (!entry) return false;
     const now = Date.now();
     const created = entry.createdTimestamp;
@@ -86,7 +72,7 @@ export async function checkRoleAssignment(
   const logEntry = fetchedLogs?.entries.find((e: any) => e.targetId === newMember.id && isRecentAuditEntry(e));
 
   if (!logEntry) {
-    // If we have dangerous permissions, we MUST NOT ignore even if there is no audit log entry
+    // If dangerous permissions are being granted without an audit log, allow anti-nuke to check
     if (hasDangerousPerms) {
       if (debugMode) {
         console.log(`[JoinGuard Debug] [Guild ${guild.id}] No audit log entry, but dangerous permissions are being granted to ${newMember.user.username}. Allowing check.`);
@@ -94,9 +80,9 @@ export async function checkRoleAssignment(
       return 'ALLOW_CHECK';
     }
 
-    if (ignoreOnboarding || ignoreScreening) {
+    if (ignoreOnboarding || ignoreScreening || recentlyJoined) {
       if (debugMode) {
-        console.log(`[JoinGuard Debug] [Guild ${guild.id}] No matching recent audit log found for ${newMember.user.username} (inside grace period). Assuming onboarding/auto-role. Ignoring event.`);
+        console.log(`[JoinGuard Debug] [Guild ${guild.id}] No matching recent audit log found for ${newMember.user.username}. Assuming onboarding/auto-role. Ignoring event.`);
       }
       return 'IGNORE_EVENT';
     }
@@ -106,13 +92,32 @@ export async function checkRoleAssignment(
 
   const executor = logEntry.executor;
   if (!executor) {
+    if (!hasDangerousPerms && (ignoreOnboarding || ignoreScreening || recentlyJoined)) {
+      return 'IGNORE_EVENT';
+    }
     if (debugMode) {
       console.log(`[JoinGuard Debug] [Guild ${guild.id}] Audit log entry found but no executor present for ${newMember.user.username}. Allowing check.`);
     }
     return 'ALLOW_CHECK';
   }
 
-  // 3 & 5. Rage Optimiser Assigned the Role
+  // Discord Community Onboarding / Self-Selected Roles:
+  // When a user answers onboarding questions, Discord creates an audit log entry where executor is the user themselves.
+  // Unless the roles have dangerous permissions, this is normal Discord Onboarding and MUST NOT trigger anti-nuke.
+  if (executor.id === newMember.id) {
+    if (hasDangerousPerms) {
+      if (debugMode) {
+        console.log(`[JoinGuard Debug] [Guild ${guild.id}] Member ${newMember.user.username} received dangerous role via self-grant. Allowing check.`);
+      }
+      return 'ALLOW_CHECK';
+    }
+    if (debugMode) {
+      console.log(`[JoinGuard Debug] [Guild ${guild.id}] Role grant executor is the member themselves (${newMember.user.username}) — Discord Onboarding/Community questions. Ignoring event.`);
+    }
+    return 'IGNORE_EVENT';
+  }
+
+  // Rage Optimiser Assigned the Role
   if (executor.id === client.user.id) {
     if (hasDangerousPerms) {
       if (debugMode) {
@@ -126,7 +131,7 @@ export async function checkRoleAssignment(
     return 'IGNORE_EVENT';
   }
 
-  // 4. Trusted Bot check (Whitelist + PreBot)
+  // Trusted Bot check (Whitelist + PreBot)
   if (executor.bot) {
     let isPrebotAuth = false;
     try {
@@ -155,8 +160,15 @@ export async function checkRoleAssignment(
     }
   }
 
-  // 6. Whitelisted Executor
-  // Whitelisted executors are humans here, we return ALLOW_CHECK so existing anti-nuke whitelisting handles it.
+  // If inside join grace period and roles are non-dangerous:
+  if (recentlyJoined && !hasDangerousPerms && (ignoreOnboarding || ignoreScreening)) {
+    if (debugMode) {
+      console.log(`[JoinGuard Debug] [Guild ${guild.id}] Member ${newMember.user.username} granted non-dangerous role inside grace period. Ignoring event.`);
+    }
+    return 'IGNORE_EVENT';
+  }
+
+  // Whitelisted Executor
   const isWhitelisted = await checkBypassImmunity(executor.id, guild, context || {}, 'anti_role_grant');
   if (isWhitelisted) {
     if (debugMode) {
@@ -181,7 +193,7 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
     validate: (config: Record<string, any>, registry: DiscordResourceRegistry) => {
       const errors: string[] = [];
       // Set default values if not present
-      if (config.joinGracePeriod === undefined) config.joinGracePeriod = 20;
+      if (config.joinGracePeriod === undefined) config.joinGracePeriod = 300;
       if (config.enableJoinGuard === undefined) config.enableJoinGuard = true;
       if (config.ignoreOnboarding === undefined) config.ignoreOnboarding = true;
       if (config.ignoreScreening === undefined) config.ignoreScreening = true;

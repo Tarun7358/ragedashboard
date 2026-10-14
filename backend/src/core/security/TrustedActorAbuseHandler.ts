@@ -1,12 +1,144 @@
-import { Guild, GuildMember, EmbedBuilder } from 'discord.js';
+import { Guild, GuildMember, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { Database } from '../Database.js';
 import { removeExtraOwnerFromCache, getExtraOwnerFromCache, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import { TrustedActorStateSnapshot, SnapshotRecord } from './TrustedActorStateSnapshot.js';
-import { TrustedActorRateLimiter } from './TrustedActorRateLimiter.js';
+import { TrustedActorRateLimiter, AggregateThreatEvent } from './TrustedActorRateLimiter.js';
 import { RestoreEngine, RestoreReport } from './RestoreEngine.js';
+import { CentralLogger } from './CentralLogger.js';
 
 export class TrustedActorAbuseHandler {
   private static processingLocks = new Set<string>();
+
+  /**
+   * Pre-Attribution Anti-Nuke Circuit Breaker Trigger.
+   * Immediately (<1ms) engages narrowly-scoped containment when cross-event velocity explodes,
+   * before audit log resolution completes or executor attribution is finalized.
+   */
+  public static async tripCircuitBreaker(
+    guild: Guild,
+    recentEvents: AggregateThreatEvent[],
+    client?: any
+  ): Promise<string> {
+    if (!guild) return '';
+    TrustedActorRateLimiter.markCircuitBreakerTripped(guild.id);
+
+    const incidentId = `cb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const eventTimelineJson = JSON.stringify(recentEvents);
+    const score = recentEvents.reduce((acc, e) => acc + (e.weight || 1), 0);
+    const triggerReason = `Cross-Event Velocity Breach: ${recentEvents.length} destructive events (${score.toFixed(1)} velocity points in <5s)`;
+
+    console.warn(`⚡ [Circuit Breaker Tripped] Guild "${guild.name}" (${guild.id}) — Incident ${incidentId}: ${triggerReason}`);
+
+    // 1. Scoped Containment: Isolate dangerous permissions on public roles instantly
+    try {
+      if (guild.roles?.everyone) {
+        const everyonePerms = guild.roles.everyone.permissions;
+        const dangerous = [
+          PermissionFlagsBits.Administrator,
+          PermissionFlagsBits.ManageGuild,
+          PermissionFlagsBits.ManageRoles,
+          PermissionFlagsBits.ManageChannels,
+          PermissionFlagsBits.BanMembers,
+          PermissionFlagsBits.KickMembers,
+          PermissionFlagsBits.ManageWebhooks
+        ];
+        if (dangerous.some(p => everyonePerms.has(p))) {
+          await guild.roles.everyone.setPermissions(
+            everyonePerms.remove(dangerous),
+            `Circuit Breaker Containment [${incidentId}]`
+          ).catch(() => {});
+        }
+      }
+    } catch (e) {}
+
+    // 2. Persist Incident Record in SQLite (Zero-latency background write)
+    const db = Database.getDb();
+    if (db) {
+      await db.run(
+        `INSERT INTO security_incidents 
+        (incidentId, guildId, threatScore, triggerReason, containmentPolicy, eventTimelineJson, executorAttributionStatus, createdAt) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          incidentId,
+          guild.id,
+          score,
+          triggerReason,
+          'scoped_containment_quarantine',
+          eventTimelineJson,
+          'pending_attribution',
+          Date.now()
+        ]
+      ).catch(() => {});
+    }
+
+    // 3. Central Security Log & Alert
+    CentralLogger.attack({
+      guild,
+      action: 'ANTI-NUKE CIRCUIT BREAKER TRIPPED',
+      reason: triggerReason,
+      executorId: 'PENDING_AUDIT_LOG_ATTRIBUTION',
+      executorName: 'Unattributed Multi-Actor/High-Velocity Surge',
+      result: 'success',
+      note: `Incident ${incidentId}: Pre-attribution scoped containment engaged. Server restoration initiated.`,
+      severity: 'critical'
+    });
+
+    // 4. Alert in Security Log Channel & Fire Restoration
+    setImmediate(async () => {
+      try {
+        const logChannelId = await this.resolveSecurityLogChannel(guild);
+        if (logChannelId) {
+          const chan = guild.channels.cache.get(logChannelId) as any;
+          if (chan && chan.isTextBased()) {
+            const embed = new EmbedBuilder()
+              .setColor(0xEF4444)
+              .setAuthor({ name: 'Rage Optimiser • Pre-Attribution Circuit Breaker' })
+              .setTitle('<a:warning:1546155193303957504> CIRCUIT BREAKER TRIPPED — SCOPED CONTAINMENT ACTIVE')
+              .setDescription([
+                `**Incident ID**: \`${incidentId}\``,
+                `**Threat Score**: \`${score.toFixed(1)}\` (Threshold $\\ge$ 3.0 in 5s)`,
+                `**Status**: Scoped Containment Active • Attribution Verifying`,
+                `\n**Common Event Timeline**:`,
+                ...recentEvents.map(e => `• \`${e.eventType}\` — **${e.targetName}** (+${e.weight}) [${new Date(e.timestamp).toISOString().substring(11, 19)}]`),
+                `\n<a:loading:1546134304625528882> *Audit log executor analysis running in background. Server state restoration initiated via live snapshot.*`
+              ].join('\n'))
+              .setFooter({ text: 'Rage Optimiser • Zero-Trust Circuit Breaker' })
+              .setTimestamp();
+            await chan.send({ embeds: [embed] }).catch(() => {});
+          }
+        }
+
+        // Fire UPM Live Snapshot Restoration
+        const { restoreFromLiveSnapshot } = await import('../../modules/security/manifest.js');
+        await restoreFromLiveSnapshot(guild, client || guild.client, {}).catch(() => {});
+      } catch (e) {}
+    });
+
+    return incidentId;
+  }
+
+  /**
+   * Updates an incident record in SQLite once audit log attributes the destructive actor.
+   */
+  public static async updateIncidentAttribution(
+    incidentId: string,
+    executorId: string,
+    executorName: string
+  ): Promise<void> {
+    if (!incidentId) return;
+    try {
+      const db = Database.getDb();
+      if (db) {
+        await db.run(
+          `UPDATE security_incidents 
+           SET executorAttributionStatus = 'attributed', 
+               triggerReason = triggerReason || ' | Attributed to ' || ? || ' (' || ? || ')' 
+           WHERE incidentId = ?`,
+          [executorName, executorId, incidentId]
+        );
+      }
+    } catch {}
+  }
 
   /**
    * Ultra-fast (<1ms) trusted actor event processor.
@@ -122,12 +254,12 @@ export class TrustedActorAbuseHandler {
     const dmEmbed = new EmbedBuilder()
       .setColor(0xF59E0B)
       .setAuthor({ name: 'Rage Optimiser • Behavioral Security Gate' })
-      .setTitle('<a:Timer:1546231426863730728> TRUSTED ACTOR BEHAVIORAL WARNING')
+      .setTitle('<a:loading:1546134304625528882> TRUSTED ACTOR BEHAVIORAL WARNING')
       .setDescription([
         `You are registered as a **${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'}** in **${guild.name}**.\n`,
         `> <a:success_check:1546134620087783526> **Rapid Actions Detected**: Our sub-millisecond behavioral firewall detected rapid operations:`,
         ...summary,
-        `\n<a:Timer:1546231426863730728> **WARNING**: You are currently at **${warnCount}/${punishCount} events** in the ${winSec}-second window.`,
+        `\n<a:loading:1546134304625528882> **WARNING**: You are currently at **${warnCount}/${punishCount} events** in the ${winSec}-second window.`,
         `If rapid destructive actions continue, your trusted status will be **AUTOMATICALLY REVOKED**, you will be **QUARANTINED**, and all changes will be **REVERSED**.`
       ].join('\n'))
       .setFooter({ text: 'Rage Optimiser • Unbypassable Security Engine' })
@@ -143,7 +275,7 @@ export class TrustedActorAbuseHandler {
         const logEmbed = new EmbedBuilder()
           .setColor(0xF59E0B)
           .setAuthor({ name: 'Rage Optimiser • Security Log' })
-          .setTitle('<a:Timer:1546231426863730728> TRUSTED ACTOR WARNING ISSUED')
+          .setTitle('<a:loading:1546134304625528882> TRUSTED ACTOR WARNING ISSUED')
           .setDescription([
             `**Actor**: ${member} (\`${member.id}\`)`,
             `**Trust Level**: ${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'}`,
@@ -216,6 +348,20 @@ export class TrustedActorAbuseHandler {
       }
       await this.applyQuarantine(guild, member);
 
+      const summary = TrustedActorRateLimiter.getSummary(guild.id, member.id, 10);
+
+      CentralLogger.attack({
+        guild,
+        action: 'TRUSTED ACTOR ABUSE',
+        reason: `Exceeded 2+ rapid deletions/creations under 10s: ${summary.join(' • ')}`,
+        executorId: member.id,
+        executorName: member.user.username,
+        executorIsBot: member.user.bot,
+        result: 'success',
+        note: 'Whitelist permanently revoked, actor quarantined, and server state restored via live snapshot.',
+        severity: 'critical'
+      });
+
       // 4. STEP 3: RESTORE ALL DELETED/CREATED ASSETS FAST (LIFO Order + Live Snapshot)
       const restoreReport: RestoreReport = await RestoreEngine.restoreAll(guild, timeline);
       const { restoreFromLiveSnapshot } = await import('../../modules/security/manifest.js');
@@ -242,13 +388,12 @@ export class TrustedActorAbuseHandler {
       }
 
       // 6. STEP 5: LOG CHANNEL EMBED WITH CUSTOM EMOJIS & UI
-      const summary = TrustedActorRateLimiter.getSummary(guild.id, member.id, 10);
       const targetChanId = await this.resolveSecurityLogChannel(guild, logChannelId);
 
       const logEmbed = new EmbedBuilder()
         .setColor(0xEF4444)
         .setAuthor({ name: 'Rage Optimiser • Unbypassable Security Gate' })
-        .setTitle('<a:wrong:1546155193303957504> TRUSTED ACTOR ABUSE — REVOCATION & ROLLBACK EXECUTED')
+        .setTitle('<a:warning:1546155193303957504> TRUSTED ACTOR ABUSE — REVOCATION & ROLLBACK EXECUTED')
         .setDescription([
           `**Actor**: ${member} (\`${member.id}\`)`,
           `**Trust Level**: ${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted User'} *(NOW REVOKED)*`,
@@ -257,7 +402,7 @@ export class TrustedActorAbuseHandler {
           ...summary,
           `\n<:ticks:1532620580266836148> **RESTORATION REPORT (${restoreReport.durationMs}ms)**:`,
           ...(restoreReport.restored.length > 0 ? restoreReport.restored.map(r => `> <:ticks:1532620580266836148> ${r}`) : ['> *No assets required restoration*']),
-          ...(restoreReport.failed.length > 0 ? restoreReport.failed.map(f => `> <a:wrong:1546155193303957504> ${f}`) : []),
+          ...(restoreReport.failed.length > 0 ? restoreReport.failed.map(f => `> <a:warning:1546155193303957504> ${f}`) : []),
           `\n<a:success_check:1546134620087783526> *Trusted status permanently revoked. Server state restored to pre-abuse conditions.*`
         ].join('\n'))
         .setFooter({ text: 'Rage Optimiser • Sub-Millisecond Firewall' })
@@ -274,7 +419,7 @@ export class TrustedActorAbuseHandler {
       const dmEmbed = new EmbedBuilder()
         .setColor(0xEF4444)
         .setAuthor({ name: 'Rage Optimiser • Unbypassable Security Gate' })
-        .setTitle('<a:wrong:1546155193303957504> TRUSTED STATUS REVOKED & QUARANTINED')
+        .setTitle('<a:warning:1546155193303957504> TRUSTED STATUS REVOKED & QUARANTINED')
         .setDescription([
           `Your **${trustType === 'extraowner' ? 'Extra Owner' : 'Whitelisted'}** status in **${guild.name}** has been **AUTOMATICALLY REVOKED**.`,
           `\n**Reason**: Exceeded trusted actor threshold (2+ destructive actions under 10 seconds).`,
@@ -334,9 +479,9 @@ export class TrustedActorAbuseHandler {
       if (!qRole) {
         qRole = await guild.roles.create({
           name: '. Quarantine',
-          color: 0x343541,
+          colors: { primaryColor: 0x343541 },
           reason: 'Rage Optimiser Automated Quarantine System'
-        });
+        } as any);
       }
 
       if (qRole && member.manageable) {

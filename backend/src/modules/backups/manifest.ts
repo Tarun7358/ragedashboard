@@ -110,17 +110,17 @@ export async function ensureRageRoleAtTop(guild: any): Promise<any> {
       if (role) {
         if (!topRole) topRole = role;
 
+        const targetPos = Math.max(1, botHighestPos - 1 - i);
+        if (role.position !== targetPos) {
+          await role.setPosition(targetPos).catch(() => null);
+        }
+
         // Assign to bot ONLY (NEVER to owner or other members)
         me = await guild.members?.fetchMe().catch(() => guild.members?.me);
         if (me && !me.roles.cache.has(role.id)) {
-          await me.roles.add(role.id, `Backup Authority: Self-assigning ${roleName} role to bot`).catch((err: any) => {
-            console.error(`[Backup] Failed to add role "${role.name}" to bot:`, err?.message || err);
-          });
-        }
-
-        const targetPos = Math.max(1, botHighestPos - 1 - i);
-        if (role.position < targetPos) {
-          await role.setPosition(targetPos).catch(() => null);
+          if (me.roles.highest.comparePositionTo(role) > 0) {
+            await me.roles.add(role.id, `Backup Authority: Self-assigning ${roleName} role to bot`).catch(() => { });
+          }
         }
       }
     }
@@ -156,6 +156,7 @@ async function createBackupData(guild: any, creatorTag: string): Promise<any> {
       topic: c.topic || null,
       nsfw: c.nsfw || false,
       userLimit: c.userLimit || null,
+      rateLimitPerUser: c.rateLimitPerUser || 0,
       parentName: c.parent ? c.parent.name : null,
       position: c.position,
       permissionOverwrites: c.permissionOverwrites?.cache?.map((o: any) => {
@@ -368,7 +369,15 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
           try {
             const parent = chanData.parentName ? newCategoriesMap.get(chanData.parentName) : null;
             const isVoice = chanData.type === 2 || chanData.type === ChannelType.GuildVoice;
-            const type = isVoice ? ChannelType.GuildVoice : ChannelType.GuildText;
+            const isStage = chanData.type === 13 || chanData.type === ChannelType.GuildStageVoice;
+            const isAnnouncement = chanData.type === 5 || chanData.type === ChannelType.GuildAnnouncement;
+            const type = isVoice
+              ? ChannelType.GuildVoice
+              : isStage
+                ? ChannelType.GuildStageVoice
+                : isAnnouncement
+                  ? ChannelType.GuildAnnouncement
+                  : ChannelType.GuildText;
 
             const chanOptions: any = {
               name: chanData.name,
@@ -377,8 +386,11 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
               nsfw: Boolean(chanData.nsfw)
             };
 
-            if (!isVoice && chanData.topic) {
+            if (!isVoice && !isStage && chanData.topic) {
               chanOptions.topic = chanData.topic;
+            }
+            if (!isVoice && !isStage && typeof chanData.rateLimitPerUser === 'number' && chanData.rateLimitPerUser > 0) {
+              chanOptions.rateLimitPerUser = chanData.rateLimitPerUser;
             }
             if (isVoice && typeof chanData.userLimit === 'number' && chanData.userLimit > 0) {
               chanOptions.userLimit = chanData.userLimit;
@@ -630,15 +642,21 @@ export const BackupsManifest: ModuleManifest = {
 
         const interaction = interactionOrMessage;
         const isMessage = Boolean(interactionOrMessage.author);
-        const args: string[] = interactionOrMessage.args || [];
-        const sub = isMessage
-          ? (args[0]?.toLowerCase() || 'create')
-          : interactionOrMessage.options?.getSubcommand(false);
+        const args: string[] = interactionOrMessage.args || interactionOrMessage.parsed?.args || [];
+        const sub = (
+          interactionOrMessage.options?.getSubcommand?.(false) ||
+          args[0]?.toLowerCase() ||
+          (isMessage ? 'create' : 'list')
+        );
 
         if (!sub) {
           const msg = '❌ Please specify a subcommand: `create`, `list`, `info`, `load`, or `delete`.';
           return isMessage ? interactionOrMessage.reply(msg) : interactionOrMessage.reply({ content: msg, flags: 64 });
         }
+
+        const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+                        Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)) ||
+                        guild.ownerId === (interaction.user?.id || interaction.author?.id);
 
         const reply = async (payload: any) => {
           if (isMessage) {
@@ -648,6 +666,15 @@ export const BackupsManifest: ModuleManifest = {
             return interactionOrMessage.editReply(payload);
           }
           return interactionOrMessage.reply({ ...payload, flags: 64 });
+        };
+
+        const getBackupIdArg = () => {
+          return (
+            interaction.options?.getString?.('backup-id') ||
+            interaction.parsed?.args?.[1] ||
+            args[1] ||
+            ''
+          ).trim();
         };
 
         // 1. CREATE / SAVE SUBCOMMAND
@@ -685,7 +712,7 @@ export const BackupsManifest: ModuleManifest = {
             context.logSyncEvent?.(`Backup Recovery: Created configuration backup snapshot "${snapshot.id}" and updated live recovery database.`, 'success');
           } catch (err: any) {
             console.error(err);
-            await reply({ content: `<a:wrong:1546155193303957504> Failed to generate configuration backup: ${err.message}` });
+            await reply({ content: `<a:warning:1546155193303957504> Failed to generate configuration backup: ${err.message}` });
           }
         }
 
@@ -704,20 +731,23 @@ export const BackupsManifest: ModuleManifest = {
           guildBackups.slice(0, 10).forEach(b => {
             embed.addFields({
               name: `Snapshot \`${b.id}\``,
-              value: `<a:Timer:1546231426863730728> Date: \`${new Date(b.timestamp).toLocaleString()}\` | <a:success_check:1546134620087783526> Roles: \`${b.rolesCount}\` | <a:lovemail:1527647157371535420> Channels: \`${b.channelsCount}\` | Created By: \`${b.createdByName}\``
+              value: `<a:loading:1546134304625528882> Date: \`${new Date(b.timestamp).toLocaleString()}\` | <a:success_check:1546134620087783526> Roles: \`${b.rolesCount}\` | <a:lovemail:1527647157371535420> Channels: \`${b.channelsCount}\` | Created By: \`${b.createdByName}\``
             });
           });
 
-          await interaction.reply({ embeds: [embed], flags: 64 });
+          await reply({ embeds: [embed] });
         }
 
         // 3. INFO SUBCOMMAND
         else if (sub === 'info') {
-          const backupId = interaction.options.getString('backup-id') || '';
+          const backupId = getBackupIdArg();
+          if (!backupId) {
+            return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID. Example: `r!backup info BP-123-4567`' });
+          }
           const snapshot = await getBackupById(backupId);
 
           if (!snapshot) {
-            return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` was not found.`, flags: 64 });
+            return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` was not found.` });
           }
 
           const embed = new EmbedBuilder()
@@ -737,60 +767,66 @@ export const BackupsManifest: ModuleManifest = {
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
 
-          await interaction.reply({ embeds: [embed], flags: 64 });
+          await reply({ embeds: [embed] });
         }
 
         // 4. DELETE SUBCOMMAND
         else if (sub === 'delete') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '<a:success_check:1546134620087783526> Administrator permissions required to delete backups.', flags: 64 });
+          if (!isAdmin) {
+            return reply({ content: '<a:warning:1546155193303957504> Administrator permissions required to delete backups.' });
           }
 
-          const backupId = interaction.options.getString('backup-id') || '';
+          const backupId = getBackupIdArg();
+          if (!backupId) {
+            return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID to delete. Example: `r!backup delete BP-123-4567`' });
+          }
           const snapshot = await getBackupById(backupId);
 
           if (!snapshot) {
-            return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` was not found.`, flags: 64 });
+            return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` was not found.` });
           }
 
           await deleteBackup(backupId);
           context.logSyncEvent(`Backup Recovery: Deleted backup snapshot "${backupId}".`, 'warn');
-          await interaction.reply({ content: `<:ticks:1532620580266836148> Backup snapshot \`${backupId}\` was deleted successfully.`, flags: 64 });
+          await reply({ content: `<:ticks:1532620580266836148> Backup snapshot \`${backupId}\` was deleted successfully.` });
         }
 
         // 5. LOAD/RESTORE SUBCOMMAND
         else if (sub === 'load') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> Administrator permissions required to load backups.', flags: 64 });
+          if (!isAdmin) {
+            return reply({ content: '<a:warning:1546155193303957504> Administrator permissions required to load backups.' });
           }
 
-          const backupId = interaction.options.getString('backup-id') || '';
+          const backupId = getBackupIdArg();
+          if (!backupId) {
+            return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID to load. Example: `r!backup load BP-123-4567`' });
+          }
           const snapshot = await getBackupById(backupId);
 
           if (!snapshot) {
-            return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` was not found.`, flags: 64 });
+            return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` was not found.` });
           }
 
           // Save load intent mapping
-          pendingBackupLoads.set(`${guild.id}:${interaction.user.id}`, backupId);
+          const userId = interaction.user?.id || interaction.author?.id;
+          pendingBackupLoads.set(`${guild.id}:${userId}`, backupId);
 
           const embed = new EmbedBuilder()
             .setAuthor({ name: 'Rage Optimiser' })
-            .setTitle('<a:wrong:1546155193303957504> Confirm Server Rewrite & Clone')
+            .setTitle('<a:warning:1546155193303957504> Confirm Server Rewrite & Clone')
             .setDescription(`You are about to load backup ID **\`${backupId}\`**.\n\n` +
               `<a:lovemail:1527647157371535420> **Source Server**: ${snapshot.guildName}\n` +
               `<:config:1532425712844144701> **Channels**: ${snapshot.channelsCount}\n` +
               `<a:success_check:1546134620087783526> **Roles**: ${snapshot.rolesCount}\n\n` +
-              `<a:wrong:1546155193303957504> **WARNING**: This operation is **destructive**! It will delete all existing channels, categories, and roles (except bot roles & booster roles) and rebuild them from template.`)
+              `<a:warning:1546155193303957504> **WARNING**: This operation is **destructive**! It will delete all existing channels, categories, and roles (except bot roles & booster roles) and rebuild them from template.`)
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
 
-
           const row = new ActionRowBuilder()
             .addComponents(
               new ButtonBuilder()
-                .setCustomId('backup_confirm')
+                .setCustomId(`backup_confirm:${backupId}`)
                 .setLabel('Confirm & Rewrite')
                 .setStyle(ButtonStyle.Danger),
               new ButtonBuilder()
@@ -799,18 +835,20 @@ export const BackupsManifest: ModuleManifest = {
                 .setStyle(ButtonStyle.Secondary)
             );
 
-          await interaction.reply({ embeds: [embed], components: [row], flags: 64 });
+          await reply({ embeds: [embed], components: [row] });
         }
         else if (sub === 'compare') {
-          const backupId = interaction.options.getString('backup-id') || '';
+          const backupId = getBackupIdArg();
+          if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID to compare.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          return interaction.reply({ content: `<a:lovemail:1527647157371535420> **Backup Comparison (vs Current Guild)** for \`${backupId}\`:\n• **Roles**: ${snapshot.rolesCount} backup roles vs ${guild.roles.cache.size} current roles.\n• **Channels**: ${snapshot.channelsCount} backup channels vs ${guild.channels.cache.size} current channels.\nNo configuration drift identified.`, flags: 64 });
+          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          return reply({ content: `<a:lovemail:1527647157371535420> **Backup Comparison (vs Current Guild)** for \`${backupId}\`:\n• **Roles**: ${snapshot.rolesCount} backup roles vs ${guild.roles.cache.size} current roles.\n• **Channels**: ${snapshot.channelsCount} backup channels vs ${guild.channels.cache.size} current channels.\nNo configuration drift identified.` });
         }
         else if (sub === 'preview') {
-          const backupId = interaction.options.getString('backup-id') || '';
+          const backupId = getBackupIdArg();
+          if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID to preview.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
+          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
           const embed = new EmbedBuilder()
             .setAuthor({ name: 'Rage Optimiser' })
             .setTitle(`<a:lovemail:1527647157371535420> Backup Snapshot Preview: ${snapshot.id}`)
@@ -818,45 +856,54 @@ export const BackupsManifest: ModuleManifest = {
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
             .setTimestamp();
-          return interaction.reply({ embeds: [embed], flags: 64 });
+          return reply({ embeds: [embed] });
         }
         else if (sub === 'verify') {
-          const backupId = interaction.options.getString('backup-id') || '';
+          const backupId = getBackupIdArg();
+          if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID to verify.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          return interaction.reply({ content: `<:ticks:1532620580266836148> **Backup Snapshot Verification Result** for \`${backupId}\`:\nFile checksum verified. Snapshot structure is intact and ready for deployment.`, flags: 64 });
+          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          return reply({ content: `<:ticks:1532620580266836148> **Backup Snapshot Verification Result** for \`${backupId}\`:\nFile checksum verified. Snapshot structure is intact and ready for deployment.` });
         }
         else if (sub === 'schedule') {
-          const interval = interaction.options.getString('interval') || 'daily';
+          const interval = interaction.options?.getString?.('interval') || interaction.parsed?.args?.[1] || args[1] || 'daily';
           context.logSyncEvent(`Backup Recovery: Automated database backup scheduled (${interval}).`, 'success');
-          return interaction.reply({ content: `<a:Timer:1546231426863730728> **Automated Backup Scheduled**:\nSystem will generate backups on a **${interval}** interval.`, flags: 64 });
+          return reply({ content: `<a:loading:1546134304625528882> **Automated Backup Scheduled**:\nSystem will generate backups on a **${interval}** interval.` });
         }
         else if (sub === 'permissions') {
-          const backupId = interaction.options.getString('backup-id') || '';
+          if (!isAdmin) return reply({ content: '<a:warning:1546155193303957504> Administrator permissions required to restore permissions.' });
+          const backupId = getBackupIdArg();
+          if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          await interaction.reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring permissions settings only from snapshot \`${backupId}\`...`, flags: 64 });
+          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          await reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring permissions settings only from snapshot \`${backupId}\`...` });
           executeRestoration(guild, snapshot, { roles: false, channels: false, settings: true, expressions: false }, context).catch(console.error);
         }
         else if (sub === 'channels') {
-          const backupId = interaction.options.getString('backup-id') || '';
+          if (!isAdmin) return reply({ content: '<a:warning:1546155193303957504> Administrator permissions required to restore channels.' });
+          const backupId = getBackupIdArg();
+          if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          await interaction.reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring channels layout structure only from snapshot \`${backupId}\`...`, flags: 64 });
+          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          await reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring channels layout structure only from snapshot \`${backupId}\`...` });
           executeRestoration(guild, snapshot, { roles: false, channels: true, settings: false, expressions: false }, context).catch(console.error);
         }
         else if (sub === 'roles') {
-          const backupId = interaction.options.getString('backup-id') || '';
+          if (!isAdmin) return reply({ content: '<a:warning:1546155193303957504> Administrator permissions required to restore roles.' });
+          const backupId = getBackupIdArg();
+          if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          await interaction.reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring roles hierarchy only from snapshot \`${backupId}\`...`, flags: 64 });
+          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          await reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring roles hierarchy only from snapshot \`${backupId}\`...` });
           executeRestoration(guild, snapshot, { roles: true, channels: false, settings: false, expressions: false }, context).catch(console.error);
         }
         else if (sub === 'emojis') {
-          const backupId = interaction.options.getString('backup-id') || '';
+          if (!isAdmin) return reply({ content: '<a:warning:1546155193303957504> Administrator permissions required to restore emojis.' });
+          const backupId = getBackupIdArg();
+          if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return interaction.reply({ content: `<a:wrong:1546155193303957504> Backup with ID \`${backupId}\` not found.`, flags: 64 });
-          await interaction.reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring custom emojis only from snapshot \`${backupId}\`...`, flags: 64 });
+          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          await reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring custom emojis only from snapshot \`${backupId}\`...` });
           executeRestoration(guild, snapshot, { roles: false, channels: false, settings: false, expressions: true }, context).catch(console.error);
         }
       }
@@ -867,32 +914,51 @@ export const BackupsManifest: ModuleManifest = {
         const guild = interaction.guild;
         if (!guild) return;
 
-        // Re-verify admin permission on the button click — prevents bypass if the
-        // original slash command's permission check is somehow circumvented.
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Administrator permissions required to confirm server restoration.', flags: 64 });
+        // Immediately acknowledge the interaction to prevent Discord 3-second timeout
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferUpdate().catch(() => {});
         }
 
-        const key = `${guild.id}:${interaction.user.id}`;
-        const backupId = pendingBackupLoads.get(key);
+        // Re-verify admin permission on the button click — prevents bypass if the
+        // original slash command's permission check is somehow circumvented.
+        const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+                        Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)) ||
+                        guild.ownerId === (interaction.user?.id || interaction.author?.id);
+
+        if (!isAdmin) {
+          return interaction.followUp({ content: '<a:warning:1546155193303957504> Administrator permissions required to confirm server restoration.', flags: 64 }).catch(() => {});
+        }
+
+        const userId = interaction.user?.id || interaction.author?.id;
+        const key = `${guild.id}:${userId}`;
+        let backupId = pendingBackupLoads.get(key);
+
+        if (!backupId && typeof interaction.customId === 'string' && interaction.customId.includes(':')) {
+          backupId = interaction.customId.split(':')[1];
+        }
 
         if (!backupId) {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> No pending backup load intent found. Please rerun `/backup load`.', flags: 64 });
+          return interaction.followUp({ content: '<a:warning:1546155193303957504> No pending backup load intent found. Please rerun `/backup load` or `r!backup load`.', flags: 64 }).catch(() => {});
         }
 
         pendingBackupLoads.delete(key);
 
         const snapshot = await getBackupById(backupId);
         if (!snapshot) {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Backup snapshot data not found.', flags: 64 });
+          return interaction.followUp({ content: `<a:warning:1546155193303957504> Backup snapshot data for \`${backupId}\` was not found in the database.`, flags: 64 }).catch(() => {});
         }
 
         try {
-          await interaction.reply({ content: '<a:success_check:1546134620087783526> **Restoration Commencing**\nBot is rebuilding channels and roles in the background. Watch dashboard/logs for live updates.', flags: 64 });
+          await interaction.editReply({
+            content: '<a:success_check:1546134620087783526> **Restoration Commencing**\nBot is rebuilding channels and roles in the background. Watch dashboard/logs for live updates.',
+            embeds: [],
+            components: []
+          }).catch(() => {});
+
           executeRestoration(guild, snapshot, { roles: true, channels: true, settings: true, expressions: true }, context).catch(console.error);
         } catch (e: any) {
           console.error(e);
-          await interaction.followUp({ content: `<a:wrong:1546155193303957504> Failed to execute restoration: ${e.message}`, flags: 64 });
+          await interaction.followUp({ content: `<a:warning:1546155193303957504> Failed to execute restoration: ${e.message}`, flags: 64 }).catch(() => {});
         }
       }
     },
@@ -902,8 +968,18 @@ export const BackupsManifest: ModuleManifest = {
         const guild = interaction.guild;
         if (!guild) return;
 
-        pendingBackupLoads.delete(`${guild.id}:${interaction.user.id}`);
-        await interaction.reply({ content: '<a:wrong:1546155193303957504> Backup restoration canceled.', flags: 64 });
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferUpdate().catch(() => {});
+        }
+
+        const userId = interaction.user?.id || interaction.author?.id;
+        pendingBackupLoads.delete(`${guild.id}:${userId}`);
+
+        await interaction.editReply({
+          content: '<a:warning:1546155193303957504> Backup restoration canceled.',
+          embeds: [],
+          components: []
+        }).catch(() => {});
       }
     }
   ],

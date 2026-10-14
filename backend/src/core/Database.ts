@@ -220,7 +220,8 @@ export class Database {
       'guild_xp', 'guild_economy', 'discord_sessions', 'public_feed',
       'sync_logs', 'schema_migrations', 'tickets', 'ticket_messages',
       'ticket_panels', 'moderation_cases', 'persistent_music_queues', 'prebot_whitelist',
-      'guild_custom_embeds', 'trusted_actor_abuse_logs', 'server_audit_logs'
+      'guild_custom_embeds', 'trusted_actor_abuse_logs', 'server_audit_logs',
+      'upm_snapshot_versions', 'security_incidents'
     ];
 
     const rows = await this.all<{ name: string }>(
@@ -521,6 +522,29 @@ export class Database {
         roles TEXT,
         guildSettings TEXT
       );`,
+      `CREATE TABLE IF NOT EXISTS upm_snapshot_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        sha256 TEXT,
+        channels TEXT,
+        roles TEXT,
+        guildSettings TEXT
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_upm_snap_vers ON upm_snapshot_versions (guildId, version DESC);`,
+      `CREATE TABLE IF NOT EXISTS security_incidents (
+        id TEXT PRIMARY KEY,
+        guildId TEXT NOT NULL,
+        status TEXT NOT NULL,
+        threatScore REAL NOT NULL,
+        executorId TEXT,
+        executorTag TEXT,
+        timeline TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        containedAt INTEGER
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_sec_incidents_guild ON security_incidents (guildId, createdAt DESC);`,
       `CREATE TABLE IF NOT EXISTS guild_warnings (
         guildId TEXT NOT NULL,
         userId TEXT NOT NULL,
@@ -806,6 +830,12 @@ export class Database {
         channelId TEXT NOT NULL,
         messageId TEXT NOT NULL,
         updatedAt INTEGER NOT NULL
+      );`,
+      `CREATE TABLE IF NOT EXISTS uptime_monitors (
+        guildId TEXT PRIMARY KEY,
+        channelId TEXT NOT NULL,
+        messageId TEXT NOT NULL,
+        lastUpdated INTEGER NOT NULL
       );`
     ];
 

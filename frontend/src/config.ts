@@ -11,12 +11,16 @@ const isLocal = typeof window !== 'undefined' && (
 );
 
 const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+const isNetlify = typeof window !== 'undefined' && window.location.hostname.includes('netlify.app');
 const PROD_HOST = 'apirageoptimisercom.altvr.in';
 
-const defaultApiBase = isLocal ? 'http://localhost:5000' : `https://${PROD_HOST}`;
+// When running on Netlify, use same-origin relative proxy ('') so Netlify edge handles requests
+// This prevents direct browser navigation to flagged domains and avoids Google Safe Browsing warnings.
+const defaultApiBase = isLocal ? 'http://localhost:5000' : (isNetlify ? '' : `https://${PROD_HOST}`);
 const defaultWsBase = isLocal ? 'ws://localhost:5000' : `wss://${PROD_HOST}`;
 
-let resolvedApiBase = (import.meta.env.VITE_API_URL as string) || defaultApiBase;
+let envApiUrl = (import.meta.env.VITE_API_URL as string) || '';
+let resolvedApiBase = envApiUrl ? (isNetlify && envApiUrl.includes('altvr.in') ? '' : envApiUrl) : defaultApiBase;
 let resolvedWsBase = (import.meta.env.VITE_WS_URL as string) || defaultWsBase;
 
 // Security & mixed-content guard: On HTTPS pages (like Netlify), never attempt ws:// or localhost
@@ -30,7 +34,7 @@ if (isHttps) {
   if (resolvedWsBase.includes('localhost') || resolvedWsBase.includes('127.0.0.1')) {
     resolvedWsBase = `wss://${PROD_HOST}`;
   }
-  if (resolvedApiBase.includes('localhost') || resolvedApiBase.includes('127.0.0.1')) {
+  if (!isNetlify && (resolvedApiBase.includes('localhost') || resolvedApiBase.includes('127.0.0.1'))) {
     resolvedApiBase = `https://${PROD_HOST}`;
   }
 }

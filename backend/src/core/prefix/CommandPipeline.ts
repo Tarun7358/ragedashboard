@@ -76,19 +76,40 @@ export class CommandPipeline {
         'enable', 'disable', 'on', 'off', 'activate', 'deactivate',
         'setup', 'config', 'settings', 'module', 'modules',
         'setup-tickets', 'setup-discord-dashboard', 'security', 'logs',
-        'backup', 'audit', 'diagnostics', 'automod', 'automation', 'automations', 'auto'
+        'backup', 'audit', 'diagnostics', 'automod', 'automation', 'automations', 'auto',
+        '247', '24/7', 'voicepresence', 'voice', 'vc',
+        'prefix', 'setprefix', 'pfx'
       ];
 
       const managementSubCmds = [
         'setup', 'enable', 'disable', 'config', 'settings', 'profile',
-        'role', 'branding', 'preset', 'on', 'off', 'activate', 'deactivate', 'status'
+        'role', 'branding', 'preset', 'on', 'off', 'activate', 'deactivate', 'status',
+        'join', 'leave', 'set'
       ];
 
       const isManagementCmd =
         managementCmdNames.includes(cmdMeta.name) ||
         managementSubCmds.includes(parsed.subcommand || '');
 
-      if (cmdMeta.moduleOwnerId !== 'core' && !isManagementCmd && (!modState || modState.status !== 'enabled')) {
+      let isModuleActive = modState && modState.status === 'enabled';
+      if (!isModuleActive && (cmdMeta.moduleOwnerId === 'prebot_whitelist' || cmdMeta.name === 'prebot')) {
+        const secMod = modules.find((m: any) => m.id === 'security');
+        if (secMod && secMod.status === 'enabled') {
+          const toggle = ctx.get('toggleModule');
+          if (toggle) toggle('prebot_whitelist', true);
+          isModuleActive = true;
+        }
+      }
+
+      if (!isModuleActive && (cmdMeta.moduleOwnerId === 'voice' || ['247', '24/7', 'voicepresence', 'voice', 'vc'].includes(cmdMeta.name))) {
+        if (['join', 'set'].includes(parsed.subcommand || '')) {
+          const toggle = ctx.get('toggleModule');
+          if (toggle) toggle('voice', true);
+          isModuleActive = true;
+        }
+      }
+
+      if (cmdMeta.moduleOwnerId !== 'core' && cmdMeta.moduleOwnerId !== 'rage-enterprise' && !isManagementCmd && !isModuleActive) {
         return this.sendError(ctx, `The backing module **\`${cmdMeta.moduleOwnerId}\`** is currently disabled on this server. Run \`r!enable ${cmdMeta.moduleOwnerId}\` or \`r!enable all\` to activate it.`);
       }
 
@@ -144,15 +165,18 @@ export class CommandPipeline {
         return this.sendError(ctx, permResult.reason || 'You lack the required permissions to execute this command.');
       }
 
-      // Auto-delete sensitive trigger messages containing 2fa, passcodes, or confidential commands
+      // Auto-delete sensitive trigger messages containing raw secrets or 2FA setup passcodes
       const rawInputLower = ctx.parsed.rawInput.toLowerCase();
-      const isSensitiveTrigger = cmdMeta.name === 'prebot' || cmdMeta.hidden || 
-        rawInputLower.includes('2fa') || 
-        rawInputLower.includes('passcode') || 
-        rawInputLower.includes('secret') || 
-        rawInputLower.includes('pin');
+      const containsSecretPin = (
+        rawInputLower.includes('2fa set') ||
+        rawInputLower.includes('2fa change') ||
+        rawInputLower.includes('2fa off') ||
+        (ctx.args.some(a => /^\d{6}$/.test(a.trim())) && (rawInputLower.includes('2fa') || rawInputLower.includes('passcode')))
+      );
 
-      if (isSensitiveTrigger && ctx.message.deletable) {
+      // Do NOT delete normal prebot commands (e.g. r!prebot add, r!prebot list) before execution,
+      // as deleting the trigger message before execution breaks Discord's message.reply() reference in handlers.
+      if (containsSecretPin && ctx.message.deletable) {
         ctx.message.delete().catch(() => {});
       }
 
@@ -172,7 +196,7 @@ export class CommandPipeline {
         PrefixAnalytics.trackFailure('cooldown');
         const embed = new EmbedBuilder()
           .setAuthor({ name: 'Rage Optimiser Security Gate • Cooldown' })
-          .setTitle('<a:Timer:1546231426863730728> Command Cooldown Active')
+          .setTitle('<a:loading:1546134304625528882> Command Cooldown Active')
           .setDescription(`Please wait **\`${cdResult.retryAfter}s\`** before executing \`r!${cmdMeta.name}\` again.`)
           .setColor(0xF59E0B)
           .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${correlationId}` })
@@ -262,12 +286,14 @@ export class CommandPipeline {
 
       const errEmbed = new EmbedBuilder()
         .setAuthor({ name: 'Rage Optimiser Engine • Execution Error' })
-        .setTitle('<a:wrong:1546155193303957504> Command Execution Failed')
+        .setTitle('<a:warning:1546155193303957504> Command Execution Failed')
         .setDescription(err.message || 'An internal server error occurred during validation or execution of this command.')
         .setColor(0xEF4444)
         .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
         .setTimestamp();
-      await ctx.message.reply({ embeds: [errEmbed] }).catch(() => {});
+      await ctx.message.reply({ embeds: [errEmbed] }).catch(() => {
+        return (ctx.channel as any)?.send({ embeds: [errEmbed] }).catch(() => {});
+      });
     }
   }
 
@@ -297,11 +323,11 @@ export class CommandPipeline {
         await confirmation.update({ content: '<:ticks:1532620580266836148> Command confirmed. Starting execution...', embeds: [], components: [] });
         return true;
       } else {
-        await confirmation.update({ content: '<a:wrong:1546155193303957504> Command cancelled.', embeds: [], components: [] });
+        await confirmation.update({ content: '<a:warning:1546155193303957504> Command cancelled.', embeds: [], components: [] });
         return false;
       }
     } catch {
-      await response.edit({ content: '<a:Timer:1546231426863730728> Command timed out due to inactivity.', embeds: [], components: [] }).catch(() => {});
+      await response.edit({ content: '<a:loading:1546134304625528882> Command timed out due to inactivity.', embeds: [], components: [] }).catch(() => {});
       return false;
     }
   }
@@ -311,37 +337,32 @@ export class CommandPipeline {
       new ButtonBuilder()
         .setCustomId(`btn_dismiss_${ctx.executor.id}`)
         .setLabel('Dismiss Message')
-        .setEmoji('<a:wrong:1546155193303957504>')
         .setStyle(ButtonStyle.Danger)
     );
 
     const embed = new EmbedBuilder()
       .setAuthor({ name: 'Rage Optimiser Security Gate • System Warning' })
-      .setTitle('<a:wrong:1546155193303957504> Command Pipeline Warning')
+      .setTitle('<a:warning:1546155193303957504> Command Pipeline Warning')
       .setDescription(message)
       .setColor(0xEF4444)
       .setFooter({ text: `Rage Optimiser v4.2 • Correlation ID: ${ctx.correlationId}` })
       .setTimestamp();
 
-    // 1. Send privately via Direct Message (DM) so ONLY the person who triggered the command can view it
-    const dmSent = await ctx.executor.send({ embeds: [embed] }).then(() => true).catch(() => false);
-
-    if (dmSent) {
-      // Auto-delete trigger message from channel so public chat stays clean
-      if (ctx.message.deletable) {
-        ctx.message.delete().catch(() => {});
+    // Deliver feedback directly in the channel with safe auto-delete and fallback
+    const safeChannelSend = async () => {
+      try {
+        return await ctx.message.reply({ embeds: [embed], components: [dismissRow] });
+      } catch {
+        return await (ctx.channel as any)?.send({ embeds: [embed], components: [dismissRow] }).catch(() => null);
       }
-      return;
-    }
+    };
 
-    // 2. Fallback if user's DMs are closed: reply in channel with auto-delete after 5 seconds
-    return ctx.message.reply({ embeds: [embed], components: [dismissRow] }).then(sent => {
-      setTimeout(() => {
-        sent.delete().catch(() => {});
-        if (ctx.message.deletable) {
-          ctx.message.delete().catch(() => {});
-        }
-      }, 5000);
+    return safeChannelSend().then((sent: any) => {
+      if (sent) {
+        setTimeout(() => {
+          sent.delete().catch(() => {});
+        }, 7000);
+      }
     }).catch(() => {});
   }
 }

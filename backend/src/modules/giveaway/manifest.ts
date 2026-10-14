@@ -234,7 +234,6 @@ export const GiveawayManifest: ModuleManifest = {
               .setCustomId(`gw_enter_${gwId}`)
               .setLabel('Enter Giveaway')
               .setStyle(ButtonStyle.Success)
-              .setEmoji('<:booster:1532621228492460172>')
           );
 
           if (interaction.deferReply) {

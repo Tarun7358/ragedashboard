@@ -277,27 +277,22 @@ export function buildBotStatsComponents(userId: string, currentCategory: string 
     new ButtonBuilder()
       .setCustomId(`botstats_cat_overview_${userId}`)
       .setLabel('Overview')
-      .setEmoji(BOT_ICON)
       .setStyle(currentCategory === 'overview' ? ButtonStyle.Success : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`botstats_cat_network_${userId}`)
       .setLabel('Network')
-      .setEmoji(MEMBER_ICON)
       .setStyle(currentCategory === 'network' ? ButtonStyle.Success : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`botstats_cat_system_${userId}`)
       .setLabel('System')
-      .setEmoji(CONFIG_ICON)
       .setStyle(currentCategory === 'system' ? ButtonStyle.Success : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`botstats_cat_security_${userId}`)
       .setLabel('Security')
-      .setEmoji(SHIELD_ICON)
       .setStyle(currentCategory === 'security' ? ButtonStyle.Success : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`botstats_refresh_${userId}`)
       .setLabel('Refresh')
-      .setEmoji(VERIFIED_ICON)
       .setStyle(ButtonStyle.Primary)
   );
 

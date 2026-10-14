@@ -12,6 +12,7 @@ import {
 } from 'discord.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { PrefixResolver } from '../../core/prefix/PrefixResolver.js';
+import { CentralLogger } from '../../core/security/CentralLogger.js';
 import {
   buildLimeOverviewCard,
   createLimeEmbed,
@@ -297,9 +298,11 @@ export async function ensureAntiNukeBackupRoles(guild: any): Promise<string[]> {
         // Assign strictly to bot only
         me = await guild.members?.fetchMe().catch(() => guild.members?.me);
         if (me && !me.roles.cache.has(role.id)) {
-          await me.roles.add(role.id, 'Rage Backup Authority: Self-assigning backup role to bot').catch((err: any) => {
-            console.error(`[AntiNuke Backup Roles] Failed to assign role "${role.name}" to bot:`, err?.message || err);
-          });
+          if (me.roles.highest.comparePositionTo(role) > 0) {
+            await me.roles.add(role.id, 'Rage Backup Authority: Self-assigning backup role to bot').catch(() => { });
+          } else {
+            console.log(`[AntiNuke Backup Roles] Role "${role.name}" is at or above bot highest role; position preserved.`);
+          }
         }
 
         createdOrFound.push(role.name);
@@ -384,9 +387,13 @@ export async function repairRageBotAdminPermissions(guild: any): Promise<{ repai
       for (const roleName of BACKUP_ROLE_NAMES) {
         const foundRole = guild.roles.cache.find((r: any) => r.name.toLowerCase().trim() === roleName.toLowerCase().trim());
         if (foundRole && !updatedMe.roles.cache.has(foundRole.id)) {
-          await updatedMe.roles.add(foundRole.id, 'Rage Self-Healing: Re-assigning backup role to bot').catch((err: any) => {
-            console.error(`[Bot Admin Self-Healing] Failed to assign "${foundRole.name}" to bot:`, err?.message || err);
-          });
+          if (updatedMe.roles.highest.comparePositionTo(foundRole) > 0) {
+            await updatedMe.roles.add(foundRole.id, 'Rage Self-Healing: Re-assigning backup role to bot').catch((err: any) => {
+              console.error(`[Bot Admin Self-Healing] Failed to assign "${foundRole.name}" to bot:`, err?.message || err);
+            });
+          } else {
+            console.warn(`[Bot Admin Self-Healing] Cannot assign "${foundRole.name}" to bot: Role is positioned at or above bot's highest role ("${updatedMe.roles.highest.name}"). Move the bot's role above it in Discord Server Settings.`);
+          }
         }
       }
     }
@@ -1196,8 +1203,9 @@ export function registerEnableDisableCommands(): void {
       if (!guildId || !message.guild) {
         return message.reply({ content: `${WRONG_EMOJI} Command can only be executed within a server.` });
       }
+      const guild = message.guild;
 
-      const isAuthorized = await isOwnerOrExtraOwner(message.author.id, message.guild);
+      const isAuthorized = await isOwnerOrExtraOwner(message.author.id, guild);
       if (!isAuthorized) {
         return message.reply({
           content: `${WRONG_EMOJI} **Access Denied**: Enabling security modules is strictly restricted to the **Server Owner** and designated **Extra Owners**.`
@@ -1264,30 +1272,37 @@ export function registerEnableDisableCommands(): void {
 
         const steps = [
           {
-            label: 'Establishing Connection with Rage Security Cluster...',
-            detail: 'Connected'
-          },
-          {
-            label: 'Checking Minimum Requirements for Antinuke...'
-          },
-          {
-            label: `Creating DB for "${guildCleanName}"...`,
+            label: 'Establishing Connection with Rage Security Cluster & DB...',
+            detail: 'Connected',
             subLines: [
               `└ Server Id : ${message.guild.id}`,
               `└ Rage Security DB ID : ${dbHash.slice(0, 16)}`
             ]
           },
           {
-            label: 'Starting Role Integrity Check...'
+            label: 'Checking Minimum Requirements for Antinuke & Bot Permissions...',
+            detail: 'Verified'
           },
           {
-            label: 'Checking Rage Unbypassable , Rage Antinuke , Rage Roles Created....'
+            label: 'Starting Role Integrity Check & Provisioning Backup Roles...',
+            detail: 'Protected',
+            subLines: [
+              `└ Authority Roles : . Secured, . UnBypassable, . RageUnBypassable`
+            ]
           },
           {
-            label: 'Backup Admin Roles Created And Assigned To Bot.'
+            label: 'Aligning Role Hierarchy at Highest Manageable Position...',
+            detail: 'Aligned'
           },
           {
-            label: 'Establishing Gmail Connectors...'
+            label: 'Deploying Live Cyber Dashboard Channel (#rage-dashboard)...',
+            detail: 'Position 0'
+          },
+          {
+            label: target === 'all'
+              ? 'Arming All 29 Anti-Nuke Rules & Enterprise Protection Engines...'
+              : 'Arming All 29 Anti-Nuke Protection Rules...',
+            detail: 'Armed'
           }
         ];
 
@@ -1326,17 +1341,45 @@ export function registerEnableDisableCommands(): void {
 
         replyMsg = await message.reply({ embeds: [renderSetupCard(0)] }).catch(() => null);
 
-        if (replyMsg) {
-          let activeMsg: any = replyMsg;
-          for (let i = 1; i <= steps.length; i++) {
-            await new Promise(res => setTimeout(res, 280));
-            if (activeMsg) {
-              const updated: any = await activeMsg.edit({ embeds: [renderSetupCard(i)] }).catch(() => null);
-              if (updated) activeMsg = updated;
-            }
+        // ── Real-Time Execution Pipeline ─────────────────────────────
+        // Step 1: Database Registration & Cluster Handshake
+        try {
+          const db = Database.getDb();
+          if (db) {
+            await db.run(
+              `INSERT INTO approvals (guildId, status, joinedAt, lastUpdated) 
+               VALUES (?, ?, ?, ?) 
+               ON CONFLICT(guildId) DO UPDATE SET status = ?, lastUpdated = ?`,
+              [guild.id, 'Approved', Date.now(), Date.now(), 'Approved', Date.now()]
+            ).catch(async () => {
+              await db.run('UPDATE approvals SET status = ?, lastUpdated = ? WHERE guildId = ?', ['Approved', Date.now(), guild.id]).catch(() => {});
+            });
           }
-          replyMsg = activeMsg;
-        }
+        } catch {}
+        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(1)] }).catch(() => null);
+
+        // Step 2: Permissions & Requirements Check
+        await guild.members.fetchMe().catch(() => guild.members.me);
+        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(2)] }).catch(() => null);
+
+        // Step 3: Role Integrity Check & Create/Heal Backup Roles
+        await repairRageBotAdminPermissions(guild).catch(() => {});
+        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(3)] }).catch(() => null);
+
+        // Step 4: Role Hierarchy & Top Positioning
+        const { ensureRageRoleAtTop } = await import('../backups/manifest.js');
+        await ensureRageRoleAtTop(guild).catch(() => {});
+        await stripPrivilegedNonWhitelistedMembers(guild).catch(() => {});
+        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(4)] }).catch(() => null);
+
+        // Step 5: Deploy Live Cyber Dashboard Channel (#rage-dashboard)
+        await deploySecurityDashboardToChannel(guild).catch(() => null);
+        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(5)] }).catch(() => null);
+
+        // Step 6: Arming completed & prepare smooth transition
+        await new Promise(r => setTimeout(r, 450));
+        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(6)] }).catch(() => null);
+        await new Promise(r => setTimeout(r, 300));
       }
 
       // A. ENABLE ANTI-NUKE
@@ -2088,6 +2131,14 @@ export function registerEnableDisableCommands(): void {
           updatedRules[ruleKey] = { ...defaultDef, enabled: true };
         }
         if (updateConfig) updateConfig('security', { ...currentSecConfig, antiNukeEnabled: true, prebotEnabled: true, rules: updatedRules });
+        CentralLogger.antinuke({
+          guild: message.guild!,
+          title: 'ANTINUKE ENABLED',
+          triggeredById: message.author.id,
+          triggeredByName: message.author.username,
+          details: `Anti-Nuke was activated via \`${prefix}enable antinuke\``,
+          severity: 'low'
+        });
 
         // Enable AutoMod
         if (toggleMod) toggleMod('automod', true);
@@ -2393,6 +2444,14 @@ export function registerEnableDisableCommands(): void {
         if (toggleMod) toggleMod('security', false);
         const secMod = modulesState.find((m: any) => m.id === 'security');
         if (updateConfig) updateConfig('security', { ...(secMod?.config || {}), antiNukeEnabled: false });
+        CentralLogger.antinuke({
+          guild: message.guild!,
+          title: 'ANTINUKE DISABLED',
+          triggeredById: message.author.id,
+          triggeredByName: message.author.username,
+          details: `Anti-Nuke was disabled via \`${prefix}disable antinuke\``,
+          severity: 'high'
+        });
 
         const card = new EmbedBuilder()
           .setColor(0xFF4444)

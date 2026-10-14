@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE } from '../config';
 
 /**
  * OAuthCallback — handles the redirect from Discord after OAuth authorization.
- * Backend redirects here with ?data=<encoded JSON> containing token + guilds.
- * After parsing, it calls loginDiscord() and transitions to server selection.
+ * Supports both:
+ * 1. Backend redirect: ?data=<encoded JSON>
+ * 2. Direct Discord redirect: ?code=...&state=... (exchanged via /api/auth/discord/callback proxy)
  */
 export function OAuthCallback({ onSuccess }: { onSuccess: () => void }) {
   const { loginDiscord } = useAuth();
@@ -16,6 +18,8 @@ export function OAuthCallback({ onSuccess }: { onSuccess: () => void }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const rawData = params.get('data');
+    const code = params.get('code');
+    const state = params.get('state');
     const error = params.get('error');
 
     if (error) {
@@ -24,8 +28,52 @@ export function OAuthCallback({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
+    const finishLogin = (data: any) => {
+      const { token, user, managedGuilds, approvals } = data;
+      if (!token || !user) throw new Error('Malformed session data');
+      loginDiscord(token, user, managedGuilds || [], approvals || {});
+      setStatus('success');
+
+      setTimeout(() => {
+        try {
+          window.history.replaceState({}, '', '/');
+        } catch {}
+        if (onSuccess) {
+          onSuccess();
+        }
+        setTimeout(() => {
+          if (window.location.pathname.startsWith('/auth/callback')) {
+            window.location.replace('/');
+          }
+        }, 300);
+      }, 700);
+    };
+
+    if (code) {
+      // Direct OAuth code exchange through Netlify API proxy
+      fetch(`${API_BASE}/api/auth/discord/callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, state })
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Authentication failed (${res.status})`);
+          }
+          return res.json();
+        })
+        .then((data) => finishLogin(data))
+        .catch((err) => {
+          console.error('[OAuthCallback] Code exchange error:', err);
+          setErrorMsg(err.message || 'Failed to exchange Discord authorization code.');
+          setStatus('error');
+        });
+      return;
+    }
+
     if (!rawData) {
-      setErrorMsg('Invalid callback — no data received from Discord.');
+      setErrorMsg('Invalid callback — no authorization data or code received.');
       setStatus('error');
       return;
     }
@@ -37,12 +85,7 @@ export function OAuthCallback({ onSuccess }: { onSuccess: () => void }) {
       } catch {
         decoded = JSON.parse(decodeURIComponent(rawData));
       }
-      const { token, user, managedGuilds, approvals } = decoded;
-
-      if (!token || !user) throw new Error('Malformed session data');
-
-      loginDiscord(token, user, managedGuilds || [], approvals || {});
-      setStatus('success');
+      finishLogin(decoded);
 
       // Short success animation before redirecting to server selection
       setTimeout(() => {

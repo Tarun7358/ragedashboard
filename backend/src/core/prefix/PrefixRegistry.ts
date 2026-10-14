@@ -50,7 +50,10 @@ export class PrefixRegistry {
     'an': 'antinuke',
     'eo': 'extraowner',
     'pb': 'prebot',
-    'nop': 'noprefix',
+    'nop': 'np',
+    'noprefix': 'np',
+    'npmanager': 'np',
+    'threat': 'security',
     'q': 'quarantine',
     'quar': 'quarantine',
     'unq': 'unquarantine',
@@ -99,35 +102,59 @@ export class PrefixRegistry {
     'en': 'enable',
     'dis': 'disable',
     'pfx': 'prefix',
+    'setprefix': 'prefix',
     'diag': 'diagnostics',
     'bs': 'botstats',
+    'bi': 'botstats',
+    'botinfo': 'botstats',
     'gw': 'giveaway',
     'rr': 'reactionrole',
-    'vc': 'voice',
+    'reactionroles': 'reactionrole',
+    'vc': '247',
+    '24/7': '247',
+    '24-7': '247',
+    'voice': '247',
+    'vp': '247',
+    'voicepresence': '247',
     'jointocreate': 'jtc',
     'j2c': 'jtc',
     'jg': 'joinguard',
     'jguard': 'joinguard',
+    'voicemanager': 'voice',
+    'vclock': 'vclock',
+    'vcunlock': 'vcunlock',
+    'lockvc': 'vclock',
+    'unlockvc': 'vcunlock',
+    'voicelock': 'vclock',
+    'voiceunlock': 'vcunlock',
+    'vc-lock': 'vclock',
+    'vc-unlock': 'vcunlock',
     'automations': 'automation',
     'auto': 'automation',
+    'tickets': 'ticket',
+    'tkmgr': 'ticketmanager',
+    'social': 'social-updates',
+    'customembed': 'embed',
+    'backups': 'backup',
+    'leveling': 'rank',
+    'level': 'rank',
 
     // Informational & System
     'h': 'help',
-    'cmds': 'commands',
+    'cmds': 'help',
+    'commands': 'help',
     'p': 'play',
     's': 'skip',
     'q_music': 'queue',
-    'np': 'nowplaying',
     'ui': 'userinfo',
     'av': 'avatar',
     'si': 'serverinfo',
-    'ri': 'roleinfo',
-    'ci': 'channelinfo',
-    'bi': 'botinfo',
     'stat': 'stats',
-    'ver': 'version',
+    'ver': 'botstats',
+    'version': 'botstats',
     'sec': 'security',
-    'log': 'logs'
+    'log': 'logs',
+    'logging': 'logs'
   };
 
   // ─────────────────────────────────────────────
@@ -154,13 +181,14 @@ export class PrefixRegistry {
 
     if (this.commandsMap.has(name)) {
       const existing = this.commandsMap.get(name)!;
-      if (meta.execute) {
-        existing.execute = meta.execute;
+      if (meta.execute || (meta.subcommands && meta.subcommands.length > 0) || meta.examples) {
+        if (meta.execute) existing.execute = meta.execute;
         if (meta.description) existing.description = meta.description;
         if (meta.usage) existing.usage = meta.usage;
         if (meta.category) existing.category = meta.category;
+        if (meta.subcommands && meta.subcommands.length > 0) existing.subcommands = meta.subcommands;
         if (meta.aliases) {
-          existing.aliases = meta.aliases;
+          existing.aliases = Array.from(new Set([...existing.aliases, ...meta.aliases]));
           for (const alias of meta.aliases) {
             this.aliasMap.set(alias.toLowerCase(), name);
           }
@@ -385,12 +413,67 @@ export class PrefixRegistry {
         description: 'View or change the server prefix',
         category: 'System',
         usage: 'r!prefix [set <prefix> | reset | list]',
-        aliases: ['pfx'],
+        aliases: ['pfx', 'setprefix'],
         userPermissions: ['Administrator'],
         cooldownSeconds: 3,
         examples: ['r!prefix', 'r!prefix set !', 'r!prefix reset'],
         moduleOwnerId: 'core',
-        dangerLevel: 'Low'
+        dangerLevel: 'Low',
+        execute: async (message: any, args: string[]) => {
+          const guildId = message.guildId;
+          if (!guildId || !message.guild) {
+            return message.reply('Custom prefixes can only be configured inside a server.');
+          }
+          const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+          const isAuthorized = await isOwnerOrExtraOwner(message.author.id, message.guild);
+          const { PrefixResolver } = await import('./PrefixResolver.js');
+          const { Embeds, VERIFIED_ICON, WRONG_ICON, CONFIG_ICON } = await import('../UIFactory.js');
+
+          const firstArg = args[0]?.toLowerCase();
+          if (!firstArg || firstArg === 'list' || firstArg === 'show') {
+            const curPrefix = PrefixResolver.getPrefix(guildId);
+            const embed = Embeds.info(
+              `${CONFIG_ICON} Server Prefix Settings`,
+              `Current prefix: **\`${curPrefix}\`**   •   Default fallback: **\`r!\`**\n\nChange with: \`${curPrefix}prefix set <new>\` or \`${curPrefix}setprefix <new>\`\n*Restricted to Server Owner & Extra Owners.*`,
+              { module: 'system' }
+            );
+            return message.reply({ embeds: [embed] });
+          }
+
+          if (firstArg === 'reset') {
+            if (!isAuthorized) {
+              return message.reply(`${WRONG_ICON} **Access Denied**: Resetting the server prefix is strictly restricted to the **Server Owner** (<@${message.guild?.ownerId}>) and designated **Extra Owners**.`);
+            }
+            const updated = await PrefixResolver.resetPrefix(guildId);
+            const embed = Embeds.success(
+              `${VERIFIED_ICON} Prefix Reset`,
+              `Server prefix has been reset to the default: **\`${updated}\`**`,
+              { module: 'system' }
+            );
+            return message.reply({ embeds: [embed] });
+          }
+
+          const targetPrefix = firstArg === 'set' ? args[1] : args[0];
+          if (!targetPrefix) {
+            return message.reply(`${WRONG_ICON} Please specify a new prefix. Example: \`r!prefix set !\` or \`r!setprefix !\``);
+          }
+
+          if (!isAuthorized) {
+            return message.reply(`${WRONG_ICON} **Access Denied**: Changing the server prefix is strictly restricted to the **Server Owner** (<@${message.guild?.ownerId}>) and designated **Extra Owners**.`);
+          }
+
+          try {
+            const updated = await PrefixResolver.setPrefix(guildId, targetPrefix);
+            const embed = Embeds.success(
+              `${VERIFIED_ICON} Server Prefix Updated`,
+              `Prefix for **${message.guild?.name}** has been changed to **\`${updated}\`**`,
+              { module: 'system' }
+            );
+            return message.reply({ embeds: [embed] });
+          } catch (err: any) {
+            return message.reply(`${WRONG_ICON} Failed to update prefix: ${err.message}`);
+          }
+        }
       },
       {
         name: 'ping',
@@ -401,7 +484,20 @@ export class PrefixRegistry {
         cooldownSeconds: 3,
         examples: ['r!ping'],
         moduleOwnerId: 'core',
-        dangerLevel: 'Low'
+        dangerLevel: 'Low',
+        execute: async (message: any) => {
+          const wsPing = Math.max(1, Math.round(message.client.ws.ping));
+          const uptimeSec = process.uptime();
+          const startTime = Math.floor((Date.now() - uptimeSec * 1000) / 1000);
+          const heapMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
+          const { Embeds, BOT_ICON } = await import('../UIFactory.js');
+          const pingEmbed = Embeds.info(
+            `${BOT_ICON} Bot Latency & Status`,
+            `WebSocket Ping: **\`${wsPing}ms\`**\nUptime: <t:${startTime}:R>\nMemory Heap: **\`${heapMb} MB\`**`,
+            { module: 'system' }
+          );
+          return message.reply({ embeds: [pingEmbed] });
+        }
       }
     ];
 
@@ -411,54 +507,7 @@ export class PrefixRegistry {
 
     // ── Enterprise shortcut stubs ─────────────────────────────────
     const shortcutCategoryMap: Record<string, string> = {
-      antinuke: 'Security',
-      extraowner: 'Security',
-      whitelist: 'Security',
-      prebot: 'Security',
-      temprole: 'Security',
-      noprefix: 'Security',
-      threat: 'Security',
-      quarantine: 'Security',
-      media: 'Security',
-      attachfiles: 'Security',
-      mediaall: 'Security',
-      antispam: 'AutoMod',
-      antilink: 'AutoMod',
-      automod: 'AutoMod',
-      antiattachment: 'AutoMod',
-      antimedia: 'AutoMod',
-      antiimages: 'AutoMod',
-      raidmode: 'Security',
-      emergency: 'Security',
-      permissions: 'Security',
-      verification: 'Verification',
-      leveling: 'Leveling & Economy',
-      ticket: 'Tickets',
-      tickets: 'Tickets',
-      ticketmanager: 'Tickets',
-      tkmgr: 'Tickets',
-      social: 'Social Updates',
-      'social-updates': 'Social Updates',
-      jtc: 'Voice',
-      voiceprotection: 'Voice',
-      voicemanager: 'Voice',
-      automation: 'Automations',
-      automations: 'Automations',
-      logging: 'Logging',
-      notes: 'Moderation',
-      autorole: 'Community',
-      embed: 'Community',
-      customembed: 'Community',
-      goodbye: 'Community',
-      birthday: 'Community',
-      boost: 'Community',
-      milestones: 'Community',
-      reactionroles: 'Reaction Roles',
-      selfroles: 'Roles',
-      backup: 'Backups',
-      backups: 'Backups',
-      config: 'Configuration',
-      setup: 'Configuration',
+      permissions: 'System',
       modules: 'System',
       premium: 'System',
       status: 'System',
@@ -468,6 +517,8 @@ export class PrefixRegistry {
       uptime: 'System',
       cache: 'System',
       memory: 'System',
+      emergency: 'Security',
+      diagnostics: 'Diagnostics',
       developer: 'System',
       reload: 'System',
       restart: 'System',
@@ -485,14 +536,14 @@ export class PrefixRegistry {
         cooldownSeconds: 3,
         examples: [`r!${name}`],
         moduleOwnerId: 'rage-enterprise',
-        hidden: name === 'prebot' || name === 'prebotwhitelist',
+        hidden: false,
         dangerLevel: ['emergency', 'reload', 'restart'].includes(name) ? 'High' : 'Low'
       });
     }
 
     // ── Music commands ────────────────────────────────────────────
     // Registered here so they enter the standard pipeline (permissions, cooldowns, analytics).
-    // The CommandPipeline dispatches them to the music module's manifest event handlers.
+    // The CommandPipeline dispatches them to the rage-enterprise module's manifest event handlers.
     const musicCommands: Array<Partial<PrefixCommandMeta> & { name: string; description: string; category: string }> = [
       {
         name: 'play',
@@ -502,7 +553,7 @@ export class PrefixRegistry {
         aliases: ['p'],
         cooldownSeconds: 2,
         examples: ['r!play Blinding Lights', 'r!play https://youtu.be/xxx'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -513,7 +564,7 @@ export class PrefixRegistry {
         aliases: [],
         cooldownSeconds: 2,
         examples: ['r!pause'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -524,7 +575,7 @@ export class PrefixRegistry {
         aliases: [],
         cooldownSeconds: 2,
         examples: ['r!resume'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -535,7 +586,7 @@ export class PrefixRegistry {
         aliases: ['s'],
         cooldownSeconds: 2,
         examples: ['r!skip'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -546,7 +597,7 @@ export class PrefixRegistry {
         aliases: ['prev', 'previous'],
         cooldownSeconds: 2,
         examples: ['r!back'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -557,7 +608,7 @@ export class PrefixRegistry {
         aliases: ['leave', 'disconnect'],
         cooldownSeconds: 2,
         examples: ['r!stop'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -568,7 +619,7 @@ export class PrefixRegistry {
         aliases: ['q'],
         cooldownSeconds: 2,
         examples: ['r!queue'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -579,7 +630,7 @@ export class PrefixRegistry {
         aliases: [],
         cooldownSeconds: 2,
         examples: ['r!shuffle'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -590,7 +641,7 @@ export class PrefixRegistry {
         aliases: ['repeat'],
         cooldownSeconds: 2,
         examples: ['r!loop track', 'r!loop queue', 'r!loop off'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -601,7 +652,7 @@ export class PrefixRegistry {
         aliases: ['vol'],
         cooldownSeconds: 2,
         examples: ['r!volume 80'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -612,7 +663,7 @@ export class PrefixRegistry {
         aliases: ['current'],
         cooldownSeconds: 2,
         examples: ['r!nowplaying'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       },
       {
@@ -623,7 +674,7 @@ export class PrefixRegistry {
         aliases: [],
         cooldownSeconds: 3,
         examples: ['r!autoplay on', 'r!autoplay off'],
-        moduleOwnerId: 'music',
+        moduleOwnerId: 'rage-enterprise',
         dangerLevel: 'Low'
       }
     ];
@@ -637,7 +688,7 @@ export class PrefixRegistry {
     const totalCmds = this.commandsMap.size;
     const totalAliases = this.aliasMap.size;
     const categories = this.getCategories();
-    const musicCmds = this.getCommandsByCategory('Voice').filter(c => c.moduleOwnerId === 'music').length;
+    const musicCmds = this.getCommandsByCategory('Voice').filter(c => c.moduleOwnerId === 'rage-enterprise' || c.moduleOwnerId === 'music').length;
 
     console.log(`[PrefixRegistry] ═══════════════════════════════════════`);
     console.log(`[PrefixRegistry] Initialized: ${totalCmds} commands across ${categories.length} categories`);

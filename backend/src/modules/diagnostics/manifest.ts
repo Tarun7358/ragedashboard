@@ -1,6 +1,8 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
+import fs from 'fs';
 import { Colors, Embeds, buildLimeOverviewCard, fmt, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, MEMBER_ICON, BOT_ICON, INFO_ICON } from '../../core/UIFactory.js';
+import { UptimeBroadcaster } from '../../services/UptimeBroadcaster.js';
 
 function getPingStatus(ms: number) {
   if (ms < 100) return `${VERIFIED_ICON} Ultra Fast`;
@@ -46,7 +48,6 @@ function createPingComponents(userId: string) {
   const button = new ButtonBuilder()
     .setCustomId(`ping_refresh_${userId}`)
     .setLabel('Refresh Diagnostics')
-    .setEmoji(VERIFIED_ICON)
     .setStyle(ButtonStyle.Success);
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(button)];
 }
@@ -212,25 +213,10 @@ export const DiagnosticsManifest: ModuleManifest = {
 
         // ─── UPTIME ──────────────────────────────────────────────
         if (sub === 'uptime') {
-          const uptime = process.uptime();
-          const startedAt = new Date(Date.now() - uptime * 1000);
-          const startSec = Math.floor(startedAt.getTime() / 1000);
-          const embed = buildLimeOverviewCard({
-            title: 'BOT UPTIME & LIFETIME',
-            subtitle: 'PROCESS RUNTIME METRICS',
-            color: Colors.BRAND,
-            sections: [
-              {
-                title: '<a:Timer:1546231426863730728> RUNTIME DURATION',
-                items: [
-                  `Running Duration: <t:${startSec}:R>`,
-                  `Initial Launch Time: <t:${startSec}:F>`
-                ]
-              }
-            ],
-            footerText: 'Rage Optimiser Enterprise • Uptime Diagnostics'
-          });
-          return interaction.reply({ embeds: [embed] });
+          const embed = UptimeBroadcaster.formatEmbed(client);
+          const banner = UptimeBroadcaster.getBannerAttachment();
+          const files = banner ? [banner] : [];
+          return interaction.reply({ embeds: [embed], files });
         }
 
         // ─── MODULES ─────────────────────────────────────────────

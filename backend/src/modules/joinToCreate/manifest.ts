@@ -644,7 +644,7 @@ export const JoinToCreateManifest: ModuleManifest = {
         const jtcMod = modules.find((m: any) => m.id === 'join_to_create');
 
         if (!jtcMod || jtcMod.status !== 'enabled') {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Join To Create module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<a:warning:1546155193303957504> Join To Create module is not enabled.', flags: 64 });
         }
 
         const config: IJoinToCreate = jtcMod.config || {};
@@ -653,7 +653,7 @@ export const JoinToCreateManifest: ModuleManifest = {
 
         if (sub === 'setup') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> Administrator permission required.', flags: 64 });
+            return interaction.reply({ content: '<a:warning:1546155193303957504> Administrator permission required.', flags: 64 });
           }
           const channel = interaction.options.getChannel('channel');
           const category = interaction.options.getChannel('category');
@@ -686,13 +686,13 @@ export const JoinToCreateManifest: ModuleManifest = {
 
         if (sub === 'remove') {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> Administrator permission required.', flags: 64 });
+            return interaction.reply({ content: '<a:warning:1546155193303957504> Administrator permission required.', flags: 64 });
           }
           const channel = interaction.options.getChannel('channel');
           const existingTriggers: any[] = [...(config.triggers || [])];
           const filtered = existingTriggers.filter((t: any) => t.triggerChannelId !== channel.id);
           if (filtered.length === existingTriggers.length) {
-            return interaction.reply({ content: `<a:wrong:1546155193303957504> ${channel} is not a registered JTC trigger channel.`, flags: 64 });
+            return interaction.reply({ content: `<a:warning:1546155193303957504> ${channel} is not a registered JTC trigger channel.`, flags: 64 });
           }
           saveConfig({ triggers: filtered });
           context.logSyncEvent(`[JTC] Trigger removed: #${(channel as any).name} (${filtered.length} remaining).`, 'info');
@@ -703,10 +703,10 @@ export const JoinToCreateManifest: ModuleManifest = {
         const myChannel = activeChannels.find((c: any) => c.ownerId === interaction.user.id);
 
         if (sub === 'name') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const name = interaction.options.getString('name');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           await channel.setName(name).catch(() => {});
           myChannel.name = name;
           saveConfig({ activeChannels });
@@ -714,18 +714,18 @@ export const JoinToCreateManifest: ModuleManifest = {
         }
 
         if (sub === 'limit') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const limit = interaction.options.getInteger('limit');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           await channel.setUserLimit(limit).catch(() => {});
           return interaction.reply({ content: `<:ticks:1532620580266836148> Set user limit to **${limit === 0 ? 'unlimited' : limit}**.`, flags: 64 });
         }
 
         if (sub === 'lock') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           // Lock = deny Connect (and ViewChannel for invisible mode) for @everyone
           await channel.permissionOverwrites.edit(interaction.guildId, {
             Connect: false,
@@ -737,9 +737,9 @@ export const JoinToCreateManifest: ModuleManifest = {
         }
 
         if (sub === 'unlock') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           // Restore privacy mode from the originating trigger
           const originTrigger = (config.triggers || []).find((t: any) => t.id === myChannel.triggerId);
           const originPrivacy = originTrigger?.privacy || 'public';
@@ -758,7 +758,7 @@ export const JoinToCreateManifest: ModuleManifest = {
         }
 
         if (sub === 'transfer') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const user = interaction.options.getUser('user');
           myChannel.ownerId = user.id;
           myChannel.ownerTag = user.username;
@@ -768,10 +768,10 @@ export const JoinToCreateManifest: ModuleManifest = {
         }
 
         if (sub === 'kick') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const user = interaction.options.getUser('user');
           const member = interaction.guild?.members.cache.get(user.id);
-          if (!member) return interaction.reply({ content: '<a:wrong:1546155193303957504> Member not found.', flags: 64 });
+          if (!member) return interaction.reply({ content: '<a:warning:1546155193303957504> Member not found.', flags: 64 });
           if (member.voice?.channelId === myChannel.channelId) {
             await member.voice.disconnect('Kicked from JTC channel').catch(() => {});
           }
@@ -781,16 +781,16 @@ export const JoinToCreateManifest: ModuleManifest = {
         }
 
         if (sub === 'invite') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const user = interaction.options.getUser('user');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           await channel.permissionOverwrites.edit(user.id, { Connect: true, ViewChannel: true }).catch(() => {});
           return interaction.reply({ content: `<:ticks:1532620580266836148> Invited ${user} to your channel.`, flags: 64 });
         }
 
         if (sub === 'info') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const originTrigger = (config.triggers || []).find((t: any) => t.id === myChannel.triggerId);
           const privacyLabel: Record<string, string> = { public: 'Public', private: 'Private', locked: 'Locked', invisible: 'Invisible', stage: 'Stage', sync: 'Synced' };
           const embed = new EmbedBuilder()
@@ -803,7 +803,7 @@ export const JoinToCreateManifest: ModuleManifest = {
               { name: '<:config:1532425712844144701> Privacy Mode', value: privacyLabel[originTrigger?.privacy || 'public'] || 'Public', inline: true },
               { name: '<:member:1532621317487071426> User Limit', value: (myChannel.limit || 0) === 0 ? '∞ Unlimited' : `${myChannel.limit} max`, inline: true },
               { name: '<:link:1532620952087826602> Trigger', value: originTrigger ? originTrigger.label : 'Legacy', inline: true },
-              { name: '<a:Timer:1546231426863730728> Created', value: `<t:${Math.floor(new Date(myChannel.createdAt).getTime() / 1000)}:R>`, inline: true }
+              { name: '<a:loading:1546134304625528882> Created', value: `<t:${Math.floor(new Date(myChannel.createdAt).getTime() / 1000)}:R>`, inline: true }
             );
           return interaction.reply({ embeds: [embed], flags: 64 });
         }
@@ -853,28 +853,28 @@ export const JoinToCreateManifest: ModuleManifest = {
         }
 
         if (sub === 'bitrate') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const bitrate = interaction.options.getInteger('bitrate');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           await channel.setBitrate(bitrate * 1000).catch(() => {});
           return interaction.reply({ content: `<:ticks:1532620580266836148> Set bitrate to **${bitrate}kbps**.`, flags: 64 });
         }
 
         if (sub === 'region') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const region = interaction.options.getString('region');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           const rtcRegion = region?.toLowerCase() === 'auto' ? null : (region || null);
           await (channel as any).setRTCRegion(rtcRegion).catch(() => {});
           return interaction.reply({ content: `<:ticks:1532620580266836148> Set voice region to **${rtcRegion ?? 'Automatic'}**.`, flags: 64 });
         }
 
         if (sub === 'reset') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           // BUG FIX: resolve defaults from originating trigger, not stale root config fields
           const originTrigger = (config.triggers || []).find((t: any) => t.id === myChannel.triggerId);
           const defaultName = ((originTrigger?.defaultName || config.defaultName || "{username}'s Channel"))
@@ -902,51 +902,51 @@ export const JoinToCreateManifest: ModuleManifest = {
         }
 
         if (sub === 'hide') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           await channel.permissionOverwrites.edit(interaction.guild?.roles.everyone.id!, { ViewChannel: false });
           return interaction.reply({ content: '<:ticks:1532620580266836148> Channel successfully hidden.', flags: 64 });
         }
 
         if (sub === 'unhide') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           await channel.permissionOverwrites.edit(interaction.guild?.roles.everyone.id!, { ViewChannel: true });
           return interaction.reply({ content: '<:ticks:1532620580266836148> Channel successfully unhidden.', flags: 64 });
         }
 
         if (sub === 'permit') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           const target = interaction.options.getUser('user');
           await channel.permissionOverwrites.edit(target.id, { Connect: true, ViewChannel: true });
           return interaction.reply({ content: `<:ticks:1532620580266836148> Allowed ${target} to join your channel.`, flags: 64 });
         }
 
         if (sub === 'reject') {
-          if (!myChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
+          if (!myChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You don\'t own an active JTC channel.', flags: 64 });
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Channel not found.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           const target = interaction.options.getUser('user');
           await channel.permissionOverwrites.edit(target.id, { Connect: false });
           const member = interaction.guild?.members.cache.get(target.id);
           if (member && member.voice?.channelId === channel.id) {
             await member.voice.disconnect().catch(() => {});
           }
-          return interaction.reply({ content: `<a:wrong:1546155193303957504> Blocked ${target} from joining your channel.`, flags: 64 });
+          return interaction.reply({ content: `<a:warning:1546155193303957504> Blocked ${target} from joining your channel.`, flags: 64 });
         }
 
         if (sub === 'claim') {
           const currentVoiceChannel = (interaction.member as any)?.voice?.channel;
-          if (!currentVoiceChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You must be in a JTC voice channel to claim it.', flags: 64 });
+          if (!currentVoiceChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> You must be in a JTC voice channel to claim it.', flags: 64 });
           const activeCh = activeChannels.find((c: any) => c.channelId === currentVoiceChannel.id);
-          if (!activeCh) return interaction.reply({ content: '<a:wrong:1546155193303957504> This channel is not a managed JTC channel.', flags: 64 });
+          if (!activeCh) return interaction.reply({ content: '<a:warning:1546155193303957504> This channel is not a managed JTC channel.', flags: 64 });
           const originalOwnerInVc = currentVoiceChannel.members.has(activeCh.ownerId);
           if (originalOwnerInVc && activeCh.ownerId !== interaction.user.id) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> You cannot claim this channel because the owner is still in the voice channel.', flags: 64 });
+            return interaction.reply({ content: '<a:warning:1546155193303957504> You cannot claim this channel because the owner is still in the voice channel.', flags: 64 });
           }
           activeCh.ownerId = interaction.user.id;
           activeCh.ownerTag = interaction.user.tag;

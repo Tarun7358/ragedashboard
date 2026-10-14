@@ -38,11 +38,11 @@ function startSubprocess(name, cmd, args, cwd) {
 
 async function bootSystem() {
   console.log('======================================================');
-  // 0. Reset any local container file modifications to match GitHub HEAD cleanly
-  try {
-    const { execSync } = await import('child_process');
-    execSync('git checkout HEAD -- .', { stdio: 'ignore' });
-  } catch (e) {}
+  // 0. Container file sync (disabled to preserve local workspace customizations and features)
+  // try {
+  //   const { execSync } = await import('child_process');
+  //   execSync('git checkout HEAD -- .', { stdio: 'ignore' });
+  // } catch (e) {}
 
   // 0. Ensure Native SQLite3 Bindings for Current OS/Architecture
   try {
@@ -69,17 +69,14 @@ async function bootSystem() {
     process.exit(1);
   }
 
-  // 2. Ensure Backend dist/index.js exists (auto-build if missing after git pull)
+  // 2. Ensure Backend dist is freshly compiled on boot
   const backendDir = path.resolve(process.cwd(), 'backend');
-  const backendDistPath = path.resolve(backendDir, 'dist', 'index.js');
-  if (!fs.existsSync(backendDistPath)) {
-    console.log('[Orchestrator] 🔨 backend/dist/index.js not found. Running automatic build...');
-    const buildProc = spawn('npm', ['run', 'build', '--workspace=backend'], { stdio: 'inherit', shell: true });
-    const buildCode = await new Promise((resolve) => buildProc.on('close', resolve));
-    if (buildCode !== 0) {
-      console.error('❌ [Orchestrator] Backend build failed. Boot sequence aborted.');
-      process.exit(1);
-    }
+  console.log('[Orchestrator] 🔨 Compiling backend TypeScript source...');
+  const buildProc = spawn('npm', ['run', 'build', '--workspace=backend'], { stdio: 'inherit', shell: true });
+  const buildCode = await new Promise((resolve) => buildProc.on('close', resolve));
+  if (buildCode !== 0) {
+    console.error('❌ [Orchestrator] Backend build failed. Boot sequence aborted.');
+    process.exit(1);
   }
 
   // 3. Start Core Backend & WebServer

@@ -57,11 +57,33 @@ export function Login() {
     };
   }, []);
 
-  const handleDiscordLogin = () => {
+  const handleDiscordLogin = async () => {
     setDiscordLoading(true);
     setErrorMsg('');
     const returnUrl = encodeURIComponent(window.location.origin);
-    window.location.href = `${API_BASE}/api/auth/discord/login?returnUrl=${returnUrl}`;
+    try {
+      // 1. Fetch authorization URL as JSON through Netlify proxy / backend
+      const res = await fetch(`${API_BASE}/api/auth/discord/login?returnUrl=${returnUrl}&format=json`, {
+        headers: { Accept: 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          // Navigates directly to discord.com — never exposes backend host in browser address bar
+          window.location.href = data.url;
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[Login] Backend OAuth URL fetch failed, using direct Discord authorize:', err);
+    }
+
+    // 2. Direct Discord Authorization fallback:
+    const clientId = '1519626369594818560';
+    const redirectUri = encodeURIComponent('https://apirageoptimisercom.altvr.in/api/auth/discord/callback');
+    const stateObj = { returnUrl: window.location.origin, timestamp: Date.now() };
+    const state = encodeURIComponent(btoa(JSON.stringify(stateObj)));
+    window.location.href = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=identify%20guilds%20guilds.join&state=${state}`;
   };
 
   const handleLocalLogin = async () => {

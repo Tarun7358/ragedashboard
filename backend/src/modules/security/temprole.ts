@@ -3,10 +3,10 @@ import { Database } from '../../core/Database.js';
 import { createLimeEmbed } from '../../core/UIFactory.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 
-const TIMER_EMOJI = '<a:Timer:1546231426863730728>';
+const TIMER_EMOJI = '<a:loading:1546134304625528882>';
 const SHIELD_EMOJI = '<a:success_check:1546134620087783526>';
 const APPROVED_ICON = '<:ticks:1532620580266836148>';
-const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
+const WRONG_EMOJI = '<a:warning:1546155193303957504>';
 const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
 
 export function parseDurationToMs(str: string): number | null {

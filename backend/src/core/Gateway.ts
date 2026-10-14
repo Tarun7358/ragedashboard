@@ -23,6 +23,8 @@ import { BrainEventInterceptor } from '../brain/BrainEventInterceptor.js';
 import { OAuthService } from './OAuthService.js';
 import { ensureAntiNukeBackupRoles } from '../modules/security/enable.js';
 import { DashboardSyncService } from '../services/DashboardSyncService.js';
+import { CentralLogger } from './security/CentralLogger.js';
+import { UptimeBroadcaster } from '../services/UptimeBroadcaster.js';
 import {
   AdvancedSecurityService,
   handleThreadCreate,
@@ -42,6 +44,22 @@ function transformContentToLimeCard(options: any, user: any) {
   return PayloadFormatter.normalize(options, user);
 }
 
+function isInteractionExpiredOrHandled(err: any): boolean {
+  if (!err) return false;
+  const code = err.code || err.rawError?.code;
+  const msg = err.message || '';
+  return (
+    code === 10062 || // Unknown interaction (expired 3s token)
+    code === 40060 || // Interaction has already been acknowledged
+    code === 10008 || // Unknown message
+    code === 50027 || // Invalid Webhook Token
+    msg.includes('Unknown interaction') ||
+    msg.includes('already acknowledged') ||
+    msg.includes('Unknown Message') ||
+    msg.includes('Invalid Webhook Token')
+  );
+}
+
 export function wrapInteraction(interaction: any) {
   if (!interaction) return interaction;
   if (interaction._antigravity_wrapped) return interaction;
@@ -49,6 +67,7 @@ export function wrapInteraction(interaction: any) {
 
   const originalReply = interaction.reply ? interaction.reply.bind(interaction) : null;
   const originalDeferReply = interaction.deferReply ? interaction.deferReply.bind(interaction) : null;
+  const originalDeferUpdate = interaction.deferUpdate ? interaction.deferUpdate.bind(interaction) : null;
   const originalEditReply = interaction.editReply ? interaction.editReply.bind(interaction) : null;
   const originalFollowUp = interaction.followUp ? interaction.followUp.bind(interaction) : null;
   const originalUpdate = interaction.update ? interaction.update.bind(interaction) : null;
@@ -60,7 +79,27 @@ export function wrapInteraction(interaction: any) {
         return await originalDeferReply(options);
       } catch (err: any) {
         interaction._defer_failed = true;
+        if (isInteractionExpiredOrHandled(err)) {
+          console.warn('[wrapInteraction] deferReply skipped (expired/acknowledged):', err.message);
+          return;
+        }
         console.warn('[wrapInteraction] deferReply failed:', err.message);
+      }
+    };
+  }
+
+  if (originalDeferUpdate) {
+    interaction.deferUpdate = async function (options?: any) {
+      if (interaction.deferred || interaction.replied) return;
+      try {
+        return await originalDeferUpdate(options);
+      } catch (err: any) {
+        interaction._defer_failed = true;
+        if (isInteractionExpiredOrHandled(err)) {
+          console.warn('[wrapInteraction] deferUpdate skipped (expired/acknowledged):', err.message);
+          return;
+        }
+        console.warn('[wrapInteraction] deferUpdate failed:', err.message);
       }
     };
   }
@@ -76,10 +115,18 @@ export function wrapInteraction(interaction: any) {
         try {
           return await originalEditReply(options);
         } catch (err: any) {
+          if (isInteractionExpiredOrHandled(err)) {
+            console.warn('[wrapInteraction] reply (as editReply) skipped:', err.message);
+            return;
+          }
           if (originalFollowUp) {
             try {
               return await originalFollowUp(options);
             } catch (e: any) {
+              if (isInteractionExpiredOrHandled(e)) {
+                console.warn('[wrapInteraction] reply (as followUp) skipped:', e.message);
+                return;
+              }
               console.warn('[wrapInteraction] reply (as followUp) failed:', e.message);
             }
           }
@@ -88,6 +135,10 @@ export function wrapInteraction(interaction: any) {
         try {
           return await originalFollowUp(options);
         } catch (err: any) {
+          if (isInteractionExpiredOrHandled(err)) {
+            console.warn('[wrapInteraction] reply (as followUp) skipped:', err.message);
+            return;
+          }
           console.warn('[wrapInteraction] reply (as followUp) failed:', err.message);
         }
       } else {
@@ -98,8 +149,15 @@ export function wrapInteraction(interaction: any) {
             try {
               return await originalEditReply(options);
             } catch (e: any) {
+              if (isInteractionExpiredOrHandled(e)) {
+                console.warn('[wrapInteraction] reply fallback to editReply skipped:', e.message);
+                return;
+              }
               console.warn('[wrapInteraction] reply fallback to editReply failed:', e.message);
             }
+          } else if (isInteractionExpiredOrHandled(err)) {
+            console.warn('[wrapInteraction] reply skipped (expired/unknown):', err.message);
+            return;
           } else {
             throw err;
           }
@@ -122,8 +180,15 @@ export function wrapInteraction(interaction: any) {
             try {
               return await originalEditReply(options);
             } catch (e: any) {
+              if (isInteractionExpiredOrHandled(e)) {
+                console.warn('[wrapInteraction] editReply fallback to originalEditReply skipped:', e.message);
+                return;
+              }
               console.warn('[wrapInteraction] editReply fallback to originalEditReply failed:', e.message);
             }
+          } else if (isInteractionExpiredOrHandled(err)) {
+            console.warn('[wrapInteraction] editReply (as reply) skipped (expired/unknown):', err.message);
+            return;
           } else {
             console.warn('[wrapInteraction] editReply (as reply) failed:', err.message);
           }
@@ -132,6 +197,10 @@ export function wrapInteraction(interaction: any) {
         try {
           return await originalEditReply(options);
         } catch (err: any) {
+          if (isInteractionExpiredOrHandled(err)) {
+            console.warn('[wrapInteraction] editReply skipped (expired/unknown):', err.message);
+            return;
+          }
           console.warn('[wrapInteraction] editReply failed:', err.message);
         }
       }
@@ -147,6 +216,10 @@ export function wrapInteraction(interaction: any) {
       try {
         return await originalFollowUp(options);
       } catch (err: any) {
+        if (isInteractionExpiredOrHandled(err)) {
+          console.warn('[wrapInteraction] followUp skipped (expired/unknown):', err.message);
+          return;
+        }
         console.warn('[wrapInteraction] followUp failed:', err.message);
       }
     };
@@ -163,6 +236,10 @@ export function wrapInteraction(interaction: any) {
           try {
             return await originalEditReply(options);
           } catch (err: any) {
+            if (isInteractionExpiredOrHandled(err)) {
+              console.warn('[wrapInteraction] update (as editReply) skipped (expired/unknown):', err.message);
+              return;
+            }
             console.warn('[wrapInteraction] update (as editReply) failed:', err.message);
           }
         }
@@ -174,8 +251,15 @@ export function wrapInteraction(interaction: any) {
             try {
               return await originalEditReply(options);
             } catch (e: any) {
+              if (isInteractionExpiredOrHandled(e)) {
+                console.warn('[wrapInteraction] update fallback to editReply skipped (expired/unknown):', e.message);
+                return;
+              }
               console.warn('[wrapInteraction] update fallback to editReply failed:', e.message);
             }
+          } else if (isInteractionExpiredOrHandled(err)) {
+            console.warn('[wrapInteraction] update skipped: interaction expired or unknown (10062)');
+            return;
           } else {
             throw err;
           }
@@ -381,18 +465,22 @@ export class Gateway {
       for (const gId of readyGuildIds) {
         const g = this.client.guilds.cache.get(gId);
         if (g) {
-          ensureAntiNukeBackupRoles(g).catch(() => { });
-          import('../modules/backups/manifest.js').then(m => m.ensureRageRoleAtTop(g)).catch(() => {});
-          import('../modules/security/enable.js').then(m => {
-            m.repairRageBotAdminPermissions(g).catch(() => {});
-            m.deploySecurityDashboardToChannel(g).catch(() => {});
-          }).catch(() => {});
+          const secMod = this.getModulesState(gId)?.find((m: any) => m.id === 'security');
+          const isSecActive = secMod?.status === 'enabled' || secMod?.config?.antiNukeEnabled === true;
+          if (isSecActive) {
+            import('../modules/backups/manifest.js').then(m => m.ensureRageRoleAtTop(g)).catch(() => {});
+            import('../modules/security/enable.js').then(m => {
+              m.repairRageBotAdminPermissions(g).catch(() => {});
+            }).catch(() => {});
+          }
         }
         this.dispatchEventForGuild('ready', gId);
       }
 
       DashboardSyncService.init(this.client);
       AdvancedSecurityService.init(this.client);
+      CentralLogger.initClient(this.client);
+      UptimeBroadcaster.init(this.client);
 
       setInterval(() => this.syncRegistry(), 30000);
       setInterval(() => this.checkVoicePresence(), 10000);
@@ -416,20 +504,35 @@ export class Gateway {
       this.syncRegistry();
     });
 
+    this.client.on('guildDelete', (guild) => {
+      if (!guild.available) return; // outage, not a real removal
+      CentralLogger.antinuke({ guild, title: 'BOT LEFT / REMOVED FROM SERVER', details: 'Rage Optimiser is no longer in this server.', severity: 'high' });
+    });
+
     this.client.on('guildCreate', async (guild) => {
       this.logSyncEvent(`Discord Event: Bot joined new guild "${guild.name}" (${guild.id}).`, 'success');
+      void (async () => {
+        let inviterId: string | undefined;
+        let inviterName: string | undefined;
+        try {
+          await new Promise(r => setTimeout(r, 1500)); // let the audit entry land
+          const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.BotAdd, limit: 5 });
+          const entry = logs.entries.find((e: any) => e.target?.id === this.client.user?.id);
+          inviterId = entry?.executor?.id;
+          inviterName = entry?.executor?.username ?? undefined;
+        } catch { /* no audit permission yet — still log the join */ }
+        const ownerLine = guild.ownerId ? `<@${guild.ownerId}> (\`${guild.ownerId}\`)` : '`Unknown`';
+        CentralLogger.antinuke({
+          guild,
+          title: 'BOT JOINED NEW SERVER',
+          triggeredById: inviterId,
+          triggeredByName: inviterName,
+          details: `Rage Optimiser was added to **${guild.name}**. Owner: ${ownerLine}. Total servers now: **${this.client.guilds.cache.size}**.${inviterId ? '' : ' Inviter could not be resolved (audit log unavailable).'}`
+        });
+      })();
 
-      // 1. Position Rage Role at absolute top of manageable hierarchy & repair Administrator permissions
-      try {
-        const { repairRageBotAdminPermissions } = await import('../modules/security/enable.js');
-        await repairRageBotAdminPermissions(guild).catch(() => {});
-      } catch {}
-
-      // 2. Auto-provision backup administrative security roles on bot join
-      await ensureAntiNukeBackupRoles(guild).catch((err) => {
-        console.error(`[Gateway] Error provisioning backup roles for new guild "${guild.name}":`, err);
-        return [];
-      });
+      // Backup roles, #rage-dashboard channel, and DB status are provisioned 
+      // ONLY when the server owner activates security with `r!enable all`.
 
       // Broadcast real-time update to web dashboard
       this.broadcast({
@@ -452,15 +555,7 @@ export class Gateway {
         });
       } catch { /* non-fatal */ }
 
-      // Synchronize SQLite approvals table if record exists
-      try {
-        const db = Database.getDb();
-        if (db) {
-          await db.run('UPDATE approvals set status = ? WHERE guildId = ?', ['Approved', guild.id]);
-        }
-      } catch (e) { }
-
-      // Send welcome message to server owner (DM) and guild channel
+      // Send private welcome & onboarding guide directly to server owner (DM only, zero public channel spam)
       try {
         const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
@@ -482,18 +577,17 @@ export class Gateway {
             {
               title: `📄 A-Z COMMAND & SECURITY MANUAL (PDF INCLUDED)`,
               items: [
-                'Welcome Server Owner! Your server is now protected by **Rage Optimiser V3**.',
+                'Welcome Server Owner! Your server is ready for protection by **Rage Optimiser V3**.',
                 'The complete A-Z Command Manual (Slash & Prefix commands) is ready for you:',
                 '• **View / Print PDF Manual**: [Click Here to Open Command Manual](https://rageoptimiser.com/manual)',
-                '• **Auto-Provisioned Backup Administrator Roles**: `. Secured`, `. UnBypassable`, `. RageUnBypassable`',
-                '• *Backup roles have been automatically created and assigned to your account for unbypassable clearance.*'
+                '• **Backup Admin Roles & Dashboard**: Provisioned automatically upon activating security with `r!enable all`.'
               ]
             },
             {
               title: `⚡ MASTER 1-CLICK SECURITY ACTIVATION (OFF BY DEFAULT)`,
               items: [
                 'For maximum setup safety, **all protection modules start OFF by default** in new servers.',
-                'Use the commands below to turn on security modules with optimal default values:',
+                'Use the commands below in your server to activate modules with optimal defaults:',
                 '',
                 '• `r!enable all` — **Master 1-Click Activation**: Enable Anti-Nuke, AutoMod, Voice, Join-Role Guard, Logging & Backups instantly',
                 '• `r!enable antinuke` — Enable 24 Anti-Nuke & Unbypassable protection rules',
@@ -538,51 +632,10 @@ export class Gateway {
           footerText: 'Rage Optimiser Enterprise • Server Owner Security Clearance'
         });
 
-        // 1. Direct Message to Server Owner
+        // Direct Message to Server Owner strictly (no public server messages)
         const owner = await guild.fetchOwner().catch(() => null);
         if (owner) {
           await owner.user.send({ embeds: [welcomeEmbed], components: [actionRow] }).catch(() => { });
-        }
-
-        // 2. Channel Message to Guild System Channel or first sendable text channel
-        const systemChan = guild.systemChannel || guild.channels.cache.find(
-          (c: any) => c.isTextBased() && c.permissionsFor(guild.members.me)?.has(PermissionFlagsBits.SendMessages)
-        );
-        if (systemChan) {
-          const channelEmbed = buildLimeOverviewCard({
-            title: 'RAGE OPTIMISER ENTERPRISE • BOT INITIALIZATION',
-            subtitle: `UNBYPASSABLE PROTECTION & MANAGEMENT ENGINE FOR ${guild.name.toUpperCase()}`,
-            color: Colors.BRAND,
-            thumbnail: guild.iconURL({ size: 256 }) || undefined,
-            sections: [
-              {
-                title: `📄 A-Z COMMAND MANUAL & BACKUP ROLES`,
-                items: [
-                  '• **A-Z Security Manual**: [Open Command & Security Manual](https://rageoptimiser.com/manual)',
-                  '• **Backup Admin Roles**: Auto-provisioned `. Secured`, `. UnBypassable`, `. RageUnBypassable` and assigned to Server Owner.'
-                ]
-              },
-              {
-                title: `${SHIELD_ICON} INITIAL STATE: OFF BY DEFAULT`,
-                items: [
-                  'Protection modules start **OFF** for seamless server setup.'
-                ]
-              },
-              {
-                title: `⚡ ONE-CLICK ACTIVATION COMMANDS`,
-                items: [
-                  '• `r!enable all` — Activate full enterprise protection suite (Anti-Nuke, AutoMod, Voice, Logging)',
-                  '• `r!enable antinuke` — Activate all Anti-Nuke protections with standard limits',
-                  '• `r!enable automod` — Activate Anti-Link & Anti-Spam filters',
-                  '• `r!counter enable` — Activate live Member Stats Counter voice channels',
-                  '• `r!config` or `/config` — Open interactive server control dashboard'
-                ]
-              }
-            ],
-            footerText: 'Rage Optimiser Enterprise • System Initialized'
-          });
-
-          await (systemChan as any).send({ embeds: [channelEmbed], components: [actionRow] }).catch(() => { });
         }
       } catch (e) {
         console.error('[Gateway] Error handling guildCreate welcome onboarding:', e);
@@ -1271,7 +1324,7 @@ export class Gateway {
             `• **Server ID**: \`${guild.id}\`\n` +
             `• **Primary Owner**: <@${guild.ownerId}>\n` +
             `• **Security Protection Status**: \`Suspended until re-invited\`\n\n` +
-            `**<a:warning:1546155457981452441> POTENTIAL ACCOUNT COMPROMISE / RAID THREAT**\n` +
+            `**<a:warning:1546155193303957504> POTENTIAL ACCOUNT COMPROMISE / RAID THREAT**\n` +
             `If the Primary Owner's account was compromised, designated **Extra Owners** must **re-invite Rage Optimiser immediately** to re-activate Anti-Nuke protections.\n\n` +
             `**<a:success_check:1546134620087783526> Automatic Snapshot Vault**\n` +
             `All server configurations, whitelists, rules, and Anti-Nuke settings remain **100% saved in cloud memory**.`
@@ -1719,6 +1772,20 @@ export class Gateway {
     const channelId = config.channelId;
     if (!channelId) {
       voiceModule.connectionStatus = 'not_configured';
+      const currentConn = getVoiceConnection(guildId);
+      if (currentConn) {
+        try {
+          (currentConn as any)._presenceListener = null;
+          currentConn.removeAllListeners();
+          currentConn.destroy();
+        } catch (e) {}
+        const vsD = this.getVoiceState(guildId);
+        vsD.connection = null;
+        vsD.connectTime = null;
+        vsD.lastChannelId = null;
+        voiceModule.connectedChannelId = null;
+        this.broadcast({ type: 'STATE_UPDATE', modules, registry: this.getRegistry(guildId), guildId });
+      }
       return;
     }
 
@@ -1866,7 +1933,7 @@ export class Gateway {
       vs.connectTime = null;
     }
 
-    if (voiceModule && voiceModule.status !== 'enabled') {
+    if (!voiceModule || voiceModule.status !== 'enabled' || !voiceModule.config?.channelId) {
       return;
     }
 

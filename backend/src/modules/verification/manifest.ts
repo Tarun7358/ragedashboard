@@ -4,7 +4,9 @@ import {
   ActionRowBuilder,
   ButtonStyle,
   Message,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  AttachmentBuilder,
+  RoleSelectMenuBuilder
 } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
@@ -17,7 +19,8 @@ import {
   SHIELD_ICON,
   CONFIG_ICON,
   MEMBER_ICON,
-  BRAND_FOOTER
+  BRAND_FOOTER,
+  getBrandBannerAttachment
 } from '../../core/UIFactory.js';
 
 // Safe display name helper
@@ -62,6 +65,9 @@ async function getVerifiedUsersCount(guildId: string): Promise<number> {
 }
 
 export function buildPublicVerificationCard(guild: any) {
+  const bannerAttachment = getBrandBannerAttachment('rage-banner.png');
+  const files: AttachmentBuilder[] = [];
+
   const embed = new EmbedBuilder()
     .setTitle('Rage Optimiser • Member Verification Gate')
     .setColor(Colors.BRAND)
@@ -76,6 +82,11 @@ export function buildPublicVerificationCard(guild: any) {
     .setFooter({ text: BRAND_FOOTER })
     .setTimestamp();
 
+  if (bannerAttachment) {
+    embed.setImage('attachment://rage-banner.png');
+    files.push(bannerAttachment);
+  }
+
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('verify_btn_click')
@@ -87,13 +98,16 @@ export function buildPublicVerificationCard(guild: any) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [row], files: files.length > 0 ? files : undefined };
 }
 
 export function buildVerificationAdminDashboardGUI(guild: any, config: any, verifiedCount: number = 0) {
   const isMasterEnabled = config.enabled !== false;
   const verifiedRole = config.verifiedRoleId ? `<@&${config.verifiedRoleId}>` : '`Not Configured (Click Setup Below)`';
   const unverifiedRole = config.unverifiedRoleId ? `<@&${config.unverifiedRoleId}>` : '`None Configured`';
+
+  const banner = getBrandBannerAttachment('rage-banner.png');
+  const files: AttachmentBuilder[] = [];
 
   const embed = new EmbedBuilder()
     .setTitle('Rage Optimiser • User Verification Control Center')
@@ -105,10 +119,25 @@ export function buildVerificationAdminDashboardGUI(guild: any, config: any, veri
       `**Verified Access Role:** ${verifiedRole}\n` +
       `**Unverified Quarantine Role:** ${unverifiedRole}\n` +
       `**Verified Members in Database:** \`${verifiedCount} Members Registered\`\n` +
-      `**Auto-Restore on Rejoin:** \`ENABLED\``
+      `**Auto-Restore on Rejoin:** \`ENABLED\`\n\n` +
+      `• **Choose Role**: Select any existing server role below to bind as the verified role.\n` +
+      `• **Send Card**: Click Send Verification Card to post the entry button panel to any channel.`
     )
     .setThumbnail(guild.iconURL({ size: 256 }) || undefined)
     .setFooter({ text: BRAND_FOOTER });
+
+  if (banner) {
+    embed.setImage('attachment://rage-banner.png');
+    files.push(banner);
+  }
+
+  const roleSelectRow = new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
+    new RoleSelectMenuBuilder()
+      .setCustomId('ver_role_select')
+      .setPlaceholder('Select an existing role to assign upon verification...')
+      .setMinValues(1)
+      .setMaxValues(1)
+  );
 
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -140,7 +169,7 @@ export function buildVerificationAdminDashboardGUI(guild: any, config: any, veri
       .setStyle(ButtonStyle.Secondary)
   );
 
-  return { embeds: [embed], components: [row1, row2] };
+  return { embeds: [embed], components: [roleSelectRow, row1, row2], files: files.length > 0 ? files : undefined };
 }
 
 export async function handleVerificationGuiInteraction(interaction: any, context: any) {
@@ -154,7 +183,7 @@ export async function handleVerificationGuiInteraction(interaction: any, context
     });
   }
 
-  if (!customId.startsWith('ver_btn_')) return;
+  if (!customId.startsWith('ver_btn_') && customId !== 'ver_role_select') return;
 
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: `${WRONG_ICON} Administrator permission required.`, flags: 64 });
@@ -164,6 +193,19 @@ export async function handleVerificationGuiInteraction(interaction: any, context
   const verModule = modules.find((m: any) => m.id === 'verification');
   const config = verModule?.config || {};
   const saveConfig = (updated: any) => context.updateModuleConfig('verification', { ...config, ...updated });
+
+  // 0. Interactive Role Select Menu
+  if (customId === 'ver_role_select') {
+    await interaction.deferUpdate().catch(() => {});
+    const selectedRoleId = interaction.values?.[0];
+    if (selectedRoleId) {
+      saveConfig({ verifiedRoleId: selectedRoleId });
+      context.logSyncEvent(`[Verification] Selected verified access role <@&${selectedRoleId}>.`, 'success');
+      const count = await getVerifiedUsersCount(interaction.guildId);
+      const payload = buildVerificationAdminDashboardGUI(interaction.guild, { ...config, verifiedRoleId: selectedRoleId }, count);
+      return interaction.editReply(payload);
+    }
+  }
 
   // 1. Toggle Master Status
   if (customId === 'ver_btn_toggle_module') {
@@ -476,33 +518,43 @@ export const VerificationManifest: ModuleManifest = {
     {
       name: 'command_setup-verify',
       handler: async (client: any, interaction: any, context: any) => {
-        const modules = context.getModulesState ? context.getModulesState() : [];
-        const verModule = modules.find((m: any) => m.id === 'verification');
-        if (!verModule || verModule.status !== 'enabled') {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Verification module is not enabled.', flags: 64 });
+        const guild = interaction.guild;
+        if (!guild) return;
+
+        // Auto-enable verification module if not enabled
+        if (context.toggleModule) {
+          await context.toggleModule('verification', true);
+        }
+
+        const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
+        let verModule = modules.find((m: any) => m.id === 'verification');
+        const config = verModule?.config || {};
+
+        // Auto-provision verified role if missing
+        if (!config.verifiedRoleId) {
+          let role = guild.roles.cache.find((r: any) => r.name.toLowerCase() === '. verified' || r.name.toLowerCase() === 'verified');
+          if (!role) {
+            role = await guild.roles.create({
+              name: 'Verified',
+              color: 0x99CC00,
+              reason: 'Auto-provisioned by setup-verify'
+            }).catch(() => null);
+          }
+          if (role) {
+            config.verifiedRoleId = role.id;
+            if (context.updateModuleConfig) {
+              await context.updateModuleConfig('verification', { verifiedRoleId: role.id });
+            }
+          }
         }
 
         try {
-          const embed = new EmbedBuilder()
-            .setTitle('<a:success_check:1546134620087783526> Member Verification Required')
-            .setDescription('To gain access to the channels and features of this server, please click the verification button below.')
-            .setColor(0x99CC00)
-            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
-            .setTimestamp();
-
-          const btn = new ButtonBuilder()
-            .setCustomId('verify_btn_click')
-            .setLabel('Verify Me')
-            .setStyle(ButtonStyle.Success)
-            .setEmoji('<:ticks:1532620580266836148>');
-
-          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btn);
-
-          await interaction.reply({ embeds: [embed], components: [row] });
-          context.logSyncEvent('Verification Service: Posted verification card to entry channel.', 'info');
-        } catch (err) {
+          const payload = buildPublicVerificationCard(guild);
+          await interaction.reply(payload);
+          context.logSyncEvent(`Verification Service: Setup complete and verification card posted to #${interaction.channel?.name}.`, 'success');
+        } catch (err: any) {
           console.error(err);
-          await interaction.reply({ content: '<a:wrong:1546155193303957504> Failed to post verification card.', flags: 64 });
+          await interaction.reply({ content: `<a:warning:1546155193303957504> Failed to post verification card: ${err.message}`, flags: 64 });
         }
       }
     },
@@ -512,20 +564,65 @@ export const VerificationManifest: ModuleManifest = {
     },
     {
       name: 'command_verification',
-      handler: handleVerifyCommandInteraction
+      handler: async (client: any, interaction: any, context: any) => {
+        const member = interaction.member;
+        const guild = interaction.guild;
+        if (!guild) return;
+
+        const isAdmin = member?.permissions?.has?.(PermissionFlagsBits.Administrator) || member?.permissions?.has?.(PermissionFlagsBits.ManageGuild);
+        if (isAdmin) {
+          const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
+          const verModule = modules.find((m: any) => m.id === 'verification');
+          const config = verModule?.config || {};
+          const count = await getVerifiedUsersCount(guild.id);
+          const payload = buildVerificationAdminDashboardGUI(guild, config, count);
+          return interaction.reply({ ...payload, flags: 64 });
+        }
+
+        return handleVerifyCommandInteraction(client, interaction, context);
+      }
     },
     {
       name: 'button_verify_btn_click',
       handler: async (client: any, interaction: any, context: any) => {
-        const modules = context.getModulesState ? context.getModulesState() : [];
-        const verModule = modules.find((m: any) => m.id === 'verification');
+        const guild = interaction.guild;
+        if (!guild) return;
+        const member = interaction.member;
+        if (!member) return;
+
+        const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
+        let verModule = modules.find((m: any) => m.id === 'verification');
         if (!verModule || verModule.status !== 'enabled') {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Verification module is not enabled.', flags: 64 });
+          if (context.toggleModule) {
+            await context.toggleModule('verification', true);
+          }
         }
 
-        const config = verModule.config;
+        const config = verModule?.config || {};
+        let verifiedRoleId = config.verifiedRoleId;
         const unverifiedRoleId = config.unverifiedRoleId;
-        const verifiedRoleId = config.verifiedRoleId;
+
+        // Auto-provision verified role if missing
+        if (!verifiedRoleId) {
+          let role = guild.roles.cache.find((r: any) => r.name.toLowerCase() === '. verified' || r.name.toLowerCase() === 'verified');
+          if (!role) {
+            role = await guild.roles.create({
+              name: 'Verified',
+              color: 0x99CC00,
+              reason: 'Auto-provisioned on member verification click'
+            }).catch(() => null);
+          }
+          if (role) {
+            verifiedRoleId = role.id;
+            if (context.updateModuleConfig) {
+              await context.updateModuleConfig('verification', { verifiedRoleId: role.id });
+            }
+          }
+        }
+
+        if (!verifiedRoleId) {
+          return interaction.reply({ content: '<a:warning:1546155193303957504> Verification role is not configured. Please ask an admin to configure it using `r!verification`.', flags: 64 });
+        }
 
         // Toggles
         const preventDuplicates = config.preventDuplicates ?? true;
@@ -533,23 +630,18 @@ export const VerificationManifest: ModuleManifest = {
         const logDuplicates = config.logDuplicates ?? true;
         const showAlreadyVerifiedMessage = config.showAlreadyVerifiedMessage ?? true;
 
-        if (!unverifiedRoleId || !verifiedRoleId) {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Verification role settings are not configured properly.', flags: 64 });
-        }
-
         try {
-          const member = interaction.member;
-          if (!member) return;
-
-          const guildId = interaction.guildId;
+          const guildId = guild.id;
           const isVerifiedInDb = await isUserVerified(guildId, member.user.id);
           const hasVerifiedRole = member.roles.cache.has(verifiedRoleId);
 
           if (preventDuplicates && isVerifiedInDb) {
             // User is in DB but missing the role?
             if (!hasVerifiedRole && autoRestoreRole) {
-              await member.roles.add(verifiedRoleId);
-              if (member.roles.cache.has(unverifiedRoleId)) await member.roles.remove(unverifiedRoleId);
+              await member.roles.add(verifiedRoleId).catch(() => {});
+              if (unverifiedRoleId && member.roles.cache.has(unverifiedRoleId)) {
+                await member.roles.remove(unverifiedRoleId).catch(() => {});
+              }
               
               context.logSyncEvent(`Verification Service: Restored missing verified role for returning user "${userTag(member.user)}".`, 'info');
               
@@ -579,18 +671,18 @@ export const VerificationManifest: ModuleManifest = {
           }
 
           // Proceed with new verification
-          if (member.roles.cache.has(unverifiedRoleId)) {
-            await member.roles.remove(unverifiedRoleId);
+          if (unverifiedRoleId && member.roles.cache.has(unverifiedRoleId)) {
+            await member.roles.remove(unverifiedRoleId).catch(() => {});
           }
-          await member.roles.add(verifiedRoleId);
+          await member.roles.add(verifiedRoleId).catch(() => {});
 
           await markUserVerified(guildId, member.user.id);
 
           await interaction.reply({ content: '<:ticks:1532620580266836148> **Verification Succeeded!** Welcome to the server.', flags: 64 });
           context.logSyncEvent(`Verification Service: Verified member "${userTag(member.user)}" successfully.`, 'success');
-        } catch (err) {
+        } catch (err: any) {
           console.error(err);
-          await interaction.reply({ content: '<a:wrong:1546155193303957504> Failed to update your roles. Verify bot roles hierarchy.', flags: 64 });
+          await interaction.reply({ content: `<a:warning:1546155193303957504> Failed to update your roles: ${err.message}. Verify bot roles hierarchy.`, flags: 64 });
         }
       }
     },

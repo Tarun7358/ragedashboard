@@ -260,7 +260,7 @@ export class InteractionRouter {
       const targetExecutorId = parts[parts.length - 1];
       if (/^\d{17,20}$/.test(targetExecutorId) && interaction.user.id !== targetExecutorId) {
         return interaction.reply({
-          content: `<a:wrong:1546155193303957504> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
+          content: `<a:warning:1546155193303957504> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
           flags: 64
         }).catch(() => {});
       }
@@ -271,7 +271,7 @@ export class InteractionRouter {
       const targetId = interaction.customId.split('_').pop();
       if (/^\d{17,20}$/.test(targetId) && interaction.user.id !== targetId) {
         return interaction.reply({
-          content: `<a:wrong:1546155193303957504> Only the message owner (<@${targetId}>) can dismiss this confidential message.`,
+          content: `<a:warning:1546155193303957504> Only the message owner (<@${targetId}>) can dismiss this confidential message.`,
           flags: 64
         }).catch(() => {});
       }
@@ -299,10 +299,6 @@ export class InteractionRouter {
       interaction.customId === 'btn_sec_open_otp_modal' ||
       interaction.customId.startsWith('btn_sec_cat_custom_thresh_') ||
       interaction.customId === 'btn_disable_enter_code' ||
-      // Backup confirm/cancel use interaction.reply() — must not be auto-deferred
-      // or Discord will throw "interaction already acknowledged" on slow DB reads.
-      interaction.customId === 'backup_confirm' ||
-      interaction.customId === 'backup_cancel' ||
       interaction.customId.includes('modal');
 
     let deferred = false;
@@ -321,6 +317,7 @@ export class InteractionRouter {
       // Prefix-based generic dispatchers for modules that use wildcard patterns.
       // These are fired concurrently after the primary handler has already acknowledged.
       const genericPrefixes: Array<[string, string]> = [
+        ['backup_confirm', 'button_backup_confirm'],
         ['gw_enter_',    'button_gw_enter_generic'],
         ['tickets_v2_',  'button_tickets_v2_generic'],
         ['tkmgr_',       'button_tickets_v2_generic'],
@@ -371,7 +368,7 @@ export class InteractionRouter {
       const targetExecutorId = parts[parts.length - 1];
       if (/^\d{17,20}$/.test(targetExecutorId) && interaction.user.id !== targetExecutorId) {
         return interaction.reply({
-          content: `<a:wrong:1546155193303957504> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
+          content: `<a:warning:1546155193303957504> This interactive session can only be operated by the command executor (<@${targetExecutorId}>).`,
           flags: 64
         }).catch(() => {});
       }

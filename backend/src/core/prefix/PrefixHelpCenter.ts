@@ -231,7 +231,7 @@ export class PrefixHelpCenter {
       .setColor(0x84cc16)
       .setAuthor({ name: 'Rage Optimiser Enterprise' })
       .setTitle(`${CONFIG_ICON} Command Hub & Security Modules`)
-      .setDescription(descLines.join('\n'))
+      .setDescription(this.fitDescription(descLines, categories, prefix))
       .setThumbnail(botUser?.displayAvatarURL({ size: 256 }) ?? null)
       .setImage(DEFAULT_HELP_BANNER)
       .setFooter({ text: 'Rage Optimiser Enterprise • 29 Defense Rules • Zero-Latency Rollback' })
@@ -268,9 +268,31 @@ export class PrefixHelpCenter {
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnInvite, btnSupport);
 
     if (updateInteraction) {
-      return updateInteraction.update({ embeds: [embed], components: [row1, row2] }).catch(() => {});
+      return updateInteraction.update({ embeds: [embed], components: [row1, row2] }).catch((err: any) => {
+        console.error('[PrefixHelpCenter] Failed to update root help:', err?.message || err);
+      });
     }
-    return message.reply({ embeds: [embed], components: [row1, row2] }).catch(() => {});
+    try {
+      return await message.reply({ embeds: [embed], components: [row1, row2] });
+    } catch (err: any) {
+      console.error('[PrefixHelpCenter] Failed to send root help embed:', err?.message || err, err?.rawError ? JSON.stringify(err.rawError) : '');
+      const plain = `**Rage Optimiser Command Hub**\nPrefix: \`${prefix}\`\nModules: ${categories.map(c => `\`${c}\``).join(', ')}\n\nUse \`${prefix}help <module>\` or \`${prefix}help <command>\`.`;
+      return message.reply({ content: plain.slice(0, 1990) }).catch((e2: any) => {
+        console.error('[PrefixHelpCenter] Plain-text help fallback also failed (check Send Messages permission):', e2?.message || e2);
+      });
+    }
+  }
+
+  /** Ensures the root help description never exceeds Discord's 4096-char embed limit. */
+  private static fitDescription(lines: string[], categories: string[], prefix: string): string {
+    const full = lines.join('\n');
+    if (full.length <= 4000) return full;
+    const compact = [
+      ...lines.slice(0, 7),
+      categories.map(cat => `\`${cat}\` (${PrefixRegistry.getCommandsByCategory(cat).length})`).join(' • '),
+      `\n*Select a module from the menu below or type \`${prefix}help <command_name>\` for detailed manuals.*`
+    ].join('\n');
+    return compact.length <= 4000 ? compact : compact.slice(0, 3990) + '…';
   }
 
   private static formatUsage(usage: string, commandName: string, prefix: string): string {
@@ -550,7 +572,6 @@ export class PrefixHelpCenter {
     const btnHome = new ButtonBuilder()
       .setCustomId(`help_btn_home${execSuffix}`)
       .setLabel('Home')
-      .setEmoji('🏠')
       .setStyle(ButtonStyle.Success);
 
     const btnPrev = new ButtonBuilder()

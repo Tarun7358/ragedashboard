@@ -17,6 +17,7 @@ import {
 import { checkWhitelistPermission, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import { isUrlCommandBypass, isMessageAntiLinkHandled, markMessageAntiLinkHandled } from '../../utils/antiLinkBypass.js';
 import { resetRateLimit } from '../security/manifest.js';
+import { CentralLogger } from '../../core/security/CentralLogger.js';
 
 function userTag(user: any): string {
   return user?.globalName ?? user?.username ?? user?.tag ?? user?.id ?? 'Unknown';
@@ -179,7 +180,7 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
     : '**None (Strict full URL filter)**';
 
   const actionLabels: Record<string, string> = {
-    warn: '<a:warning:1546155457981452441> WARN & PURGE MESSAGE (DEFAULT)',
+    warn: '<a:warning:1546155193303957504> WARN & PURGE MESSAGE (DEFAULT)',
     mute: '🔇 MUTE / TIMEOUT (10 MINUTES)',
     kick: '👢 KICK MEMBER',
     ban: '🔨 BAN MEMBER PERMANENTLY',
@@ -215,23 +216,19 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
     new ButtonBuilder()
       .setCustomId('btn_al_toggle')
       .setLabel(isEnabled ? 'Disable Anti-Link' : 'Enable Anti-Link')
-      .setStyle(isEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary)
-      .setEmoji(isEnabled ? '1546155193303957504' : '1546134620087783526'),
+      .setStyle(isEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_al_action_cycle')
       .setLabel(`Action: ${action.toUpperCase()}`)
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1532621057318584380'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_al_limit_cycle')
       .setLabel(`Limit: ${limit} Violations`)
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1546134620087783526'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_al_toggle_invites')
       .setLabel(allowInvites ? 'Block Invites' : 'Allow Invites')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji(allowInvites ? '1546155193303957504' : '1546134620087783526')
   );
 
   // Row 2: Management & Reset Actions
@@ -239,23 +236,19 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
     new ButtonBuilder()
       .setCustomId('btn_al_channels')
       .setLabel(`Channels (${ignoredChannels.length})`)
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1527647157371535420'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_al_roles')
       .setLabel(`Roles (${ignoredRoles.length})`)
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1532425712844144701'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_al_clearwarns')
       .setLabel('Reset Warnings')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1532429110775779459'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_al_refresh')
       .setLabel('Refresh GUI')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1546134620087783526')
   );
 
   // Row 3: Action Dropdown Selector
@@ -581,12 +574,12 @@ export const AutomodManifest: ModuleManifest = {
       name: 'command_antilink',
       handler: async (client: any, interaction: any, context: any) => {
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: '<a:wrong:1546155193303957504> AntiLink commands must be run inside a server.', flags: 64 });
+        if (!guild) return interaction.reply({ content: '<a:warning:1546155193303957504> AntiLink commands must be run inside a server.', flags: 64 });
 
         const isOwnerOrExtra = await isOwnerOrExtraOwner(interaction.user.id, guild);
         if (!isOwnerOrExtra) {
           return interaction.reply({
-            content: '<a:wrong:1546155193303957504> **Access Denied**: Only the **Server Owner** and **Extra Owners** can configure Anti-Link settings.',
+            content: '<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** and **Extra Owners** can configure Anti-Link settings.',
             flags: 64
           });
         }
@@ -618,7 +611,7 @@ export const AutomodManifest: ModuleManifest = {
           saveConfig(config);
           context.logSyncEvent(`AntiLink: Disabled filter by ${interaction.user.tag}`, 'warn');
           return interaction.reply({
-            content: `<a:wrong:1546155193303957504> **Anti-Link Protection Disabled**. Links will no longer be intercepted.`,
+            content: `<a:warning:1546155193303957504> **Anti-Link Protection Disabled**. Links will no longer be intercepted.`,
             flags: 64
           });
         }
@@ -635,7 +628,7 @@ export const AutomodManifest: ModuleManifest = {
 
           if (!count) {
             return interaction.reply({
-              content: `<a:wrong:1546155193303957504> Please specify a valid violation limit between 1 and 100. Example: \`r!antilink limit 5\``,
+              content: `<a:warning:1546155193303957504> Please specify a valid violation limit between 1 and 100. Example: \`r!antilink limit 5\``,
               flags: 64
             });
           }
@@ -655,7 +648,7 @@ export const AutomodManifest: ModuleManifest = {
           const actionOpt = interaction.options?.getString?.('type') || rawArgs[1]?.toLowerCase();
           if (!actionOpt || !['warn', 'mute', 'kick', 'ban', 'delete', 'timeout'].includes(actionOpt)) {
             return interaction.reply({
-              content: `<a:wrong:1546155193303957504> Please specify a valid action: \`warn\`, \`mute\`, \`kick\`, \`ban\`, or \`delete\`. Example: \`r!antilink action warn\``,
+              content: `<a:warning:1546155193303957504> Please specify a valid action: \`warn\`, \`mute\`, \`kick\`, \`ban\`, or \`delete\`. Example: \`r!antilink action warn\``,
               flags: 64
             });
           }
@@ -681,7 +674,7 @@ export const AutomodManifest: ModuleManifest = {
           saveConfig(config);
           context.logSyncEvent(`AntiLink: Discord invites set to ${allow ? 'ALLOWED' : 'BLOCKED'} by ${interaction.user.tag}`, 'info');
           return interaction.reply({
-            content: `<:ticks:1532620580266836148> **Discord Invite Links**: ${allow ? '<:ticks:1532620580266836148> **Allowed**' : '<a:wrong:1546155193303957504> **Blocked (Deleted)**'}`,
+            content: `<:ticks:1532620580266836148> **Discord Invite Links**: ${allow ? '<:ticks:1532620580266836148> **Allowed**' : '<a:warning:1546155193303957504> **Blocked (Deleted)**'}`,
             flags: 64
           });
         }
@@ -691,7 +684,7 @@ export const AutomodManifest: ModuleManifest = {
           const targetUser = interaction.options?.getUser?.('user') || interaction.parsed?.mentions?.users?.first?.() || (interaction as any)?.message?.mentions?.users?.first?.();
           if (!targetUser) {
             return interaction.reply({
-              content: `<a:wrong:1546155193303957504> Please mention a target user to reset warnings for. Example: \`r!antilink clearwarns @user\``,
+              content: `<a:warning:1546155193303957504> Please mention a target user to reset warnings for. Example: \`r!antilink clearwarns @user\``,
               flags: 64
             });
           }
@@ -717,7 +710,7 @@ export const AutomodManifest: ModuleManifest = {
                 `> **Member**: ${targetUser} (\`${userTag(targetUser)}\` • \`ID: ${targetUser.id}\`)`,
                 ``,
                 `• **Violations Logged**: \`${currentCount} / ${maxLimit}\``,
-                `• **Threshold Status**: ${currentCount > 0 ? `<a:wrong:1546155193303957504> **${currentCount} Active Violation(s)**` : '<:ticks:1532620580266836148> **No Violations (Clean)**'}`,
+                `• **Threshold Status**: ${currentCount > 0 ? `<a:warning:1546155193303957504> **${currentCount} Active Violation(s)**` : '<:ticks:1532620580266836148> **No Violations (Clean)**'}`,
                 `• **Punishment on Limit**: **\`${(config.punishment || 'warn').toUpperCase()}\`**`
               ].join('\n')
             })],
@@ -737,7 +730,7 @@ export const AutomodManifest: ModuleManifest = {
           let ignoredChannels: string[] = config.ignoredChannels || [];
 
           if (action === 'add') {
-            if (!targetChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please mention a text channel to ignore. Example: `r!antilink ignore-channel add #general`', flags: 64 });
+            if (!targetChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> Please mention a text channel to ignore. Example: `r!antilink ignore-channel add #general`', flags: 64 });
             if (!ignoredChannels.includes(targetChannel.id)) {
               ignoredChannels.push(targetChannel.id);
               saveConfig({ ignoredChannels });
@@ -746,7 +739,7 @@ export const AutomodManifest: ModuleManifest = {
           }
 
           if (action === 'remove') {
-            if (!targetChannel) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please mention a text channel to remove.', flags: 64 });
+            if (!targetChannel) return interaction.reply({ content: '<a:warning:1546155193303957504> Please mention a text channel to remove.', flags: 64 });
             ignoredChannels = ignoredChannels.filter((id: string) => id !== targetChannel.id);
             saveConfig({ ignoredChannels });
             return interaction.reply({ content: `<:ticks:1532620580266836148> Removed ${targetChannel} from AntiLink **ignored channels**.`, flags: 64 });
@@ -769,7 +762,7 @@ export const AutomodManifest: ModuleManifest = {
           let ignoredRoles: string[] = config.ignoredRoles || [];
 
           if (action === 'add') {
-            if (!targetRole) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please mention a role to ignore. Example: `r!antilink ignore-role add @Staff`', flags: 64 });
+            if (!targetRole) return interaction.reply({ content: '<a:warning:1546155193303957504> Please mention a role to ignore. Example: `r!antilink ignore-role add @Staff`', flags: 64 });
             if (!ignoredRoles.includes(targetRole.id)) {
               ignoredRoles.push(targetRole.id);
               saveConfig({ ignoredRoles });
@@ -778,7 +771,7 @@ export const AutomodManifest: ModuleManifest = {
           }
 
           if (action === 'remove') {
-            if (!targetRole) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please mention a role to remove.', flags: 64 });
+            if (!targetRole) return interaction.reply({ content: '<a:warning:1546155193303957504> Please mention a role to remove.', flags: 64 });
             ignoredRoles = ignoredRoles.filter((id: string) => id !== targetRole.id);
             saveConfig({ ignoredRoles });
             return interaction.reply({ content: `<a:success_check:1546134620087783526> Removed ${targetRole} from AntiLink **ignored roles**.`, flags: 64 });
@@ -799,12 +792,12 @@ export const AutomodManifest: ModuleManifest = {
       name: 'command_automod',
       handler: async (client: any, interaction: any, context: any) => {
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: '<a:wrong:1546155193303957504> AutoMod commands must be run inside a server.', flags: 64 });
+        if (!guild) return interaction.reply({ content: '<a:warning:1546155193303957504> AutoMod commands must be run inside a server.', flags: 64 });
 
         const isOwnerOrExtra = await isOwnerOrExtraOwner(interaction.user.id, guild);
         if (!isOwnerOrExtra) {
           return interaction.reply({
-            content: '<a:wrong:1546155193303957504> Access Denied: Only the Guild Owner and Extra Owners can configure AutoMod.',
+            content: '<a:warning:1546155193303957504> Access Denied: Only the Guild Owner and Extra Owners can configure AutoMod.',
             flags: 64
           });
         }
@@ -814,15 +807,57 @@ export const AutomodManifest: ModuleManifest = {
         const config = { ...getDefaultAntiLinkConfig(), ...(amMod?.config || {}) };
 
         const sub = interaction.options?.getSubcommand?.(false) || interaction.parsed?.args?.[0]?.toLowerCase() || 'status';
+        const cleanSub = sub.replace(/[-_]/g, '');
 
         // Redirect antilink subcommand to antilink GUI
-        if (sub === 'antilink' || sub === 'al') {
+        if (cleanSub === 'antilink' || cleanSub === 'al') {
           const gui = buildAntiLinkDashboardGUI(guild, config);
           return interaction.reply({ embeds: gui.embeds, components: gui.components });
         }
 
+        // ── Subcommand: Anti-Everyone / Anti-Here ──────────────────────
+        if (['antieveryone', 'everyone', 'here', 'antihere', 'antiping', 'massping', 'ping'].includes(cleanSub)) {
+          const rawArgs = interaction.parsed?.args || [];
+          const enableOpt = interaction.options?.getBoolean?.('enable');
+          const toggle = (enableOpt !== null && enableOpt !== undefined)
+            ? (enableOpt ? 'on' : 'off')
+            : rawArgs[1]?.toLowerCase();
+
+          if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
+            return interaction.reply({
+              content: '<a:warning:1546155193303957504> **Syntax**: `r!automod antieveryone <on|off>`\nExample: `r!automod antieveryone off`',
+              flags: 64
+            });
+          }
+
+          const isEnabled = ['on', 'enable'].includes(toggle);
+          config.antiEveryoneEnabled = isEnabled;
+          context.updateModuleConfig('automod', config);
+
+          const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
+          const secModule = modules.find((m: any) => m.id === 'security');
+          if (secModule && context.updateModuleConfig) {
+            const secConfig = secModule.config || {};
+            const rules = { ...(secConfig.rules || {}) };
+            const existing = rules.anti_everyone_here || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
+            rules.anti_everyone_here = { ...existing, enabled: isEnabled };
+            context.updateModuleConfig('security', {
+              ...secConfig,
+              rules,
+              automod: { ...(secConfig.automod || {}), antiEveryoneEnabled: isEnabled }
+            });
+          }
+
+          context.logSyncEvent?.(`AutoMod: Updated Anti-Everyone config to ${isEnabled ? 'ENABLED' : 'DISABLED'} by ${interaction.user.tag}`, 'info');
+
+          return interaction.reply({
+            content: `<a:success_check:1546134620087783526> Anti-Everyone / Anti-Here tag filter is now **${isEnabled ? 'ENABLED' : 'DISABLED'}**.`,
+            flags: 64
+          });
+        }
+
         // ── Subcommand: Anti-Spam Rate Limiter ─────────────────────────
-        if (sub === 'antispam' || sub === 'spam') {
+        if (cleanSub === 'antispam' || cleanSub === 'spam') {
           const rawArgs = interaction.parsed?.args || [];
           const enableOpt = interaction.options?.getBoolean?.('enable');
           const maxOpt = interaction.options?.getInteger?.('max_messages');
@@ -855,7 +890,7 @@ export const AutomodManifest: ModuleManifest = {
             .setTitle('Anti-Spam Rate Limiter Configuration')
             .setDescription([
               `>>> ${[
-                `• **Status**: ${config.antiSpamEnabled !== false ? '<a:success_check:1546134620087783526> **Enabled**' : '<a:wrong:1546155193303957504> **Disabled**'}`,
+                `• **Status**: ${config.antiSpamEnabled !== false ? '<a:success_check:1546134620087783526> **Enabled**' : '<a:warning:1546155193303957504> **Disabled**'}`,
                 `• **Max Message Burst**: \`${config.maxSpamMessages || 5} messages\``,
                 `• **Time Window**: \`${config.spamWindowSeconds || 5} seconds\``,
                 `• **Punishment Action**: \`${(config.spamAction || 'mute').toUpperCase()}\``
@@ -871,7 +906,7 @@ export const AutomodManifest: ModuleManifest = {
         }
 
         // ── Subcommand: Bad Words / Blacklist ───────────────────────────
-        if (['badwords', 'badword', 'blacklist', 'words', 'word'].includes(sub)) {
+        if (['badwords', 'badword', 'blacklist', 'words', 'word'].includes(cleanSub)) {
           const rawArgs = interaction.parsed?.args || [];
           const action = rawArgs[1]?.toLowerCase();
           const targetWord = rawArgs.slice(2).join(' ').trim().toLowerCase();
@@ -879,7 +914,7 @@ export const AutomodManifest: ModuleManifest = {
           let badWords: string[] = config.badWords || [];
 
           if (action === 'add') {
-            if (!targetWord) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please specify a word or phrase to blacklist. Example: `r!automod badwords add badword`', flags: 64 });
+            if (!targetWord) return interaction.reply({ content: '<a:warning:1546155193303957504> Please specify a word or phrase to blacklist. Example: `r!automod badwords add badword`', flags: 64 });
             if (!badWords.includes(targetWord)) {
               badWords.push(targetWord);
               config.badWords = badWords;
@@ -889,7 +924,7 @@ export const AutomodManifest: ModuleManifest = {
           }
 
           if (action === 'remove' || action === 'del') {
-            if (!targetWord) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please specify a word to remove.', flags: 64 });
+            if (!targetWord) return interaction.reply({ content: '<a:warning:1546155193303957504> Please specify a word to remove.', flags: 64 });
             badWords = badWords.filter((w: string) => w.toLowerCase() !== targetWord);
             config.badWords = badWords;
             context.updateModuleConfig('automod', config);
@@ -912,7 +947,7 @@ export const AutomodManifest: ModuleManifest = {
         }
 
         // ── Subcommand: Caps Spam Filter ────────────────────────────────
-        if (['caps', 'capsspam', 'anticaps'].includes(sub)) {
+        if (['caps', 'capsspam', 'anticaps'].includes(cleanSub)) {
           const rawArgs = interaction.parsed?.args || [];
           const state = rawArgs[1]?.toLowerCase();
 
@@ -932,7 +967,7 @@ export const AutomodManifest: ModuleManifest = {
         }
 
         // ── Subcommand: Max Mentions Filter ─────────────────────────────
-        if (['mentions', 'maxmentions', 'antimention'].includes(sub)) {
+        if (['mentions', 'maxmentions', 'antimention'].includes(cleanSub)) {
           const rawArgs = interaction.parsed?.args || [];
           const count = parseInt(rawArgs[1], 10);
 
@@ -952,7 +987,7 @@ export const AutomodManifest: ModuleManifest = {
         }
 
         // ── Subcommand: Max Emojis Filter ───────────────────────────────
-        if (['emojis', 'maxemojis', 'antiemoji'].includes(sub)) {
+        if (['emojis', 'maxemojis', 'antiemoji'].includes(cleanSub)) {
           const rawArgs = interaction.parsed?.args || [];
           const count = parseInt(rawArgs[1], 10);
 
@@ -972,7 +1007,7 @@ export const AutomodManifest: ModuleManifest = {
         }
 
         // ── Subcommand: Block Attachments / Files / Media Filter ────────
-        if (['attachments', 'attachment', 'files', 'file', 'images', 'image', 'media', 'antiattachment', 'antiattachments'].includes(sub)) {
+        if (['attachments', 'attachment', 'files', 'file', 'images', 'image', 'media', 'antiattachment', 'antiattachments'].includes(cleanSub)) {
           const rawArgs = interaction.parsed?.args || [];
           const state = rawArgs[1]?.toLowerCase();
           const targetChannel = interaction.mentions?.channels?.first?.() || (rawArgs[2] ? interaction.guild.channels.cache.get(rawArgs[2].replace(/[<#>]/g, '')) : (rawArgs[1]?.startsWith('<#') ? interaction.guild.channels.cache.get(rawArgs[1].replace(/[<#>]/g, '')) : null));
@@ -1026,6 +1061,7 @@ export const AutomodManifest: ModuleManifest = {
           .setDescription([
             `>>> ${[
               `${statusIcon} **AutoMod Engine**: \`${amMod?.status || 'enabled'}\``,
+              `${config.antiEveryoneEnabled !== false ? VERIFIED_ICON : WRONG_ICON} **Anti-Everyone Tag**: ${config.antiEveryoneEnabled !== false ? '**Enabled**' : '**Disabled**'} (@everyone / @here)`,
               `${antilinkIcon} **Anti-Link Filter**: ${isBlockLinks ? '**Enabled**' : '**Disabled**'} (Limit: \`${config.antiLinkLimit || 5}\`, Action: \`${(config.punishment || 'warn').toUpperCase()}\`)`,
               `${VERIFIED_ICON} **Anti-Spam Limiter**: ${config.antiSpamEnabled !== false ? '**Enabled**' : '**Disabled**'} (\`${config.maxSpamMessages || 5} msgs / ${config.spamWindowSeconds || 5}s\`)`,
               `${isBlockFiles ? VERIFIED_ICON : WRONG_ICON} **Attachment & Image Blocker**: ${config.blockAttachments ? '**Server-wide Blocked**' : (config.blockedAttachmentChannels?.length ? `**${config.blockedAttachmentChannels.length} Channels Protected**` : '**Disabled**')}`,
@@ -1038,6 +1074,7 @@ export const AutomodManifest: ModuleManifest = {
             `**Automated Content Filtering & Intelligence Matrix • Realtime Shield**`,
             '',
             `**Quick Commands:**`,
+            `• \`r!automod antieveryone <on|off>\` — Toggle Anti-Everyone / Anti-Here filter`,
             `• \`r!automod attachments <on|off> [#channel]\` — Block file & image uploads`,
             `• \`r!antilink\` — Open interactive Anti-Link Dashboard GUI`,
             `• \`r!automod antispam [on|off] [max] [window]\` — Configure Anti-Spam`,
@@ -1315,6 +1352,16 @@ export const AutomodManifest: ModuleManifest = {
           }
         }
 
+        // 5b. Adaptive Anti-Raid Correlated Pattern Check (Cross-Account Raid Interception)
+        if (!deleted && message.guild) {
+          const { handleRaidMessageCheck } = await import('../../services/AdvancedSecurityService.js');
+          const raidCheck = await handleRaidMessageCheck(message, context);
+          if (raidCheck.isRaid) {
+            deleted = true;
+            reason = raidCheck.reason;
+          }
+        }
+
         // 6. Attachment / Image / File Upload Filter
         if (!deleted && (config.blockAttachments || (config.blockedAttachmentChannels && config.blockedAttachmentChannels.includes(message.channel.id)))) {
           const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild);
@@ -1360,7 +1407,7 @@ export const AutomodManifest: ModuleManifest = {
 
                 // Send DM warning notification
                 const dmEmbed = Embeds.warn(
-                  `<a:warning:1546155457981452441> Anti-Link Warning (${currentCount}/${maxLimit}) — ${message.guild.name}`,
+                  `<a:warning:1546155193303957504> Anti-Link Warning (${currentCount}/${maxLimit}) — ${message.guild.name}`,
                   `Your message in **#${message.channel.name || 'channel'}** was **deleted** because external link sharing is restricted.\n\n**Violation Count**: **${currentCount}/${maxLimit}**\nReaching **${maxLimit} violations** will trigger **${punishAction.toUpperCase()}** enforcement.`,
                   { module: 'automod', footer: `${message.guild.name} • Anti-Link Protection` }
                 );
@@ -1392,6 +1439,17 @@ export const AutomodManifest: ModuleManifest = {
                   await message.member?.ban({ reason: 'Anti-Link: Maximum link violation limit exceeded' }).catch(() => { });
                 }
 
+                // Dispatch Global Event to Central Hub Logger across all servers
+                CentralLogger.automod({
+                  guild: message.guild,
+                  action: `AUTOMOD ${punishAction.toUpperCase()}`,
+                  reason: `Anti-Link threshold exceeded (${currentCount}/${maxLimit})`,
+                  offenderId: message.author.id,
+                  offenderName: userTag(message.author),
+                  channelName: message.channel.name,
+                  severity: punishAction === 'ban' ? 'critical' : 'high'
+                });
+
                 // Send DM notification of punishment
                 const dmEmbed = Embeds.error(
                   `<:gavel:1532621057318584380> Anti-Link Limit Reached — ${message.guild.name}`,
@@ -1416,6 +1474,18 @@ export const AutomodManifest: ModuleManifest = {
               await message.channel.send({ embeds: [warnCard] })
                 .then((m: any) => setTimeout(() => m.delete().catch(() => { }), 6000))
                 .catch(() => { });
+
+              if (reason.includes('burst') || reason.includes('raid') || reason.includes('Cross-channel')) {
+                CentralLogger.automod({
+                  guild: message.guild,
+                  action: 'AUTOMOD SPAM RAID DETECTED',
+                  reason: `${reason} in #${message.channel.name}`,
+                  offenderId: message.author.id,
+                  offenderName: userTag(message.author),
+                  channelName: message.channel.name,
+                  severity: 'high'
+                });
+              }
             }
 
             context.logSyncEvent(`AutoMod: Removed message from ${userTag(message.author)} in #${message.channel.name} (${reason})`, 'warn');

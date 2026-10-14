@@ -296,7 +296,7 @@ export const LevelingManifest: ModuleManifest = {
         if (diff < cooldown) {
           const remaining = Math.ceil((cooldown - diff) / 3600000);
           const { embeds, components } = buildStatusCard({
-            emoji: '<a:Timer:1546231426863730728>',
+            emoji: '<a:loading:1546134304625528882>',
             title: 'Daily Cooldown Active',
             body: `You've already claimed your daily reward today.\n\n**Next reward available:** ${ts(Math.floor((last + cooldown) / 1000))}`,
             accentColor: Colors.WARN,
@@ -316,7 +316,7 @@ export const LevelingManifest: ModuleManifest = {
           fields: [
             { label: '<:booster:1532621228492460172> Reward',     value: '**500 coins**' },
             { label: '<:stats:1532429110775779459> New Balance', value: `**${fmt(eco.balance)}** coins` },
-            { label: '<a:Timer:1546231426863730728> Next Daily',  value: ts(Math.floor((now + cooldown) / 1000)) },
+            { label: '<a:loading:1546134304625528882> Next Daily',  value: ts(Math.floor((now + cooldown) / 1000)) },
           ],
           footerNote: `Rage Optimiser • Unbypassable Security`,
         });
@@ -338,7 +338,7 @@ export const LevelingManifest: ModuleManifest = {
         if (now - last < cooldown) {
           const remaining = Math.ceil((cooldown - (now - last)) / 60000);
           const { embeds, components } = buildStatusCard({
-            emoji: '<a:Timer:1546231426863730728>',
+            emoji: '<a:loading:1546134304625528882>',
             title: 'Work Shift Cooldown',
             body: `You're currently resting after your work shift.\n\n**Back to work in:** \`${remaining} minutes\``,
             accentColor: Colors.WARN,
@@ -358,7 +358,7 @@ export const LevelingManifest: ModuleManifest = {
           fields: [
             { label: '<:stats:1532429110775779459> Earned',      value: `**${fmt(earnings)} coins**` },
             { label: '<:stats:1532429110775779459> New Balance', value: `**${fmt(eco.balance)} coins**` },
-            { label: '<a:Timer:1546231426863730728> Next Shift',  value: ts(Math.floor((now + cooldown) / 1000)) },
+            { label: '<a:loading:1546134304625528882> Next Shift',  value: ts(Math.floor((now + cooldown) / 1000)) },
           ],
           footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
         });

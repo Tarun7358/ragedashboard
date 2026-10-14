@@ -1,7 +1,9 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
+import path from 'path';
+import fs from 'fs';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
-import { buildLimeOverviewCard, buildMinimalAction, createLimeEmbed, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, SHIELD_ICON, CONFIG_ICON, MEMBER_ICON, VIP_ICON, Colors } from '../../core/UIFactory.js';
+import { buildLimeOverviewCard, buildMinimalAction, createLimeEmbed, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, SHIELD_ICON, CONFIG_ICON, MEMBER_ICON, VIP_ICON, Colors, BRAND_FOOTER, ARROW_ICON } from '../../core/UIFactory.js';
 
 // Safe display name helper
 function userTag(user: any): string {
@@ -9,18 +11,48 @@ function userTag(user: any): string {
 }
 
 // Lime GG aesthetic default constants
-export const DEFAULT_LIME_HEADER = '<:foxydealz:1511379877180215296>  **Welcome, {user}! To {server}**';
+export const DEFAULT_LIME_HEADER = '**Welcome, {user}! To {server}**';
 export const DEFAULT_LIME_DESCRIPTION = [
   '> **{user}! You Are the {membercount} Member**',
-  '> **<:verifiedblue:1518869383219253328>  Thanks for being part of our community. **',
-  '> **We hope you have an amazing experience! <:drmomoscandy:1511379935237902517> **',
-  '> **Join Our Voice Channel to Connect! <:voicechannelgreen:1532425750278438962>**',
+  '> **Thanks for being part of our community.**',
+  '> **We hope you have an amazing experience!**',
+  '> **Join Our Voice Channel to Connect!**',
   '',
-  '  **------- Enhanced Community! <:hunter:1511379940002631790>  -------- **'
+  '  **------- Enhanced Community! -------- **'
 ].join('\n');
 export const DEFAULT_LIME_COLOR = '#CBF528';
 export const DEFAULT_LIME_FOOTER = '{server} • Member #{memberCount}';
-export const DEFAULT_WELCOME_IMAGE_URL = 'https://cdn.discordapp.com/attachments/1499055667238146289/1538212292980773004/ChatGPT_Image_Aug_15_2026_09_14_48_PM.png?ex=6a81db55&is=6a8089d5&hm=4e8308bbc0423a9b1fa28776ba323ebc65e14534cf9fa9487546a50d6e172d3b';
+export const DEFAULT_WELCOME_IMAGE_URL = 'D:\\RAGE OPTIMISER V3\\CLUTCH NATION\\gemini_generated_video_0c54a55f-ezgif.com-cut.png';
+
+export function resolveWelcomeImagePath(inputPath?: string): string | null {
+  const target = inputPath || DEFAULT_WELCOME_IMAGE_URL;
+  if (!target || target === 'none' || target === 'off') return null;
+  if (target.startsWith('http://') || target.startsWith('https://')) return null;
+
+  const cwd = process.cwd();
+  const candidates = [
+    target,
+    'D:\\RAGE OPTIMISER V3\\CLUTCH NATION\\gemini_generated_video_0c54a55f-ezgif.com-cut.png',
+    path.resolve(cwd, 'gemini_generated_video_0c54a55f-ezgif.com-cut.png'),
+    path.resolve(cwd, 'backend', 'gemini_generated_video_0c54a55f-ezgif.com-cut.png'),
+    path.resolve(cwd, '..', 'gemini_generated_video_0c54a55f-ezgif.com-cut.png'),
+    path.resolve(cwd, 'backend', 'assets', 'welcome-banner.png'),
+    path.resolve(cwd, 'assets', 'welcome-banner.png'),
+    path.resolve(cwd, 'backend', 'public', 'assets', 'default_welcome_banner.png'),
+    path.resolve(__dirname, '../../assets/welcome-banner.png'),
+    path.resolve(__dirname, '../../../assets/welcome-banner.png'),
+    '/home/container/gemini_generated_video_0c54a55f-ezgif.com-cut.png',
+    '/home/container/backend/assets/welcome-banner.png',
+    '/home/container/assets/welcome-banner.png'
+  ];
+
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(c)) return c;
+    } catch {}
+  }
+  return null;
+}
 
 export function parseWelcomeVariables(str: string, member: any, countOverride?: number, config?: any): string {
   if (!str) return '';
@@ -146,33 +178,72 @@ export function registerWelcomeCommands(): void {
 
         if (action === 'status' || action === 'view') {
           const ch = commConfig.welcomeChannelId ? `<#${commConfig.welcomeChannelId}>` : '`Not Configured`';
+          const role = commConfig.autoRoleId ? `<@&${commConfig.autoRoleId}>` : '`None`';
+          const rules = commConfig.rulesChannelId ? `<#${commConfig.rulesChannelId}>` : '`Not Set`';
+          const roles = commConfig.rolesChannelId ? `<#${commConfig.rolesChannelId}>` : '`Not Set`';
+          const chat = commConfig.chatChannelId ? `<#${commConfig.chatChannelId}>` : '`Not Set`';
           const img = commConfig.welcomeEmbed?.imageUrl || commConfig.imageUrl || DEFAULT_WELCOME_IMAGE_URL;
 
-          const overviewCard = buildLimeOverviewCard({
-            title: 'COMMUNITY WELCOMER MODULE CONFIGURATION MATRIX',
-            subtitle: 'NEW MEMBER GREETING CARDS & BANNER INFRASTRUCTURE',
-            color: Colors.BRAND,
-            sections: [
-              {
-                title: '<:member:1532621317487071426> WELCOME SYSTEM PARAMETERS',
-                items: [
-                  `Welcome Channel: ${ch}`,
-                  `Banner Image URL: \`${img.slice(0, 75)}...\``
-                ]
-              }
-            ],
-            footerText: 'Rage Optimiser Enterprise • Welcome Configuration'
-          });
+          const statusEmbed = new EmbedBuilder()
+            .setColor(Colors.BRAND)
+            .setTitle('Community Welcomer Telemetry Matrix')
+            .setDescription([
+              '> **Real-Time Automated Onboarding Matrix**',
+              '> Live greeting cards, variable interpolation, auto-assigned join roles, and instant welcome dispatch.',
+              '',
+              '**Configuration Parameters**',
+              `> • **Welcome Channel**: ${ch}`,
+              `> • **Auto-Assigned Role**: ${role}`,
+              `> • **Rules Reference ({rules})**: ${rules}`,
+              `> • **Roles Reference ({roles})**: ${roles}`,
+              `> • **Chat Reference ({chat})**: ${chat}`,
+              '> • **Card Style**: Lime GG Modern Graphic Matrix',
+              `> • **Banner Image**: \`${img.slice(0, 65)}...\``
+            ].join('\n'))
+            .setImage(img && img !== 'none' ? img : null)
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
 
-          return message.reply({ embeds: [overviewCard] });
+          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('welcome_matrix_test')
+              .setLabel('Test Greeting')
+              .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+              .setLabel('Web Dashboard')
+              .setURL('https://ragesecuredashboard.netlify.app')
+              .setStyle(ButtonStyle.Link)
+          );
+
+          const statusPayload: any = { components: [row] };
+          const localImg = resolveWelcomeImagePath(img);
+          if (img && (img.startsWith('http://') || img.startsWith('https://'))) {
+            statusEmbed.setImage(img);
+          } else if (localImg) {
+            try {
+              const ext = path.extname(localImg) || '.png';
+              const filename = `welcome-banner${ext}`;
+              statusPayload.files = [new AttachmentBuilder(fs.readFileSync(localImg), { name: filename })];
+              statusEmbed.setImage(`attachment://${filename}`);
+            } catch {}
+          }
+          statusPayload.embeds = [statusEmbed];
+          return message.reply(statusPayload);
         }
 
         if (action === 'image' || action === 'banner') {
           const urlArg = args[1];
           if (!urlArg) {
-            return message.reply({
-              content: `${WRONG_ICON} **Syntax**: \`r!welcome image <image_url | reset | none>\`\nExample: \`r!welcome image https://cdn.discordapp.com/attachments/.../image.png\``
-            });
+            const errCard = new EmbedBuilder()
+              .setColor(Colors.WARN)
+              .setTitle(`${CONFIG_ICON} Set Welcome Banner Image`)
+              .setDescription([
+                '> **Usage**: `r!welcome image <image_url | reset | none>`',
+                '> **Example**: `r!welcome image https://cdn.discordapp.com/attachments/.../banner.png`',
+                '> Set to `reset` to restore the default RAGE OPTIMISER banner.'
+              ].join('\n'))
+              .setFooter({ text: BRAND_FOOTER });
+            return message.reply({ embeds: [errCard] });
           }
 
           let newUrl = urlArg;
@@ -183,13 +254,44 @@ export function registerWelcomeCommands(): void {
           const welcomeEmbed = { ...(commConfig.welcomeEmbed || {}), imageUrl: newUrl };
           updateCommConfig({ welcomeEmbed, imageUrl: newUrl });
 
-          return message.reply({
-            content: `${VERIFIED_ICON} Welcome embed banner image saved! Updated URL:\n\`${newUrl}\``
-          });
+          const savedEmbed = new EmbedBuilder()
+            .setColor(Colors.BRAND)
+            .setTitle(`${VERIFIED_ICON} Welcome Banner Image Saved`)
+            .setDescription([
+              '> **Greeting Banner Updated Successfully**',
+              `> \`${newUrl}\``,
+              '> \nRun `r!welcome test` to preview the updated greeting card.'
+            ].join('\n'))
+            .setImage(newUrl !== 'none' ? newUrl : null)
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+
+          const savePayload: any = {};
+          const localSavedImg = resolveWelcomeImagePath(newUrl);
+          if (newUrl && (newUrl.startsWith('http://') || newUrl.startsWith('https://'))) {
+            savedEmbed.setImage(newUrl);
+          } else if (localSavedImg) {
+            try {
+              const ext = path.extname(localSavedImg) || '.png';
+              const filename = `welcome-banner${ext}`;
+              savePayload.files = [new AttachmentBuilder(fs.readFileSync(localSavedImg), { name: filename })];
+              savedEmbed.setImage(`attachment://${filename}`);
+            } catch {}
+          }
+          savePayload.embeds = [savedEmbed];
+          return message.reply(savePayload);
         }
 
-        if (action === 'channel') {
-          const channelArg = args[1];
+        // Support 'setup', 'channel', 'setchannel', or directly providing channel mention / ID
+        const isChannelAction = action === 'channel' || action === 'setup' || action === 'setchannel' ||
+                                (action === 'set' && args[1]?.toLowerCase() === 'channel') ||
+                                /^\d{17,20}$/.test(action) || /^<#\d{17,20}>$/.test(action);
+
+        if (isChannelAction) {
+          let channelArg = (action === 'set' && args[1]?.toLowerCase() === 'channel')
+            ? args[2]
+            : (action === 'channel' || action === 'setup' || action === 'setchannel' ? args[1] : action);
+
           let channel: any = message.mentions.channels.first();
           if (!channel && channelArg && message.guild) {
             const cleanId = channelArg.replace(/[<#>]/g, '');
@@ -204,15 +306,49 @@ export function registerWelcomeCommands(): void {
           }
 
           if (!channel) {
-            return message.reply({
-              content: `${WRONG_ICON} **Syntax**: \`r!welcome channel <#channel | channel_id | channel_name>\`\nExample: \`r!welcome channel #welcome\` or \`r!welcome channel 123456789012345678\``
-            });
+            const syntaxCard = new EmbedBuilder()
+              .setColor(Colors.WARN)
+              .setTitle(`${CONFIG_ICON} Configure Welcome Channel`)
+              .setDescription([
+                '> **Usage**: `r!welcome channel <#channel | ID | name>`',
+                '> **Quick Setup**: `r!welcome setup <#channel | ID>`',
+                '> **Example**: `r!welcome channel #welcome` or `r!welcome setup 1557415177547423908`'
+              ].join('\n'))
+              .setFooter({ text: BRAND_FOOTER });
+            return message.reply({ embeds: [syntaxCard] });
           }
 
           updateCommConfig({ welcomeChannelId: channel.id });
-          return message.reply({
-            content: `${VERIFIED_ICON} Welcome channel updated to **<#${channel.id}>** (\`${channel.id}\`).`
-          });
+
+          const activeRole = commConfig.autoRoleId ? `<@&${commConfig.autoRoleId}>` : '`None`';
+          const successEmbed = new EmbedBuilder()
+            .setColor(Colors.BRAND)
+            .setTitle(`${VERIFIED_ICON} Community Welcomer Activated`)
+            .setDescription([
+              `> Member onboarding broadcast has been bound to <#${channel.id}>.`,
+              '> ',
+              `> **Target Channel**: <#${channel.id}> (\`${channel.id}\`)`,
+              `> **Auto-Role**: ${activeRole}`,
+              `> **System Status**: ${VERIFIED_ICON} Active & Operational`,
+              '> **Visual Theme**: Lime GG High-Impact Greeting Card',
+              '> ',
+              '> Click **Test Greeting** below or run `r!welcome test` to dispatch a live preview card.'
+            ].join('\n'))
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+
+          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('welcome_matrix_test')
+              .setLabel('Test Greeting')
+              .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+              .setCustomId('welcome_matrix_status')
+              .setLabel('View Status')
+              .setStyle(ButtonStyle.Secondary)
+          );
+
+          return message.reply({ embeds: [successEmbed], components: [row] });
         }
 
         if (action === 'rules' || action === 'roles' || action === 'chat') {
@@ -243,9 +379,17 @@ export function registerWelcomeCommands(): void {
           };
 
           updateCommConfig({ [fieldMap[action]]: channel.id });
-          return message.reply({
-            content: `${VERIFIED_ICON} Welcome card **{${action}}** link updated to **<#${channel.id}>** (\`${channel.id}\`).`
-          });
+
+          const savedEmbed = new EmbedBuilder()
+            .setColor(Colors.BRAND)
+            .setTitle(`${VERIFIED_ICON} Navigation Link Configured`)
+            .setDescription([
+              `> Welcome card placeholder **{${action}}** bound to <#${channel.id}>.`,
+              '> Members who click or view the welcome embed can quickly jump to this channel.'
+            ].join('\n'))
+            .setFooter({ text: BRAND_FOOTER });
+
+          return message.reply({ embeds: [savedEmbed] });
         }
 
         if (action === 'autorole' || action === 'role') {
@@ -264,15 +408,31 @@ export function registerWelcomeCommands(): void {
           }
 
           if (!role) {
-            return message.reply({
-              content: `${WRONG_ICON} **Syntax**: \`r!welcome autorole <@role | role_id | role_name>\`\nExample: \`r!welcome autorole @Member\``
-            });
+            const syntaxCard = new EmbedBuilder()
+              .setColor(Colors.WARN)
+              .setTitle(`${CONFIG_ICON} Configure Auto-Assigned Join Role`)
+              .setDescription([
+                '> **Usage**: `r!welcome autorole <@role | ID | name>`',
+                '> **Example**: `r!welcome autorole @Member` or `r!welcome autorole 1234567890`'
+              ].join('\n'))
+              .setFooter({ text: BRAND_FOOTER });
+            return message.reply({ embeds: [syntaxCard] });
           }
 
           updateCommConfig({ autoRoleId: role.id });
-          return message.reply({
-            content: `${VERIFIED_ICON} Onboarding auto-assigned join role set to **<@&${role.id}>**.`
-          });
+
+          const savedEmbed = new EmbedBuilder()
+            .setColor(Colors.BRAND)
+            .setTitle(`${VERIFIED_ICON} Onboarding Auto-Role Configured`)
+            .setDescription([
+              `> New members will automatically receive **<@&${role.id}>** upon joining the server.`,
+              '> ',
+              `> **Role**: <@&${role.id}> (\`${role.id}\`)`,
+              '> **Protection**: Managed under Clutch Security Hierarchy'
+            ].join('\n'))
+            .setFooter({ text: BRAND_FOOTER });
+
+          return message.reply({ embeds: [savedEmbed] });
         }
 
         if (action === 'test') {
@@ -282,25 +442,89 @@ export function registerWelcomeCommands(): void {
           const payload = buildLimeWelcomePayload(commConfig, message.member || message.author);
           await (targetChannel as any).send(payload);
 
-          return message.reply({
-            content: `${VERIFIED_ICON} Dispatched test welcome greeting card to ${targetChannel}.`
-          });
+          const dispatchEmbed = new EmbedBuilder()
+            .setColor(Colors.BRAND)
+            .setTitle(`${VERIFIED_ICON} Test Greeting Dispatched`)
+            .setDescription([
+              `> Live test welcome card has been sent to <#${targetChannel.id}>.`,
+              '> Verify the avatar, member count variable interpolation, and banner formatting.'
+            ].join('\n'))
+            .setFooter({ text: BRAND_FOOTER });
+
+          return message.reply({ embeds: [dispatchEmbed] });
         }
 
-        // Fallback Command Help Syntax
-        return message.reply({
-          content: [
-            `${CONFIG_ICON} **Community Welcomer Command Matrix**`,
-            `• \`r!welcome channel <#channel | ID | name>\` — Set main welcome channel`,
-            `• \`r!welcome rules <#channel | ID | name>\` — Link server rules channel`,
-            `• \`r!welcome roles <#channel | ID | name>\` — Link self-roles channel`,
-            `• \`r!welcome chat <#channel | ID | name>\` — Link general chat channel`,
-            `• \`r!welcome image <URL | reset>\` — Set greeting card banner image`,
-            `• \`r!welcome autorole <@role | ID | name>\` — Set auto-assigned join role`,
-            `• \`r!welcome status\` — View active welcome matrix parameters`,
-            `• \`r!welcome test\` — Dispatch live greeting preview card\` (or \`r!welcome set channel <ID>\`)`
-          ].join('\n')
-        });
+        // ── Enhanced Command Matrix Fallback ────────────────────────────────
+        const activeCh = commConfig.welcomeChannelId ? `<#${commConfig.welcomeChannelId}>` : '`Not Configured`';
+        const activeRole = commConfig.autoRoleId ? `<@&${commConfig.autoRoleId}>` : '`None`';
+        const activeRules = commConfig.rulesChannelId ? `<#${commConfig.rulesChannelId}>` : '`Not Set`';
+
+        const matrixEmbed = new EmbedBuilder()
+          .setColor(Colors.BRAND)
+          .setTitle('Community Welcomer Suite • Command Matrix')
+          .setDescription([
+            '> **Enterprise Automated Onboarding & Greeting Engine**',
+            '> Real-time greeting cards, variable interpolation, auto-assigned join roles, and instant welcome dispatch.',
+            '',
+            '**Active Matrix Status**',
+            `> • **Welcome Channel**: ${activeCh}`,
+            `> • **Auto-Role**: ${activeRole}`,
+            `> • **Rules Reference**: ${activeRules}`
+          ].join('\n'))
+          .addFields([
+            {
+              name: 'Channel Configuration',
+              value: [
+                '• `r!welcome channel <#channel | ID>` — Set primary welcome broadcast channel',
+                '• `r!welcome setup <#channel | ID>` — Quick setup welcome channel'
+              ].join('\n'),
+              inline: false
+            },
+            {
+              name: 'Greeting Assets & Visuals',
+              value: [
+                '• `r!welcome image <URL | reset>` — Set customized greeting banner image',
+                '• `r!welcome test` — Dispatch a live greeting card preview'
+              ].join('\n'),
+              inline: false
+            },
+            {
+              name: 'Navigation Links (Variables)',
+              value: [
+                '• `r!welcome rules <#channel>` — Link rules channel (`{rules}`)',
+                '• `r!welcome roles <#channel>` — Link self-roles channel (`{roles}`)',
+                '• `r!welcome chat <#channel>` — Link general chat channel (`{chat}`)'
+              ].join('\n'),
+              inline: false
+            },
+            {
+              name: 'Join Automation & Diagnostics',
+              value: [
+                '• `r!welcome autorole <@role | ID>` — Auto-assign role to new members',
+                '• `r!welcome status` — View full active welcomer parameters'
+              ].join('\n'),
+              inline: false
+            }
+          ])
+          .setFooter({ text: BRAND_FOOTER })
+          .setTimestamp();
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId('welcome_matrix_test')
+            .setLabel('Test Greeting')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId('welcome_matrix_status')
+            .setLabel('View Status')
+            .setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder()
+            .setLabel('Web Dashboard')
+            .setURL('https://ragesecuredashboard.netlify.app')
+            .setStyle(ButtonStyle.Link)
+        );
+
+        return message.reply({ embeds: [matrixEmbed], components: [row] });
       }
     });
   });
@@ -373,10 +597,10 @@ export const CommunityManifest: ModuleManifest = {
           description: 'Action to perform',
           required: true,
           choices: [
-            { name: '🧪 Test Welcome Card', value: 'test' },
-            { name: '📊 View Status & Image URL', value: 'status' },
-            { name: '🖼️ Set Custom Banner Image URL', value: 'set-image' },
-            { name: '🔄 Reset Banner Image to Default', value: 'reset-image' }
+            { name: 'Test Welcome Card', value: 'test' },
+            { name: 'View Status & Image URL', value: 'status' },
+            { name: 'Set Custom Banner Image URL', value: 'set-image' },
+            { name: 'Reset Banner Image to Default', value: 'reset-image' }
           ]
         },
         { name: 'image_url', type: 3, description: 'Image URL (for set-image action)', required: false }
@@ -434,6 +658,75 @@ export const CommunityManifest: ModuleManifest = {
   ],
   events: [
     {
+      name: 'button_welcome_matrix_test',
+      handler: async (client: any, interaction: any, context: any) => {
+        const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
+                        interaction.member?.permissions?.has?.('Administrator');
+        if (!isOwner) return interaction.reply({ content: `${WRONG_ICON} Requires Administrator permissions.`, flags: 64 });
+
+        const modules = context.getModulesState ? context.getModulesState() : [];
+        const commMod = modules.find((m: any) => m.id === 'community');
+        const commConfig = commMod?.config || {};
+
+        const channelId = commConfig.welcomeChannelId || interaction.channelId;
+        const targetChannel = interaction.guild?.channels.cache.get(channelId);
+        if (targetChannel && targetChannel.isTextBased()) {
+          const payload = buildLimeWelcomePayload(commConfig, interaction.member || interaction.user);
+          await targetChannel.send(payload);
+          return interaction.reply({ content: `${VERIFIED_ICON} Dispatched live test greeting card to <#${targetChannel.id}>.`, flags: 64 });
+        }
+        return interaction.reply({ content: `${WRONG_ICON} Welcome channel not configured or unreachable.`, flags: 64 });
+      }
+    },
+    {
+      name: 'button_welcome_matrix_status',
+      handler: async (client: any, interaction: any, context: any) => {
+        const modules = context.getModulesState ? context.getModulesState() : [];
+        const commMod = modules.find((m: any) => m.id === 'community');
+        const commConfig = commMod?.config || {};
+
+        const ch = commConfig.welcomeChannelId ? `<#${commConfig.welcomeChannelId}>` : '`Not Configured`';
+        const role = commConfig.autoRoleId ? `<@&${commConfig.autoRoleId}>` : '`None`';
+        const rules = commConfig.rulesChannelId ? `<#${commConfig.rulesChannelId}>` : '`Not Set`';
+        const roles = commConfig.rolesChannelId ? `<#${commConfig.rolesChannelId}>` : '`Not Set`';
+        const chat = commConfig.chatChannelId ? `<#${commConfig.chatChannelId}>` : '`Not Set`';
+        const img = commConfig.welcomeEmbed?.imageUrl || commConfig.imageUrl || DEFAULT_WELCOME_IMAGE_URL;
+
+        const statusEmbed = new EmbedBuilder()
+          .setColor(Colors.BRAND)
+          .setTitle('Community Welcomer Telemetry Matrix')
+          .setDescription([
+            '> **Real-Time Automated Onboarding Matrix**',
+            '> ',
+            `> **Welcome Channel**: ${ch}`,
+            `> **Auto-Assigned Role**: ${role}`,
+            `> **Rules Reference ({rules})**: ${rules}`,
+            `> **Roles Reference ({roles})**: ${roles}`,
+            `> **Chat Reference ({chat})**: ${chat}`,
+            '> **Card Style**: Lime GG Modern Graphic Matrix',
+            `> **Banner Image**: \`${img.slice(0, 65)}...\``
+          ].join('\n'))
+          .setImage(img && img !== 'none' ? img : null)
+          .setFooter({ text: BRAND_FOOTER })
+          .setTimestamp();
+
+        const statusPayload: any = { flags: 64 };
+        const localImg = resolveWelcomeImagePath(img);
+        if (img && (img.startsWith('http://') || img.startsWith('https://'))) {
+          statusEmbed.setImage(img);
+        } else if (localImg) {
+          try {
+            const ext = path.extname(localImg) || '.png';
+            const filename = `welcome-banner${ext}`;
+            statusPayload.files = [new AttachmentBuilder(fs.readFileSync(localImg), { name: filename })];
+            statusEmbed.setImage(`attachment://${filename}`);
+          } catch {}
+        }
+        statusPayload.embeds = [statusEmbed];
+        return interaction.reply(statusPayload);
+      }
+    },
+    {
       name: 'command_welcome',
       handler: async (client: any, interaction: any, context: any) => {
         // If prefix command (SyntheticInteraction), delegate to PrefixRegistry execute handler
@@ -465,7 +758,7 @@ export const CommunityManifest: ModuleManifest = {
             color: Colors.BRAND,
             sections: [
               {
-                title: '<:member:1532621317487071426> WELCOME SYSTEM PARAMETERS',
+                title: 'WELCOME SYSTEM PARAMETERS',
                 items: [
                   `Welcome Channel: ${ch}`,
                   `Banner Image URL: \`${img.slice(0, 75)}...\``
@@ -658,7 +951,7 @@ export const CommunityManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const question = interaction.options.getString('question');
         const embed = new EmbedBuilder()
-          .setTitle('📊 Poll')
+          .setTitle('Poll')
           .setDescription(question)
           .setColor('#4f8cff')
           .setFooter({ text: `Asked by ${userTag(interaction.user)}` });
@@ -677,12 +970,12 @@ export const CommunityManifest: ModuleManifest = {
           const res = await fetch(`https://wttr.in/${encodeURIComponent(location)}?format=3`);
           if (res.ok) {
             const text = await res.text();
-            await interaction.editReply(`🌍 **Weather Report:**\n> ${text.trim()}`);
+            await interaction.editReply(`**Weather Report:**\n> ${text.trim()}`);
           } else {
-            await interaction.editReply(`☀️ The weather in **${location}** is currently sunny at 24°C.`);
+            await interaction.editReply(`The weather in **${location}** is currently sunny at 24°C.`);
           }
         } catch (err) {
-          await interaction.editReply(`☀️ The weather in **${location}** is currently sunny at 24°C.`);
+          await interaction.editReply(`The weather in **${location}** is currently sunny at 24°C.`);
         }
       }
     },
@@ -729,21 +1022,21 @@ export const CommunityManifest: ModuleManifest = {
         const answers = ['It is certain.', 'Without a doubt.', 'Yes.', 'Reply hazy, try again.', 'Ask again later.', 'Don\'t count on it.', 'My sources say no.', 'Very doubtful.'];
         const question = interaction.options.getString('question');
         const answer = answers[Math.floor(Math.random() * answers.length)];
-        await interaction.reply(`🎱 **Question:** ${question}\n**Answer:** ${answer}`);
+        await interaction.reply(`**Question:** ${question}\n**Answer:** ${answer}`);
       }
     },
     {
       name: 'command_flip',
       handler: async (client: any, interaction: any, context: any) => {
         const result = Math.random() > 0.5 ? 'Heads' : 'Tails';
-        await interaction.reply(`🪙 The coin landed on: **${result}**`);
+        await interaction.reply(`The coin landed on: **${result}**`);
       }
     },
     {
       name: 'command_roll',
       handler: async (client: any, interaction: any, context: any) => {
         const result = Math.floor(Math.random() * 6) + 1;
-        await interaction.reply(`🎲 You rolled a **${result}**`);
+        await interaction.reply(`You rolled a **${result}**`);
       }
     },
     {
@@ -778,9 +1071,9 @@ export const CommunityManifest: ModuleManifest = {
           result = 'I win!';
         }
 
-        const choiceIcons: Record<string, string> = { rock: '🪨 Rock', paper: '📄 Paper', scissors: '✂️ Scissors' };
+        const choiceIcons: Record<string, string> = { rock: 'Rock', paper: 'Paper', scissors: 'Scissors' };
         await interaction.reply({
-          content: `🎮 **Rock Paper Scissors**\n- **Your Choice:** ${choiceIcons[choice]}\n- **My Choice:** ${choiceIcons[botChoice]}\n- **Result:** **${result}**`
+          content: `**Rock Paper Scissors**\n- **Your Choice:** ${choiceIcons[choice]}\n- **My Choice:** ${choiceIcons[botChoice]}\n- **Result:** **${result}**`
         });
       }
     },
@@ -791,14 +1084,14 @@ export const CommunityManifest: ModuleManifest = {
         const u2 = interaction.options.getUser('user2') || interaction.user;
         const percent = Math.floor(Math.random() * 101);
 
-        let heart = '💔';
-        if (percent > 85) heart = '💖✨';
-        else if (percent > 60) heart = '❤️';
-        else if (percent > 40) heart = '💛';
-        else if (percent > 20) heart = '💙';
+        let heart = '';
+        if (percent > 85) heart = ' (High)';
+        else if (percent > 60) heart = ' (Good)';
+        else if (percent > 40) heart = ' (Fair)';
+        else if (percent > 20) heart = ' (Low)';
 
         await interaction.reply({
-          content: `❤️ **Matchmaker**\n- **Match:** ${u1} x ${u2}\n- **Compatibility:** **${percent}%** ${heart}`
+          content: `**Matchmaker**\n- **Match:** ${u1} x ${u2}\n- **Compatibility:** **${percent}%** ${heart}`
         });
       }
     },
@@ -835,11 +1128,11 @@ export const CommunityManifest: ModuleManifest = {
           const crypto = await import('crypto');
           const hashed = crypto.createHash(algo === 'md5' ? 'md5' : 'sha256').update(text).digest('hex');
           await interaction.reply({
-            content: `🔒 **Hash Result (${algo.toUpperCase()}):**\n\`\`\`\n${hashed}\n\`\`\``,
+            content: `**Hash Result (${algo.toUpperCase()}):**\n\`\`\`\n${hashed}\n\`\`\``,
             flags: 64
           });
         } catch {
-          await interaction.reply({ content: '❌ Hash computation failed.', flags: 64 });
+          await interaction.reply({ content: 'Hash computation failed.', flags: 64 });
         }
       }
     },
@@ -850,7 +1143,7 @@ export const CommunityManifest: ModuleManifest = {
         if (!hex.startsWith('#')) hex = '#' + hex;
         
         const embed = new EmbedBuilder()
-          .setTitle(`🎨 Color Preview: ${hex}`)
+          .setTitle(`Color Preview: ${hex}`)
           .setColor(hex as any)
           .setThumbnail(`https://singlecolorimage.com/get/${hex.substring(1)}/100x100`)
           .setTimestamp();
@@ -891,7 +1184,7 @@ export const CommunityManifest: ModuleManifest = {
         const channelId = config.welcomeChannelId;
         if (!channelId) return;
 
-        const defaultEmbed = { title: '👋 Welcome to {server}!', description: 'Welcome {user}!', color: '#4f8cff', showAvatar: true, footer: 'User ID: {userId}' };
+        const defaultEmbed = { title: 'Welcome to {server}!', description: 'Welcome {user}!', color: '#4f8cff', showAvatar: true, footer: 'User ID: {userId}' };
         const embedConfig = config.welcomeEmbed || defaultEmbed;
 
         try {
@@ -919,7 +1212,7 @@ export const CommunityManifest: ModuleManifest = {
         if (!commModule || commModule.status !== 'enabled') return;
 
         const config = commModule.config;
-        const defaultEmbed = { title: '😢 Goodbye {user}!', description: '**{userTag}** has left.', color: '#ff4444', showAvatar: true, footer: 'User ID: {userId}' };
+        const defaultEmbed = { title: 'Goodbye {user}!', description: '**{userTag}** has left.', color: '#ff4444', showAvatar: true, footer: 'User ID: {userId}' };
         const embedConfig = config.leaveEmbed || defaultEmbed;
         const channelId = embedConfig.channelId || config.welcomeChannelId;
         

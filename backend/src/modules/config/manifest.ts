@@ -8,7 +8,7 @@ import { SocialSubscriptionRepository } from '../social-updates/SocialSubscripti
 import { SubscriptionManager } from '../social-updates/SubscriptionManager.js';
 import { resetLinkViolations, getLinkViolations } from '../automod/manifest.js';
 import { resetRateLimit } from '../security/manifest.js';
-import { getUnifiedWhitelistEntries, getGuildExtraOwnersFromCache } from '../../utils/whitelistCheck.js';
+import { getUnifiedWhitelistEntries, getGuildExtraOwnersFromCache, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import { EmailService } from '../../services/EmailService.js';
 
 const APPROVED_ICON = SUCCESS_CHECK_ICON;
@@ -1204,6 +1204,12 @@ export function registerConfigCommands(): void {
         return message.reply(payload);
       }
       if (sub === 'whitelist' || sub === 'wl') {
+        const isOwner = await isOwnerOrExtraOwner(message.author.id, message.guild);
+        if (!isOwner) {
+          return message.reply({
+            content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** (<@${message.guild?.ownerId}>) or designated **Extra Owners** can view or manage Anti-Nuke Whitelists.`
+          });
+        }
         const payload = await buildWhitelistManagerGUI(message.guild, secConfig, extra);
         return message.reply(payload);
       }
@@ -1233,6 +1239,12 @@ export function registerConfigCommands(): void {
       const secConfig = secMod?.config || {};
 
       if (sub === 'whitelist' || sub === 'wl') {
+        const isOwner = await isOwnerOrExtraOwner(message.author.id, message.guild);
+        if (!isOwner) {
+          return message.reply({
+            content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** (<@${message.guild?.ownerId}>) or designated **Extra Owners** can view or manage Anti-Nuke Whitelists.`
+          });
+        }
         const payload = await buildWhitelistManagerGUI(message.guild, secConfig, extra);
         return message.reply(payload);
       }
@@ -1318,6 +1330,23 @@ export function registerConfigCommands(): void {
   });
 
   PrefixRegistry.register({
+    name: 'antispam',
+    category: 'AutoMod',
+    description: 'AntiSpam rate limiting, sliding-window detection & auto-mute.',
+    usage: 'r!antispam <on|off|status>',
+    aliases: ['anti-spam', 'spamfilter', 'as'],
+    examples: ['r!antispam on', 'r!antispam off', 'r!antispam status'],
+    cooldownSeconds: 3,
+    userPermissions: ['Administrator'],
+    execute: async (message: Message, args: string[], extra?: any) => {
+      const automodCmd = PrefixRegistry.get('automod');
+      if (automodCmd && automodCmd.execute) {
+        return automodCmd.execute(message, ['antispam', ...args], extra);
+      }
+    }
+  });
+
+  PrefixRegistry.register({
     name: 'antiattachment',
     category: 'AutoMod',
     description: 'Block files, images, and media attachments per-channel or server-wide.',
@@ -1339,6 +1368,27 @@ export function registerConfigCommands(): void {
       const automodCmd = PrefixRegistry.get('automod');
       if (automodCmd && automodCmd.execute) {
         return automodCmd.execute(message, ['attachments', ...args], extra);
+      }
+    }
+  });
+
+  PrefixRegistry.register({
+    name: 'antieveryone',
+    category: 'AutoMod',
+    description: 'Toggle Anti-Everyone and Anti-Here tag protection.',
+    usage: 'r!antieveryone <on|off>',
+    aliases: ['anti-everyone', 'ae', 'antihere', 'anti-here', 'antiping', 'anti-ping'],
+    examples: [
+      'r!antieveryone on',
+      'r!antieveryone off',
+      'r!anti-everyone off'
+    ],
+    cooldownSeconds: 3,
+    userPermissions: ['Administrator'],
+    execute: async (message: Message, args: string[], extra?: any) => {
+      const configCmd = PrefixRegistry.get('config');
+      if (configCmd && configCmd.execute) {
+        return configCmd.execute(message, ['automod', 'anti-everyone', ...args], extra);
       }
     }
   });
@@ -1489,7 +1539,7 @@ export function registerConfigCommands(): void {
       const statusMsg = await message.reply({
         embeds: [createLimeEmbed({
           title: `${targetState ? 'Enabling' : 'Disabling'} Media & Attachments Server-Wide...`,
-          description: `<a:sync:1532404595735924736> Applying **Attach Files: ${targetState ? 'ALLOW' : 'DENY'}** across ${scope === 'all' ? 'all Text & Voice channels' : `${scope} channels`}... Please wait.`
+          description: `<a:loading:1546134304625528882> Applying **Attach Files: ${targetState ? 'ALLOW' : 'DENY'}** across ${scope === 'all' ? 'all Text & Voice channels' : `${scope} channels`}... Please wait.`
         })]
       }).catch(() => null);
 
@@ -1779,10 +1829,16 @@ export function registerConfigCommands(): void {
         const secConfig = secModule?.config || {};
         const rules = secConfig.rules || {};
 
-        // Smart Reordering: Check if user passed rule name or category before action (e.g. r!config antinuke anti_guild_update threshold 11)
-        if (action && (action.startsWith('anti_') || ['roles', 'channels', 'members', 'webhooks', 'emojis', 'guild_update', 'channel_delete', 'channel_create', 'role_create', 'role_delete', 'ban', 'kick'].includes(action))) {
+        // Smart Reordering: Check if user passed rule name or category before action (e.g. r!config antinuke role_grant off)
+        const normalizedAction = normalizeRuleName(action);
+        const isRuleOrCategory = action && (
+          action.startsWith('anti_') ||
+          normalizedAction.startsWith('anti_') ||
+          ['roles', 'role', 'channels', 'channel', 'members', 'member', 'moderation', 'webhooks', 'webhook', 'server', 'emojis', 'emoji'].includes(action)
+        );
+        if (isRuleOrCategory) {
           const possibleSub = effectiveArgs[2]?.toLowerCase();
-          if (possibleSub && ['threshold', 'punishment', 'reversion', 'enable', 'disable', 'module', 'on', 'off', 'set', 'trustedactor', 'trusted-actor', 'behavioral'].includes(possibleSub)) {
+          if (possibleSub && ['threshold', 'punishment', 'reversion', 'recovery', 'rollback', 'enable', 'disable', 'module', 'on', 'off', 'toggle', 'set', 'trustedactor', 'trusted-actor', 'behavioral'].includes(possibleSub)) {
             const ruleArg = effectiveArgs[1];
             effectiveArgs[1] = possibleSub;
             effectiveArgs[2] = ruleArg;
@@ -2072,12 +2128,19 @@ export function registerConfigCommands(): void {
             });
           }
 
-          const isEnabled = action === 'enable' || action === 'on' || (action === 'toggle' && effectiveArgs[3]?.toLowerCase() === 'on');
           const targetKeys = getRuleKeysForGroup(eventInput);
           const updatedRules = { ...rules };
 
+          let targetStateName = 'ENABLED';
           targetKeys.forEach(k => {
-            const currentRule = getEffectiveRule(rules, k);
+            const currentRule = getEffectiveRule(rules, k, secConfig);
+            let isEnabled: boolean;
+            if (action === 'toggle') {
+              isEnabled = effectiveArgs[3] ? ['on', 'enable', 'true'].includes(effectiveArgs[3].toLowerCase()) : !currentRule.enabled;
+            } else {
+              isEnabled = action === 'enable' || action === 'on';
+            }
+            targetStateName = isEnabled ? 'ENABLED' : 'DISABLED';
             updatedRules[k] = { ...currentRule, enabled: isEnabled };
           });
 
@@ -2086,7 +2149,7 @@ export function registerConfigCommands(): void {
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Anti-Nuke Protection State Saved',
-              description: `${APPROVED_ICON} Protection state for **${targetKeys.length} sub-module(s)** has been **\`${isEnabled ? 'ENABLED' : 'DISABLED'}\`**.`
+              description: `${APPROVED_ICON} Protection state for **${targetKeys.length} sub-module(s)** has been **\`${targetStateName}\`**.`
             })]
           });
         }
@@ -2278,7 +2341,8 @@ export function registerConfigCommands(): void {
 
       // AutoMod Sub-Configuration (`r!config automod ...`)
       if (moduleName === 'automod') {
-        const action = effectiveArgs[1]?.toLowerCase();
+        const action = effectiveArgs[1]?.toLowerCase() || '';
+        const cleanAction = action.replace(/[-_]/g, '');
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const amModule = modules.find((m: any) => m.id === 'automod');
         const amConfig = amModule?.config || {};
@@ -2292,7 +2356,7 @@ export function registerConfigCommands(): void {
           }
         };
 
-        if (!action || action === 'status' || action === 'view' || action === 'matrix') {
+        if (!action || ['status', 'view', 'matrix', 'info', 'show'].includes(cleanAction)) {
           const isMasterActive = amConfig.autoModEnabled !== false && amConfig.antiSpamEnabled !== false;
           const isAntiSpamActive = isMasterActive && (amConfig.antiSpamEnabled === true || Boolean(amConfig.maxSpamMessages));
           const isAntiLinkActive = isMasterActive && amConfig.blockLinks !== false && amConfig.antiLinkEnabled !== false;
@@ -2336,8 +2400,8 @@ export function registerConfigCommands(): void {
           return message.reply({ embeds: [overviewCard] });
         }
 
-        if (action === 'on' || action === 'off' || action === 'enable' || action === 'disable') {
-          const isEnabled = action === 'on' || action === 'enable';
+        if (['on', 'off', 'enable', 'disable'].includes(cleanAction)) {
+          const isEnabled = cleanAction === 'on' || cleanAction === 'enable';
           updateAmConfig({
             antiEveryoneEnabled: isEnabled,
             antiSpamEnabled: isEnabled,
@@ -2354,7 +2418,11 @@ export function registerConfigCommands(): void {
             const rules = { ...(secConfig.rules || {}) };
             const existing = rules.anti_everyone_here || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
             rules.anti_everyone_here = { ...existing, enabled: isEnabled };
-            extra.updateModuleConfig('security', { ...secConfig, rules });
+            extra.updateModuleConfig('security', {
+              ...secConfig,
+              rules,
+              automod: { ...(secConfig.automod || {}), antiEveryoneEnabled: isEnabled }
+            });
           }
 
           return message.reply({
@@ -2365,13 +2433,25 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (['antieveryone', 'everyone', 'here', 'antihere', 'massping'].includes(action)) {
+        if (['antieveryone', 'everyone', 'here', 'antihere', 'massping', 'antiping', 'everyonehere', 'antieveryonehere', 'mentions', 'antimention', 'ping', 'pings'].includes(cleanAction)) {
           const toggle = effectiveArgs[2]?.toLowerCase();
+          const secModule = modules.find((m: any) => m.id === 'security');
+          const secConfig = secModule?.config || {};
+          const ruleEveryone = secConfig?.rules?.anti_everyone_here;
+          const isAntiEveryoneActive = (ruleEveryone?.enabled !== false) && (amConfig.antiEveryoneEnabled !== false) && (secConfig.antiNukeEnabled !== false);
+
           if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
             return message.reply({
               embeds: [createLimeEmbed({
-                title: 'Anti-Everyone / Anti-Here Configuration Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config automod antieveryone <on|off>\`\nExample: \`r!config automod antieveryone off\``
+                title: 'Anti-Everyone / Anti-Here Protection Status',
+                description: [
+                  `• **Current Status**: \`${isAntiEveryoneActive ? 'ENABLED (ACTIVE)' : 'DISABLED (INACTIVE)'}\``,
+                  `• **Target Filter**: \`@everyone / @here\` unauthorized mentions`,
+                  `• **Enforcement Action**: \`${(ruleEveryone?.action || 'quarantine').toUpperCase()}\``,
+                  '',
+                  `> **Syntax**: \`r!config automod anti-everyone <on|off>\` or \`r!antieveryone <on|off>\``,
+                  `> **Example**: \`r!antieveryone off\``
+                ].join('\n')
               })]
             });
           }
@@ -2379,13 +2459,15 @@ export function registerConfigCommands(): void {
           const isEnabled = ['on', 'enable'].includes(toggle);
           updateAmConfig({ antiEveryoneEnabled: isEnabled });
 
-          const secModule = modules.find((m: any) => m.id === 'security');
           if (secModule && extra?.updateModuleConfig) {
-            const secConfig = secModule.config || {};
             const rules = { ...(secConfig.rules || {}) };
             const existing = rules.anti_everyone_here || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
             rules.anti_everyone_here = { ...existing, enabled: isEnabled };
-            extra.updateModuleConfig('security', { ...secConfig, rules });
+            extra.updateModuleConfig('security', {
+              ...secConfig,
+              rules,
+              automod: { ...(secConfig.automod || {}), antiEveryoneEnabled: isEnabled }
+            });
           }
 
           return message.reply({
@@ -2396,7 +2478,7 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (action === 'antispam') {
+        if (cleanAction === 'antispam' || cleanAction === 'spam') {
           const toggle = effectiveArgs[2]?.toLowerCase();
           const maxMsgs = parseInt(effectiveArgs[3], 10);
           const windowSec = parseInt(effectiveArgs[4], 10);
@@ -2427,7 +2509,7 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (action === 'antilink') {
+        if (cleanAction === 'antilink' || cleanAction === 'link' || cleanAction === 'links') {
           const toggle = effectiveArgs[2]?.toLowerCase();
           const limitOrInvites = effectiveArgs[3]?.toLowerCase();
           const invitesOrAction = effectiveArgs[4]?.toLowerCase();
@@ -2478,7 +2560,7 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (action === 'clearwarns' || action === 'clearwarn' || action === 'resetwarns') {
+        if (['clearwarns', 'clearwarn', 'resetwarns', 'resetwarn'].includes(cleanAction)) {
           const targetUser = message.mentions.users.first();
           if (!targetUser) {
             return message.reply({
@@ -2500,7 +2582,7 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (action === 'warnings' || action === 'warns') {
+        if (['warnings', 'warns', 'warning', 'warn'].includes(cleanAction)) {
           const targetUser = message.mentions.users.first() || message.author;
           const maxLimit = typeof amConfig.antiLinkLimit === 'number' && amConfig.antiLinkLimit > 0
             ? amConfig.antiLinkLimit
@@ -2523,7 +2605,7 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (action === 'blacklist') {
+        if (['blacklist', 'badwords', 'badword', 'wordblacklist', 'words', 'word'].includes(cleanAction)) {
           const subAct = effectiveArgs[2]?.toLowerCase();
           const wordInput = effectiveArgs.slice(3).join(' ').trim();
           const currentList: string[] = amConfig.blacklist || [];
@@ -2572,7 +2654,7 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (action === 'caps') {
+        if (['caps', 'anticaps', 'capslimit', 'capsspam'].includes(cleanAction)) {
           const toggle = effectiveArgs[2]?.toLowerCase();
           const percent = parseInt(effectiveArgs[3], 10);
 
@@ -2599,7 +2681,7 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (action === 'emoji') {
+        if (['emoji', 'emojis', 'antiemoji', 'emojispam'].includes(cleanAction)) {
           const toggle = effectiveArgs[2]?.toLowerCase();
           const count = parseInt(effectiveArgs[3], 10);
 
@@ -2626,6 +2708,13 @@ export function registerConfigCommands(): void {
           });
         }
 
+        if (['attachments', 'attachment', 'antiattachment', 'antiattachments', 'media', 'antimedia', 'files', 'file', 'images', 'image'].includes(cleanAction)) {
+          const automodCmd = PrefixRegistry.get('automod');
+          if (automodCmd && automodCmd.execute) {
+            return automodCmd.execute(message, ['attachments', ...effectiveArgs.slice(2)], extra);
+          }
+        }
+
         // Fallback for invalid AutoMod subcommand
         const overviewCard = buildLimeOverviewCard({
           title: `INVALID AUTOMOD SUBCOMMAND: "${(action || '').toUpperCase()}"`,
@@ -2636,11 +2725,13 @@ export function registerConfigCommands(): void {
               title: '<:link:1532620952087826602> VALID AUTOMOD CONFIGURATION COMMANDS',
               items: [
                 '`r!config automod status` — View AutoMod filter matrix',
+                '`r!config automod anti-everyone <on|off>` — Anti-Everyone & Anti-Here tag filter',
                 '`r!config automod antispam <on|off> [max_msgs] [window_sec] [action]` — Anti-Spam',
                 '`r!config automod antilink <on|off> [allow_invites] [action]` — Anti-Link',
                 '`r!config automod blacklist <add|remove|clear|list> [words]` — Word blacklist',
                 '`r!config automod caps <on|off> [max_percent]` — Caps limit',
-                '`r!config automod emoji <on|off> [max_emojis]` — Emoji spam limit'
+                '`r!config automod emoji <on|off> [max_emojis]` — Emoji spam limit',
+                '`r!config automod attachments <on|off> [#channel]` — Media & attachments filter'
               ]
             }
           ],
@@ -3836,7 +3927,7 @@ export const ConfigManifest: ModuleManifest = {
         const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
         if (!allowed) {
           const errPayload = {
-            content: `<a:wrong:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
+            content: `<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
             flags: 64
           };
           if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
@@ -3869,7 +3960,7 @@ export const ConfigManifest: ModuleManifest = {
         const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
         if (!allowed) {
           const errPayload = {
-            content: `<a:wrong:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
+            content: `<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
             flags: 64
           };
           if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
@@ -3901,7 +3992,7 @@ export const ConfigManifest: ModuleManifest = {
         const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
         if (!allowed) {
           const errPayload = {
-            content: `<a:wrong:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
+            content: `<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
             flags: 64
           };
           if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
@@ -3930,7 +4021,7 @@ export const ConfigManifest: ModuleManifest = {
           const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
           if (!allowed) {
             const errPayload = {
-              content: `<a:wrong:1546155193303957504> **Access Denied**: Anti-Nuke configuration matrix is strictly restricted to the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners**.`,
+              content: `<a:warning:1546155193303957504> **Access Denied**: Anti-Nuke configuration matrix is strictly restricted to the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners**.`,
               flags: 64
             };
             if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});

@@ -12,7 +12,7 @@ import { NoPrefixManager } from '../../core/security/NoPrefixManager.js';
 import { buildLimeOverviewCard, Colors, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, CONFIG_ICON } from '../../core/UIFactory.js';
 
 const APPROVED_ICON = '<:ticks:1532620580266836148>';
-const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
+const WRONG_EMOJI = '<a:warning:1546155193303957504>';
 const SHIELD_EMOJI = '<a:success_check:1546134620087783526>';
 const VIP_ICON = '<:vip:1532620837117759508>';
 const MEMBER_ICON = '<:member:1532621317487071426>';
@@ -75,7 +75,6 @@ export function registerNPCommands(): void {
         const dismissBtn = new ButtonBuilder()
           .setCustomId(`help_btn_dismiss:${message.author.id}`)
           .setLabel('Dismiss')
-          .setEmoji(WRONG_EMOJI)
           .setStyle(ButtonStyle.Secondary);
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(dismissBtn);
@@ -141,7 +140,6 @@ export function registerNPCommands(): void {
         const btnDismiss = new ButtonBuilder()
           .setCustomId(`help_btn_dismiss:${message.author.id}`)
           .setLabel('Dismiss')
-          .setEmoji(WRONG_EMOJI)
           .setStyle(ButtonStyle.Secondary);
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btnAdd, btnRemove, btnClean, btnDismiss);
@@ -180,7 +178,6 @@ export function registerNPCommands(): void {
         const dismissBtn = new ButtonBuilder()
           .setCustomId(`help_btn_dismiss:${message.author.id}`)
           .setLabel('Dismiss')
-          .setEmoji(WRONG_EMOJI)
           .setStyle(ButtonStyle.Secondary);
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(dismissBtn);
@@ -218,7 +215,6 @@ export function registerNPCommands(): void {
         const dismissBtn = new ButtonBuilder()
           .setCustomId(`help_btn_dismiss:${message.author.id}`)
           .setLabel('Dismiss')
-          .setEmoji(WRONG_EMOJI)
           .setStyle(ButtonStyle.Secondary);
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(dismissBtn);
@@ -245,7 +241,6 @@ export function registerNPCommands(): void {
         const dismissBtn = new ButtonBuilder()
           .setCustomId(`help_btn_dismiss:${message.author.id}`)
           .setLabel('Dismiss')
-          .setEmoji(WRONG_EMOJI)
           .setStyle(ButtonStyle.Secondary);
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(dismissBtn);
@@ -267,7 +262,6 @@ export function registerNPCommands(): void {
         const dismissBtn = new ButtonBuilder()
           .setCustomId(`help_btn_dismiss:${message.author.id}`)
           .setLabel('Dismiss')
-          .setEmoji(WRONG_EMOJI)
           .setStyle(ButtonStyle.Secondary);
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(dismissBtn);

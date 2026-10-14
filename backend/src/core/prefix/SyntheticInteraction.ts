@@ -52,6 +52,14 @@ export class SyntheticInteraction {
     return this.member?.permissions;
   }
 
+  public get author(): User {
+    return this.user;
+  }
+
+  public get args(): string[] {
+    return this.parsed.args;
+  }
+
   public isChatInputCommand(): boolean { return true; }
   public isRepliable(): boolean { return true; }
   public isButton(): boolean { return false; }
@@ -86,7 +94,9 @@ export class SyntheticInteraction {
       }
     }
 
-    const sent = await this.message.reply(payload);
+    const sent = await this.message.reply(payload).catch(async () => {
+      return await (this.channel as any)?.send(payload).catch(() => null);
+    });
     this.replyMessage = sent;
     this.replied = true;
     return sent;
@@ -403,6 +413,18 @@ export class SyntheticInteraction {
 
         // Clean name resolution (strip leading # and mention symbols, normalize special characters)
         const cleanVal = val.toLowerCase().replace(/^[<#>]*|[>]*$/g, '').trim();
+
+        // If a voice/stage channel matches, prefer it over a text channel with the same name
+        const byVoice = this.guild.channels.cache.find(
+          (c: any) => {
+            if (!c.name) return false;
+            const cn = c.name.toLowerCase();
+            const matches = cn === cleanVal || cn.replace(/[^a-z0-9]/g, '') === cleanVal.replace(/[^a-z0-9]/g, '');
+            return matches && (c.type === 2 || c.type === 13);
+          }
+        );
+        if (byVoice) return byVoice;
+
         const byName = this.guild.channels.cache.find(
           (c: any) => {
             if (!c.name) return false;
@@ -417,7 +439,9 @@ export class SyntheticInteraction {
       }
 
       if (this.guild && this.parsed.args.length > 0) {
-        for (const arg of this.parsed.args) {
+        // Skip subcommand token if consumed
+        const argsToScan = this._subcommandConsumed ? this.parsed.args.slice(1) : this.parsed.args;
+        for (const arg of argsToScan) {
           if (!arg) continue;
           const idMatch = arg.match(/\d{17,20}/);
           if (idMatch) {
@@ -427,6 +451,8 @@ export class SyntheticInteraction {
           }
           const cleanName = arg.toLowerCase().replace(/^[<#>]*/, '').replace(/>$/, '').trim();
           if (cleanName && cleanName.length > 1) {
+            const byVoice = this.guild.channels.cache.find((c: any) => c.name?.toLowerCase() === cleanName && (c.type === 2 || c.type === 13));
+            if (byVoice) return byVoice;
             const byName = this.guild.channels.cache.find((c: any) => c.name?.toLowerCase() === cleanName);
             if (byName) return byName;
           }

@@ -144,10 +144,10 @@ export const LoggingManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
-        if (!isOwner) return interaction.reply({ content: '<a:wrong:1546155193303957504> Requires Administrator.', flags: 64 });
+        if (!isOwner) return interaction.reply({ content: '<a:warning:1546155193303957504> Requires Administrator.', flags: 64 });
         
         const subcommand = interaction.options.getSubcommand(false);
-        if (!subcommand) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please use a valid subcommand.', flags: 64 });
+        if (!subcommand) return interaction.reply({ content: '<a:warning:1546155193303957504> Please use a valid subcommand.', flags: 64 });
         const modules = context.getModulesState();
         const logMod = modules.find((m: any) => m.id === 'logging');
         const config = logMod?.config || {};
@@ -160,7 +160,7 @@ export const LoggingManifest: ModuleManifest = {
             if (catConfig && catConfig.enabled && catConfig.channelId) {
               desc += `<:ticks:1532620580266836148> **${cat.toUpperCase()}**: <#${catConfig.channelId}> (\`${catConfig.channelId}\`)\n`;
             } else {
-              desc += `<a:wrong:1546155193303957504> **${cat.toUpperCase()}**: *Unconfigured / Disabled*\n`;
+              desc += `<a:warning:1546155193303957504> **${cat.toUpperCase()}**: *Unconfigured / Disabled*\n`;
             }
           });
           if (!desc) desc = '*No categories configured.*';
@@ -285,12 +285,12 @@ export const LoggingManifest: ModuleManifest = {
           let actualCategory = isAllCategory ? 'all' : validCategories.find(c => c.toLowerCase() === category);
           
           if (!actualCategory) {
-             return interaction.reply({ content: `<a:wrong:1546155193303957504> Invalid category. Valid options: ${validCategories.join(', ')}, all`, flags: 64 });
+             return interaction.reply({ content: `<a:warning:1546155193303957504> Invalid category. Valid options: ${validCategories.join(', ')}, all`, flags: 64 });
           }
 
           if (subcommand === 'channel') {
             const ch = interaction.options.getChannel('channel');
-            if (!ch) return interaction.reply({ content: '<a:wrong:1546155193303957504> Please specify a channel.', flags: 64 });
+            if (!ch) return interaction.reply({ content: '<a:warning:1546155193303957504> Please specify a channel.', flags: 64 });
             
             const newConfig = { ...config };
             if (isAllCategory) {
@@ -332,7 +332,7 @@ export const LoggingManifest: ModuleManifest = {
             context.logSyncEvent(`Logging Center: ${isAllCategory ? 'ALL' : actualCategory} logs were ${enabled ? 'enabled' : 'disabled'} via slash command.`, enabled ? 'success' : 'warn');
             const embed = new EmbedBuilder()
               .setColor(0x84cc16)
-              .setTitle(`${enabled ? '<:ticks:1532620580266836148>' : '<a:wrong:1546155193303957504>'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
+              .setTitle(`${enabled ? '<:ticks:1532620580266836148>' : '<a:warning:1546155193303957504>'} Category ${enabled ? 'Enabled' : 'Disabled'} — ${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}`)
               .setDescription(`> ### Telemetry Pipeline Status\n> Category **${isAllCategory ? 'ALL CATEGORIES' : actualCategory.toUpperCase()}** logging is now **${enabled ? 'ENABLED' : 'DISABLED'}**.`)
               .setFooter({ text: 'Rage Optimiser • Telemetry Config', iconURL: client.user?.displayAvatarURL() })
               .setTimestamp();
@@ -359,7 +359,7 @@ export const LoggingManifest: ModuleManifest = {
           } else if (subcommand === 'test') {
             const catConfig = config[actualCategory];
             if (!catConfig || !catConfig.channelId) {
-              return interaction.reply({ content: `<a:wrong:1546155193303957504> **${actualCategory}** does not have a configured channel.`, flags: 64 });
+              return interaction.reply({ content: `<a:warning:1546155193303957504> **${actualCategory}** does not have a configured channel.`, flags: 64 });
             }
             try {
               const channel = await interaction.guild?.channels.fetch(catConfig.channelId).catch(() => null);
@@ -381,10 +381,10 @@ export const LoggingManifest: ModuleManifest = {
                   .setTimestamp();
                 await channel.send({ embeds: [embed] });
               } else {
-                await interaction.reply({ content: `<a:wrong:1546155193303957504> Could not find or access channel ID ${catConfig.channelId}.`, flags: 64 });
+                await interaction.reply({ content: `<a:warning:1546155193303957504> Could not find or access channel ID ${catConfig.channelId}.`, flags: 64 });
               }
             } catch(e) {
-              await interaction.reply({ content: `<a:wrong:1546155193303957504> Error sending test log. Check permissions.`, flags: 64 });
+              await interaction.reply({ content: `<a:warning:1546155193303957504> Error sending test log. Check permissions.`, flags: 64 });
             }
           }
         }

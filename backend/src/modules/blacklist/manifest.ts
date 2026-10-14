@@ -163,13 +163,13 @@ export const BlacklistManifest: ModuleManifest = {
       name: 'command_blacklist',
       handler: async (client: any, interaction: any, context: any) => {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Administrator permissions required.', flags: 64 });
+          return interaction.reply({ content: '<a:warning:1546155193303957504> Administrator permissions required.', flags: 64 });
         }
 
         const modules = context.getModulesState ? context.getModulesState() : [];
         const blMod = modules.find((m: any) => m.id === 'blacklist');
         if (!blMod || blMod.status !== 'enabled') {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Blacklist module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<a:warning:1546155193303957504> Blacklist module is not enabled.', flags: 64 });
         }
 
         let entries: IBlacklistEntry[] = blMod.config?.entries || [];
@@ -193,7 +193,7 @@ export const BlacklistManifest: ModuleManifest = {
           else if (subGroup === 'sticker') { value = interaction.options.getString('sticker'); label = value; type = 'sticker'; }
 
           if (isBlacklisted(entries, type, value)) {
-            return interaction.reply({ content: `<a:wrong:1546155193303957504> \`${label}\` is already blacklisted as type **${type}**.`, flags: 64 });
+            return interaction.reply({ content: `<a:warning:1546155193303957504> \`${label}\` is already blacklisted as type **${type}**.`, flags: 64 });
           }
 
           const entry: IBlacklistEntry = {
@@ -255,7 +255,7 @@ export const BlacklistManifest: ModuleManifest = {
 
           const before = entries.length;
           entries = entries.filter(e => !(e.type === subGroup && e.value === value));
-          if (entries.length === before) return interaction.reply({ content: `<a:wrong:1546155193303957504> Entry not found in blacklist.`, flags: 64 });
+          if (entries.length === before) return interaction.reply({ content: `<a:warning:1546155193303957504> Entry not found in blacklist.`, flags: 64 });
           saveEntries(entries);
           context.logSyncEvent(`[Blacklist] Removed ${subGroup} blacklist entry: ${value} by ${interaction.user.username}`, 'info');
           return interaction.reply({ content: `<:ticks:1532620580266836148> Removed \`${value}\` from **${subGroup}** blacklist.`, flags: 64 });
@@ -298,7 +298,7 @@ export const BlacklistManifest: ModuleManifest = {
           return interaction.reply({ content: '<:ticks:1532620580266836148> Blacklist export:', files: [attachment], flags: 64 });
         }
 
-        await interaction.reply({ content: '<a:wrong:1546155193303957504> Unknown subcommand.', flags: 64 });
+        await interaction.reply({ content: '<a:warning:1546155193303957504> Unknown subcommand.', flags: 64 });
       }
     },
     // --- Message enforcement ---
@@ -396,7 +396,7 @@ export const BlacklistManifest: ModuleManifest = {
           context.logSyncEvent(`[Blacklist] Removed ${matched.type} content from ${message.author.username} in #${message.channel.name}`, 'warn');
 
           if (matched.action === 'warn') {
-            await message.member?.send(`<a:warning:1546155457981452441> Warning from **${message.guild.name}**: Your message was removed for containing blacklisted content.`).catch(() => {});
+            await message.member?.send(`<a:warning:1546155193303957504> Warning from **${message.guild.name}**: Your message was removed for containing blacklisted content.`).catch(() => {});
           } else if (matched.action === 'timeout') {
             await message.member?.timeout(5 * 60 * 1000, 'Blacklist violation').catch(() => {});
           } else if (matched.action === 'kick') {

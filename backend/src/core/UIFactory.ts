@@ -5,6 +5,9 @@
  * and command interactive UI. Built with the UI/UX Pro Max design system.
  */
 
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -12,6 +15,7 @@ import {
   ButtonStyle,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  AttachmentBuilder,
   ContainerBuilder,
   SectionBuilder,
   TextDisplayBuilder,
@@ -25,11 +29,12 @@ import {
 // ─────────────────────────────────────────────
 // CUSTOM SERVER ICONS & STATUS BADGES
 // ─────────────────────────────────────────────
-export const VERIFIED_ICON = '<a:success_check:1546134620087783526>';
-export const SQUARE_TICK_ICON = '<:ticks:1532620580266836148>';
-export const WRONG_ICON = '<a:wrong:1546155193303957504>';
-export const WARNING_ICON = '<a:warning:1546155457981452441>';
-export const VIOLATION_ICON = '<a:warning:1546155457981452441>';
+export const VERIFIED_ICON = '<a:tick:1546134620087783526>';
+export const SQUARE_TICK_ICON = '<a:tick:1546134620087783526>';
+export const TICK_ICON = '<a:tick:1546134620087783526>';
+export const WRONG_ICON = '<a:warning:1546155193303957504>';
+export const WARNING_ICON = '<a:warning:1546155193303957504>';
+export const VIOLATION_ICON = '<a:warning:1546155193303957504>';
 export const SHIELD_ICON = '<a:success_check:1546134620087783526>';
 export const GAVEL_ICON = '<:gavel:1532621057318584380>';
 export const BOT_ICON = '<:bot:1532621107746570391>';
@@ -49,9 +54,59 @@ export const BOOSTER_ICON = '<:booster:1532621228492460172>';
 export const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
 export const CONFIG_ICON = '<:config:1532425712844144701>';
 export const TICKET_ICON = '<:ticket:1532620631466836021>';
-export const TIMER_ICON = '<a:Timer:1546231426863730728>';
+export const TIMER_ICON = '<a:loading:1546134304625528882>';
 export const TIMER_GIF_URL = 'https://cdn.discordapp.com/attachments/1522887123374702684/1546231426863730728/Timer.gif?ex=6a9f07bb&is=6a9db63b&hm=f8a00c38c6fbc1cb3699cef57dc3fe5f0ba559568095e845ea729ae4e54224ae&';
 export const DEFAULT_BRAND_IMAGE_URL = 'https://cdn.discordapp.com/attachments/1499055667238146289/1538212292980773004/ChatGPT_Image_Aug_15_2026_09_14_48_PM.png?ex=6a81db55&is=6a8089d5&hm=4e8308bbc0423a9b1fa28776ba323ebc65e14534cf9fa9487546a50d6e172d3b';
+
+/**
+ * Resolves the primary, high-resolution Rage Optimiser brand banner path.
+ */
+export function getBrandBannerPath(): string | null {
+  const cwd = process.cwd();
+  let baseDir = '';
+  try {
+    baseDir = path.dirname(fileURLToPath(import.meta.url));
+  } catch {}
+
+  const candidates = [
+    path.resolve(cwd, 'gemini_generated_video_0c54a55f-ezgif.com-cut.png'),
+    path.resolve(cwd, 'backend', 'gemini_generated_video_0c54a55f-ezgif.com-cut.png'),
+    path.resolve(cwd, 'backend', 'assets', 'uptime-banner.png'),
+    path.resolve(cwd, 'assets', 'uptime-banner.png'),
+    path.resolve(cwd, 'backend', 'public', 'assets', 'default_welcome_banner.png'),
+    path.resolve(cwd, 'backend', 'public', 'assets', 'gemini_generated_video_0c54a55f-ezgif.com-cut.png'),
+    baseDir ? path.resolve(baseDir, '../../assets/uptime-banner.png') : '',
+    baseDir ? path.resolve(baseDir, '../../../assets/uptime-banner.png') : '',
+    '/home/container/gemini_generated_video_0c54a55f-ezgif.com-cut.png',
+    '/home/container/backend/assets/uptime-banner.png',
+    '/home/container/assets/uptime-banner.png',
+  ].filter(Boolean);
+
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(c)) return c;
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Creates an AttachmentBuilder for the brand banner to embed directly into Discord messages.
+ */
+export function getBrandBannerAttachment(name: string = 'rage-banner.png'): AttachmentBuilder | null {
+  const bannerPath = getBrandBannerPath();
+  if (!bannerPath) return null;
+  try {
+    const ext = path.extname(bannerPath) || '.png';
+    const finalName = name.includes('.') ? name : `${name}${ext}`;
+    const buffer = fs.readFileSync(bannerPath);
+    return new AttachmentBuilder(buffer, { name: finalName });
+  } catch (err) {
+    console.error('[UIFactory] Error reading brand banner:', err);
+    return null;
+  }
+}
+
 export const VIP_ICON = '<:vip:1532620837117759508>';
 export const LINK_ICON = '<:link:1532620952087826602>';
 export const VOICE_ICON = '<:voicechannelgreen:1532425750278438962>';
@@ -635,13 +690,11 @@ export const Components = {
       new ButtonBuilder()
         .setCustomId(confirmId)
         .setLabel(labels?.confirm ?? 'Confirm Action')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji(VERIFIED_ICON),
+        .setStyle(ButtonStyle.Success),
       new ButtonBuilder()
         .setCustomId(cancelId)
         .setLabel(labels?.cancel ?? 'Cancel')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji(WRONG_ICON)
     );
   },
 
@@ -661,7 +714,7 @@ export const Components = {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(prevId)
-        .setLabel('◀ Previous')
+        .setLabel('Previous')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page <= 1),
       new ButtonBuilder()
@@ -671,7 +724,7 @@ export const Components = {
         .setDisabled(true),
       new ButtonBuilder()
         .setCustomId(nextId)
-        .setLabel('Next ▶')
+        .setLabel('Next')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page >= total)
     );
@@ -687,18 +740,19 @@ export const Components = {
   },
 
   actionPair(
-    successId: string, successLabel: string, successEmoji: string,
-    dangerID: string, dangerLabel: string, dangerEmoji: string
+    successId: string, successLabel: string, dangerID: string, dangerLabel: string,
+    successEmoji?: string, dangerEmoji?: string
   ): ActionRowBuilder<ButtonBuilder> {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId(successId).setLabel(successLabel).setStyle(ButtonStyle.Success).setEmoji(successEmoji),
-      new ButtonBuilder().setCustomId(dangerID).setLabel(dangerLabel).setStyle(ButtonStyle.Danger).setEmoji(dangerEmoji)
-    );
+    const btn1 = new ButtonBuilder().setCustomId(successId).setLabel(successLabel).setStyle(ButtonStyle.Success);
+    if (successEmoji) btn1.setEmoji(successEmoji);
+    const btn2 = new ButtonBuilder().setCustomId(dangerID).setLabel(dangerLabel).setStyle(ButtonStyle.Danger);
+    if (dangerEmoji) btn2.setEmoji(dangerEmoji);
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(btn1, btn2);
   },
 
   jumpButton(url: string, label = 'Jump to Message'): ActionRowBuilder<ButtonBuilder> {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setLabel(label).setStyle(ButtonStyle.Link).setURL(url).setEmoji('↗️')
+      new ButtonBuilder().setLabel(label).setStyle(ButtonStyle.Link).setURL(url)
     );
   },
 };

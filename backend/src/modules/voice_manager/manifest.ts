@@ -223,7 +223,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'mass-mute') {
           const channel = interaction.options.getChannel('channel') || interaction.member?.voice?.channel;
           if (!channel) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
+            return interaction.reply({ content: '<a:warning:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
           }
           await interaction.deferReply({ flags: 64 });
           let count = 0;
@@ -239,7 +239,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'mass-unmute') {
           const channel = interaction.options.getChannel('channel') || interaction.member?.voice?.channel;
           if (!channel) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
+            return interaction.reply({ content: '<a:warning:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
           }
           await interaction.deferReply({ flags: 64 });
           let count = 0;
@@ -255,7 +255,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'mass-deafen') {
           const channel = interaction.options.getChannel('channel') || interaction.member?.voice?.channel;
           if (!channel) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
+            return interaction.reply({ content: '<a:warning:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
           }
           await interaction.deferReply({ flags: 64 });
           let count = 0;
@@ -271,7 +271,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'mass-undeafen') {
           const channel = interaction.options.getChannel('channel') || interaction.member?.voice?.channel;
           if (!channel) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
+            return interaction.reply({ content: '<a:warning:1546155193303957504> You are not currently connected to a voice channel. Please join a voice channel or select one.', flags: 64 });
           }
           await interaction.deferReply({ flags: 64 });
           let count = 0;
@@ -344,7 +344,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'limit') {
           const channel = interaction.options.getChannel('channel');
           const limit = interaction.options.getInteger('limit');
-          if (channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:wrong:1546155193303957504> Not a voice channel.', flags: 64 });
+          if (channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:warning:1546155193303957504> Not a voice channel.', flags: 64 });
           await channel.setUserLimit(limit);
           return interaction.reply({ content: `<:ticks:1532620580266836148> Set user limit to **${limit === 0 ? 'unlimited' : limit}** for ${channel}.`, flags: 64 });
         }
@@ -371,9 +371,9 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'pull') {
           const user = interaction.options.getUser('user');
           const member = guild.members.cache.get(user.id);
-          if (!member) return interaction.reply({ content: '<a:wrong:1546155193303957504> Member not found.', flags: 64 });
-          if (!interaction.member.voice?.channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> You must be in a voice channel.', flags: 64 });
-          if (!member.voice?.channel) return interaction.reply({ content: `<a:wrong:1546155193303957504> ${user.username} is not in a voice channel.`, flags: 64 });
+          if (!member) return interaction.reply({ content: '<a:warning:1546155193303957504> Member not found.', flags: 64 });
+          if (!interaction.member.voice?.channel) return interaction.reply({ content: '<a:warning:1546155193303957504> You must be in a voice channel.', flags: 64 });
+          if (!member.voice?.channel) return interaction.reply({ content: `<a:warning:1546155193303957504> ${user.username} is not in a voice channel.`, flags: 64 });
           await member.voice.setChannel(interaction.member.voice.channel);
           logVoiceAction('Pull', `${user.username} → #${interaction.member.voice.channel.name}`);
           return interaction.reply({ content: `<:ticks:1532620580266836148> Pulled ${user} to your channel.`, flags: 64 });
@@ -382,7 +382,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         // INFO
         if (sub === 'info') {
           const channel = interaction.options.getChannel('channel') || interaction.member.voice?.channel;
-          if (!channel) return interaction.reply({ content: '<a:wrong:1546155193303957504> No voice channel specified or you\'re not in one.', flags: 64 });
+          if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> No voice channel specified or you\'re not in one.', flags: 64 });
 
           const memberList = channel.members.size > 0
             ? [...channel.members.values()].map((m: any) => `• ${m.user.username}`).join('\n').substring(0, 900)
@@ -450,7 +450,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           const channel = interaction.options.getChannel('channel');
           const member = guild.members.cache.get(user.id);
           if (!member || !member.voice?.channel) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> User is not currently in a voice channel.', flags: 64 });
+            return interaction.reply({ content: '<a:warning:1546155193303957504> User is not currently in a voice channel.', flags: 64 });
           }
           await member.voice.setChannel(channel);
           logVoiceAction('Drag', `Moved ${user.username} to #${channel.name}`);
@@ -477,7 +477,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'pullall') {
           const from = interaction.options.getChannel('from');
           const to = interaction.member.voice?.channel;
-          if (!to) return interaction.reply({ content: '<a:wrong:1546155193303957504> You must be in a voice channel to pull members.', flags: 64 });
+          if (!to) return interaction.reply({ content: '<a:warning:1546155193303957504> You must be in a voice channel to pull members.', flags: 64 });
           await interaction.deferReply({ flags: 64 });
           let count = 0;
           for (const [, member] of from.members) {
@@ -517,7 +517,7 @@ export const VoiceManagerManifest: ModuleManifest = {
           const reason = interaction.options.getString('reason') || 'Voice disconnect';
           const member = guild.members.cache.get(user.id);
           if (!member || !member.voice?.channel) {
-            return interaction.reply({ content: '<a:wrong:1546155193303957504> User is not currently in a voice channel.', flags: 64 });
+            return interaction.reply({ content: '<a:warning:1546155193303957504> User is not currently in a voice channel.', flags: 64 });
           }
           await member.voice.disconnect(reason).catch(() => {});
           logVoiceAction('Disconnect', `Disconnected ${user.username} from voice`);
@@ -926,6 +926,176 @@ export function registerVoiceManagerCommands() {
       return message.reply({ embeds: [successEmbed] });
     }
   });
+
+  // Prefix Command: r!vclock
+  PrefixRegistry.register({
+    name: 'vclock',
+    category: 'Voice',
+    description: 'Lock a voice channel to prevent new members from connecting.',
+    usage: 'r!vclock [#voice-channel | channel_id] [--private]',
+    aliases: ['lockvc', 'voicelock', 'vc-lock'],
+    cooldownSeconds: 3,
+    examples: ['r!vclock', 'r!vclock #Gaming-VC', 'r!vclock --private', 'r!vclock 123456789012345678'],
+    moduleOwnerId: 'voice_manager',
+    dangerLevel: 'Low',
+    execute: async (message: Message, args: string[], context?: any) => {
+      if (!message.guild) return;
+      const authorMember = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+      const isOwner = message.guild.ownerId === message.author.id;
+      const hasPerm = isOwner ||
+        Boolean(authorMember?.permissions?.has(PermissionFlagsBits.ManageChannels)) ||
+        Boolean(authorMember?.permissions?.has(PermissionFlagsBits.MoveMembers)) ||
+        Boolean(authorMember?.permissions?.has(PermissionFlagsBits.Administrator));
+
+      if (!hasPerm) {
+        const permEmbed = new EmbedBuilder()
+          .setColor(Colors.DANGER)
+          .setTitle(`${SHIELD_ICON} Permission Denied`)
+          .setDescription(`You require \`Manage Channels\` or \`Move Members\` permission to lock voice channels.\n\n> ${INFO_ICON} **Required Permissions**: \`MANAGE_CHANNELS\` / \`MOVE_MEMBERS\``)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [permEmbed] });
+      }
+
+      let targetChannel: any = null;
+
+      if (args[0] || message.mentions.channels.size > 0) {
+        const channelIdRaw = args[0]?.replace(/[<#>]*/g, '').trim();
+        const mentionedChannel = message.mentions.channels.first();
+        if (mentionedChannel && mentionedChannel.isVoiceBased()) {
+          targetChannel = mentionedChannel;
+        } else if (args[0] && !args[0].startsWith('--')) {
+          const found = message.guild.channels.cache.get(args[0]) || 
+                        message.guild.channels.cache.get(channelIdRaw) || 
+                        message.guild.channels.cache.find((c: any) => c.isVoiceBased() && c.name.toLowerCase() === args.filter((a: any) => !a.startsWith('--')).join(' ').toLowerCase());
+          if (found && found.isVoiceBased()) targetChannel = found;
+        }
+      }
+
+      if (!targetChannel) {
+        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+        if (authorChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        }
+      }
+
+      if (!targetChannel || !targetChannel.isVoiceBased()) {
+        const noVcEmbed = new EmbedBuilder()
+          .setColor(Colors.WARN)
+          .setTitle(`${VOICE_ICON} Voice Channel Required`)
+          .setDescription(`You are not currently connected to a voice channel.\n\n> ${ARROW_ICON} **Usage**: Join a voice channel or specify \`r!vclock [#voice-channel | channel_id]\`.\n`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [noVcEmbed] });
+      }
+
+      const makePrivate = args.some((a: any) => a.toLowerCase() === '--private' || a.toLowerCase() === '-p');
+      const overwrites: any = { Connect: false, SendMessages: false };
+      if (makePrivate) overwrites.ViewChannel = false;
+
+      await targetChannel.permissionOverwrites.edit(message.guild.id, overwrites);
+
+      context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} locked voice channel #${targetChannel.name}`, 'warn');
+
+      const successEmbed = new EmbedBuilder()
+        .setColor(Colors.LIME)
+        .setTitle(`${VERIFIED_ICON} Voice Channel Locked`)
+        .setDescription([
+          `> **Status**: \`Locked (No new joins permitted)\``,
+          `> **Voice Channel**: ${targetChannel} (\`#${targetChannel.name}\`)`,
+          `> **Privacy Mode**: ${makePrivate ? '\`Hidden (ViewChannel Denied)\`' : '\`Visible (Connect Denied)\`'}`,
+          `> **Executed By**: <@${message.author.id}>`
+        ].join('\n'))
+        .setFooter({ text: BRAND_FOOTER })
+        .setTimestamp();
+
+      return message.reply({ embeds: [successEmbed] });
+    }
+  });
+
+  // Prefix Command: r!vcunlock
+  PrefixRegistry.register({
+    name: 'vcunlock',
+    category: 'Voice',
+    description: 'Unlock a voice channel allowing members to connect.',
+    usage: 'r!vcunlock [#voice-channel | channel_id]',
+    aliases: ['unlockvc', 'voiceunlock', 'vc-unlock'],
+    cooldownSeconds: 3,
+    examples: ['r!vcunlock', 'r!vcunlock #Gaming-VC', 'r!vcunlock 123456789012345678'],
+    moduleOwnerId: 'voice_manager',
+    dangerLevel: 'Low',
+    execute: async (message: Message, args: string[], context?: any) => {
+      if (!message.guild) return;
+      const authorMember = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+      const isOwner = message.guild.ownerId === message.author.id;
+      const hasPerm = isOwner ||
+        Boolean(authorMember?.permissions?.has(PermissionFlagsBits.ManageChannels)) ||
+        Boolean(authorMember?.permissions?.has(PermissionFlagsBits.MoveMembers)) ||
+        Boolean(authorMember?.permissions?.has(PermissionFlagsBits.Administrator));
+
+      if (!hasPerm) {
+        const permEmbed = new EmbedBuilder()
+          .setColor(Colors.DANGER)
+          .setTitle(`${SHIELD_ICON} Permission Denied`)
+          .setDescription(`You require \`Manage Channels\` or \`Move Members\` permission to unlock voice channels.\n\n> ${INFO_ICON} **Required Permissions**: \`MANAGE_CHANNELS\` / \`MOVE_MEMBERS\``)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [permEmbed] });
+      }
+
+      let targetChannel: any = null;
+
+      if (args[0] || message.mentions.channels.size > 0) {
+        const channelIdRaw = args[0]?.replace(/[<#>]*/g, '').trim();
+        const mentionedChannel = message.mentions.channels.first();
+        if (mentionedChannel && mentionedChannel.isVoiceBased()) {
+          targetChannel = mentionedChannel;
+        } else if (args[0]) {
+          const found = message.guild.channels.cache.get(args[0]) || 
+                        message.guild.channels.cache.get(channelIdRaw) || 
+                        message.guild.channels.cache.find((c: any) => c.isVoiceBased() && c.name.toLowerCase() === args.slice(0).join(' ').toLowerCase());
+          if (found && found.isVoiceBased()) targetChannel = found;
+        }
+      }
+
+      if (!targetChannel) {
+        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+        if (authorChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        }
+      }
+
+      if (!targetChannel || !targetChannel.isVoiceBased()) {
+        const noVcEmbed = new EmbedBuilder()
+          .setColor(Colors.WARN)
+          .setTitle(`${VOICE_ICON} Voice Channel Required`)
+          .setDescription(`You are not currently connected to a voice channel.\n\n> ${ARROW_ICON} **Usage**: Join a voice channel or specify \`r!vcunlock [#voice-channel | channel_id]\`.\n`)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [noVcEmbed] });
+      }
+
+      await targetChannel.permissionOverwrites.edit(message.guild.id, {
+        Connect: null,
+        SendMessages: null,
+        ViewChannel: null
+      });
+
+      context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} unlocked voice channel #${targetChannel.name}`, 'info');
+
+      const successEmbed = new EmbedBuilder()
+        .setColor(Colors.LIME)
+        .setTitle(`${VERIFIED_ICON} Voice Channel Unlocked`)
+        .setDescription([
+          `> **Status**: \`Unlocked (Public access restored)\``,
+          `> **Voice Channel**: ${targetChannel} (\`#${targetChannel.name}\`)`,
+          `> **Executed By**: <@${message.author.id}>`
+        ].join('\n'))
+        .setFooter({ text: BRAND_FOOTER })
+        .setTimestamp();
+
+      return message.reply({ embeds: [successEmbed] });
+    }
+  });
+
 }
 
 // Auto-register on import

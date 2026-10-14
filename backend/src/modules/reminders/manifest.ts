@@ -22,7 +22,7 @@ async function fireReminder(client: any, reminder: IReminder, context: any) {
     if (!user) return;
 
     const embed = new EmbedBuilder()
-      .setTitle('<a:Timer:1546231426863730728> Reminder!')
+      .setTitle('<a:loading:1546134304625528882> Reminder!')
       .setDescription(reminder.message)
       .setColor(0x99CC00)
       .setFooter({ text: 'Rage Optimiser • Unbypassable Security' })
@@ -122,7 +122,7 @@ export const RemindersManifest: ModuleManifest = {
         const rMod = modules.find((m: any) => m.id === 'reminders');
 
         if (!rMod || rMod.status !== 'enabled') {
-          return interaction.reply({ content: '<a:wrong:1546155193303957504> Reminder module is not enabled.', flags: 64 });
+          return interaction.reply({ content: '<a:warning:1546155193303957504> Reminder module is not enabled.', flags: 64 });
         }
 
         let reminders: IReminder[] = rMod.config?.reminders || [];
@@ -134,10 +134,10 @@ export const RemindersManifest: ModuleManifest = {
           const repeat = interaction.options.getString('repeat') || null;
           const ms = parseMs(timeStr);
 
-          if (ms < 5000) return interaction.reply({ content: '<a:wrong:1546155193303957504> Minimum reminder time is 5 seconds.', flags: 64 });
+          if (ms < 5000) return interaction.reply({ content: '<a:warning:1546155193303957504> Minimum reminder time is 5 seconds.', flags: 64 });
 
           const userReminders = reminders.filter(r => r.userId === interaction.user.id);
-          if (userReminders.length >= 10) return interaction.reply({ content: '<a:wrong:1546155193303957504> You can only have up to 10 active reminders.', flags: 64 });
+          if (userReminders.length >= 10) return interaction.reply({ content: '<a:warning:1546155193303957504> You can only have up to 10 active reminders.', flags: 64 });
 
           const remindAt = new Date(Date.now() + ms);
           const reminder: IReminder = {
@@ -160,7 +160,7 @@ export const RemindersManifest: ModuleManifest = {
           reminderTimers.set(reminder.id, timer);
 
           const embed = new EmbedBuilder()
-            .setTitle('<a:Timer:1546231426863730728> Reminder Set!')
+            .setTitle('<a:loading:1546134304625528882> Reminder Set!')
             .setDescription(`I'll remind you <t:${Math.floor(remindAt.getTime() / 1000)}:R>:\n**${message}**`)
             .setColor(0x99CC00)
             .addFields(
@@ -176,13 +176,13 @@ export const RemindersManifest: ModuleManifest = {
           const mine = reminders.filter(r => r.userId === interaction.user.id);
           if (mine.length === 0) return interaction.reply({ content: '<a:lovemail:1527647157371535420> You have no active reminders.', flags: 64 });
           const lines = mine.map((r, i) => `**${i + 1}.** \`${r.id}\` — <t:${Math.floor(new Date(r.remindAt).getTime() / 1000)}:R> — ${r.message.substring(0, 50)}${r.message.length > 50 ? '...' : ''}`);
-          return interaction.reply({ content: `<a:Timer:1546231426863730728> **Your Reminders (${mine.length}):**\n${lines.join('\n')}`, flags: 64 });
+          return interaction.reply({ content: `<a:loading:1546134304625528882> **Your Reminders (${mine.length}):**\n${lines.join('\n')}`, flags: 64 });
         }
 
         if (sub === 'cancel') {
           const id = interaction.options.getString('id');
           const rem = reminders.find(r => r.id === id && r.userId === interaction.user.id);
-          if (!rem) return interaction.reply({ content: `<a:wrong:1546155193303957504> Reminder \`${id}\` not found.`, flags: 64 });
+          if (!rem) return interaction.reply({ content: `<a:warning:1546155193303957504> Reminder \`${id}\` not found.`, flags: 64 });
           const existing = reminderTimers.get(id);
           if (existing) { clearTimeout(existing); reminderTimers.delete(id); }
           saveReminders(reminders.filter(r => r.id !== id));
@@ -193,7 +193,7 @@ export const RemindersManifest: ModuleManifest = {
           const id = interaction.options.getString('id');
           const timeStr = interaction.options.getString('time');
           const rem = reminders.find(r => r.id === id && r.userId === interaction.user.id);
-          if (!rem) return interaction.reply({ content: `<a:wrong:1546155193303957504> Reminder \`${id}\` not found.`, flags: 64 });
+          if (!rem) return interaction.reply({ content: `<a:warning:1546155193303957504> Reminder \`${id}\` not found.`, flags: 64 });
 
           const existing = reminderTimers.get(id);
           if (existing) { clearTimeout(existing); reminderTimers.delete(id); }

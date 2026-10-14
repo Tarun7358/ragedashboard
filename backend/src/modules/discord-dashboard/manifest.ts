@@ -177,7 +177,6 @@ function generateDashboardComponents(config: any = {}, activePage: string = 'hom
       new ButtonBuilder()
         .setCustomId(b.id)
         .setLabel(b.label)
-        .setEmoji(b.emoji)
         .setStyle(style)
     );
   }
@@ -188,7 +187,7 @@ function generateDashboardComponents(config: any = {}, activePage: string = 'hom
 
   // Utility row (always enabled, single Auto-Refresh status button)
   const utilityRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('dbn_refresh').setLabel('Auto-Refreshing (5s)').setEmoji('🔄').setStyle(ButtonStyle.Success)
+    new ButtonBuilder().setCustomId('dbn_refresh').setLabel('Auto-Refreshing (5s)').setStyle(ButtonStyle.Success)
   );
   rows.push(utilityRow);
 

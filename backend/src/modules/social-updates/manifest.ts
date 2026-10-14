@@ -96,23 +96,19 @@ export async function buildSocialDashboardGUI(guild: any) {
     new ButtonBuilder()
       .setCustomId('btn_social_add_yt')
       .setLabel('Add YouTube Feed')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1538152286839373905'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_social_add_ig')
       .setLabel('Add Instagram Feed')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1538152297845231736'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_social_force_scan')
       .setLabel('Force Scan Now')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1546134620087783526'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_social_refresh')
       .setLabel('Refresh')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1532425712844144701')
   );
 
   const port = process.env.PORT || 5000;
@@ -123,28 +119,23 @@ export async function buildSocialDashboardGUI(guild: any) {
     new ButtonBuilder()
       .setLabel('Connect Instagram')
       .setStyle(ButtonStyle.Link)
-      .setURL(directConnectUrl)
-      .setEmoji('1538152297845231736'),
+      .setURL(directConnectUrl),
     new ButtonBuilder()
       .setCustomId('btn_social_pause_all')
       .setLabel('Pause All')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1546155193303957504'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_social_resume_all')
       .setLabel('Resume All')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1532390590707142956'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_social_stats')
       .setLabel('Analytics')
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1532429110775779459'),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_social_help')
       .setLabel('CLI Help')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji('1527647157371535420')
   );
 
   const components: any[] = [row1, row2];
@@ -269,7 +260,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
             return interaction.reply({ embeds: [embed], flags: 64 });
           }
           const lines = subs.map((s: any) =>
-            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<:ticks:1532620580266836148> Active' : '<a:wrong:1546155193303957504> Paused'} (Health: **${s.validationStatus}**)`
+            `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<:ticks:1532620580266836148> Active' : '<a:warning:1546155193303957504> Paused'} (Health: **${s.validationStatus}**)`
           );
           const embed = new EmbedBuilder()
             .setTitle('<a:lovemail:1527647157371535420> Social Updates Subscriptions')
@@ -291,7 +282,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
             return interaction.reply({ embeds: [embed], flags: 64 });
           } else {
             const embed = new EmbedBuilder()
-              .setTitle('<a:wrong:1546155193303957504> Scheduler Error')
+              .setTitle('<a:warning:1546155193303957504> Scheduler Error')
               .setDescription('Scheduler process is currently offline or not initialized.')
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -352,7 +343,6 @@ export const SocialUpdatesManifest: ModuleManifest = {
               .setLabel('Open Instagram Login Interface')
               .setStyle(ButtonStyle.Link)
               .setURL(connectUrl)
-              .setEmoji('1538152297845231736')
           );
 
           return interaction.reply({ embeds: [embed], components: [row], flags: 64 });
@@ -392,7 +382,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
 
           if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channel) {
             const embed = new EmbedBuilder()
-              .setTitle('<a:wrong:1546155193303957504> Invalid Add Syntax')
+              .setTitle('<a:warning:1546155193303957504> Invalid Add Syntax')
               .setDescription([
                 `> **Syntax**: \`r!social-updates add <youtube|instagram> <handle_or_channel_id> <#discordChannel>\``,
                 `> **YouTube Handle Example**: \`r!social add youtube clasherliveop #announcements\``,
@@ -409,7 +399,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           });
           if (!res.success) {
             const embed = new EmbedBuilder()
-              .setTitle('<a:wrong:1546155193303957504> Subscription Error')
+              .setTitle('<a:warning:1546155193303957504> Subscription Error')
               .setDescription(`Failed to add social feed: \`${res.error}\``)
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -431,7 +421,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           const subId = interaction.options?.getString?.('id') || context?.parsed?.args[1];
           if (!subId) {
             const embed = new EmbedBuilder()
-              .setTitle('<a:wrong:1546155193303957504> Invalid Remove Syntax')
+              .setTitle('<a:warning:1546155193303957504> Invalid Remove Syntax')
               .setDescription(`> **Syntax**: \`r!social-updates remove <subscription_id>\`\n> *(Use \`r!social-updates list\` to view IDs)*`)
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -441,7 +431,7 @@ export const SocialUpdatesManifest: ModuleManifest = {
           const res = await SubscriptionManager.removeSubscription(guildId, subId);
           if (!res.success) {
             const embed = new EmbedBuilder()
-              .setTitle('<a:wrong:1546155193303957504> Removal Error')
+              .setTitle('<a:warning:1546155193303957504> Removal Error')
               .setDescription(`\`${res.error}\``)
               .setColor(0xEF4444)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -717,23 +707,19 @@ export const SocialUpdatesManifest: ModuleManifest = {
             new ButtonBuilder()
               .setCustomId(`btn_sub_toggle_${sub.id}`)
               .setLabel(sub.enabled ? 'Pause Feed' : 'Resume Feed')
-              .setStyle(ButtonStyle.Secondary)
-              .setEmoji(sub.enabled ? '1546155193303957504' : '1532390590707142956'),
+              .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
               .setCustomId(`btn_sub_test_${sub.id}`)
               .setLabel('Send Test Alert')
-              .setStyle(ButtonStyle.Secondary)
-              .setEmoji('1532620952087826602'),
+              .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
               .setCustomId(`btn_sub_delete_${sub.id}`)
               .setLabel('Delete Feed')
-              .setStyle(ButtonStyle.Danger)
-              .setEmoji('1546155193303957504'),
+              .setStyle(ButtonStyle.Danger),
             new ButtonBuilder()
               .setCustomId('btn_social_refresh')
               .setLabel('Back to Dashboard')
               .setStyle(ButtonStyle.Secondary)
-              .setEmoji('1532425712844144701')
           );
 
           return interaction.editReply({ embeds: [embed], components: [row] });
@@ -1377,7 +1363,7 @@ export function registerSocialUpdatesCommands(): void {
     execute: async (message: Message, args: string[], context?: any) => {
       const guildId = message.guildId;
       if (!guildId || !message.guild) {
-        return message.reply({ content: '<a:wrong:1546155193303957504> Command can only be executed within a server.' });
+        return message.reply({ content: '<a:warning:1546155193303957504> Command can only be executed within a server.' });
       }
 
       const action = (args[0] || '').toLowerCase().trim();
@@ -1406,7 +1392,7 @@ export function registerSocialUpdatesCommands(): void {
           return message.reply({ embeds: [embed] });
         }
         const lines = subs.map((s: any) =>
-          `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<:ticks:1532620580266836148> Active' : '<a:wrong:1546155193303957504> Paused'} (Health: **${s.validationStatus}**) [ID: \`${s.id}\`]`
+          `• **${s.provider.toUpperCase()}** \`${s.sourceName}\` → <#${s.discordChannelId}> — ${s.enabled ? '<:ticks:1532620580266836148> Active' : '<a:warning:1546155193303957504> Paused'} (Health: **${s.validationStatus}**) [ID: \`${s.id}\`]`
         );
         const embed = new EmbedBuilder()
           .setTitle('<a:lovemail:1527647157371535420> Social Updates Subscriptions')
@@ -1488,7 +1474,6 @@ export function registerSocialUpdatesCommands(): void {
             .setLabel('Open Instagram Login Interface')
             .setStyle(ButtonStyle.Link)
             .setURL(connectUrl)
-            .setEmoji('1538152297845231736')
         );
 
         return message.reply({ embeds: [embed], components: [row] });
@@ -1505,7 +1490,7 @@ export function registerSocialUpdatesCommands(): void {
 
         if (!provider || !['youtube', 'instagram'].includes(provider) || !sourceId || !channelMention) {
           const embed = new EmbedBuilder()
-            .setTitle('<a:wrong:1546155193303957504> Invalid Add Syntax')
+            .setTitle('<a:warning:1546155193303957504> Invalid Add Syntax')
             .setDescription([
               `> **Syntax**: \`r!social add <youtube|instagram> <handle_or_channel_id> <#discordChannel> [optional_credential]\``,
               `> **YouTube Example**: \`r!social add youtube clasherliveop #announcements\``,
@@ -1522,7 +1507,7 @@ export function registerSocialUpdatesCommands(): void {
         });
         if (!res.success) {
           const embed = new EmbedBuilder()
-            .setTitle('<a:wrong:1546155193303957504> Subscription Error')
+            .setTitle('<a:warning:1546155193303957504> Subscription Error')
             .setDescription(`Failed to add social feed: \`${res.error}\``)
             .setColor(0xEF4444)
             .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
@@ -1546,7 +1531,7 @@ export function registerSocialUpdatesCommands(): void {
         const subId = args[1];
         if (!subId) {
           const embed = new EmbedBuilder()
-            .setTitle('<a:wrong:1546155193303957504> Invalid Remove Syntax')
+            .setTitle('<a:warning:1546155193303957504> Invalid Remove Syntax')
             .setDescription(`> **Syntax**: \`r!social remove <subscription_id>\`\n> *(Use \`r!social list\` to view active IDs)*`)
             .setColor(0xEF4444)
             .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
@@ -1556,7 +1541,7 @@ export function registerSocialUpdatesCommands(): void {
         const res = await SubscriptionManager.removeSubscription(guildId, subId);
         if (!res.success) {
           const embed = new EmbedBuilder()
-            .setTitle('<a:wrong:1546155193303957504> Removal Error')
+            .setTitle('<a:warning:1546155193303957504> Removal Error')
             .setDescription(`\`${res.error}\``)
             .setColor(0xEF4444)
             .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });

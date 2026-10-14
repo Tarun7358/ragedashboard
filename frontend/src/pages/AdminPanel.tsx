@@ -6,8 +6,9 @@ import {
   Radio, Crown, Power, Eye, Play, Pause, Search, Sliders, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE } from '../config';
 
-const API = 'https://apirageoptimisercom.altvr.in';
+const API = API_BASE;
 const OWNER_ID = '830993126301630485';
 
 interface GuildData {

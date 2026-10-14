@@ -1,10 +1,10 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import {
   ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
-  ButtonBuilder, ButtonStyle, MessageFlags, ComponentType, PermissionFlagsBits, EmbedBuilder
+  ButtonBuilder, ButtonStyle, MessageFlags, ComponentType, PermissionFlagsBits, EmbedBuilder, AttachmentBuilder
 } from 'discord.js';
 import {
-  Colors, Embeds, buildLimeOverviewCard, createLimeEmbed,
+  Colors, Embeds, buildLimeOverviewCard, createLimeEmbed, getBrandBannerAttachment,
   VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, MEMBER_ICON, CONFIG_ICON, VIP_ICON, TIMER_ICON
 } from '../../core/UIFactory.js';
 import { isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
@@ -335,8 +335,7 @@ export const SelfRolesManifest: ModuleManifest = {
               const btn = new ButtonBuilder()
                 .setCustomId(`sr_btn:${menu.id}:${o.roleId}`)
                 .setLabel(o.label)
-                .setStyle(ButtonStyle.Primary);
-              if (o.emoji) btn.setEmoji(o.emoji);
+                .setStyle(ButtonStyle.Secondary);
               currentRow.addComponents(btn);
             });
 
@@ -344,7 +343,18 @@ export const SelfRolesManifest: ModuleManifest = {
             components.push(...rows);
           }
 
-          const sent = await targetChan.send({ embeds: [cardEmbed], components }).catch(() => null);
+          const banner = getBrandBannerAttachment('rage-banner.png');
+          const files: AttachmentBuilder[] = [];
+          if (banner) {
+            cardEmbed.setImage('attachment://rage-banner.png');
+            files.push(banner);
+          }
+
+          const sent = await targetChan.send({
+            embeds: [cardEmbed],
+            components,
+            files: files.length > 0 ? files : undefined
+          }).catch(() => null);
           if (!sent) {
             return interaction.reply({ content: `${WRONG_ICON} Failed to send menu to #${targetChan.name}. Check bot channel permissions.`, flags: 64 });
           }

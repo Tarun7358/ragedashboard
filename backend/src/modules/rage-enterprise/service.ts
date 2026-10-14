@@ -19,13 +19,13 @@ export class RageEnterpriseService {
     const config = secMod.config || {};
 
     const isAntiNukeActive = config.antiNukeEnabled !== false;
-    const antiNukeStatus = isAntiNukeActive ? '<:ticks:1532620580266836148> `Active (Protected)`' : '<a:wrong:1546155193303957504> `Inactive (Disabled)`';
+    const antiNukeStatus = isAntiNukeActive ? '<:ticks:1532620580266836148> `Active (Protected)`' : '<a:warning:1546155193303957504> `Inactive (Disabled)`';
     const raidModeStatus = config.raidModeEnabled ? '<a:success_check:1546134620087783526> `RAID MODE ENABLED`' : '<a:success_check:1546134620087783526> `Normal Protection`';
     const { userSet, roleSet } = getUnifiedWhitelistEntries(modules);
     const whitelistCount = userSet.size + roleSet.size;
     const quarantineCount = (config.quarantinedUsers || []).length;
-    const antiSpamStatus = config.antiSpamEnabled ? '<:ticks:1532620580266836148> `Enabled`' : '<a:wrong:1546155193303957504> `Disabled`';
-    const antiLinkStatus = config.antiLinkEnabled ? '<:ticks:1532620580266836148> `Enabled`' : '<a:wrong:1546155193303957504> `Disabled`';
+    const antiSpamStatus = config.antiSpamEnabled ? '<:ticks:1532620580266836148> `Enabled`' : '<a:warning:1546155193303957504> `Disabled`';
+    const antiLinkStatus = config.antiLinkEnabled ? '<:ticks:1532620580266836148> `Enabled`' : '<a:warning:1546155193303957504> `Disabled`';
 
     const embed = buildLimeOverviewCard({
       title: 'SECURITY & ANTI-NUKE OVERVIEW',
@@ -55,16 +55,16 @@ export class RageEnterpriseService {
     });
 
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('sec_toggle_antinuke').setLabel('Toggle Anti-Nuke').setStyle(isAntiNukeActive ? ButtonStyle.Danger : ButtonStyle.Success).setEmoji('<a:success_check:1546134620087783526>'),
-      new ButtonBuilder().setCustomId('sec_toggle_raidmode').setLabel('Toggle Raid Mode').setStyle(config.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji('<a:success_check:1546134620087783526>'),
-      new ButtonBuilder().setCustomId('sec_view_whitelist').setLabel('View Whitelist').setStyle(ButtonStyle.Secondary).setEmoji('<:member:1532621317487071426>'),
-      new ButtonBuilder().setCustomId('sec_view_quarantine').setLabel('Quarantine Queue').setStyle(ButtonStyle.Secondary).setEmoji('<:gavel:1532621057318584380>')
+      new ButtonBuilder().setCustomId('sec_toggle_antinuke').setLabel('Toggle Anti-Nuke').setStyle(isAntiNukeActive ? ButtonStyle.Danger : ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('sec_toggle_raidmode').setLabel('Toggle Raid Mode').setStyle(config.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('sec_view_whitelist').setLabel('View Whitelist').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('sec_view_quarantine').setLabel('Quarantine Queue').setStyle(ButtonStyle.Secondary)
     );
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('sec_toggle_antispam').setLabel('Toggle Anti-Spam').setStyle(ButtonStyle.Primary).setEmoji('<:bot:1532621107746570391>'),
-      new ButtonBuilder().setCustomId('sec_toggle_antilink').setLabel('Toggle Anti-Link').setStyle(ButtonStyle.Primary).setEmoji('<:link:1532620952087826602>'),
-      new ButtonBuilder().setCustomId('sec_trigger_lockdown').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger).setEmoji('<a:success_check:1546134620087783526>')
+      new ButtonBuilder().setCustomId('sec_toggle_antispam').setLabel('Toggle Anti-Spam').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('sec_toggle_antilink').setLabel('Toggle Anti-Link').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('sec_trigger_lockdown').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger)
     );
 
     return { embeds: [embed], components: [row1, row2] };
@@ -92,11 +92,11 @@ export class RageEnterpriseService {
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('mod_btn_ban').setLabel('Ban Member').setStyle(ButtonStyle.Danger).setEmoji('<:gavel:1532621057318584380>'),
-      new ButtonBuilder().setCustomId('mod_btn_kick').setLabel('Kick Member').setStyle(ButtonStyle.Danger).setEmoji('<:member:1532621317487071426>'),
-      new ButtonBuilder().setCustomId('mod_btn_timeout').setLabel('Timeout Member').setStyle(ButtonStyle.Secondary).setEmoji('<a:Timer:1546231426863730728>'),
-      new ButtonBuilder().setCustomId('mod_btn_purge').setLabel('Purge Messages').setStyle(ButtonStyle.Secondary).setEmoji('<:config:1532425712844144701>'),
-      new ButtonBuilder().setCustomId('mod_btn_notes').setLabel('User Notes').setStyle(ButtonStyle.Primary).setEmoji('<a:lovemail:1527647157371535420>')
+      new ButtonBuilder().setCustomId('mod_btn_ban').setLabel('Ban Member').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('mod_btn_kick').setLabel('Kick Member').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('mod_btn_timeout').setLabel('Timeout Member').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('mod_btn_purge').setLabel('Purge Messages').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('mod_btn_notes').setLabel('User Notes').setStyle(ButtonStyle.Primary)
     );
 
     return { embeds: [embed], components: [row] };
@@ -111,7 +111,7 @@ export class RageEnterpriseService {
     const welcMod = modules.find((m: any) => m.id === 'community' || m.id === 'welcome-v2') || {};
     const config = welcMod.config || {};
 
-    const status = welcMod.status === 'enabled' ? '<:ticks:1532620580266836148> `Active`' : '<a:wrong:1546155193303957504> `Disabled`';
+    const status = welcMod.status === 'enabled' ? '<:ticks:1532620580266836148> `Active`' : '<a:warning:1546155193303957504> `Disabled`';
     const channelName = config.channelId ? `<#${config.channelId}>` : '`Not Set`';
     const autoRoles = (config.autoroleIds || []).map((r: string) => `<@&${r}>`).join(', ') || '`None`';
 
@@ -134,9 +134,9 @@ export class RageEnterpriseService {
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('welc_setup_wizard').setLabel('Setup Wizard').setStyle(ButtonStyle.Success).setEmoji('<:config:1532425712844144701>'),
-      new ButtonBuilder().setCustomId('welc_test_welcome').setLabel('Test Greeting').setStyle(ButtonStyle.Primary).setEmoji('<:member:1532621317487071426>'),
-      new ButtonBuilder().setCustomId('welc_toggle_module').setLabel('Toggle Module').setStyle(ButtonStyle.Secondary).setEmoji('<:config:1532425712844144701>')
+      new ButtonBuilder().setCustomId('welc_setup_wizard').setLabel('Setup Wizard').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('welc_test_welcome').setLabel('Test Greeting').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('welc_toggle_module').setLabel('Toggle Module').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row] };
@@ -164,10 +164,10 @@ export class RageEnterpriseService {
     });
 
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('music_play').setLabel('Play / Pause').setStyle(ButtonStyle.Success).setEmoji('<:voicechannelgreen:1532425750278438962>'),
-      new ButtonBuilder().setCustomId('music_skip').setLabel('Skip').setStyle(ButtonStyle.Secondary).setEmoji('<:lightpurplearrow:1532621364115013693>'),
-      new ButtonBuilder().setCustomId('music_queue').setLabel('View Queue').setStyle(ButtonStyle.Primary).setEmoji('<a:lovemail:1527647157371535420>'),
-      new ButtonBuilder().setCustomId('music_shuffle').setLabel('Shuffle').setStyle(ButtonStyle.Secondary).setEmoji('<:config:1532425712844144701>')
+      new ButtonBuilder().setCustomId('music_play').setLabel('Play / Pause').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('music_skip').setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('music_queue').setLabel('View Queue').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('music_shuffle').setLabel('Shuffle').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row1] };
@@ -213,9 +213,9 @@ export class RageEnterpriseService {
     const rowSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
     const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('config_btn_wizard').setLabel('Interactive Setup Wizard').setStyle(ButtonStyle.Success).setEmoji('<:config:1532425712844144701>'),
-      new ButtonBuilder().setCustomId('config_btn_reload').setLabel('Reload Configs').setStyle(ButtonStyle.Secondary).setEmoji('<:bot:1532621107746570391>'),
-      new ButtonBuilder().setCustomId('config_btn_status').setLabel('System Health').setStyle(ButtonStyle.Primary).setEmoji('<:vip:1532620837117759508>')
+      new ButtonBuilder().setCustomId('config_btn_wizard').setLabel('Interactive Setup Wizard').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('config_btn_reload').setLabel('Reload Configs').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('config_btn_status').setLabel('System Health').setStyle(ButtonStyle.Primary)
     );
 
     return { embeds: [embed], components: [rowSelect, rowButtons] };
@@ -251,9 +251,9 @@ export class RageEnterpriseService {
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('mon_refresh').setLabel('Refresh Status').setStyle(ButtonStyle.Success).setEmoji('<:bot:1532621107746570391>'),
-      new ButtonBuilder().setCustomId('mon_cache_flush').setLabel('Flush Cache').setStyle(ButtonStyle.Secondary).setEmoji('<:config:1532425712844144701>'),
-      new ButtonBuilder().setCustomId('mon_diag').setLabel('Run Diagnostics').setStyle(ButtonStyle.Primary).setEmoji('<a:lovemail:1527647157371535420>')
+      new ButtonBuilder().setCustomId('mon_refresh').setLabel('Refresh Status').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('mon_cache_flush').setLabel('Flush Cache').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('mon_diag').setLabel('Run Diagnostics').setStyle(ButtonStyle.Primary)
     );
 
     return { embeds: [embed], components: [row] };
@@ -282,10 +282,10 @@ export class RageEnterpriseService {
     });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('owner_emergency_lock').setLabel('Emergency Lock').setStyle(ButtonStyle.Danger).setEmoji('<a:success_check:1546134620087783526>'),
-      new ButtonBuilder().setCustomId('owner_deploy_cmds').setLabel('Sync Slash Commands').setStyle(ButtonStyle.Primary).setEmoji('<:bot:1532621107746570391>'),
-      new ButtonBuilder().setCustomId('owner_run_diag').setLabel('Diagnostics Board').setStyle(ButtonStyle.Secondary).setEmoji('<a:lovemail:1527647157371535420>'),
-      new ButtonBuilder().setCustomId('owner_toggle_debug').setLabel('Toggle Debug').setStyle(ButtonStyle.Secondary).setEmoji('<:config:1532425712844144701>')
+      new ButtonBuilder().setCustomId('owner_emergency_lock').setLabel('Emergency Lock').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('owner_deploy_cmds').setLabel('Sync Slash Commands').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('owner_run_diag').setLabel('Diagnostics Board').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('owner_toggle_debug').setLabel('Toggle Debug').setStyle(ButtonStyle.Secondary)
     );
 
     return { embeds: [embed], components: [row] };
