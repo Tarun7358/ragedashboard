@@ -3205,12 +3205,37 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'hub' || action === 'setup') {
-          const channel = message.mentions.channels.first() || (effectiveArgs[2] ? message.guild?.channels.cache.get(effectiveArgs[2].replace(/[<#>]/g, '')) : null);
+          const query = effectiveArgs.slice(2).join(' ').trim();
+          let channel: any = message.mentions.channels.first();
+
+          if (!channel && query && message.guild) {
+            const raw = query.replace(/[<#>]/g, '').trim();
+            if (/^\d{17,20}$/.test(raw)) {
+              channel = message.guild.channels.cache.get(raw);
+            }
+            if (!channel) {
+              channel = message.guild.channels.cache.find((c: any) => 
+                c.isVoiceBased?.() && 
+                c.name.toLowerCase() === query.toLowerCase()
+              );
+            }
+            if (!channel) {
+              const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
+              const qNorm = norm(query);
+              if (qNorm) {
+                channel = message.guild.channels.cache.find((c: any) => 
+                  c.isVoiceBased?.() && 
+                  norm(c.name).includes(qNorm)
+                );
+              }
+            }
+          }
+
           if (!channel) {
             return message.reply({
               embeds: [createLimeEmbed({
-                title: 'JTC Hub Channel Syntax',
-                description: `${WRONG_EMOJI} **Syntax**: \`r!config jtc setup <#hubChannel>\`\nExample: \`r!config jtc setup #Join-To-Create\``
+                title: 'JTC Hub Channel Setup',
+                description: `${WRONG_EMOJI} **Voice Channel Not Found**: Could not find a voice channel matching "` + (query || 'empty') + `".\n\n**Syntax**: ` + '`r!config jtc setup <#channel | ID | name>`' + `\n**Examples**:\n• \`r!config jtc setup #﹒Temp  Vc\`\n• \`r!config jtc setup 1567203861188579521\`\n• \`r!config jtc setup Temp Vc\``
               })]
             });
           }
@@ -3229,11 +3254,17 @@ export function registerConfigCommands(): void {
           if (trigIdx >= 0) existingTriggers[trigIdx] = trigObj;
           else existingTriggers.push(trigObj);
 
-          updateJtcConfig({ hubChannelId: channel.id, triggers: existingTriggers, enabled: true });
+          updateJtcConfig({ 
+            hubChannelId: channel.id, 
+            triggerChannelId: channel.id,
+            triggers: existingTriggers, 
+            enabled: true 
+          });
+
           return message.reply({
             embeds: [createLimeEmbed({
-              title: 'JTC Hub Channel Saved',
-              description: `${APPROVED_ICON} Set Join-To-Create hub channel to **<#${channel.id}>** and enabled automatic temporary room creation.`
+              title: 'JTC Trigger Saved & Bound by ID',
+              description: `${APPROVED_ICON} Successfully saved and bound Join-To-Create trigger:\n\n> **Channel:** <#` + channel.id + `> (` + channel.name + `)\n> **Saved Channel ID:** ` + '`' + channel.id + '`' + `\n> **Backend Status:** ` + '`READY`' + ` (Backend strictly monitors connections to this channel ID).`
             })]
           });
         }

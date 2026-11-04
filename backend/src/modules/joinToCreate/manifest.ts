@@ -1398,6 +1398,53 @@ export const JoinToCreateManifest: ModuleManifest = {
 };
 
 // Register Prefix Command for JTC / Voice Room Controller
+
+export function resolveVoiceChannelInput(guild: any, query: string, firstMention?: any): any {
+  if (firstMention && (firstMention.type === ChannelType.GuildVoice || firstMention.isVoiceBased?.())) {
+    return firstMention;
+  }
+  if (!query || !guild) return null;
+  const raw = query.trim();
+  const cleanId = raw.replace(/[<#>]/g, '').trim();
+
+  // 1. Direct ID lookup
+  if (/^\d{17,20}$/.test(cleanId)) {
+    const ch = guild.channels?.cache?.get ? guild.channels.cache.get(cleanId) : null;
+    if (ch && (ch.type === ChannelType.GuildVoice || ch.isVoiceBased?.())) return ch;
+  }
+
+  const channelList: any[] = guild.channels?.cache?.find 
+    ? guild.channels.cache 
+    : Array.from(guild.channels?.cache?.values?.() || []);
+
+  // 2. Exact name match (case-insensitive)
+  const exact = channelList.find((c: any) => 
+    (c.type === ChannelType.GuildVoice || c.isVoiceBased?.()) && 
+    c.name.toLowerCase() === raw.toLowerCase()
+  );
+  if (exact) return exact;
+
+  // 3. Normalized alphanumeric match (handles unicode dots '﹒', emojis, extra spaces)
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
+  const targetNorm = norm(raw);
+  if (targetNorm.length > 0) {
+    const normMatch = channelList.find((c: any) => 
+      (c.type === ChannelType.GuildVoice || c.isVoiceBased?.()) && 
+      norm(c.name) === targetNorm
+    );
+    if (normMatch) return normMatch;
+
+    // 4. Partial substring match
+    const partialMatch = channelList.find((c: any) => 
+      (c.type === ChannelType.GuildVoice || c.isVoiceBased?.()) && 
+      norm(c.name).includes(targetNorm)
+    );
+    if (partialMatch) return partialMatch;
+  }
+
+  return null;
+}
+
 PrefixRegistry.register({
   name: 'jtc',
   category: 'Voice',
@@ -1426,20 +1473,29 @@ PrefixRegistry.register({
         return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC triggers.` });
       }
 
+      const inputQuery = args.slice(1).join(' ').trim();
       let triggerCh: any = null;
-      if (args[1]) {
-        const cleanId = args[1].replace(/[<#>]/g, '').trim();
-        triggerCh = message.guild.channels.cache.get(cleanId);
-      }
-      if (!triggerCh && message.member?.voice?.channel) {
-        triggerCh = message.member.voice.channel;
-      }
-      if (!triggerCh) {
-        triggerCh = message.guild.channels.cache.find((c: any) => {
-          if (c.type !== ChannelType.GuildVoice) return false;
-          const n = c.name.toLowerCase();
-          return /join to create|temp\s*vc|create\s*vc|➕/i.test(n) || /^[.﹒]?\s*temp/i.test(n);
-        });
+
+      if (inputQuery) {
+        // Resolve by Mention, Snowflake ID, or Channel Name (exact / normalized)
+        triggerCh = resolveVoiceChannelInput(message.guild, inputQuery, message.mentions.channels.first());
+        if (!triggerCh) {
+          return message.reply({
+            content: `${WRONG_ICON} **Voice Channel Not Found**: Could not find any voice channel matching "` + inputQuery + `".\n> **Tip**: You can mention it (#channel), provide its ID, or write its name.`
+          });
+        }
+      } else {
+        // If no parameter given, check if member is currently in a voice channel
+        if (message.member?.voice?.channel) {
+          triggerCh = message.member.voice.channel;
+        } else {
+          // Check for existing voice channels matching trigger patterns
+          triggerCh = message.guild.channels.cache.find((c: any) => {
+            if (c.type !== ChannelType.GuildVoice) return false;
+            const n = c.name.toLowerCase();
+            return /join to create|temp\s*vc|create\s*vc|➕/i.test(n) || /^[.﹒]?\s*temp/i.test(n);
+          });
+        }
       }
 
       let category: any = triggerCh?.parent || message.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('voice channels'));
@@ -1459,12 +1515,13 @@ PrefixRegistry.register({
       }
 
       if (triggerCh) {
+        const triggerId = triggerCh.id;
         const existingTriggers = [...(config.triggers || [])];
-        const idx = existingTriggers.findIndex((t: any) => t.triggerChannelId === triggerCh.id);
+        const idx = existingTriggers.findIndex((t: any) => t.triggerChannelId === triggerId);
         const newTrig = {
-          id: `trigger_${triggerCh.id}`,
+          id: `trigger_${triggerId}`,
           label: triggerCh.name,
-          triggerChannelId: triggerCh.id,
+          triggerChannelId: triggerId,
           categoryId: triggerCh.parentId || category?.id || null,
           defaultName: "{username}'s Room",
           defaultLimit: 0,
@@ -1473,14 +1530,31 @@ PrefixRegistry.register({
         if (idx >= 0) existingTriggers[idx] = newTrig;
         else existingTriggers.push(newTrig);
 
-        saveConfig({ enabled: true, triggers: existingTriggers, activeChannels: config.activeChannels || [] });
+        const updatedConfig = {
+          ...config,
+          enabled: true,
+          triggerChannelId: triggerId,
+          hubChannelId: triggerId,
+          triggers: existingTriggers,
+          activeChannels: config.activeChannels || []
+        };
+
+        saveConfig(updatedConfig);
         config.enabled = true;
+        config.triggerChannelId = triggerId;
+        (config as any).hubChannelId = triggerId;
         config.triggers = existingTriggers;
+
         extra?.toggleModule?.('join_to_create', true);
-        extra?.logSyncEvent?.(message.guild.id, `[JTC] Setup completed: #${triggerCh.name} bound as Join-to-Create trigger.`, 'success');
+        extra?.logSyncEvent?.(message.guild.id, `[JTC] Setup completed: Saved trigger ID ${triggerId} (#${triggerCh.name}).`, 'success');
+
+        const successNotice = '> **Trigger Channel Configured Successfully**\n> **Channel:** <#' + triggerId + '> (' + triggerCh.name + ')\n> **Saved Channel ID:** `' + triggerId + '`\n> **Backend Status:** `READY` (Backend strictly monitors this channel ID).\n\n';
+        const gui = buildJTCAdminDashboardGUI(message.guild, config);
+        const sendPayload = gui.getSendPayload();
+        return message.reply({ content: successNotice, ...(sendPayload as any) }).catch(() => {
+          return message.reply({ content: successNotice, ...gui.getFallbackPayload() });
+        });
       }
-      const gui = buildJTCAdminDashboardGUI(message.guild, config);
-      return respondJtcGui(message, gui);
     }
 
     // Subcommand: clean / purge
