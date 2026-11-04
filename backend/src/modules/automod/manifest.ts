@@ -15,8 +15,9 @@ import {
   VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, GAVEL_ICON, LINK_ICON, INFO_ICON, CONFIG_ICON, VIP_ICON, BOT_ICON
 } from '../../core/UIFactory.js';
 import { checkWhitelistPermission, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
+import { handleRaidMessageCheck } from '../../services/AdvancedSecurityService.js';
 import { isUrlCommandBypass, isMessageAntiLinkHandled, markMessageAntiLinkHandled } from '../../utils/antiLinkBypass.js';
-import { resetRateLimit } from '../security/manifest.js';
+import { resetRateLimit, isExecutorBypassed } from '../security/manifest.js';
 import { CentralLogger } from '../../core/security/CentralLogger.js';
 
 function userTag(user: any): string {
@@ -27,6 +28,37 @@ function sanitizeLinksFromContent(text: string): string {
   if (!text) return '';
   const GLOBAL_LINK_REGEX = /(?:https?:\/\/|www\.|discord(?:app)?\.(?:gg|com\/invite)\/|[a-zA-Z0-9-]+\.(?:com|net|org|gg|io|me|xyz|co|uk)\b)[^\s]*/gi;
   return text.replace(GLOBAL_LINK_REGEX, '`[link removed]`').trim();
+}
+
+export function normalizeDomain(input: string): string {
+  let clean = (input || '').trim().toLowerCase();
+  clean = clean.replace(/^[a-z]+:\/\//, '');
+  clean = clean.replace(/^www\./, '');
+  clean = clean.split('/')[0];
+  clean = clean.split('?')[0];
+  return clean;
+}
+
+export function isDomainWhitelisted(hostname: string, ignoredDomains: string[]): boolean {
+  if (!hostname || !ignoredDomains || ignoredDomains.length === 0) return false;
+  const cleanHost = normalizeDomain(hostname);
+  return ignoredDomains.some(d => {
+    const cleanD = normalizeDomain(d);
+    return cleanHost === cleanD || cleanHost.endsWith('.' + cleanD);
+  });
+}
+
+export function extractDomainsFromText(text: string): string[] {
+  if (!text) return [];
+  const stripped = text.replace(/<a?:[a-zA-Z0-9_]+:\d+>/g, ' ');
+  const regex = /(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?)/gi;
+  const domains: string[] = [];
+  let match;
+  while ((match = regex.exec(stripped)) !== null) {
+    const d = normalizeDomain(match[1]);
+    if (d && !domains.includes(d)) domains.push(d);
+  }
+  return domains;
 }
 
 import crypto from 'crypto';
@@ -510,6 +542,81 @@ export const AutomodManifest: ModuleManifest = {
               required: false
             }
           ]
+        },
+        {
+          name: 'domain',
+          description: 'Manage whitelisted domains allowed through Anti-Link & AutoMod',
+          type: 1,
+          options: [
+            {
+              name: 'action',
+              type: 3,
+              description: 'Action (add / remove / list / clear)',
+              required: true,
+              choices: [
+                { name: 'Add Whitelisted Domain', value: 'add' },
+                { name: 'Remove Whitelisted Domain', value: 'remove' },
+                { name: 'List Whitelisted Domains', value: 'list' },
+                { name: 'Clear All Whitelisted Domains', value: 'clear' }
+              ]
+            },
+            {
+              name: 'domain',
+              type: 3,
+              description: 'Target domain (e.g. youtube.com, tenor.com, twitch.tv)',
+              required: false
+            }
+          ]
+        },
+        {
+          name: 'whitelist',
+          description: 'Quickly whitelist a domain so its links are never blocked',
+          type: 1,
+          options: [
+            {
+              name: 'domain',
+              type: 3,
+              description: 'Domain to whitelist (e.g. youtube.com, tenor.com)',
+              required: true
+            }
+          ]
+        },
+        {
+          name: 'unwhitelist',
+          description: 'Quickly remove a domain from the Anti-Link domain whitelist',
+          type: 1,
+          options: [
+            {
+              name: 'domain',
+              type: 3,
+              description: 'Domain to remove (e.g. youtube.com, tenor.com)',
+              required: true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      name: 'whitelist-domain',
+      description: 'Whitelist a domain to bypass AntiLink and AutoMod restrictions',
+      options: [
+        {
+          name: 'action',
+          type: 3,
+          description: 'Action (add / remove / list / clear)',
+          required: true,
+          choices: [
+            { name: 'Add Whitelisted Domain', value: 'add' },
+            { name: 'Remove Whitelisted Domain', value: 'remove' },
+            { name: 'List Whitelisted Domains', value: 'list' },
+            { name: 'Clear All Whitelisted Domains', value: 'clear' }
+          ]
+        },
+        {
+          name: 'domain',
+          type: 3,
+          description: 'Target domain (e.g. youtube.com, tenor.com, twitch.tv)',
+          required: false
         }
       ]
     },
@@ -781,6 +888,119 @@ export const AutomodManifest: ModuleManifest = {
           return interaction.reply({ content: `<a:success_check:1546134620087783526> **AntiLink Ignored Roles**:\n${list}`, flags: 64 });
         }
 
+
+        // 10. DOMAIN WHITELIST
+        if (['domain', 'domains', 'whitelist-domain', 'whitelistdomain', 'allowdomain', 'whitelist', 'unwhitelist'].includes(sub)) {
+          let action = interaction.options?.getString?.('action');
+          let domainInput = interaction.options?.getString?.('domain');
+
+          if (sub === 'whitelist' || sub === 'allowdomain') {
+            action = 'add';
+            domainInput = domainInput || rawArgs[1];
+          } else if (sub === 'unwhitelist') {
+            action = 'remove';
+            domainInput = domainInput || rawArgs[1];
+          } else {
+            action = action || rawArgs[1]?.toLowerCase();
+            domainInput = domainInput || rawArgs[2];
+
+            if (action && !['add', 'remove', 'delete', 'del', 'clear', 'list'].includes(action)) {
+              if (action.includes('.') || action.length >= 3) {
+                domainInput = action;
+                action = 'add';
+              }
+            }
+          }
+
+          let ignoredDomains: string[] = config.ignoredDomains || [];
+
+          if (action === 'add') {
+            if (!domainInput) {
+              return interaction.reply({
+                embeds: [createLimeEmbed({
+                  title: 'Specify a Domain',
+                  description: 'Please specify a domain to whitelist.\n\n• **Example**: `r!antilink domain add youtube.com` or `r!antilink whitelist youtube.com`'
+                })],
+                flags: 64
+              });
+            }
+
+            const cleanDomain = normalizeDomain(domainInput);
+            if (!cleanDomain || !cleanDomain.includes('.') || cleanDomain.length < 3) {
+              return interaction.reply({
+                embeds: [createLimeEmbed({
+                  title: 'Invalid Domain Format',
+                  description: `Invalid domain format: \`${domainInput}\`. Please provide a valid domain like \`youtube.com\`, \`tenor.com\`, \`twitch.tv\`.`
+                })],
+                flags: 64
+              });
+            }
+
+            if (!ignoredDomains.includes(cleanDomain)) {
+              ignoredDomains.push(cleanDomain);
+              config.ignoredDomains = ignoredDomains;
+              saveConfig({ ignoredDomains });
+              context.logSyncEvent(`AntiLink: Whitelisted domain "${cleanDomain}" by ${interaction.user.tag}`, 'success');
+            }
+
+            return interaction.reply({
+              embeds: [createLimeEmbed({
+                title: 'Domain Whitelisted Successfully!',
+                description: `• **Domain**: \`${cleanDomain}\`\n• **Status**: **Bypasses Anti-Link & AutoMod Restrictions**\n• **Subdomains**: Links matching \`${cleanDomain}\` or \`*.${cleanDomain}\` (e.g. \`www.${cleanDomain}\`) will **never be deleted or punished**.`
+              })],
+              flags: 64
+            });
+          }
+
+          if (action === 'remove' || action === 'delete' || action === 'del') {
+            if (!domainInput) {
+              return interaction.reply({
+                embeds: [createLimeEmbed({
+                  title: 'Specify a Domain to Remove',
+                  description: 'Please specify a domain to remove from whitelist.\n\n• **Example**: `r!antilink domain remove youtube.com`'
+                })],
+                flags: 64
+              });
+            }
+
+            const cleanDomain = normalizeDomain(domainInput);
+            ignoredDomains = ignoredDomains.filter((d: string) => normalizeDomain(d) !== cleanDomain);
+            config.ignoredDomains = ignoredDomains;
+            saveConfig({ ignoredDomains });
+            context.logSyncEvent(`AntiLink: Removed domain "${cleanDomain}" from whitelist by ${interaction.user.tag}`, 'warn');
+
+            return interaction.reply({
+              embeds: [createLimeEmbed({
+                title: 'Domain Removed from Whitelist',
+                description: `Removed \`${cleanDomain}\` from AntiLink **domain whitelist**. Links from this domain will now be filtered normally.`
+              })],
+              flags: 64
+            });
+          }
+
+          if (action === 'clear') {
+            config.ignoredDomains = [];
+            saveConfig({ ignoredDomains: [] });
+            context.logSyncEvent(`AntiLink: Cleared all whitelisted domains by ${interaction.user.tag}`, 'warn');
+            return interaction.reply({
+              embeds: [createLimeEmbed({
+                title: 'All Whitelisted Domains Cleared',
+                description: 'Cleared all whitelisted domains. All external links will now be filtered strictly.'
+              })],
+              flags: 64
+            });
+          }
+
+          // list
+          const list = ignoredDomains.map((d: string) => `• \`${d}\``).join('\n') || '**No domains whitelisted.** All external links are currently filtered.';
+          return interaction.reply({
+            embeds: [createLimeEmbed({
+              title: `AntiLink Whitelisted Domains (${ignoredDomains.length})`,
+              description: `${list}\n\n> Links from these domains are **completely bypassed** and never punished by AntiLink or AutoMod rules.\n> **To Add**: \`r!antilink domain add <domain>\` or \`r!antilink whitelist <domain>\`\n> **To Remove**: \`r!antilink domain remove <domain>\``
+            })],
+            flags: 64
+          });
+        }
         // DEFAULT: OPEN CONFIGURABLE GUI DASHBOARD
         const gui = buildAntiLinkDashboardGUI(guild, config);
         return interaction.reply({ embeds: gui.embeds, components: gui.components });
@@ -788,7 +1008,20 @@ export const AutomodManifest: ModuleManifest = {
     },
 
     // ─── COMMAND: AUTOMOD ─────────────────────────────────────────────────────
+    
+    // ─── COMMAND: WHITELIST-DOMAIN (STANDALONE SLASH COMMAND) ──────────────────
     {
+      name: 'command_whitelist-domain',
+      handler: async (client: any, interaction: any, context: any) => {
+        const antilinkCmd = AutomodManifest.events?.find(e => e.name === 'command_antilink');
+        if (antilinkCmd) {
+          interaction.options = interaction.options || {};
+          interaction.options.getSubcommand = () => 'domain';
+          return antilinkCmd.handler(client, interaction, context);
+        }
+      }
+    },
+{
       name: 'command_automod',
       handler: async (client: any, interaction: any, context: any) => {
         const guild = interaction.guild;
@@ -815,7 +1048,13 @@ export const AutomodManifest: ModuleManifest = {
           return interaction.reply({ embeds: gui.embeds, components: gui.components });
         }
 
-        // ── Subcommand: Anti-Everyone / Anti-Here ──────────────────────
+        
+        // ── Subcommand: Domain Whitelist under automod ──────────────────
+        if (['domain', 'domains', 'whitelist', 'unwhitelist', 'allowdomain'].includes(cleanSub)) {
+          const antilinkCmd = AutomodManifest.events?.find(e => e.name === 'command_antilink');
+          if (antilinkCmd) return antilinkCmd.handler(client, interaction, context);
+        }
+// ── Subcommand: Anti-Everyone / Anti-Here ──────────────────────
         if (['antieveryone', 'everyone', 'here', 'antihere', 'antiping', 'massping', 'ping'].includes(cleanSub)) {
           const rawArgs = interaction.parsed?.args || [];
           const enableOpt = interaction.options?.getBoolean?.('enable');
@@ -1235,8 +1474,26 @@ export const AutomodManifest: ModuleManifest = {
     {
       name: 'messageCreate',
       handler: async (client: any, message: any, context: any) => {
-        if (message.author.bot) return;
-        if (!message.guild) return;
+        if (!message.guild || !message.author) return;
+        if (message.author.id === client.user?.id) return;
+        if ((message as any)._securityHandled) return;
+
+        // 1. Guild Owner & Extra Owner check -> 100% immune from AutoMod
+        const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild).catch(() => false);
+        if (isOwnerOrExtra) return;
+
+        // 2. Whitelist check: If message is from a bot or webhook, allow immediately if whitelisted
+        if (message.author.bot || message.webhookId) {
+          const isBotBypassed = await isExecutorBypassed(message.guild, message.author.id, {}, context, 'anti_link').catch(() => false);
+          if (isBotBypassed) return;
+
+          const isWhitelistedBot = await checkWhitelistPermission(message.author.id, message.guild, context, 'anti_link').catch(() => false);
+          if (isWhitelistedBot) return;
+        }
+
+        // 3. Human member whitelist check for general AutoMod immunity
+        const isMemberAutomodImmune = await checkWhitelistPermission(message.author.id, message.guild, context, 'automod').catch(() => false);
+        if (isMemberAutomodImmune) return;
 
         const modules = context.getModulesState ? context.getModulesState(message.guild.id) : [];
         const amMod = modules.find((m: any) => m.id === 'automod');
@@ -1293,11 +1550,10 @@ export const AutomodManifest: ModuleManifest = {
 
           const isChannelIgnored = ignoredChannels.includes(message.channel.id);
           const hasIgnoredRole = message.member?.roles?.cache?.some((r: any) => ignoredRoles.includes(r.id));
-          const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild);
           const isWhitelisted = await checkWhitelistPermission(message.author.id, message.guild, context, 'anti_link');
           const isUrlCmd = isUrlCommandBypass(message, client?.user?.id);
 
-          if (!isChannelIgnored && !hasIgnoredRole && !isOwnerOrExtra && !isWhitelisted && !isUrlCmd) {
+          if (!isChannelIgnored && !hasIgnoredRole && !isWhitelisted && !isUrlCmd) {
             (message as any)._antiLinkHandled = true;
             markMessageAntiLinkHandled(message.id);
             deleted = true;
@@ -1337,24 +1593,20 @@ export const AutomodManifest: ModuleManifest = {
 
         // 5. Sliding Window Anti-Spam & Cross-Channel Raid Protection
         if (!deleted && message.guild) {
-          const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild);
-          if (!isOwnerOrExtra) {
-            const spamCheck = SlidingWindowSpamDetector.checkSpam(
-              message.guild.id,
-              message.author.id,
-              message.channel.id,
-              message.content
-            );
-            if (spamCheck.isSpam) {
-              deleted = true;
-              reason = spamCheck.reason;
-            }
+          const spamCheck = SlidingWindowSpamDetector.checkSpam(
+            message.guild.id,
+            message.author.id,
+            message.channel.id,
+            message.content
+          );
+          if (spamCheck.isSpam) {
+            deleted = true;
+            reason = spamCheck.reason;
           }
         }
 
         // 5b. Adaptive Anti-Raid Correlated Pattern Check (Cross-Account Raid Interception)
         if (!deleted && message.guild) {
-          const { handleRaidMessageCheck } = await import('../../services/AdvancedSecurityService.js');
           const raidCheck = await handleRaidMessageCheck(message, context);
           if (raidCheck.isRaid) {
             deleted = true;
@@ -1364,12 +1616,11 @@ export const AutomodManifest: ModuleManifest = {
 
         // 6. Attachment / Image / File Upload Filter
         if (!deleted && (config.blockAttachments || (config.blockedAttachmentChannels && config.blockedAttachmentChannels.includes(message.channel.id)))) {
-          const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild);
           const isWhitelisted = await checkWhitelistPermission(message.author.id, message.guild, context, 'anti_attachment');
           const hasIgnoredRole = message.member?.roles?.cache?.some((r: any) => (config.ignoredRoles || []).includes(r.id));
           const isIgnoredChannel = (config.ignoredChannels || []).includes(message.channel.id);
 
-          if (!isOwnerOrExtra && !isWhitelisted && !hasIgnoredRole && !isIgnoredChannel) {
+          if (!isWhitelisted && !hasIgnoredRole && !isIgnoredChannel) {
             const hasAttachment = message.attachments && message.attachments.size > 0;
             if (hasAttachment) {
               deleted = true;
@@ -1380,6 +1631,8 @@ export const AutomodManifest: ModuleManifest = {
 
         // ── EXECUTE ENFORCEMENT & DELETION ────────────────────────────────────
         if (deleted) {
+          if ((message as any)._securityHandled) return;
+          (message as any)._securityHandled = true;
           try {
             await message.delete().catch(() => { });
 
@@ -1407,7 +1660,7 @@ export const AutomodManifest: ModuleManifest = {
 
                 // Send DM warning notification
                 const dmEmbed = Embeds.warn(
-                  `<a:warning:1546155193303957504> Anti-Link Warning (${currentCount}/${maxLimit}) — ${message.guild.name}`,
+                  `Anti-Link Warning (${currentCount}/${maxLimit}) - ${message.guild.name}`,
                   `Your message in **#${message.channel.name || 'channel'}** was **deleted** because external link sharing is restricted.\n\n**Violation Count**: **${currentCount}/${maxLimit}**\nReaching **${maxLimit} violations** will trigger **${punishAction.toUpperCase()}** enforcement.`,
                   { module: 'automod', footer: `${message.guild.name} • Anti-Link Protection` }
                 );

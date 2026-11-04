@@ -1,4 +1,4 @@
-import { Client, TextChannel } from 'discord.js';
+import { Client, TextChannel, MessageFlags } from 'discord.js';
 import { Database } from '../core/Database.js';
 import { buildSecurityDashboardCard, deploySecurityDashboardToChannel } from '../modules/security/enable.js';
 
@@ -136,12 +136,23 @@ export class DashboardSyncService {
 
       // 4. Generate updated live dashboard card with fresh telemetry & timestamp
       const dashboard = await buildSecurityDashboardCard(guild);
-      await message.edit({
-        content: dashboard.content || undefined,
-        embeds: dashboard.embeds,
-        components: dashboard.components
-      }).catch(async (editErr: any) => {
+      const hasV2 = Array.isArray(dashboard.components) && dashboard.components.some((c: any) => c?.type === 17 || c?.constructor?.name === 'ContainerBuilder');
+      const isComponentsV2Msg = message.flags?.has(MessageFlags.IsComponentsV2);
+
+      if (isComponentsV2Msg && !hasV2) {
+        // Message was created with MessageFlags.IsComponentsV2, cannot be edited with legacy embeds. Delete and redeploy fresh.
+        await message.delete().catch(() => {});
+        await deploySecurityDashboardToChannel(guild).catch(() => {});
+        return true;
+      }
+
+      const sendPayload: any = hasV2
+        ? { flags: MessageFlags.IsComponentsV2, components: dashboard.components }
+        : { content: dashboard.content || undefined, embeds: dashboard.embeds, components: dashboard.components };
+
+      await message.edit(sendPayload).catch(async (editErr: any) => {
         console.warn(`[DashboardSync] Edit failed for guild ${guildId}, redeploying fresh:`, editErr?.message || editErr);
+        await message.delete().catch(() => {});
         await deploySecurityDashboardToChannel(guild).catch(() => {});
       });
 

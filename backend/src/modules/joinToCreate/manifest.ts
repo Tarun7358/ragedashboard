@@ -9,7 +9,13 @@ import {
   Message,
   ModalBuilder,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  ContainerBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  ThumbnailBuilder,
+  MessageFlags
 } from 'discord.js';
 import { IJoinToCreate } from '../../models/index.js';
 import {
@@ -30,23 +36,25 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate) {
   const isMasterEnabled = config.enabled !== false;
   const triggers = config.triggers || [];
   const activeChannels = config.activeChannels || [];
+  const guildIcon = guild?.iconURL({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
 
   const triggerList = triggers.length > 0
-    ? triggers.map((t: any, i: number) => `**${i + 1}.** <#${t.triggerChannelId}> — \`${t.label || 'Default'}\` (\`Privacy: ${(t.privacy || 'public').toUpperCase()}\`)`).join('\n')
-    : '`⚠️ No Trigger Channels Configured (Click 1-Click Setup below)`';
+    ? triggers.map((t: any, i: number) => `> **${i + 1}.** <#${t.triggerChannelId}> | \`${t.label || 'Default'}\` | \`Privacy: ${(t.privacy || 'public').toUpperCase()}\``).join('\n')
+    : '> ⚠️ *No Trigger Channels Configured (Click 1-Click Setup below)*';
 
   const embed = new EmbedBuilder()
     .setTitle('Rage Optimiser • Join-To-Create Voice Control Center')
     .setColor(isMasterEnabled ? Colors.BRAND : Colors.DANGER)
     .setDescription(
-      `> **Dynamic Automated Voice Channel Manager**\n` +
+      `# **Dynamic Automated Voice Channel Manager**\n` +
       `Automatically provisions customized temporary voice channels with full room owner permissions when members connect to a trigger channel.\n\n` +
-      `**Master Engine Status:** \`${isMasterEnabled ? 'ACTIVE & RUNNING' : 'DISABLED'}\`\n` +
-      `**Live Temporary Voice Channels:** \`${activeChannels.length} Active Rooms\`\n` +
-      `**Room Owner Permissions:** \`Rename, Lock, Hide, Limit, Kick, Claim\`\n\n` +
-      `**Configured Trigger Channels (${triggers.length}):**\n${triggerList}`
+      `## **System Telemetry**\n` +
+      `> **Master Engine Status:** \`${isMasterEnabled ? 'ACTIVE & RUNNING' : 'DISABLED'}\`\n` +
+      `> **Live Active Rooms:** \`${activeChannels.length} Active Channels\`\n` +
+      `> **Room Owner Permissions:** \`Rename, Lock, Hide, Limit, Kick, Claim\`\n\n` +
+      `## **Configured Trigger Channels (${triggers.length})**\n${triggerList}`
     )
-    .setThumbnail(guild?.iconURL({ size: 256 }) || undefined)
+    .setThumbnail(guildIcon)
     .setFooter({ text: BRAND_FOOTER });
 
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -56,7 +64,7 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate) {
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('jtc_btn_toggle_master')
-      .setLabel(isMasterEnabled ? 'JTC: ON' : 'JTC: OFF')
+      .setLabel(isMasterEnabled ? 'JTC Master: ON' : 'JTC Master: OFF')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('jtc_btn_clean_stale')
@@ -75,7 +83,53 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  return { embed, components: [row1, row2] };
+  // Native Discord Components V2 Container (Box UI)
+  const sec = new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('# **Rage Optimiser • Join-To-Create Voice Hub**')
+    )
+    .setThumbnailAccessory(
+      new ThumbnailBuilder().setURL(guildIcon)
+    );
+
+  const sep = new SeparatorBuilder().setDivider(true);
+
+  const body = new TextDisplayBuilder().setContent(
+    `# **Dynamic Automated Voice Channel Manager**\n` +
+    `> **Automatically provisions customized temporary voice channels with full room owner permissions when members connect to a trigger channel.**\n\n` +
+    `## **System Telemetry & Controls**\n` +
+    `> **Master Engine Status:** \`${isMasterEnabled ? 'ACTIVE & RUNNING' : 'DISABLED'}\`\n` +
+    `> **Live Active Rooms:** \`${activeChannels.length} Active Rooms\`\n` +
+    `> **Room Owner Privileges:** \`Rename, Lock, Hide, Limit, Kick, Claim\`\n\n` +
+    `## **Configured Trigger Channels (${triggers.length})**\n${triggerList}\n\n` +
+    `### **Admin Quick Actions**\n` +
+    `> **Click 1-Click Auto Setup to create the voice category & trigger voice channel automatically.**\n` +
+    `> **Use JTC Master to toggle voice provisioning server-wide.**\n` +
+    `> **Use Clean Stale Channels to sweep and purge all empty rooms immediately.**`
+  );
+
+  const footer = new TextDisplayBuilder().setContent(`-# ${BRAND_FOOTER}`);
+
+  const container = new ContainerBuilder()
+    .addSectionComponents(sec)
+    .addSeparatorComponents(sep)
+    .addTextDisplayComponents(body)
+    .addActionRowComponents(row1, row2)
+    .addTextDisplayComponents(footer);
+
+  return {
+    container,
+    embed,
+    components: [row1, row2],
+    getSendPayload: () => ({
+      flags: MessageFlags.IsComponentsV2,
+      components: [container]
+    }),
+    getFallbackPayload: () => ({
+      embeds: [embed],
+      components: [row1, row2]
+    })
+  };
 }
 
 export function buildJTCVoiceControllerGUI(channel: any, activeChannelData?: any) {
@@ -86,18 +140,20 @@ export function buildJTCVoiceControllerGUI(channel: any, activeChannelData?: any
   const bitrateStr = `${Math.round(channel.bitrate / 1000)} kbps`;
   const ownerId = activeChannelData?.ownerId;
   const ownerStr = ownerId ? `<@${ownerId}>` : '`Open for Claim`';
+  const guildIcon = channel.guild?.iconURL({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
 
   const embed = new EmbedBuilder()
-    .setTitle('Rage Optimiser • Voice Room Control Panel')
+    .setTitle(`Rage Optimiser • Voice Room Control Panel`)
     .setColor(Colors.BRAND)
     .setDescription(
-      `> **Managing Room:** **${channel.name}**\n` +
-      `Welcome to your private voice room. Use the control buttons below to manage room access and audio settings.\n\n` +
-      `• **Room Owner:** ${ownerStr}\n` +
-      `• **Access Lock:** \`${isLocked ? 'LOCKED' : 'UNLOCKED'}\`\n` +
-      `• **Visibility:** \`${isHidden ? 'HIDDEN' : 'VISIBLE'}\`\n` +
-      `• **User Limit:** \`${limitStr}\`\n` +
-      `• **Audio Bitrate:** \`${bitrateStr}\``
+      `# **Managing Room:** **${channel.name}**\n` +
+      `**Welcome to your private voice room. Use the control buttons below to manage room access and audio settings.**\n\n` +
+      `## **Room Details**\n` +
+      `> **Room Owner:** ${ownerStr}\n` +
+      `> **Access Lock:** \`${isLocked ? 'LOCKED' : 'UNLOCKED'}\`\n` +
+      `> **Visibility:** \`${isHidden ? 'HIDDEN' : 'VISIBLE'}\`\n` +
+      `> **User Limit:** \`${limitStr}\`\n` +
+      `> **Audio Bitrate:** \`${bitrateStr}\``
     )
     .setFooter({ text: 'Rage Optimiser • Voice Room Controller' });
 
@@ -112,7 +168,7 @@ export function buildJTCVoiceControllerGUI(channel: any, activeChannelData?: any
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`jtc_btn_limit_${channel.id}`)
-      .setLabel('Set Limit')
+      .setLabel(`Limit: ${userLimit === 0 ? '∞' : userLimit}`)
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`jtc_btn_rename_${channel.id}`)
@@ -131,7 +187,7 @@ export function buildJTCVoiceControllerGUI(channel: any, activeChannelData?: any
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`jtc_btn_bitrate_${channel.id}`)
-      .setLabel('Cycle Bitrate')
+      .setLabel(`${bitrateStr}`)
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`jtc_btn_delete_${channel.id}`)
@@ -143,7 +199,91 @@ export function buildJTCVoiceControllerGUI(channel: any, activeChannelData?: any
       .setStyle(ButtonStyle.Secondary)
   );
 
-  return { embed, components: [row1, row2] };
+  // Native Discord Components V2 Container (Box UI)
+  const sec = new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`# **Voice Room Controller : ${channel.name}**`)
+    )
+    .setThumbnailAccessory(
+      new ThumbnailBuilder().setURL(guildIcon)
+    );
+
+  const sep = new SeparatorBuilder().setDivider(true);
+
+  const body = new TextDisplayBuilder().setContent(
+    `# **Private Voice Room Settings**\n` +
+    `> Use the interactive buttons inside this control card to manage your room security, capacity, and permissions.\n\n` +
+    `## **Live Telemetry**\n` +
+    `> **Current Room:** \`${channel.name}\`\n` +
+    `> **Designated Owner:** ${ownerStr}\n` +
+    `> **Room Security:** \`${isLocked ? 'LOCKED (Connect Denied)' : 'OPEN (Public Access)'}\`\n` +
+    `> **Visibility:** \`${isHidden ? 'HIDDEN (ViewChannel Denied)' : 'VISIBLE'}\`\n` +
+    `> **Capacity Limit:** \`${limitStr}\`\n` +
+    `> **Voice Bitrate:** \`${bitrateStr}\``
+  );
+
+  const footer = new TextDisplayBuilder().setContent('-# Rage Optimiser • Voice Room Controller');
+
+  const container = new ContainerBuilder()
+    .addSectionComponents(sec)
+    .addSeparatorComponents(sep)
+    .addTextDisplayComponents(body)
+    .addActionRowComponents(row1, row2)
+    .addTextDisplayComponents(footer);
+
+  return {
+    container,
+    embed,
+    components: [row1, row2],
+    getSendPayload: () => ({
+      flags: MessageFlags.IsComponentsV2,
+      components: [container]
+    }),
+    getFallbackPayload: () => ({
+      embeds: [embed],
+      components: [row1, row2]
+    })
+  };
+}
+
+export async function respondJtcGui(target: any, gui: any) {
+  // If target is a prefix Message
+  if (typeof target.reply === 'function' && !target.isButton && !target.isChatInputCommand && !target.isStringSelectMenu && !target.isModalSubmit) {
+    try {
+      return await target.reply(gui.getSendPayload());
+    } catch {
+      return await target.reply(gui.getFallbackPayload());
+    }
+  }
+
+  // If target is an Interaction
+  if (target.replied || target.deferred) {
+    try {
+      return await target.editReply(gui.getSendPayload());
+    } catch {
+      return await target.editReply(gui.getFallbackPayload());
+    }
+  }
+
+  if (typeof target.update === 'function') {
+    try {
+      return await target.update(gui.getSendPayload());
+    } catch {
+      try {
+        return await target.update(gui.getFallbackPayload());
+      } catch {
+        return await target.editReply(gui.getSendPayload()).catch(() => target.editReply(gui.getFallbackPayload()));
+      }
+    }
+  }
+
+  if (typeof target.reply === 'function') {
+    try {
+      return await target.reply(gui.getSendPayload());
+    } catch {
+      return await target.reply(gui.getFallbackPayload());
+    }
+  }
 }
 
 export async function handleJtcInteraction(interaction: any, context: any) {
@@ -164,7 +304,7 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     const newName = interaction.fields.getTextInputValue('new_name');
     const targetChannel = interaction.guild.channels.cache.get(channelId);
     if (targetChannel && newName) {
-      await targetChannel.setName(newName).catch(() => {});
+      await targetChannel.setName(newName).catch(() => { });
       const activeData = activeChannels.find((c: any) => c.channelId === channelId);
       if (activeData) activeData.name = newName;
       saveConfig({ activeChannels });
@@ -173,12 +313,13 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     return interaction.reply({ content: `${WRONG_ICON} Failed to rename room.`, flags: 64 });
   }
 
+  const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
   // 1. Admin: 1-Click Auto Setup
   if (customId === 'jtc_btn_auto_setup') {
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: `${WRONG_ICON} Administrator permission required.`, flags: 64 });
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access JTC administration.`, flags: 64 });
     }
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(() => { });
 
     let category = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('voice channels'));
     if (!category) {
@@ -188,7 +329,13 @@ export async function handleJtcInteraction(interaction: any, context: any) {
       }).catch(() => null);
     }
 
-    let triggerCh = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildVoice && c.name.toLowerCase().includes('join to create'));
+    const currentVoice = interaction.member?.voice?.channel;
+    let triggerCh = currentVoice || interaction.guild.channels.cache.find((c: any) => {
+      if (c.type !== ChannelType.GuildVoice) return false;
+      const n = c.name.toLowerCase();
+      return /join to create|temp\s*vc|create\s*vc|➕/i.test(n) || /^[.﹒]?\s*temp/i.test(n);
+    });
+
     if (!triggerCh) {
       triggerCh = await interaction.guild.channels.create({
         name: '➕・Join to Create',
@@ -202,9 +349,9 @@ export async function handleJtcInteraction(interaction: any, context: any) {
       const idx = existingTriggers.findIndex((t: any) => t.triggerChannelId === triggerCh.id);
       const newTrig = {
         id: `trigger_${triggerCh.id}`,
-        label: 'Auto-Created Trigger',
+        label: triggerCh.name,
         triggerChannelId: triggerCh.id,
-        categoryId: category?.id || null,
+        categoryId: triggerCh.parentId || category?.id || null,
         defaultName: "{username}'s Room",
         defaultLimit: 0,
         privacy: 'public' as const
@@ -217,41 +364,42 @@ export async function handleJtcInteraction(interaction: any, context: any) {
         triggers: existingTriggers,
         activeChannels: config.activeChannels || []
       });
+      context.toggleModule?.('join_to_create', true);
       context.logSyncEvent(`[JTC] Auto-setup completed: #${triggerCh.name} bound to category.`, 'success');
     }
 
-    const { embed, components } = buildJTCAdminDashboardGUI(interaction.guild, { ...config, enabled: true });
-    return interaction.editReply({ embeds: [embed], components });
+    const gui = buildJTCAdminDashboardGUI(interaction.guild, { ...config, enabled: true });
+    return respondJtcGui(interaction, gui);
   }
 
   // 2. Admin: Toggle Master Module
   if (customId === 'jtc_btn_toggle_master') {
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: `${WRONG_ICON} Administrator permission required.`, flags: 64 });
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access JTC administration.`, flags: 64 });
     }
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(() => { });
     const currentState = config.enabled !== false;
     const newState = !currentState;
     saveConfig({ enabled: newState });
     context.logSyncEvent(`[JTC] Master status toggled to ${newState ? 'ENABLED' : 'DISABLED'}.`, newState ? 'success' : 'warn');
 
-    const { embed, components } = buildJTCAdminDashboardGUI(interaction.guild, { ...config, enabled: newState });
-    return interaction.editReply({ embeds: [embed], components });
+    const gui = buildJTCAdminDashboardGUI(interaction.guild, { ...config, enabled: newState });
+    return respondJtcGui(interaction, gui);
   }
 
   // 3. Admin: Clean Stale Channels
   if (customId === 'jtc_btn_clean_stale') {
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: `${WRONG_ICON} Administrator permission required.`, flags: 64 });
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access JTC administration.`, flags: 64 });
     }
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(() => { });
 
     let cleaned = 0;
     const remaining: any[] = [];
     for (const ac of activeChannels) {
       const ch = interaction.guild.channels.cache.get(ac.channelId);
       if (!ch || (ch.isVoiceBased() && ch.members.filter((m: any) => !m.user.bot).size === 0)) {
-        if (ch) await ch.delete('JTC Admin Manual Clean').catch(() => {});
+        if (ch) await ch.delete('JTC Admin Manual Clean').catch(() => { });
         cleaned++;
       } else {
         remaining.push(ac);
@@ -260,20 +408,20 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     saveConfig({ activeChannels: remaining });
     context.logSyncEvent(`[JTC] Cleaned ${cleaned} stale voice channels.`, 'info');
 
-    const { embed, components } = buildJTCAdminDashboardGUI(interaction.guild, { ...config, activeChannels: remaining });
-    return interaction.editReply({ embeds: [embed], components });
+    const gui = buildJTCAdminDashboardGUI(interaction.guild, { ...config, activeChannels: remaining });
+    return respondJtcGui(interaction, gui);
   }
 
   // 4. Admin: Send Voice Controller Panel
   if (customId === 'jtc_btn_send_voice_panel') {
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: `${WRONG_ICON} Administrator permission required.`, flags: 64 });
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access JTC administration.`, flags: 64 });
     }
     const currentVoice = interaction.member?.voice?.channel;
     if (currentVoice) {
       const activeData = activeChannels.find((c: any) => c.channelId === currentVoice.id);
-      const { embed, components } = buildJTCVoiceControllerGUI(currentVoice, activeData);
-      await interaction.channel?.send({ embeds: [embed], components });
+      const gui = buildJTCVoiceControllerGUI(currentVoice, activeData);
+      await interaction.channel?.send(gui.getSendPayload()).catch(() => interaction.channel?.send(gui.getFallbackPayload()));
       return interaction.reply({ content: `<:ticks:1532620580266836148> Posted Voice Controller for ${currentVoice}!`, flags: 64 });
     } else {
       return interaction.reply({ content: `${WRONG_ICON} Please join your temporary voice channel first, or run \`r!vc\` while inside the room.`, flags: 64 });
@@ -282,9 +430,9 @@ export async function handleJtcInteraction(interaction: any, context: any) {
 
   // 5. Admin: Refresh Admin Dashboard
   if (customId === 'jtc_btn_refresh_admin') {
-    await interaction.deferUpdate().catch(() => {});
-    const { embed, components } = buildJTCAdminDashboardGUI(interaction.guild, config);
-    return interaction.editReply({ embeds: [embed], components });
+    await interaction.deferUpdate().catch(() => { });
+    const gui = buildJTCAdminDashboardGUI(interaction.guild, config);
+    return respondJtcGui(interaction, gui);
   }
 
   // In-Voice Controls: Extract target channel ID
@@ -304,13 +452,13 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     if (!isOwner && !isAdmin) {
       return interaction.reply({ content: `${WRONG_ICON} Only the channel owner can lock this room.`, flags: 64 });
     }
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(() => { });
     const everyoneRole = interaction.guild.roles.everyone;
     const isLocked = targetChannel.permissionOverwrites?.cache?.get(everyoneRole.id)?.deny?.has(PermissionFlagsBits.Connect);
     await targetChannel.permissionOverwrites.edit(everyoneRole, { Connect: isLocked ? null : false });
 
-    const { embed, components } = buildJTCVoiceControllerGUI(targetChannel, activeData);
-    return interaction.editReply({ embeds: [embed], components });
+    const gui = buildJTCVoiceControllerGUI(targetChannel, activeData);
+    return respondJtcGui(interaction, gui);
   }
 
   // In-Voice: Hide/Unhide
@@ -318,13 +466,13 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     if (!isOwner && !isAdmin) {
       return interaction.reply({ content: `${WRONG_ICON} Only the channel owner can hide this room.`, flags: 64 });
     }
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(() => { });
     const everyoneRole = interaction.guild.roles.everyone;
     const isHidden = targetChannel.permissionOverwrites?.cache?.get(everyoneRole.id)?.deny?.has(PermissionFlagsBits.ViewChannel);
     await targetChannel.permissionOverwrites.edit(everyoneRole, { ViewChannel: isHidden ? null : false });
 
-    const { embed, components } = buildJTCVoiceControllerGUI(targetChannel, activeData);
-    return interaction.editReply({ embeds: [embed], components });
+    const gui = buildJTCVoiceControllerGUI(targetChannel, activeData);
+    return respondJtcGui(interaction, gui);
   }
 
   // In-Voice: Cycle Limit (0 -> 2 -> 4 -> 5 -> 10 -> 0)
@@ -332,15 +480,15 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     if (!isOwner && !isAdmin) {
       return interaction.reply({ content: `${WRONG_ICON} Only the channel owner can set user limits.`, flags: 64 });
     }
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(() => { });
     const limits = [0, 2, 4, 5, 10];
     const currentLimit = targetChannel.userLimit || 0;
     const nextIdx = (limits.indexOf(currentLimit) + 1) % limits.length;
     const nextLimit = limits[nextIdx >= 0 ? nextIdx : 0];
     await targetChannel.setUserLimit(nextLimit);
 
-    const { embed, components } = buildJTCVoiceControllerGUI(targetChannel, activeData);
-    return interaction.editReply({ embeds: [embed], components });
+    const gui = buildJTCVoiceControllerGUI(targetChannel, activeData);
+    return respondJtcGui(interaction, gui);
   }
 
   // In-Voice: Rename (Modal prompt)
@@ -386,9 +534,9 @@ export async function handleJtcInteraction(interaction: any, context: any) {
       Speak: true
     });
 
-    await interaction.deferUpdate().catch(() => {});
-    const { embed, components } = buildJTCVoiceControllerGUI(targetChannel, activeData);
-    return interaction.editReply({ embeds: [embed], components });
+    await interaction.deferUpdate().catch(() => { });
+    const gui = buildJTCVoiceControllerGUI(targetChannel, activeData);
+    return respondJtcGui(interaction, gui);
   }
 
   // In-Voice: Cycle Bitrate (64k -> 96k -> 128k -> 64k)
@@ -396,15 +544,15 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     if (!isOwner && !isAdmin) {
       return interaction.reply({ content: `${WRONG_ICON} Only the channel owner can change audio bitrate.`, flags: 64 });
     }
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(() => { });
     const bitrates = [64000, 96000, 128000];
     const currentBr = targetChannel.bitrate || 64000;
     const nextIdx = (bitrates.indexOf(currentBr) + 1) % bitrates.length;
     const nextBr = bitrates[nextIdx >= 0 ? nextIdx : 0];
-    await targetChannel.setBitrate(nextBr).catch(() => {});
+    await targetChannel.setBitrate(nextBr).catch(() => { });
 
-    const { embed, components } = buildJTCVoiceControllerGUI(targetChannel, activeData);
-    return interaction.editReply({ embeds: [embed], components });
+    const gui = buildJTCVoiceControllerGUI(targetChannel, activeData);
+    return respondJtcGui(interaction, gui);
   }
 
   // In-Voice: Delete Room
@@ -418,9 +566,9 @@ export async function handleJtcInteraction(interaction: any, context: any) {
 
   // In-Voice: Refresh
   if (customId.startsWith('jtc_btn_refresh_vc_')) {
-    await interaction.deferUpdate().catch(() => {});
-    const { embed, components } = buildJTCVoiceControllerGUI(targetChannel, activeData);
-    return interaction.editReply({ embeds: [embed], components });
+    await interaction.deferUpdate().catch(() => { });
+    const gui = buildJTCVoiceControllerGUI(targetChannel, activeData);
+    return respondJtcGui(interaction, gui);
   }
 }
 
@@ -517,14 +665,16 @@ export const JoinToCreateManifest: ModuleManifest = {
             { name: 'category', type: 7, description: 'Category to spawn new channels in', required: false, channel_types: [4] },
             { name: 'default_name', type: 3, description: 'Channel name template ({username}, {user}, {count})', required: false },
             { name: 'default_limit', type: 4, description: 'Default user limit (0 = unlimited)', required: false },
-            { name: 'privacy', type: 3, description: 'Default privacy', required: false, choices: [
-              { name: 'Public', value: 'public' },
-              { name: 'Private', value: 'private' },
-              { name: 'Locked', value: 'locked' },
-              { name: 'Invisible', value: 'invisible' },
-              { name: 'Stage', value: 'stage' },
-              { name: 'Sync with Category', value: 'sync' }
-            ] }
+            {
+              name: 'privacy', type: 3, description: 'Default privacy', required: false, choices: [
+                { name: 'Public', value: 'public' },
+                { name: 'Private', value: 'private' },
+                { name: 'Locked', value: 'locked' },
+                { name: 'Invisible', value: 'invisible' },
+                { name: 'Stage', value: 'stage' },
+                { name: 'Sync with Category', value: 'sync' }
+              ]
+            }
           ]
         },
         {
@@ -651,9 +801,21 @@ export const JoinToCreateManifest: ModuleManifest = {
         const activeChannels: IJoinToCreate['activeChannels'] = config.activeChannels || [];
         const saveConfig = (updated: Partial<IJoinToCreate>) => context.updateModuleConfig('join_to_create', { ...config, ...updated });
 
+        if (!sub || sub === 'gui') {
+          const currentVoice = (interaction.member as any)?.voice?.channel;
+          const activeData = currentVoice ? activeChannels.find((c: any) => c.channelId === currentVoice.id) : null;
+          if (currentVoice && activeData) {
+            const gui = buildJTCVoiceControllerGUI(currentVoice, activeData);
+            return respondJtcGui(interaction, gui);
+          }
+          const gui = buildJTCAdminDashboardGUI(interaction.guild, config);
+          return respondJtcGui(interaction, gui);
+        }
+
         if (sub === 'setup') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '<a:warning:1546155193303957504> Administrator permission required.', flags: 64 });
+          const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+          if (!interaction.guild || !(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+            return interaction.reply({ content: '<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC triggers.', flags: 64 });
           }
           const channel = interaction.options.getChannel('channel');
           const category = interaction.options.getChannel('category');
@@ -685,8 +847,9 @@ export const JoinToCreateManifest: ModuleManifest = {
         }
 
         if (sub === 'remove') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '<a:warning:1546155193303957504> Administrator permission required.', flags: 64 });
+          const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+          if (!interaction.guild || !(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+            return interaction.reply({ content: '<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can remove JTC triggers.', flags: 64 });
           }
           const channel = interaction.options.getChannel('channel');
           const existingTriggers: any[] = [...(config.triggers || [])];
@@ -707,7 +870,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const name = interaction.options.getString('name');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
-          await channel.setName(name).catch(() => {});
+          await channel.setName(name).catch(() => { });
           myChannel.name = name;
           saveConfig({ activeChannels });
           return interaction.reply({ content: `<:ticks:1532620580266836148> Renamed your channel to **${name}**.`, flags: 64 });
@@ -718,7 +881,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const limit = interaction.options.getInteger('limit');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
-          await channel.setUserLimit(limit).catch(() => {});
+          await channel.setUserLimit(limit).catch(() => { });
           return interaction.reply({ content: `<:ticks:1532620580266836148> Set user limit to **${limit === 0 ? 'unlimited' : limit}**.`, flags: 64 });
         }
 
@@ -730,7 +893,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           await channel.permissionOverwrites.edit(interaction.guildId, {
             Connect: false,
             ViewChannel: null // keep visibility as-is, only block connect
-          }).catch(() => {});
+          }).catch(() => { });
           myChannel.locked = true;
           saveConfig({ activeChannels });
           return interaction.reply({ content: '<a:success_check:1546134620087783526> Your channel is now **locked**. Use `/jtc unlock` to reopen.', flags: 64 });
@@ -745,12 +908,12 @@ export const JoinToCreateManifest: ModuleManifest = {
           const originPrivacy = originTrigger?.privacy || 'public';
           // Reset @everyone to original privacy, but keep Connect open (unlocked)
           if (originPrivacy === 'invisible') {
-            await channel.permissionOverwrites.edit(interaction.guildId, { Connect: null, ViewChannel: false }).catch(() => {});
+            await channel.permissionOverwrites.edit(interaction.guildId, { Connect: null, ViewChannel: false }).catch(() => { });
           } else if (originPrivacy === 'stage') {
-            await channel.permissionOverwrites.edit(interaction.guildId, { Connect: null, ViewChannel: null, Speak: false }).catch(() => {});
+            await channel.permissionOverwrites.edit(interaction.guildId, { Connect: null, ViewChannel: null, Speak: false }).catch(() => { });
           } else {
             // public / private / locked — just open Connect
-            await channel.permissionOverwrites.edit(interaction.guildId, { Connect: null }).catch(() => {});
+            await channel.permissionOverwrites.edit(interaction.guildId, { Connect: null }).catch(() => { });
           }
           myChannel.locked = false;
           saveConfig({ activeChannels });
@@ -773,10 +936,10 @@ export const JoinToCreateManifest: ModuleManifest = {
           const member = interaction.guild?.members.cache.get(user.id);
           if (!member) return interaction.reply({ content: '<a:warning:1546155193303957504> Member not found.', flags: 64 });
           if (member.voice?.channelId === myChannel.channelId) {
-            await member.voice.disconnect('Kicked from JTC channel').catch(() => {});
+            await member.voice.disconnect('Kicked from JTC channel').catch(() => { });
           }
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
-          if (channel) await channel.permissionOverwrites.edit(user.id, { Connect: false }).catch(() => {});
+          if (channel) await channel.permissionOverwrites.edit(user.id, { Connect: false }).catch(() => { });
           return interaction.reply({ content: `<:ticks:1532620580266836148> Kicked ${user} from your channel.`, flags: 64 });
         }
 
@@ -785,7 +948,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const user = interaction.options.getUser('user');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
-          await channel.permissionOverwrites.edit(user.id, { Connect: true, ViewChannel: true }).catch(() => {});
+          await channel.permissionOverwrites.edit(user.id, { Connect: true, ViewChannel: true }).catch(() => { });
           return interaction.reply({ content: `<:ticks:1532620580266836148> Invited ${user} to your channel.`, flags: 64 });
         }
 
@@ -810,7 +973,7 @@ export const JoinToCreateManifest: ModuleManifest = {
 
         if (!sub || sub === 'list' || sub === 'triggers' || sub === 'help' || sub === 'status') {
           const triggers: any[] = config.triggers || [];
-          const triggerLines = triggers.length > 0 
+          const triggerLines = triggers.length > 0
             ? triggers.map((t: any, i: number) => `• <#${t.triggerChannelId}> — Label: \`${t.label || 'Default'}\` | Privacy: \`${t.privacy || 'public'}\``)
             : [config.triggerChannelId ? `• <#${config.triggerChannelId}> — Legacy Trigger` : '*No JTC triggers set up yet. Use `r!jtc setup <#channel>` to add one.*'];
 
@@ -824,15 +987,15 @@ export const JoinToCreateManifest: ModuleManifest = {
             color: Colors.LIME,
             sections: [
               {
-                title: '🔊 CONFIGURATIONS & TRIGGERS',
+                title: ' CONFIGURATIONS & TRIGGERS',
                 items: triggerLines
               },
               {
-                title: '🎙️ ACTIVE SPAWNED CHANNELS',
+                title: ' ACTIVE SPAWNED CHANNELS',
                 items: activeLines
               },
               {
-                title: '⚙️ COMMANDS & CONTROLS',
+                title: ' COMMANDS & CONTROLS',
                 items: [
                   '`r!jtc setup <#channel>` — Register a voice channel trigger',
                   '`r!jtc remove <#channel>` — Unregister a voice trigger',
@@ -857,7 +1020,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const bitrate = interaction.options.getInteger('bitrate');
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
-          await channel.setBitrate(bitrate * 1000).catch(() => {});
+          await channel.setBitrate(bitrate * 1000).catch(() => { });
           return interaction.reply({ content: `<:ticks:1532620580266836148> Set bitrate to **${bitrate}kbps**.`, flags: 64 });
         }
 
@@ -867,7 +1030,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           const channel = interaction.guild?.channels.cache.get(myChannel.channelId);
           if (!channel || channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:warning:1546155193303957504> Channel not found.', flags: 64 });
           const rtcRegion = region?.toLowerCase() === 'auto' ? null : (region || null);
-          await (channel as any).setRTCRegion(rtcRegion).catch(() => {});
+          await (channel as any).setRTCRegion(rtcRegion).catch(() => { });
           return interaction.reply({ content: `<:ticks:1532620580266836148> Set voice region to **${rtcRegion ?? 'Automatic'}**.`, flags: 64 });
         }
 
@@ -882,18 +1045,18 @@ export const JoinToCreateManifest: ModuleManifest = {
             .replace(/{user}/g, (interaction.member as any)?.displayName || interaction.user.username);
           const defaultLimit = originTrigger?.defaultLimit ?? config.defaultLimit ?? 0;
           const defaultPrivacy = originTrigger?.privacy || config.privacy || 'public';
-          await channel.setName(defaultName).catch(() => {});
-          if (channel.type === ChannelType.GuildVoice) await channel.setUserLimit(defaultLimit).catch(() => {});
-          
+          await channel.setName(defaultName).catch(() => { });
+          if (channel.type === ChannelType.GuildVoice) await channel.setUserLimit(defaultLimit).catch(() => { });
+
           if (defaultPrivacy === 'sync') {
             if (channel.parentId) {
-              await channel.lockPermissions().catch(() => {});
+              await channel.lockPermissions().catch(() => { });
             }
           }
           // Re-apply the trigger's original privacy overwrite
           const overwrites = buildPrivacyOverwrites(defaultPrivacy, interaction.guildId!, interaction.user.id);
           for (const ow of overwrites) {
-            await channel.permissionOverwrites.edit(ow.id, ow).catch(() => {});
+            await channel.permissionOverwrites.edit(ow.id, ow).catch(() => { });
           }
           myChannel.name = defaultName;
           myChannel.locked = false;
@@ -934,7 +1097,7 @@ export const JoinToCreateManifest: ModuleManifest = {
           await channel.permissionOverwrites.edit(target.id, { Connect: false });
           const member = interaction.guild?.members.cache.get(target.id);
           if (member && member.voice?.channelId === channel.id) {
-            await member.voice.disconnect().catch(() => {});
+            await member.voice.disconnect().catch(() => { });
           }
           return interaction.reply({ content: `<a:warning:1546155193303957504> Blocked ${target} from joining your channel.`, flags: 64 });
         }
@@ -962,20 +1125,41 @@ export const JoinToCreateManifest: ModuleManifest = {
       handler: async (client: any, data: any, context: any) => {
         const { oldState, newState } = data;
         const modules = context.getModulesState ? context.getModulesState() : [];
-        const jtcMod = modules.find((m: any) => m.id === 'join_to_create');
-        if (!jtcMod || jtcMod.status !== 'enabled') return;
+        const jtcMod = modules.find((m: any) => m.id === 'join_to_create' || m.id === 'joinToCreate');
+        const config: IJoinToCreate = jtcMod?.config || {};
+        if (config.enabled === false) return;
 
-        const config: IJoinToCreate = jtcMod.config || {};
-        let activeChannels: IJoinToCreate['activeChannels'] = config.activeChannels || [];
         const guild = newState.guild || oldState.guild;
         if (!guild) return;
 
-        // Build effective triggers list: new array + legacy single-trigger compat
+        // Auto-heal status if triggers exist or master is active
+        const hasConfiguredTriggers = (config.triggers && config.triggers.length > 0) || (config as any).hubChannelId || config.triggerChannelId;
+        if (jtcMod && jtcMod.status !== 'enabled') {
+          if (config.enabled === true || hasConfiguredTriggers) {
+            jtcMod.status = 'enabled';
+            context.toggleModule?.('join_to_create', true);
+          } else {
+            const hasCandidate = guild.channels?.cache?.some((c: any) => 
+              c.type === ChannelType.GuildVoice && 
+              (/join to create|temp\s*vc|create\s*vc|➕/i.test(c.name) || /^[.﹒]?\s*temp/i.test(c.name))
+            );
+            if (hasCandidate) {
+              jtcMod.status = 'enabled';
+              context.toggleModule?.('join_to_create', true);
+            } else {
+              return;
+            }
+          }
+        }
+
+        let activeChannels: IJoinToCreate['activeChannels'] = config.activeChannels || [];
+
+        // Build effective triggers list: new array + legacy single-trigger compat + hubChannelId
         const triggers: any[] = [...(config.triggers || [])];
         if (config.triggerChannelId && !triggers.find((t: any) => t.triggerChannelId === config.triggerChannelId)) {
           triggers.push({
             id: 'legacy',
-            label: 'Default',
+            label: 'Default Trigger',
             triggerChannelId: config.triggerChannelId,
             categoryId: config.categoryId || null,
             defaultName: config.defaultName || "{username}'s Channel",
@@ -983,10 +1167,35 @@ export const JoinToCreateManifest: ModuleManifest = {
             privacy: config.privacy || 'public'
           });
         }
+        if ((config as any).hubChannelId && !triggers.find((t: any) => t.triggerChannelId === (config as any).hubChannelId)) {
+          triggers.push({
+            id: 'hub',
+            label: 'Configured Hub',
+            triggerChannelId: (config as any).hubChannelId,
+            categoryId: config.categoryId || null,
+            defaultName: (config as any).nameTemplate || config.defaultName || "{username}'s Room",
+            defaultLimit: (config as any).userLimit || config.defaultLimit || 0,
+            privacy: config.privacy || 'public'
+          });
+        }
         // Auto-detect fallback if no triggers configured
         if (triggers.length === 0) {
-          const found = guild.channels.cache.find((c: any) => c.type === ChannelType.GuildVoice && c.name.toLowerCase().includes('join to create'));
-          if (found) triggers.push({ id: 'auto', label: 'Auto-Detected', triggerChannelId: found.id, categoryId: null, defaultName: "{username}'s Channel", defaultLimit: 0, privacy: 'public' });
+          const found = guild.channels.cache.find((c: any) => {
+            if (c.type !== ChannelType.GuildVoice) return false;
+            const n = c.name.toLowerCase();
+            return /join to create|temp\s*vc|create\s*vc|➕/i.test(n) || /^[.﹒]?\s*temp/i.test(n);
+          });
+          if (found) {
+            triggers.push({ 
+              id: `auto_${found.id}`, 
+              label: found.name, 
+              triggerChannelId: found.id, 
+              categoryId: found.parentId || null, 
+              defaultName: "{username}'s Room", 
+              defaultLimit: 0, 
+              privacy: 'public' 
+            });
+          }
         }
 
         // 1. Find which trigger (if any) the user just joined
@@ -1050,16 +1259,16 @@ export const JoinToCreateManifest: ModuleManifest = {
             const newChannel = await guild.channels.create(createOptions);
 
             if (isSyncMode && parentId) {
-              await newChannel.lockPermissions().catch(() => {});
+              await newChannel.lockPermissions().catch(() => { });
               await newChannel.permissionOverwrites.edit(member.id, {
                 ManageChannels: true,
                 Connect: true,
                 ViewChannel: true,
                 Speak: true
-              }).catch(() => {});
+              }).catch(() => { });
             }
 
-            await member.voice.setChannel(newChannel).catch(() => {});
+            await member.voice.setChannel(newChannel).catch(() => { });
 
             activeChannels.push({
               channelId: newChannel.id,
@@ -1108,8 +1317,13 @@ export const JoinToCreateManifest: ModuleManifest = {
               continue;
             }
 
-            const nonBotMembers = channel.members.filter((m: any) => !m.user.bot);
-            if (nonBotMembers.size === 0) {
+            // Don't auto-delete freshly created channels to allow Discord voice connection handover
+            const roomAgeMs = Date.now() - new Date(activeCh.createdAt || 0).getTime();
+            if (roomAgeMs < 10000) continue;
+
+            const nonBotMembers = channel.members?.filter ? channel.members.filter((m: any) => !m.user?.bot) : Array.from((channel.members?.values?.() || [])).filter((m: any) => !m.user?.bot);
+            const nonBotCount = nonBotMembers?.size !== undefined ? nonBotMembers.size : (nonBotMembers?.length || 0);
+            if (nonBotCount === 0) {
               try {
                 await channel.delete('JTC: Channel empty');
                 activeChannels.splice(i, 1);
@@ -1187,8 +1401,8 @@ export const JoinToCreateManifest: ModuleManifest = {
 PrefixRegistry.register({
   name: 'jtc',
   category: 'Voice',
-  description: 'Interactive Join-To-Create Voice Control Panel & Admin Manager.',
-  usage: 'r!jtc [setup|lock|hide|limit|rename|claim|mute]',
+  description: 'Interactive Join-To-Create Voice Control Center & Room Manager in Box UI.',
+  usage: 'r!jtc [setup|clean|toggle|lock|hide|limit|rename|claim|bitrate]',
   aliases: ['jointocreate', 'vc', 'voicecontrol', 'vcmgr'],
   cooldownSeconds: 2,
   execute: async (message: Message, args: string[], extra?: any) => {
@@ -1200,13 +1414,212 @@ PrefixRegistry.register({
 
     const currentVoice = message.member?.voice?.channel;
     const activeData = currentVoice ? activeChannels.find((c: any) => c.channelId === currentVoice.id) : null;
+    const sub = (args[0] || '').toLowerCase();
+    const saveConfig = (updated: Partial<IJoinToCreate>) => extra?.updateModuleConfig?.('join_to_create', { ...config, ...updated });
 
-    if (currentVoice && activeData) {
-      const { embed, components } = buildJTCVoiceControllerGUI(currentVoice, activeData);
-      return message.reply({ embeds: [embed], components });
+    const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+    const isOwner = await isOwnerOrExtraOwner(message.author.id, message.guild);
+
+    // Subcommand: setup / auto / add / set
+    if (sub === 'setup' || sub === 'auto' || sub === 'add' || sub === 'set') {
+      if (!isOwner) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC triggers.` });
+      }
+
+      let triggerCh: any = null;
+      if (args[1]) {
+        const cleanId = args[1].replace(/[<#>]/g, '').trim();
+        triggerCh = message.guild.channels.cache.get(cleanId);
+      }
+      if (!triggerCh && message.member?.voice?.channel) {
+        triggerCh = message.member.voice.channel;
+      }
+      if (!triggerCh) {
+        triggerCh = message.guild.channels.cache.find((c: any) => {
+          if (c.type !== ChannelType.GuildVoice) return false;
+          const n = c.name.toLowerCase();
+          return /join to create|temp\s*vc|create\s*vc|➕/i.test(n) || /^[.﹒]?\s*temp/i.test(n);
+        });
+      }
+
+      let category: any = triggerCh?.parent || message.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('voice channels'));
+      if (!category && !triggerCh) {
+        category = await message.guild.channels.create({
+          name: '🔊 ┃ VOICE CHANNELS',
+          type: ChannelType.GuildCategory
+        }).catch(() => null);
+      }
+
+      if (!triggerCh) {
+        triggerCh = await message.guild.channels.create({
+          name: '➕・Join to Create',
+          type: ChannelType.GuildVoice,
+          parent: category?.id || null
+        }).catch(() => null);
+      }
+
+      if (triggerCh) {
+        const existingTriggers = [...(config.triggers || [])];
+        const idx = existingTriggers.findIndex((t: any) => t.triggerChannelId === triggerCh.id);
+        const newTrig = {
+          id: `trigger_${triggerCh.id}`,
+          label: triggerCh.name,
+          triggerChannelId: triggerCh.id,
+          categoryId: triggerCh.parentId || category?.id || null,
+          defaultName: "{username}'s Room",
+          defaultLimit: 0,
+          privacy: 'public' as const
+        };
+        if (idx >= 0) existingTriggers[idx] = newTrig;
+        else existingTriggers.push(newTrig);
+
+        saveConfig({ enabled: true, triggers: existingTriggers, activeChannels: config.activeChannels || [] });
+        config.enabled = true;
+        config.triggers = existingTriggers;
+        extra?.toggleModule?.('join_to_create', true);
+        extra?.logSyncEvent?.(message.guild.id, `[JTC] Setup completed: #${triggerCh.name} bound as Join-to-Create trigger.`, 'success');
+      }
+      const gui = buildJTCAdminDashboardGUI(message.guild, config);
+      return respondJtcGui(message, gui);
     }
 
-    const { embed, components } = buildJTCAdminDashboardGUI(message.guild, config);
-    return message.reply({ embeds: [embed], components });
+    // Subcommand: clean / purge
+    if (sub === 'clean' || sub === 'purge') {
+      if (!isOwner) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can clean JTC rooms.` });
+      }
+      let cleaned = 0;
+      const remaining: any[] = [];
+      for (const ac of activeChannels) {
+        const ch = message.guild.channels.cache.get(ac.channelId);
+        if (!ch || (ch.isVoiceBased() && ch.members.filter((m: any) => !m.user.bot).size === 0)) {
+          if (ch) await ch.delete('JTC Manual Clean').catch(() => { });
+          cleaned++;
+        } else {
+          remaining.push(ac);
+        }
+      }
+      saveConfig({ activeChannels: remaining });
+      config.activeChannels = remaining;
+      extra?.logSyncEvent?.(message.guild.id, `[JTC] Cleaned ${cleaned} stale voice channels.`, 'info');
+      const gui = buildJTCAdminDashboardGUI(message.guild, config);
+      return respondJtcGui(message, gui);
+    }
+
+    // Subcommand: toggle
+    if (sub === 'toggle' || sub === 'enable' || sub === 'disable') {
+      if (!isOwner) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can toggle JTC.` });
+      }
+      const newState = sub === 'enable' ? true : (sub === 'disable' ? false : !(config.enabled !== false));
+      saveConfig({ enabled: newState });
+      config.enabled = newState;
+      extra?.logSyncEvent?.(message.guild.id, `[JTC] Master status toggled to ${newState ? 'ENABLED' : 'DISABLED'}.`, newState ? 'success' : 'warn');
+      const gui = buildJTCAdminDashboardGUI(message.guild, config);
+      return respondJtcGui(message, gui);
+    }
+
+    // Subcommand: lock/unlock
+    if (sub === 'lock' || sub === 'unlock') {
+      if (!currentVoice || !activeData) {
+        return message.reply({ content: `${WRONG_ICON} You must be inside your active temporary voice room to use this.` });
+      }
+      const isAdmin = message.member?.permissions?.has(PermissionFlagsBits.Administrator);
+      if (activeData.ownerId !== message.author.id && !isAdmin) {
+        return message.reply({ content: `${WRONG_ICON} Only the channel owner can lock/unlock this room.` });
+      }
+      const everyoneRole = message.guild.roles.everyone;
+      const willLock = sub === 'lock';
+      await currentVoice.permissionOverwrites.edit(everyoneRole, { Connect: willLock ? false : null });
+      const gui = buildJTCVoiceControllerGUI(currentVoice, activeData);
+      return respondJtcGui(message, gui);
+    }
+
+    // Subcommand: hide/unhide
+    if (sub === 'hide' || sub === 'unhide') {
+      if (!currentVoice || !activeData) {
+        return message.reply({ content: `${WRONG_ICON} You must be inside your active temporary voice room to use this.` });
+      }
+      const isAdmin = message.member?.permissions?.has(PermissionFlagsBits.Administrator);
+      if (activeData.ownerId !== message.author.id && !isAdmin) {
+        return message.reply({ content: `${WRONG_ICON} Only the channel owner can hide/unhide this room.` });
+      }
+      const everyoneRole = message.guild.roles.everyone;
+      const willHide = sub === 'hide';
+      await currentVoice.permissionOverwrites.edit(everyoneRole, { ViewChannel: willHide ? false : null });
+      const gui = buildJTCVoiceControllerGUI(currentVoice, activeData);
+      return respondJtcGui(message, gui);
+    }
+
+    // Subcommand: rename
+    if (sub === 'rename' || sub === 'name') {
+      if (!currentVoice || !activeData) {
+        return message.reply({ content: `${WRONG_ICON} You must be inside your active temporary voice room to use this.` });
+      }
+      const isAdmin = message.member?.permissions?.has(PermissionFlagsBits.Administrator);
+      if (activeData.ownerId !== message.author.id && !isAdmin) {
+        return message.reply({ content: `${WRONG_ICON} Only the channel owner can rename this room.` });
+      }
+      const newName = args.slice(1).join(' ').trim();
+      if (!newName) {
+        return message.reply({ content: `${WRONG_ICON} Please specify the new room name: \`r!jtc rename Squad-Alpha\`` });
+      }
+      await currentVoice.setName(newName).catch(() => { });
+      activeData.name = newName;
+      saveConfig({ activeChannels });
+      const gui = buildJTCVoiceControllerGUI(currentVoice, activeData);
+      return respondJtcGui(message, gui);
+    }
+
+    // Subcommand: limit
+    if (sub === 'limit') {
+      if (!currentVoice || !activeData) {
+        return message.reply({ content: `${WRONG_ICON} You must be inside your active temporary voice room to use this.` });
+      }
+      const isAdmin = message.member?.permissions?.has(PermissionFlagsBits.Administrator);
+      if (activeData.ownerId !== message.author.id && !isAdmin) {
+        return message.reply({ content: `${WRONG_ICON} Only the channel owner can set user limits.` });
+      }
+      const limitNum = parseInt(args[1], 10);
+      if (isNaN(limitNum) || limitNum < 0 || limitNum > 99) {
+        return message.reply({ content: `${WRONG_ICON} Please specify a valid limit between 0 (unlimited) and 99: \`r!jtc limit 5\`` });
+      }
+      await currentVoice.setUserLimit(limitNum);
+      const gui = buildJTCVoiceControllerGUI(currentVoice, activeData);
+      return respondJtcGui(message, gui);
+    }
+
+    // Subcommand: claim
+    if (sub === 'claim') {
+      if (!currentVoice || !activeData) {
+        return message.reply({ content: `${WRONG_ICON} You must be inside a JTC voice room to claim ownership.` });
+      }
+      const ownerInVc = currentVoice.members.has(activeData.ownerId);
+      if (ownerInVc && activeData.ownerId !== message.author.id) {
+        return message.reply({ content: `${WRONG_ICON} The current room owner is still connected to the voice room.` });
+      }
+      activeData.ownerId = message.author.id;
+      activeData.ownerTag = message.author.username;
+      saveConfig({ activeChannels });
+      await currentVoice.permissionOverwrites.edit(message.author.id, {
+        ManageChannels: true,
+        Connect: true,
+        ViewChannel: true,
+        Speak: true
+      });
+      const gui = buildJTCVoiceControllerGUI(currentVoice, activeData);
+      return respondJtcGui(message, gui);
+    }
+
+    // Default GUI rendering:
+    // If inside an active voice room: render Voice Room Controller Box UI
+    if (currentVoice && activeData) {
+      const gui = buildJTCVoiceControllerGUI(currentVoice, activeData);
+      return respondJtcGui(message, gui);
+    }
+
+    // Otherwise: render JTC Admin Dashboard Hub Box UI
+    const gui = buildJTCAdminDashboardGUI(message.guild, config);
+    return respondJtcGui(message, gui);
   }
 });

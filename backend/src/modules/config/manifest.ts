@@ -1,4 +1,4 @@
-import { Message, StringSelectMenuBuilder, ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { Message, StringSelectMenuBuilder, ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits, ContainerBuilder, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder, SeparatorBuilder, MessageFlags } from 'discord.js';
 import { ModuleManifest } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
 import { createLimeEmbed, buildLimeOverviewCard, Colors, VERIFIED_ICON, WRONG_ICON, WARNING_ICON, VIOLATION_ICON, SHIELD_ICON, CONFIG_ICON, ARROW_ICON, SQUARE_TICK_ICON, BRAND_FOOTER, SUCCESS_CHECK_ICON, LOADING_ANIMATED_ICON, SECURITY_SHIELD_ICON, formatCustomEmoji } from '../../core/UIFactory.js';
@@ -44,6 +44,8 @@ export const DEFAULT_SECURITY_RULES: Record<string, { enabled: boolean; limit: n
   anti_sticker_update: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
   anti_everyone_here: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
   anti_invite_create: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_integration: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
+  anti_member_unban: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
   anti_link: { enabled: true, limit: 5, window: 10, action: 'warn', recovery: false }
 };
 
@@ -133,7 +135,7 @@ export function parseDurationToMs(str: string): number | null {
   }
 }
 
-export function getEffectiveRule(rules: any, ruleKey: string, secConfig?: any): { enabled: boolean; limit: number; window: number; action: string; recovery: boolean; [key: string]: any } {
+export function getEffectiveRule(rules: any, ruleKey: string, secConfig?: any): { enabled: boolean; limit: number; window: number; action: string; recovery: boolean;[key: string]: any } {
   const normalizedKey = normalizeRuleName(ruleKey);
   const defaultConfig = DEFAULT_SECURITY_RULES[normalizedKey] || { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true };
   const actualRules = (rules && typeof rules === 'object' && 'rules' in rules) ? rules.rules : rules;
@@ -141,11 +143,31 @@ export function getEffectiveRule(rules: any, ruleKey: string, secConfig?: any): 
 
   const customConfig = actualRules?.[normalizedKey] || actualRules?.[ruleKey] || {};
   const isMasterEnabled = actualConfig ? actualConfig.antiNukeEnabled !== false : true;
-  return {
+  const merged = {
     ...defaultConfig,
     ...customConfig,
     enabled: isMasterEnabled ? (customConfig.enabled !== undefined ? Boolean(customConfig.enabled) : defaultConfig.enabled) : false
   };
+  // Zero-tolerance enforcement for critical Anti-Nuke rules: always trigger on 1st unauthorized action
+  // and ensure unwhitelisted Administrators are kicked (or banned if configured as ban) instead of failing timeout
+  if (normalizedKey !== 'anti_link') {
+    merged.limit = 1;
+  }
+  const CRITICAL_KICK_RULES = new Set([
+    'anti_ban',
+    'anti_kick',
+    'anti_webhook_create',
+    'anti_webhook_update',
+    'anti_webhook_delete',
+    'anti_integration',
+    'anti_channel_delete',
+    'anti_role_delete',
+    'anti_bot_add'
+  ]);
+  if (CRITICAL_KICK_RULES.has(normalizedKey) && merged.action !== 'ban' && merged.action !== 'kick') {
+    merged.action = 'kick';
+  }
+  return merged;
 }
 
 export function buildSecuritySelectMenu(currentValue?: string): ActionRowBuilder<StringSelectMenuBuilder> {
@@ -200,7 +222,7 @@ export async function buildAntiNukeDashboardGUI(guild: any, secConfig: any, extr
       const row = await db.get<any>('SELECT COUNT(*) as count FROM extra_owners WHERE guildId = ?', [guildId]).catch(() => null);
       if (row && typeof row.count === 'number') extraOwnerCount = row.count;
     }
-  } catch {}
+  } catch { }
   if (extraOwnerCount === 0 && Array.isArray(secConfig?.extraOwners)) {
     extraOwnerCount = secConfig.extraOwners.length;
   }
@@ -361,7 +383,7 @@ export async function buildSecurityDashboardComponents(guild: any, secConfig: an
       const row = await db.get<any>('SELECT COUNT(*) as count FROM extra_owners WHERE guildId = ?', [guildId]).catch(() => null);
       if (row && typeof row.count === 'number') extraOwnerCount = row.count;
     }
-  } catch {}
+  } catch { }
   if (extraOwnerCount === 0 && Array.isArray(secConfig?.extraOwners)) {
     extraOwnerCount = secConfig.extraOwners.length;
   }
@@ -511,10 +533,10 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
   const selectedKey = targetGroup?.toLowerCase();
   const normalizedGroup = selectedKey === 'roles' || selectedKey === 'role' ? 'group_roles'
     : selectedKey === 'channels' || selectedKey === 'channel' ? 'group_channels'
-    : selectedKey === 'members' || selectedKey === 'member' || selectedKey === 'mods' ? 'group_members'
-    : selectedKey === 'server' || selectedKey === 'webhooks' || selectedKey === 'webhook' ? 'group_server'
-    : selectedKey && categoryDefinitions[selectedKey] ? selectedKey
-    : 'group_roles';
+      : selectedKey === 'members' || selectedKey === 'member' || selectedKey === 'mods' ? 'group_members'
+        : selectedKey === 'server' || selectedKey === 'webhooks' || selectedKey === 'webhook' ? 'group_server'
+          : selectedKey && categoryDefinitions[selectedKey] ? selectedKey
+            : 'group_roles';
 
   const activeDef = categoryDefinitions[normalizedGroup] || categoryDefinitions.group_roles;
 
@@ -658,7 +680,7 @@ export async function buildAutoModDashboardComponents(guild: any, secConfig: any
     if (db && guildId) {
       const row = await db.get<any>('SELECT configJson FROM guild_module_configs WHERE guildId = ? AND moduleId = ?', [guildId, 'automod']).catch(() => null);
       if (row?.configJson) {
-        try { amConfig = JSON.parse(row.configJson); } catch {}
+        try { amConfig = JSON.parse(row.configJson); } catch { }
       }
     }
   }
@@ -905,7 +927,7 @@ export async function buildWhitelistManagerGUI(guild: any, secConfig: any, extra
         extraOwnerIds = rows.map((r: any) => r.userId);
       }
     }
-  } catch {}
+  } catch { }
   if (extraOwnerIds.length === 0 && guildId) {
     const cached = getGuildExtraOwnersFromCache(guildId);
     if (cached && cached.length > 0) {
@@ -922,7 +944,7 @@ export async function buildWhitelistManagerGUI(guild: any, secConfig: any, extra
   if (extraOrContext?.getModulesState) {
     try {
       modules = extraOrContext.getModulesState(guildId) || [];
-    } catch {}
+    } catch { }
   }
   if (modules.length === 0 && db && guildId) {
     try {
@@ -930,7 +952,7 @@ export async function buildWhitelistManagerGUI(guild: any, secConfig: any, extra
       if (mwRow?.configJson) {
         modules.push({ id: 'member_whitelist', config: JSON.parse(mwRow.configJson) });
       }
-    } catch {}
+    } catch { }
   }
   if (secConfig && !modules.some((m: any) => m.id === 'security')) {
     modules.push({ id: 'security', config: secConfig });
@@ -1050,21 +1072,8 @@ export function buildEnableAllDashboardGUI(
     `${CHECK} Media & Attachment Threat Bypass Security Protocol`
   ];
 
-  const description = [
-    `>>> ${subsystems.join('\n')}`,
-    '',
-    `**All 14 Antinuke Security Engines Initialized & Fully Operational**`
-  ].join('\n');
-
-  const embed = new EmbedBuilder()
-    .setColor(0x2B2D31)
-    .setTitle('Antinuke Security Subsystems Initialized')
-    .setDescription(description)
-    .setFooter({
-      text: BRAND_FOOTER,
-      iconURL: guild?.iconURL() || undefined
-    })
-    .setTimestamp();
+  const guildIcon = guild?.iconURL?.({ size: 512 }) || guild?.client?.user?.displayAvatarURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
+  const serverName = guild?.name || 'Protected Server';
 
   const row = new ActionRowBuilder<ButtonBuilder>();
   if (!secConfig?.alertEmail) {
@@ -1072,7 +1081,7 @@ export function buildEnableAllDashboardGUI(
       new ButtonBuilder()
         .setCustomId('btn_sec_link_gmail')
         .setLabel('Link Gmail 2FA')
-        .setStyle(ButtonStyle.Primary),
+        .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId('btn_sec_open_extraowner')
         .setLabel('Manage Admins')
@@ -1107,7 +1116,36 @@ export function buildEnableAllDashboardGUI(
     );
   }
 
-  return { embeds: [embed], components: [row] };
+  const sec = new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('# **Antinuke Security Subsystems Initialized**')
+    )
+    .setThumbnailAccessory(
+      new ThumbnailBuilder().setURL(guildIcon)
+    );
+
+  const bodyContent = [
+    `> **Server:** \`${serverName}\``,
+    `> **Status:** \`All 14 Security Engines Armed & Operational\``,
+    `> **2FA Alert Gateway:** \`${secConfig?.alertEmail ? 'Active & Monitored' : 'Not Linked'}\``,
+    `> **Dashboard:** ${dashChannel ? `<#${dashChannel.id}>` : '\`#rage-dashboard\`'}`,
+    '',
+    ...subsystems,
+    '',
+    '**All 14 Antinuke Security Engines Initialized & Fully Operational**'
+  ].join('\n');
+
+  const container = new ContainerBuilder()
+    .addSectionComponents(sec)
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(bodyContent))
+    .addActionRowComponents(row)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Optimiser Enterprise - High-Availability Infrastructure'));
+
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    components: [container]
+  };
 }
 
 export function buildDisableAllDashboardGUI(
@@ -1132,34 +1170,49 @@ export function buildDisableAllDashboardGUI(
     `${WRONG} Media & Attachment Threat Bypass Security Protocol`
   ];
 
-  const description = [
-    `>>> ${subsystems.join('\n')}`,
-    '',
-    `**All 14 Antinuke Security Engines Offline & Placed on Standby**`
-  ].join('\n');
-
-  const embed = new EmbedBuilder()
-    .setColor(0x2B2D31)
-    .setTitle('Antinuke Security Subsystems Deactivated')
-    .setDescription(description)
-    .setFooter({
-      text: BRAND_FOOTER,
-      iconURL: guild?.iconURL() || undefined
-    })
-    .setTimestamp();
+  const guildIcon = guild?.iconURL?.({ size: 512 }) || guild?.iconURL?.() || 'https://cdn.discordapp.com/embed/avatars/0.png';
+  const serverName = guild?.name || 'Server';
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('btn_sec_enable_all_quick')
       .setLabel('Re-Enable All')
-      .setStyle(ButtonStyle.Success),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('btn_sec_close_overview')
       .setLabel('Dismiss')
       .setStyle(ButtonStyle.Secondary)
   );
 
-  return { embeds: [embed], components: [row] };
+  const sec = new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('# **Antinuke Security Subsystems Deactivated**')
+    )
+    .setThumbnailAccessory(
+      new ThumbnailBuilder().setURL(guildIcon)
+    );
+
+  const bodyContent = [
+    `> **Server:** \`${serverName}\``,
+    `> **Status:** \`All 14 Security Engines Offline & On Standby\``,
+    `> **Protection Grid:** \`Deactivated\``,
+    '',
+    ...subsystems,
+    '',
+    '**All 14 Antinuke Security Engines Offline & Placed on Standby**'
+  ].join('\n');
+
+  const container = new ContainerBuilder()
+    .addSectionComponents(sec)
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(bodyContent))
+    .addActionRowComponents(row)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Optimiser Enterprise • High-Availability Infrastructure'));
+
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    components: [container]
+  };
 }
 
 export function registerConfigCommands(): void {
@@ -1194,6 +1247,20 @@ export function registerConfigCommands(): void {
       const modules = extra?.getModulesState ? extra.getModulesState(message.guild!.id) : [];
       const secMod = modules.find((m: any) => m.id === 'security');
       const secConfig = secMod?.config || {};
+
+      const antinukeConfigActions = [
+        'threshold', 'punishment', 'reversion', 'recovery', 'rollback',
+        'enable', 'disable', 'toggle', 'module', 'set', 'matrix',
+        'setall', 'all', 'trustedactor', 'trusted-actor', 'behavioral',
+        'timeout-duration', 'timeout_duration', 'timeouttime', 'timeout-time', 'timeout',
+        'quarantine-role', 'quarantinerole'
+      ];
+      if (sub && antinukeConfigActions.includes(sub)) {
+        const configCmd = PrefixRegistry.get('config');
+        if (configCmd && configCmd.execute) {
+          return configCmd.execute(message, ['antinuke', ...args], extra);
+        }
+      }
 
       if (sub === 'roles' || sub === 'role' || sub === 'channels' || sub === 'channel' || sub === 'members' || sub === 'member' || sub === 'server' || sub === 'webhooks') {
         const payload = buildAntiNukeOverview(secConfig, sub);
@@ -1267,7 +1334,7 @@ export function registerConfigCommands(): void {
     name: 'automod',
     category: 'AutoMod',
     description: 'AutoMod chat filtering, anti-link rules & channel/role bypasses.',
-    usage: 'r!automod <status|antilink|antispam|antieveryone|ignore-channel|ignore-role> [args]',
+    usage: 'r!automod <status|antilink|antispam|antieveryone|ignore-channel|ignore-role|domain|whitelist> [args]',
     aliases: ['am', 'automode'],
     cooldownSeconds: 3,
     userPermissions: ['Administrator'],
@@ -1293,13 +1360,22 @@ export function registerConfigCommands(): void {
           parsed: { args },
           options: {
             getSubcommand: () => args[0]?.toLowerCase() || 'status',
-            getString: (name: string) => args[1]?.toLowerCase(),
+            getString: (name: string) => {
+              if (name === 'action') return args[1]?.toLowerCase();
+              if (name === 'domain') return args[2] || args[1];
+              if (name === 'type') return args[1]?.toLowerCase();
+              return args[1]?.toLowerCase();
+            },
             getChannel: () => message.mentions.channels.first(),
             getRole: () => message.mentions.roles.first(),
+            getUser: () => message.mentions.users.first(),
             getBoolean: () => null,
             getInteger: () => null
           },
-          reply: async (data: any) => message.reply(data)
+          reply: async (data: any) => {
+            if (typeof data === 'string') return message.reply({ content: data });
+            return message.reply(data);
+          }
         };
         await eventHandler(message.client, fakeInteraction, extra);
       }
@@ -1309,22 +1385,95 @@ export function registerConfigCommands(): void {
   PrefixRegistry.register({
     name: 'antilink',
     category: 'AutoMod',
-    description: 'AntiLink filter & channel/role bypass configuration.',
-    usage: 'r!antilink <enable|disable|ignore-channel|ignore-role|status> [add|remove|list] [#channel|@role]',
-    aliases: ['anti-link', 'linkfilter', 'antilinks'],
+    description: 'AntiLink filter & channel/role/domain bypass configuration.',
+    usage: 'r!antilink <enable|disable|ignore-channel|ignore-role|status|domain|whitelist> [add|remove|list] [#channel|@role|domain]',
+    aliases: ['anti-link', 'linkfilter', 'antilinks', 'al'],
     cooldownSeconds: 3,
     userPermissions: ['Administrator'],
     execute: async (message: Message, args: string[], extra?: any) => {
-      const automodCmd = PrefixRegistry.get('automod');
-      if (automodCmd && automodCmd.execute) {
-        const sub = args[0]?.toLowerCase();
-        if (sub === 'ignore-channel' || sub === 'ignorechannel' || sub === 'channel' || sub === 'channels') {
-          return automodCmd.execute(message, ['ignore-channel', ...args.slice(1)], extra);
-        }
-        if (sub === 'ignore-role' || sub === 'ignorerole' || sub === 'role' || sub === 'roles') {
-          return automodCmd.execute(message, ['ignore-role', ...args.slice(1)], extra);
-        }
-        return automodCmd.execute(message, ['antilink', ...args], extra);
+      const { AutomodManifest } = await import('../automod/manifest.js');
+      const eventHandler = AutomodManifest.events?.find((e: any) => e.name === 'command_antilink')?.handler;
+      if (eventHandler) {
+        const fakeInteraction: any = {
+          guild: message.guild,
+          user: message.author,
+          member: message.member,
+          channel: message.channel,
+          client: message.client,
+          commandName: 'antilink',
+          parsed: { args },
+          options: {
+            getSubcommand: () => args[0]?.toLowerCase(),
+            getString: (name: string) => {
+              if (name === 'action') return args[1]?.toLowerCase();
+              if (name === 'domain') return args[2] || args[1];
+              if (name === 'type') return args[1]?.toLowerCase();
+              return args[1]?.toLowerCase();
+            },
+            getInteger: (name: string) => {
+              const val = parseInt(args[1], 10);
+              return isNaN(val) ? null : val;
+            },
+            getBoolean: (name: string) => {
+              const val = args[1]?.toLowerCase();
+              if (val === 'true' || val === 'on' || val === 'enable' || val === 'yes') return true;
+              if (val === 'false' || val === 'off' || val === 'disable' || val === 'no') return false;
+              return null;
+            },
+            getChannel: () => message.mentions.channels.first(),
+            getRole: () => message.mentions.roles.first(),
+            getUser: () => message.mentions.users.first(),
+            getMember: () => message.mentions.members?.first?.()
+          },
+          reply: async (data: any) => {
+            if (typeof data === 'string') return message.reply({ content: data });
+            return message.reply(data);
+          }
+        };
+        return eventHandler(message.client, fakeInteraction, extra);
+      }
+    }
+  });
+
+  // 0c. Standalone Whitelist Domain Command (`r!whitelist-domain`, `r!allowdomain`)
+  PrefixRegistry.register({
+    name: 'whitelist-domain',
+    category: 'AutoMod',
+    description: 'Whitelist a domain to bypass AntiLink and AutoMod restrictions.',
+    usage: 'r!whitelist-domain <add|remove|list|clear> [domain]',
+    aliases: ['whitelistdomain', 'allowdomain', 'whitelist-domains', 'domain-whitelist'],
+    cooldownSeconds: 3,
+    userPermissions: ['Administrator'],
+    execute: async (message: Message, args: string[], extra?: any) => {
+      const { AutomodManifest } = await import('../automod/manifest.js');
+      const eventHandler = AutomodManifest.events?.find((e: any) => e.name === 'command_antilink')?.handler;
+      if (eventHandler) {
+        const effectiveArgs = args[0]?.toLowerCase() === 'domain' ? args : ['domain', ...args];
+        const fakeInteraction: any = {
+          guild: message.guild,
+          user: message.author,
+          member: message.member,
+          channel: message.channel,
+          client: message.client,
+          commandName: 'whitelist-domain',
+          parsed: { args: effectiveArgs },
+          options: {
+            getSubcommand: () => 'domain',
+            getString: (name: string) => {
+              if (name === 'action') return effectiveArgs[1]?.toLowerCase();
+              if (name === 'domain') return effectiveArgs[2] || effectiveArgs[1];
+              return effectiveArgs[1]?.toLowerCase();
+            },
+            getChannel: () => message.mentions.channels.first(),
+            getRole: () => message.mentions.roles.first(),
+            getUser: () => message.mentions.users.first()
+          },
+          reply: async (data: any) => {
+            if (typeof data === 'string') return message.reply({ content: data });
+            return message.reply(data);
+          }
+        };
+        return eventHandler(message.client, fakeInteraction, extra);
       }
     }
   });
@@ -1349,9 +1498,9 @@ export function registerConfigCommands(): void {
   PrefixRegistry.register({
     name: 'antiattachment',
     category: 'AutoMod',
-    description: 'Block files, images, and media attachments per-channel or server-wide.',
+    description: 'Block all files, images, and media attachments per-channel or server-wide.',
     usage: 'r!antiattachment <on|off> [#channel]',
-    aliases: ['antiattachments', 'antimedia', 'antifiles', 'antiimages', 'blockattachments'],
+    aliases: ['antiattachments', 'antimedia', 'antiimages', 'blockattachments', 'blockmedia'],
     examples: [
       'r!antiattachment on #general',
       'r!antiattachment off #general',
@@ -1368,6 +1517,59 @@ export function registerConfigCommands(): void {
       const automodCmd = PrefixRegistry.get('automod');
       if (automodCmd && automodCmd.execute) {
         return automodCmd.execute(message, ['attachments', ...args], extra);
+      }
+    }
+  });
+
+  PrefixRegistry.register({
+    name: 'antifiles',
+    category: 'AutoMod',
+    description: 'Block dangerous files, scripts, archives and executables (.exe, .bat, .zip, etc.) while allowing normal images.',
+    usage: 'r!antifiles <on|off> [#channel]',
+    aliases: ['anti-files', 'antifile', 'blockfiles', 'dangerousfiles'],
+    examples: [
+      'r!antifiles on',
+      'r!antifiles off',
+      'r!antifiles on #general'
+    ],
+    subcommands: [
+      { name: 'on [#channel]', description: 'Block dangerous files/executables in channel or server-wide.' },
+      { name: 'off [#channel]', description: 'Allow files in channel or server-wide.' }
+    ],
+    cooldownSeconds: 3,
+    userPermissions: ['Administrator'],
+    execute: async (message: Message, args: string[], extra?: any) => {
+      const automodCmd = PrefixRegistry.get('automod');
+      if (automodCmd && automodCmd.execute) {
+        return automodCmd.execute(message, ['files', ...args], extra);
+      }
+    }
+  });
+
+  PrefixRegistry.register({
+    name: 'blockext',
+    category: 'AutoMod',
+    description: 'Manage custom blocked file extensions in AutoMod.',
+    usage: 'r!blockext <add|remove|list|reset> [.ext]',
+    aliases: ['block-ext', 'fileext', 'blockedextensions'],
+    examples: [
+      'r!blockext list',
+      'r!blockext add .pdf',
+      'r!blockext remove .zip',
+      'r!blockext reset'
+    ],
+    subcommands: [
+      { name: 'list', description: 'List currently blocked file extensions.' },
+      { name: 'add <.ext>', description: 'Add a file extension to the blacklist.' },
+      { name: 'remove <.ext>', description: 'Remove a file extension from the blacklist.' },
+      { name: 'reset', description: 'Reset blocked file extensions to default security preset.' }
+    ],
+    cooldownSeconds: 3,
+    userPermissions: ['Administrator'],
+    execute: async (message: Message, args: string[], extra?: any) => {
+      const automodCmd = PrefixRegistry.get('automod');
+      if (automodCmd && automodCmd.execute) {
+        return automodCmd.execute(message, ['blockext', ...args], extra);
       }
     }
   });
@@ -1425,9 +1627,9 @@ export function registerConfigCommands(): void {
 
       const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
       const isAuthorized = await isOwnerOrExtraOwner(message.author.id, guild);
-      if (!isAuthorized && !message.member?.permissions.has(PermissionFlagsBits.Administrator)) {
+      if (!isAuthorized) {
         return message.reply({
-          content: `${WRONG_ICON} **Access Denied**: Server-wide media permission overrides require **Server Owner** or **Administrator** privileges.`
+          content: `${WRONG_ICON} **Access Denied**: Server-wide media permission overrides are strictly restricted to the **Server Owner** and **Extra Owners**.`
         });
       }
 
@@ -1614,7 +1816,7 @@ export function registerConfigCommands(): void {
       });
 
       if (statusMsg) {
-        return statusMsg.edit({ embeds: [summaryCard] }).catch(() => {});
+        return statusMsg.edit({ embeds: [summaryCard] }).catch(() => { });
       } else {
         return message.reply({ embeds: [summaryCard] });
       }
@@ -1632,6 +1834,16 @@ export function registerConfigCommands(): void {
     userPermissions: ['Administrator'],
     botPermissions: ['Administrator'],
     execute: async (message: Message) => {
+      const userId = (message as any).author?.id || (message as any).user?.id;
+      if (message.guild && userId) {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const allowed = await isOwnerOrExtraOwner(userId, message.guild);
+        if (!allowed) {
+          return message.reply({
+            content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can run the Server Setup Wizard.`
+          });
+        }
+      }
       const embed = createLimeEmbed({
         title: 'Interactive Server Protection Wizard',
         description: [
@@ -1667,7 +1879,7 @@ export function registerConfigCommands(): void {
     category: 'Configuration',
     description: 'Interactive Discord Control Panel & Anti-Nuke Module Configuration Engine.',
     usage: 'r!config [antinuke|export|backup] [subcommands...]',
-    aliases: ['settings', 'panel', 'configure', 'antinuke', 'automod', 'security', 'an', 'sec'],
+    aliases: ['settings', 'panel', 'configure', 'cfg'],
     subcommands: [
       { name: 'antinuke status', description: 'View anti-nuke protection matrix, limits, and auto-reversion states.' },
       { name: 'antinuke threshold <event> <limit> <window>', description: 'Configure action count threshold and rate limit window.' },
@@ -1711,6 +1923,16 @@ export function registerConfigCommands(): void {
     cooldownSeconds: 3,
     userPermissions: ['Administrator'],
     execute: async (message: Message, args: string[], extra?: any) => {
+      const execUserId = (message as any).author?.id || (message as any).user?.id;
+      if (message.guild && execUserId) {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const allowed = await isOwnerOrExtraOwner(execUserId, message.guild);
+        if (!allowed) {
+          return message.reply({
+            content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access server configuration controls.`
+          });
+        }
+      }
       // Alias argument normalizer (e.g. r!antinuke threshold anti_role_grant 11)
       let effectiveArgs = [...args];
       const rawCmd = message.content.trim().split(/\s+/)[0]?.toLowerCase() || '';
@@ -1740,6 +1962,51 @@ export function registerConfigCommands(): void {
 
       if (!db) {
         return message.reply({ embeds: [createLimeEmbed({ title: 'Database Error', description: `${WRONG_EMOJI} Database engine unavailable.` })] });
+      }
+
+      // AntiLink Sub-Configuration (`r!config antilink ...`)
+      if (moduleName === 'antilink' || moduleName === 'al') {
+        const { AutomodManifest } = await import('../automod/manifest.js');
+        const eventHandler = AutomodManifest.events?.find((e: any) => e.name === 'command_antilink')?.handler;
+        if (eventHandler) {
+          const passArgs = effectiveArgs.slice(1);
+          const fakeInteraction: any = {
+            guild: message.guild,
+            user: message.author,
+            member: message.member,
+            channel: message.channel,
+            client: message.client,
+            commandName: 'antilink',
+            parsed: { args: passArgs },
+            options: {
+              getSubcommand: () => passArgs[0]?.toLowerCase(),
+              getString: (name: string) => {
+                if (name === 'action') return passArgs[1]?.toLowerCase();
+                if (name === 'domain') return passArgs[2] || passArgs[1];
+                if (name === 'type') return passArgs[1]?.toLowerCase();
+                return passArgs[1]?.toLowerCase();
+              },
+              getInteger: (name: string) => {
+                const val = parseInt(passArgs[1], 10);
+                return isNaN(val) ? null : val;
+              },
+              getBoolean: (name: string) => {
+                const val = passArgs[1]?.toLowerCase();
+                if (val === 'true' || val === 'on' || val === 'enable' || val === 'yes') return true;
+                if (val === 'false' || val === 'off' || val === 'disable' || val === 'no') return false;
+                return null;
+              },
+              getChannel: () => message.mentions.channels.first(),
+              getRole: () => message.mentions.roles.first(),
+              getUser: () => message.mentions.users.first()
+            },
+            reply: async (data: any) => {
+              if (typeof data === 'string') return message.reply({ content: data });
+              return message.reply(data);
+            }
+          };
+          return eventHandler(message.client, fakeInteraction, extra);
+        }
       }
 
       // Security Sub-Configuration Suite (`r!config security ...` / `r!security`)
@@ -2004,8 +2271,8 @@ export function registerConfigCommands(): void {
               embeds: [createLimeEmbed({
                 title: 'Trusted Actor Security Limits Syntax',
                 description: `${WRONG_EMOJI} **Syntax**: \`r!config antinuke trustedactor <warn_at> <punish_at> [window_seconds]\`\n` +
-                             `• **Default**: \`r!config antinuke trustedactor 1 2 10\` (Warn at 1, Revoke & Restore at 2 under 10s)\n` +
-                             `• **Relaxed**: \`r!config antinuke trustedactor 2 4 10\` (Warn at 2, Revoke & Restore at 4 under 10s)`
+                  `• **Default**: \`r!config antinuke trustedactor 1 2 10\` (Warn at 1, Revoke & Restore at 2 under 10s)\n` +
+                  `• **Relaxed**: \`r!config antinuke trustedactor 2 4 10\` (Warn at 2, Revoke & Restore at 4 under 10s)`
               })]
             });
           }
@@ -2026,9 +2293,9 @@ export function registerConfigCommands(): void {
             embeds: [createLimeEmbed({
               title: 'Trusted Actor Behavioral Limits Saved',
               description: `${APPROVED_ICON} Updated Behavioral Firewall for Whitelisted & Extra Owners:\n` +
-                           `> • **Warning Threshold**: DM warning at **\`${warnAt}\`** rapid action(s)\n` +
-                           `> • **Punish Threshold**: Trust revoked & state restored at **\`${punishAt}\`** rapid action(s)\n` +
-                           `> • **Monitoring Window**: **\`${windowSec} seconds\`**`
+                `> • **Warning Threshold**: DM warning at **\`${warnAt}\`** rapid action(s)\n` +
+                `> • **Punish Threshold**: Trust revoked & state restored at **\`${punishAt}\`** rapid action(s)\n` +
+                `> • **Monitoring Window**: **\`${windowSec} seconds\`**`
             })]
           });
         }
@@ -2056,10 +2323,10 @@ export function registerConfigCommands(): void {
               embeds: [createLimeEmbed({
                 title: 'Invalid Timeout Duration Syntax',
                 description: `${WRONG_EMOJI} Please provide a valid duration between **10 seconds** and **28 days**.\nExamples:\n` +
-                             `• \`r!config antinuke timeout-duration 10m\` (10 Minutes)\n` +
-                             `• \`r!config antinuke timeout-duration 1h\` (1 Hour)\n` +
-                             `• \`r!config antinuke timeout-duration 7d\` (7 Days)\n` +
-                             `• \`r!config antinuke timeout-duration 28d\` (28 Days — Maximum)`
+                  `• \`r!config antinuke timeout-duration 10m\` (10 Minutes)\n` +
+                  `• \`r!config antinuke timeout-duration 1h\` (1 Hour)\n` +
+                  `• \`r!config antinuke timeout-duration 7d\` (7 Days)\n` +
+                  `• \`r!config antinuke timeout-duration 28d\` (28 Days — Maximum)`
               })]
             });
           }
@@ -2240,8 +2507,8 @@ export function registerConfigCommands(): void {
           }
 
           const targetRole = message.mentions.roles.first() ||
-                             message.guild?.roles.cache.get(roleArg) ||
-                             message.guild?.roles.cache.find(r => r.name.toLowerCase() === roleArg.toLowerCase());
+            message.guild?.roles.cache.get(roleArg) ||
+            message.guild?.roles.cache.find(r => r.name.toLowerCase() === roleArg.toLowerCase());
 
           if (!targetRole) {
             return message.reply({
@@ -2520,15 +2787,15 @@ export function registerConfigCommands(): void {
               embeds: [createLimeEmbed({
                 title: 'Anti-Link Configuration Syntax',
                 description: `${WRONG_EMOJI} **Syntax**: \`r!config automod antilink <on|off> [limit] [allow_invites] [action]\`\n` +
-                             `• **Example**: \`r!config automod antilink on 5 off mute\` (Enable, limit 5, no invites, mute on limit)\n` +
-                             `• **Example**: \`r!config automod antilink on 5\` (Enable with default 5 limit)`
+                  `• **Example**: \`r!config automod antilink on 5 off mute\` (Enable, limit 5, no invites, mute on limit)\n` +
+                  `• **Example**: \`r!config automod antilink on 5\` (Enable with default 5 limit)`
               })]
             });
           }
 
           const isEnabled = ['on', 'enable'].includes(toggle);
           const updates: Record<string, any> = { antiLinkEnabled: isEnabled, blockLinks: isEnabled };
-          
+
           let numLimit = parseInt(limitOrInvites, 10);
           if (!isNaN(numLimit) && numLimit > 0) {
             updates.antiLinkLimit = numLimit;
@@ -2708,7 +2975,54 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (['attachments', 'attachment', 'antiattachment', 'antiattachments', 'media', 'antimedia', 'files', 'file', 'images', 'image'].includes(cleanAction)) {
+        if (['files', 'file', 'dangerousfiles', 'antifiles', 'antifile', 'blockfiles', 'executables'].includes(cleanAction)) {
+          const automodCmd = PrefixRegistry.get('automod');
+          if (automodCmd && automodCmd.execute) {
+            return automodCmd.execute(message, ['files', ...effectiveArgs.slice(2)], extra);
+          }
+        }
+
+        if (['blockext', 'ext', 'extensions', 'fileext'].includes(cleanAction)) {
+          const automodCmd = PrefixRegistry.get('automod');
+          if (automodCmd && automodCmd.execute) {
+            return automodCmd.execute(message, ['blockext', ...effectiveArgs.slice(2)], extra);
+          }
+        }
+
+        if (['domain', 'domains', 'whitelist', 'unwhitelist', 'allowdomain', 'whitelistdomain'].includes(cleanAction)) {
+          const { AutomodManifest } = await import('../automod/manifest.js');
+          const antilinkCmd = AutomodManifest.events?.find(e => e.name === 'command_antilink');
+          if (antilinkCmd) {
+            const passArgs = ['domain', 'domains'].includes(cleanAction) ? effectiveArgs.slice(1) : ['domain', cleanAction, ...effectiveArgs.slice(2)];
+            const fakeInteraction: any = {
+              guild: message.guild,
+              user: message.author,
+              member: message.member,
+              channel: message.channel,
+              client: message.client,
+              commandName: 'antilink',
+              parsed: { args: passArgs },
+              options: {
+                getSubcommand: () => 'domain',
+                getString: (name: string) => {
+                  if (name === 'action') return passArgs[1]?.toLowerCase();
+                  if (name === 'domain') return passArgs[2] || passArgs[1];
+                  return passArgs[1]?.toLowerCase();
+                },
+                getChannel: () => message.mentions.channels.first(),
+                getRole: () => message.mentions.roles.first(),
+                getUser: () => message.mentions.users.first()
+              },
+              reply: async (data: any) => {
+                if (typeof data === 'string') return message.reply({ content: data });
+                return message.reply(data);
+              }
+            };
+            return antilinkCmd.handler(message.client, fakeInteraction, extra);
+          }
+        }
+
+        if (['attachments', 'attachment', 'antiattachment', 'antiattachments', 'media', 'antimedia', 'images', 'image'].includes(cleanAction)) {
           const automodCmd = PrefixRegistry.get('automod');
           if (automodCmd && automodCmd.execute) {
             return automodCmd.execute(message, ['attachments', ...effectiveArgs.slice(2)], extra);
@@ -2728,9 +3042,12 @@ export function registerConfigCommands(): void {
                 '`r!config automod anti-everyone <on|off>` — Anti-Everyone & Anti-Here tag filter',
                 '`r!config automod antispam <on|off> [max_msgs] [window_sec] [action]` — Anti-Spam',
                 '`r!config automod antilink <on|off> [allow_invites] [action]` — Anti-Link',
+                '`r!config automod domain <add|remove|list|clear> [domain]` — Domain whitelist',
                 '`r!config automod blacklist <add|remove|clear|list> [words]` — Word blacklist',
                 '`r!config automod caps <on|off> [max_percent]` — Caps limit',
                 '`r!config automod emoji <on|off> [max_emojis]` — Emoji spam limit',
+                '`r!config automod files <on|off> [#channel]` — Dangerous files & scripts filter (.exe, .zip, etc.)',
+                '`r!config automod blockext <add|remove|list|reset> [.ext]` — Manage blocked file extensions',
                 '`r!config automod attachments <on|off> [#channel]` — Media & attachments filter'
               ]
             }
@@ -2847,12 +3164,15 @@ export function registerConfigCommands(): void {
       if (moduleName === 'jtc' || moduleName === 'jointocreate') {
         const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
-        const jtcModule = modules.find((m: any) => m.id === 'joinToCreate' || m.id === 'voice_manager');
+        const jtcModule = modules.find((m: any) => m.id === 'join_to_create' || m.id === 'joinToCreate' || m.id === 'voice_manager');
         const jtcConfig = jtcModule?.config || {};
 
         const updateJtcConfig = (newCfg: Record<string, any>) => {
           if (extra?.updateModuleConfig) {
-            extra.updateModuleConfig(jtcModule?.id || 'joinToCreate', { ...jtcConfig, ...newCfg });
+            extra.updateModuleConfig(jtcModule?.id || 'join_to_create', { ...jtcConfig, ...newCfg });
+          }
+          if (extra?.toggleModule) {
+            extra.toggleModule('join_to_create', true);
           }
           if (extra?.logSyncEvent) {
             extra.logSyncEvent(message.guild?.id, 'JTC Config: Updated Join-To-Create parameters via CLI.', 'success');
@@ -2860,7 +3180,7 @@ export function registerConfigCommands(): void {
         };
 
         if (!action || action === 'status' || action === 'view') {
-          const hubChannelStr = jtcConfig.hubChannelId ? `<#${jtcConfig.hubChannelId}>` : '`Not Set`';
+          const hubChannelStr = jtcConfig.hubChannelId ? `<#${jtcConfig.hubChannelId}>` : (jtcConfig.triggers?.[0]?.triggerChannelId ? `<#${jtcConfig.triggers[0].triggerChannelId}>` : '`Not Set`');
           const catStr = jtcConfig.categoryId ? `<#${jtcConfig.categoryId}>` : '`Auto-Detect`';
 
           const overviewCard = buildLimeOverviewCard({
@@ -2885,7 +3205,7 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'hub' || action === 'setup') {
-          const channel = message.mentions.channels.first();
+          const channel = message.mentions.channels.first() || (effectiveArgs[2] ? message.guild?.channels.cache.get(effectiveArgs[2].replace(/[<#>]/g, '')) : null);
           if (!channel) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -2895,11 +3215,25 @@ export function registerConfigCommands(): void {
             });
           }
 
-          updateJtcConfig({ hubChannelId: channel.id });
+          const existingTriggers = [...(jtcConfig.triggers || [])];
+          const trigIdx = existingTriggers.findIndex((t: any) => t.triggerChannelId === channel.id);
+          const trigObj = {
+            id: `trigger_${channel.id}`,
+            label: (channel as any).name || 'Hub',
+            triggerChannelId: channel.id,
+            categoryId: (channel as any).parentId || null,
+            defaultName: "{username}'s Room",
+            defaultLimit: 0,
+            privacy: 'public'
+          };
+          if (trigIdx >= 0) existingTriggers[trigIdx] = trigObj;
+          else existingTriggers.push(trigObj);
+
+          updateJtcConfig({ hubChannelId: channel.id, triggers: existingTriggers, enabled: true });
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'JTC Hub Channel Saved',
-              description: `${APPROVED_ICON} Set Join-To-Create hub channel to **<#${channel.id}>**.`
+              description: `${APPROVED_ICON} Set Join-To-Create hub channel to **<#${channel.id}>** and enabled automatic temporary room creation.`
             })]
           });
         }
@@ -3359,6 +3693,7 @@ export function registerConfigCommands(): void {
               title: '<:config:1532425712844144701> VALID CONFIGURATION MODULE COMMANDS',
               items: [
                 '`r!config antinuke` — Anti-Nuke protection matrix & limits',
+                '`r!config antilink` — Anti-Link filter & domain whitelist matrix',
                 '`r!config automod` — AutoMod filters (spams, links, bad words)',
                 '`r!config welcome` — Onboarding cards, channel & auto-roles',
                 '`r!config voiceprotection` — Voice loudness ceiling & penalties',
@@ -3671,8 +4006,8 @@ export function registerConfigCommands(): void {
           })]
         });
 
-        setTimeout(() => replyMsg.delete().catch(() => {}), 4000);
-        if (message.deletable) message.delete().catch(() => {});
+        setTimeout(() => replyMsg.delete().catch(() => { }), 4000);
+        if (message.deletable) message.delete().catch(() => { });
 
         if (extra?.logSyncEvent) {
           extra.logSyncEvent(message.guild?.id, `Moderation: ${message.author.tag} purged ${deletedCount} msgs in ${targetChannel.name}.`, 'info');
@@ -3851,6 +4186,13 @@ export const ConfigManifest: ModuleManifest = {
     {
       name: 'select_setup_preset_select',
       handler: async (client: any, interaction: any, context: any) => {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        if (!interaction.guild || !(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+          return interaction.reply({
+            content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure security presets.`,
+            flags: 64
+          }).catch(() => {});
+        }
         const preset = interaction.values?.[0] || 'standard';
         let presetName = 'Standard Profile';
         let desc = 'Balanced protection for active communities.';
@@ -3892,6 +4234,15 @@ export const ConfigManifest: ModuleManifest = {
     {
       name: 'select_an_rule_select',
       handler: async (client: any, interaction: any, extra: any) => {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        if (!interaction.guild || !(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+          const errPayload = {
+            content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access Anti-Nuke controls.`,
+            flags: 64
+          };
+          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => { });
+          return interaction.reply(errPayload).catch(() => { });
+        }
         const selectedGroup = interaction.values?.[0];
         const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
@@ -3899,24 +4250,33 @@ export const ConfigManifest: ModuleManifest = {
 
         const payload = buildAntiNukeOverview(secConfig, selectedGroup);
         if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(payload).catch(() => {});
+          await interaction.editReply(payload).catch(() => { });
         } else {
-          await interaction.update(payload).catch(() => {});
+          await interaction.update(payload).catch(() => { });
         }
       }
     },
     {
       name: 'button_an_view_full',
       handler: async (client: any, interaction: any, extra: any) => {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        if (!interaction.guild || !(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+          const errPayload = {
+            content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access Anti-Nuke controls.`,
+            flags: 64
+          };
+          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => { });
+          return interaction.reply(errPayload).catch(() => { });
+        }
         const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         const secConfig = secModule?.config || {};
 
         const payload = buildAntiNukeOverview(secConfig);
         if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(payload).catch(() => {});
+          await interaction.editReply(payload).catch(() => { });
         } else {
-          await interaction.update(payload).catch(() => {});
+          await interaction.update(payload).catch(() => { });
         }
       }
     },
@@ -3930,8 +4290,8 @@ export const ConfigManifest: ModuleManifest = {
             content: `<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
             flags: 64
           };
-          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
-          return interaction.reply(errPayload).catch(() => {});
+          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => { });
+          return interaction.reply(errPayload).catch(() => { });
         }
 
         const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
@@ -3947,9 +4307,9 @@ export const ConfigManifest: ModuleManifest = {
         const payload = buildAntiNukeOverview(updatedConfig);
 
         if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(payload).catch(() => {});
+          await interaction.editReply(payload).catch(() => { });
         } else {
-          await interaction.update(payload).catch(() => {});
+          await interaction.update(payload).catch(() => { });
         }
       }
     },
@@ -3963,8 +4323,8 @@ export const ConfigManifest: ModuleManifest = {
             content: `<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
             flags: 64
           };
-          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
-          return interaction.reply(errPayload).catch(() => {});
+          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => { });
+          return interaction.reply(errPayload).catch(() => { });
         }
 
         const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
@@ -3979,9 +4339,9 @@ export const ConfigManifest: ModuleManifest = {
         const payload = buildAntiNukeOverview(updatedConfig);
 
         if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(payload).catch(() => {});
+          await interaction.editReply(payload).catch(() => { });
         } else {
-          await interaction.update(payload).catch(() => {});
+          await interaction.update(payload).catch(() => { });
         }
       }
     },
@@ -3995,8 +4355,8 @@ export const ConfigManifest: ModuleManifest = {
             content: `<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
             flags: 64
           };
-          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
-          return interaction.reply(errPayload).catch(() => {});
+          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => { });
+          return interaction.reply(errPayload).catch(() => { });
         }
 
         const embed = createLimeEmbed({
@@ -4004,15 +4364,24 @@ export const ConfigManifest: ModuleManifest = {
           description: `${APPROVED_ICON} Server text channels locked down successfully.`
         });
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ embeds: [embed], flags: 64 }).catch(() => {});
+          await interaction.followUp({ embeds: [embed], flags: 64 }).catch(() => { });
         } else {
-          await interaction.reply({ embeds: [embed], flags: 64 }).catch(() => {});
+          await interaction.reply({ embeds: [embed], flags: 64 }).catch(() => { });
         }
       }
     },
     {
       name: 'select_config_category_select',
       handler: async (client: any, interaction: any, extra: any) => {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        if (!interaction.guild || !(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+          const errPayload = {
+            content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access the configuration matrix.`,
+            flags: 64
+          };
+          if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => { });
+          return interaction.reply(errPayload).catch(() => { });
+        }
         const selectedModule = interaction.values?.[0] || 'overview';
         const modules = extra?.getModulesState ? extra.getModulesState(interaction.guildId) : [];
 
@@ -4024,17 +4393,17 @@ export const ConfigManifest: ModuleManifest = {
               content: `<a:warning:1546155193303957504> **Access Denied**: Anti-Nuke configuration matrix is strictly restricted to the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners**.`,
               flags: 64
             };
-            if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => {});
-            return interaction.reply(errPayload).catch(() => {});
+            if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => { });
+            return interaction.reply(errPayload).catch(() => { });
           }
 
           const secModule = modules.find((m: any) => m.id === 'security');
           const secConfig = secModule?.config || {};
           const payload = buildAntiNukeOverview(secConfig);
           if (interaction.replied || interaction.deferred) {
-            await interaction.editReply(payload).catch(() => {});
+            await interaction.editReply(payload).catch(() => { });
           } else {
-            await interaction.update(payload).catch(() => {});
+            await interaction.update(payload).catch(() => { });
           }
           return;
         }
@@ -4046,9 +4415,9 @@ export const ConfigManifest: ModuleManifest = {
           mentions: { channels: { first: () => null }, users: { first: () => null } },
           reply: async (payload: any) => {
             if (interaction.replied || interaction.deferred) {
-              return interaction.editReply(payload).catch(() => {});
+              return interaction.editReply(payload).catch(() => { });
             } else {
-              return interaction.update(payload).catch(() => {});
+              return interaction.update(payload).catch(() => { });
             }
           }
         };
