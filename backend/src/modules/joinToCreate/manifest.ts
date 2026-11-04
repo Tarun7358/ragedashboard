@@ -36,6 +36,7 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate) {
   const isMasterEnabled = config.enabled !== false;
   const triggers = config.triggers || [];
   const activeChannels = config.activeChannels || [];
+  const categoryStr = config.categoryId ? `<#${config.categoryId}>` : '`Auto-Detect (Inherit from Trigger)`';
   const guildIcon = guild?.iconURL({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
 
   const triggerList = triggers.length > 0
@@ -50,6 +51,7 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate) {
       `Automatically provisions customized temporary voice channels with full room owner permissions when members connect to a trigger channel.\n\n` +
       `## **System Telemetry**\n` +
       `> **Master Engine Status:** \`${isMasterEnabled ? 'ACTIVE & RUNNING' : 'DISABLED'}\`\n` +
+      `> **Spawn Category:** ${categoryStr}\n` +
       `> **Live Active Rooms:** \`${activeChannels.length} Active Channels\`\n` +
       `> **Room Owner Permissions:** \`Rename, Lock, Hide, Limit, Kick, Claim\`\n\n` +
       `## **Configured Trigger Channels (${triggers.length})**\n${triggerList}`
@@ -73,6 +75,10 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate) {
   );
 
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('jtc_btn_set_category')
+      .setLabel('Set Category')
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('jtc_btn_send_voice_panel')
       .setLabel('Send Voice Controller')
@@ -99,6 +105,7 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate) {
     `> **Automatically provisions customized temporary voice channels with full room owner permissions when members connect to a trigger channel.**\n\n` +
     `## **System Telemetry & Controls**\n` +
     `> **Master Engine Status:** \`${isMasterEnabled ? 'ACTIVE & RUNNING' : 'DISABLED'}\`\n` +
+    `> **Spawn Category:** ${categoryStr}\n` +
     `> **Live Active Rooms:** \`${activeChannels.length} Active Rooms\`\n` +
     `> **Room Owner Privileges:** \`Rename, Lock, Hide, Limit, Kick, Claim\`\n\n` +
     `## **Configured Trigger Channels (${triggers.length})**\n${triggerList}\n\n` +
@@ -298,6 +305,50 @@ export async function handleJtcInteraction(interaction: any, context: any) {
   let activeChannels: IJoinToCreate['activeChannels'] = config.activeChannels || [];
   const saveConfig = (updated: Partial<IJoinToCreate>) => context.updateModuleConfig('join_to_create', { ...config, ...updated });
 
+  // Handle modal submit for configure category
+  if (interaction.isModalSubmit && interaction.isModalSubmit() && customId === 'jtc_modal_set_category') {
+    const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC settings.`, flags: 64 });
+    }
+    const catQuery = (interaction.fields.getTextInputValue('category_query') || '').trim();
+    if (catQuery.toLowerCase() === 'auto' || catQuery.toLowerCase() === 'reset' || catQuery.toLowerCase() === 'none') {
+      saveConfig({ categoryId: null });
+      config.categoryId = null;
+      context.logSyncEvent(`[JTC] Spawn category set to auto-detect.`, 'info');
+      return interaction.reply({ content: '<:ticks:1532620580266836148> Target category reset to **Auto-Detect** (temporary channels will spawn inside each trigger\'s own category).', flags: 64 });
+    }
+
+    const rawId = catQuery.replace(/[<#>]/g, '').trim();
+    let foundCat: any = null;
+    if (/^\d{17,20}$/.test(rawId)) {
+      foundCat = interaction.guild.channels.cache.get(rawId);
+    }
+    if (!foundCat) {
+      foundCat = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === catQuery.toLowerCase());
+    }
+    if (!foundCat) {
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
+      const qNorm = norm(catQuery);
+      if (qNorm) {
+        foundCat = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && norm(c.name).includes(qNorm));
+      }
+    }
+
+    if (!foundCat || foundCat.type !== ChannelType.GuildCategory) {
+      return interaction.reply({ content: `${WRONG_ICON} Could not find a valid category matching "` + catQuery + `". Please provide the exact name or category ID.`, flags: 64 });
+    }
+
+    saveConfig({ categoryId: foundCat.id });
+    config.categoryId = foundCat.id;
+    context.logSyncEvent(`[JTC] Target spawn category updated to #${foundCat.name} (${foundCat.id}).`, 'success');
+
+    return interaction.reply({
+      content: '<:ticks:1532620580266836148> **JTC Target Category Updated**!\n> **Category:** <#' + foundCat.id + '> (`' + foundCat.name + '`)\n> **Category ID:** `' + foundCat.id + '`\n> All new temporary voice rooms will now spawn inside this category.',
+      flags: 64
+    });
+  }
+
   // Handle modal submit for rename
   if (interaction.isModalSubmit && interaction.isModalSubmit() && customId.startsWith('jtc_modal_rename_')) {
     const channelId = customId.replace('jtc_modal_rename_', '');
@@ -426,6 +477,26 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     } else {
       return interaction.reply({ content: `${WRONG_ICON} Please join your temporary voice channel first, or run \`r!vc\` while inside the room.`, flags: 64 });
     }
+  }
+
+  // 4b. Admin: Set Category Modal Prompt
+  if (customId === 'jtc_btn_set_category') {
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC administration.`, flags: 64 });
+    }
+    const currentCat = config.categoryId ? (interaction.guild.channels.cache.get(config.categoryId)?.name || config.categoryId) : '';
+    const modal = new ModalBuilder()
+      .setCustomId('jtc_modal_set_category')
+      .setTitle('Configure Spawn Category');
+    const input = new TextInputBuilder()
+      .setCustomId('category_query')
+      .setLabel('Category Name or ID (or "auto")')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder(currentCat || 'e.g. 🔊 ┃ VOICE CHANNELS or ID')
+      .setRequired(true)
+      .setMaxLength(64);
+    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+    return interaction.showModal(modal);
   }
 
   // 5. Admin: Refresh Admin Dashboard
@@ -1578,6 +1649,44 @@ PrefixRegistry.register({
       extra?.logSyncEvent?.(message.guild.id, `[JTC] Cleaned ${cleaned} stale voice channels.`, 'info');
       const gui = buildJTCAdminDashboardGUI(message.guild, config);
       return respondJtcGui(message, gui);
+    }
+
+    // Subcommand: category / cat
+    if (sub === 'category' || sub === 'cat') {
+      if (!isOwner) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC category.` });
+      }
+      const query = args.slice(1).join(' ').trim();
+      if (!query) {
+        const catStr = config.categoryId ? `<#${config.categoryId}>` : '`Auto-Detect (Inherits from trigger channel)`';
+        return message.reply({ content: `📁 **Current JTC Spawn Category:** ${catStr}\n> To change: \`r!jtc category <#category | ID | name>\`\n> To reset to auto: \`r!jtc category auto\`` });
+      }
+      if (query.toLowerCase() === 'auto' || query.toLowerCase() === 'reset' || query.toLowerCase() === 'none') {
+        saveConfig({ categoryId: null });
+        config.categoryId = null;
+        return message.reply({ content: '<:ticks:1532620580266836148> JTC spawn category reset to **Auto-Detect** (inherits trigger channel\'s category).' });
+      }
+      const rawId = query.replace(/[<#>]/g, '').trim();
+      let foundCat: any = null;
+      if (/^\d{17,20}$/.test(rawId)) {
+        foundCat = message.guild.channels.cache.get(rawId);
+      }
+      if (!foundCat) {
+        foundCat = message.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === query.toLowerCase());
+      }
+      if (!foundCat) {
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
+        const qNorm = norm(query);
+        if (qNorm) {
+          foundCat = message.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && norm(c.name).includes(qNorm));
+        }
+      }
+      if (!foundCat || foundCat.type !== ChannelType.GuildCategory) {
+        return message.reply({ content: `${WRONG_ICON} Could not find a valid category matching "` + query + `". Please mention it or provide its ID.` });
+      }
+      saveConfig({ categoryId: foundCat.id });
+      config.categoryId = foundCat.id;
+      return message.reply({ content: '<:ticks:1532620580266836148> Set JTC temporary channel category to **' + foundCat.name + '** (`' + foundCat.id + '`).' });
     }
 
     // Subcommand: toggle
