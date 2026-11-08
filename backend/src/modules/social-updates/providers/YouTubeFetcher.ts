@@ -150,6 +150,29 @@ export class YouTubeFetcher {
   /**
    * Check if a YouTube video is a YouTube Short by making a lightweight HEAD request.
    */
+  /**
+   * Authoritative Short check. Returns true (Short), false (regular video / live),
+   * or null when YouTube could not be reached so callers can keep their heuristic.
+   */
+  static async verifyShort(videoId: string): Promise<boolean | null> {
+    if (!videoId) return null;
+    try {
+      const resp = await fetch(`https://www.youtube.com/shorts/${videoId}`, {
+        method: 'HEAD',
+        redirect: 'manual',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (resp.status === 200) return true;
+      if (resp.status === 301 || resp.status === 302 || resp.status === 303) return false;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   static async checkIfShort(videoId: string, fallbackIsShort: boolean = false): Promise<boolean> {
     if (fallbackIsShort) return true;
     if (!videoId) return false;

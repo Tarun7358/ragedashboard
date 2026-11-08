@@ -50,17 +50,21 @@ export class YouTubeProvider extends BaseProvider {
     const items: ContentItem[] = await YouTubeFetcher.fetchRssFeed(channelId, limit).catch(() => []);
 
     // Verify top recent items for YouTube Shorts status if not already tagged
+    // The RSS parser only guesses "short" from a #shorts hashtag, which mislabels live streams
+    // and long videos that carry the hashtag. YouTube is the source of truth, so verify both ways.
     await Promise.all(
       items.slice(0, 5).map(async (item) => {
-        if (!item.isShort && !item.isLive && !item.isPremiere) {
-          const isShort = await YouTubeFetcher.checkIfShort(item.id, false);
-          if (isShort) {
-            item.isShort = true;
-            item.url = `https://www.youtube.com/shorts/${item.id}`;
-            if (item.extra) {
-              item.extra.contentType = 'short';
-            }
-          }
+        if (item.isLive || item.isPremiere) return;
+        const verified = await YouTubeFetcher.verifyShort(item.id);
+        if (verified === null) return; // network issue: keep heuristic result
+        if (verified && !item.isShort) {
+          item.isShort = true;
+          item.url = `https://www.youtube.com/shorts/${item.id}`;
+          if (item.extra) item.extra.contentType = 'short';
+        } else if (!verified && item.isShort) {
+          item.isShort = false;
+          item.url = `https://www.youtube.com/watch?v=${item.id}`;
+          if (item.extra) item.extra.contentType = 'video';
         }
       })
     );
@@ -68,7 +72,11 @@ export class YouTubeProvider extends BaseProvider {
     // 2. Scrape live stream and premiere status
     const liveItem = await YouTubeFetcher.scrapeLiveStatus(channelId).catch(() => null);
     if (liveItem) {
-      // Unshift active live/premiere to make sure it's processed first
+      // The same stream usually also appears in the RSS feed as a plain video. Keep only the
+      // live/premiere entry so one stream can never produce two alerts.
+      for (let i = items.length - 1; i >= 0; i--) {
+        if (items[i].id === liveItem.id) items.splice(i, 1);
+      }
       items.unshift(liveItem);
     }
 

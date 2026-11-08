@@ -95,6 +95,7 @@ export class ComparisonEngine {
     }
 
     const newItems: ContentItem[] = [];
+    const seenThisTick = new Set<string>();
 
     // Process from oldest to newest to preserve chronological order
     const sortedFetched = [...fetchedItems].sort((a, b) => 
@@ -106,7 +107,10 @@ export class ComparisonEngine {
       const itemCacheKey = `${item.id}:${type}`;
 
       // Check both database cache and active in-memory pending queue
+      if (type !== 'story' && seenThisTick.has(item.id)) continue;
+
       if (!hasCachedKey(item.id, type) && !PendingQueueCache.has(provider, sourceId, itemCacheKey)) {
+        seenThisTick.add(item.id);
         newItems.push(item);
         // Place in in-memory pending queue cache immediately
         PendingQueueCache.add(provider, sourceId, itemCacheKey);

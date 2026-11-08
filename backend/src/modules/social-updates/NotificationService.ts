@@ -93,6 +93,8 @@ export class NotificationService {
       titleEnabled: true,
       title: isInstagram ? '{post.caption}' : '{video.title}',
       titleUrl: isInstagram ? '{post.url}' : '{video.url}',
+      thumbnailEnabled: true,
+      thumbnail: isInstagram ? '{profile.avatar}' : '{channel.avatar}',
       imageEnabled: true,
       image: isInstagram ? '{post.image}' : '{video.thumbnail}',
       footerEnabled: true,
