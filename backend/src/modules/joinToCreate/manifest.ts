@@ -80,6 +80,10 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate, not
       .setLabel('1-Click Auto Setup')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
+      .setCustomId('jtc_btn_add_trigger')
+      .setLabel('Add Trigger')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId('jtc_btn_toggle_master')
       .setLabel(isMasterEnabled ? 'JTC Master: ON' : 'JTC Master: OFF')
       .setStyle(ButtonStyle.Secondary),
@@ -101,7 +105,7 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate, not
     new ButtonBuilder()
       .setCustomId('jtc_btn_delete_trigger')
       .setLabel('Delete Trigger')
-      .setStyle(ButtonStyle.Danger),
+      .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('jtc_btn_refresh_admin')
       .setLabel('Refresh Dashboard')
@@ -130,6 +134,7 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate, not
     `## **Configured Trigger Channels (${triggers.length})**\n${triggerList}\n\n` +
     `### **Admin Quick Actions**\n` +
     `> **Click 1-Click Auto Setup to create the voice category & trigger voice channel automatically.**\n` +
+    `> **Use Add Trigger (or r!jtc add <#channel>) to create or register a new trigger channel.**\n` +
     `> **Use JTC Master to toggle voice provisioning server-wide.**\n` +
     `> **Use Set Category (or r!jtc category) to assign dedicated categories per trigger or server-wide.**\n` +
     `> **Use Clean Stale Channels to sweep empty rooms and purge deleted #unknown triggers.**\n` +
@@ -411,6 +416,75 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     return interaction.reply({ content: `${WRONG_ICON} Failed to rename room.`, flags: 64 });
   }
 
+  // Handle modal submit for adding a trigger channel
+  if (interaction.isModalSubmit && interaction.isModalSubmit() && customId === 'jtc_modal_add_trigger') {
+    const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can add JTC triggers.`, flags: 64 });
+    }
+
+    const channelQuery = (interaction.fields.getTextInputValue('channel_query') || '').trim();
+    const catQuery = (interaction.fields.getTextInputValue('category_query') || '').trim();
+    const labelQuery = (interaction.fields.getTextInputValue('label_query') || '').trim();
+
+    let targetCat: any = null;
+    if (catQuery) {
+      const cleanCatId = catQuery.replace(/[<#>]/g, '').trim();
+      if (/^\d{17,20}$/.test(cleanCatId)) targetCat = interaction.guild.channels.cache.get(cleanCatId);
+      if (!targetCat) targetCat = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === catQuery.toLowerCase());
+      if (!targetCat) {
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
+        const qNorm = norm(catQuery);
+        if (qNorm) targetCat = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && norm(c.name).includes(qNorm));
+      }
+    }
+
+    let triggerCh: any = null;
+    if (channelQuery.toLowerCase() === 'new' || channelQuery.toLowerCase() === 'create') {
+      triggerCh = await interaction.guild.channels.create({
+        name: labelQuery ? `➕・${labelQuery}` : '➕・Join to Create',
+        type: ChannelType.GuildVoice,
+        parent: targetCat?.id || config.categoryId || null
+      }).catch(() => null);
+    } else {
+      triggerCh = resolveVoiceChannelInput(interaction.guild, channelQuery);
+    }
+
+    if (!triggerCh) {
+      return interaction.reply({
+        content: `${WRONG_ICON} **Voice Channel Not Found**: Could not find a voice channel matching "${channelQuery}".\n> **Tip**: Mention the channel (<#channel>), type its ID, or write \`new\` to have the bot create one automatically.`,
+        flags: 64
+      });
+    }
+
+    const existingTriggers = [...(config.triggers || [])];
+    const idx = existingTriggers.findIndex((t: any) => t.triggerChannelId === triggerCh.id);
+    const newTrig = {
+      id: `trigger_${triggerCh.id}`,
+      label: labelQuery || triggerCh.name,
+      triggerChannelId: triggerCh.id,
+      categoryId: targetCat?.id || triggerCh.parentId || config.categoryId || null,
+      defaultName: "{username}'s Room",
+      defaultLimit: 0,
+      privacy: 'public' as const
+    };
+
+    if (idx >= 0) existingTriggers[idx] = newTrig;
+    else existingTriggers.push(newTrig);
+
+    saveConfig({ triggers: existingTriggers, triggerChannelId: triggerCh.id, enabled: true });
+    config.triggers = existingTriggers;
+    config.enabled = true;
+
+    context.logSyncEvent(`[JTC] Added trigger #${triggerCh.name} (${triggerCh.id}). Total: ${existingTriggers.length}.`, 'success');
+
+    const catNotice = newTrig.categoryId ? ` in category <#${newTrig.categoryId}>` : '';
+    return interaction.reply({
+      content: `<:ticks:1532620580266836148> **JTC Trigger Configured!**\n> **Channel:** <#${triggerCh.id}>\n> **Label:** \`${newTrig.label}\`${catNotice}\n> **Total Triggers:** **${existingTriggers.length}**\n> Click **Refresh Dashboard** to view your updated dashboard.`,
+      flags: 64
+    });
+  }
+
   const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
   // 1. Admin: 1-Click Auto Setup
   if (customId === 'jtc_btn_auto_setup') {
@@ -468,6 +542,49 @@ export async function handleJtcInteraction(interaction: any, context: any) {
 
     const gui = buildJTCAdminDashboardGUI(interaction.guild, { ...config, enabled: true });
     return respondJtcGui(interaction, gui);
+  }
+
+  // 1b. Admin: Add Trigger Modal Prompt
+  if (customId === 'jtc_btn_add_trigger') {
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can add JTC triggers.`, flags: 64 });
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId('jtc_modal_add_trigger')
+      .setTitle('Add JTC Trigger Channel');
+
+    const channelInput = new TextInputBuilder()
+      .setCustomId('channel_query')
+      .setLabel('Voice Channel (#channel, ID, or "new")')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('e.g. #Join To Create, ID, or write "new"')
+      .setRequired(true)
+      .setMaxLength(64);
+
+    const catInput = new TextInputBuilder()
+      .setCustomId('category_query')
+      .setLabel('Spawn Category (Optional)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('e.g. 🔊 ┃ VOICE CHANNELS or ID')
+      .setRequired(false)
+      .setMaxLength(64);
+
+    const labelInput = new TextInputBuilder()
+      .setCustomId('label_query')
+      .setLabel('Trigger Label / Name (Optional)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('e.g. Gaming Room, Duo, Chill Room')
+      .setRequired(false)
+      .setMaxLength(32);
+
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(channelInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(catInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(labelInput)
+    );
+
+    return interaction.showModal(modal);
   }
 
   // 2. Admin: Toggle Master Module
