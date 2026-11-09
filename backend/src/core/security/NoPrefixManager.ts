@@ -114,9 +114,22 @@ export class NoPrefixManager {
     const cfg = this.getConfig(guildId);
     if (!cfg.enabled) return false;
 
-    // 2. Channel restriction: if specific channels configured, message must be in one of them
-    if (cfg.channels.length > 0 && !cfg.channels.includes(message.channelId)) {
-      return false;
+    // 2. Channel restriction logic:
+    // If specific channels are configured, commands are active in those channels!
+    if (cfg.channels.length > 0) {
+      if (!cfg.channels.includes(message.channelId)) {
+        return false;
+      }
+      // If inside a whitelisted channel:
+      // If specific role or user restrictions are also configured, verify them
+      if (cfg.roles.length > 0 || cfg.users.length > 0) {
+        if (cfg.users.includes(userId)) return true;
+        if (message.member?.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+        if (cfg.roles.length > 0 && message.member?.roles?.cache?.some(r => cfg.roles.includes(r.id))) return true;
+        return false;
+      }
+      // In the whitelisted channel with no restrictive role list -> ANY member in this channel can use commands!
+      return true;
     }
 
     // 3. Direct whitelisted user
@@ -131,6 +144,12 @@ export class NoPrefixManager {
     if (cfg.roles.length > 0 && message.member?.roles?.cache) {
       const hasRole = cfg.roles.some(rId => message.member!.roles.cache.has(rId));
       if (hasRole) return true;
+    }
+
+    // 6. If no channels, no roles, and no user restrictions are configured,
+    // and No-Prefix is enabled, allow server members to execute commands!
+    if (cfg.roles.length === 0 && cfg.users.length === 0) {
+      return true;
     }
 
     return false;

@@ -107,7 +107,40 @@ describe('No-Prefix System & Permission Engine', () => {
       expect(allowed).toBe(true);
     });
 
-    it('denies general members without roles or whitelist', async () => {
+    it('allows any general member inside a whitelisted channel', async () => {
+      const mockMsg = {
+        guild: {
+          id: 'guild_channel_test',
+          ownerId: 'owner1'
+        },
+        author: {
+          id: 'snow_user'
+        },
+        channelId: 'bot_cmd_channel',
+        member: {
+          permissions: {
+            has: () => false
+          },
+          roles: {
+            cache: new Map()
+          }
+        }
+      } as unknown as Message;
+
+      await NoPrefixManager.setEnabled('guild_channel_test', true);
+      await NoPrefixManager.toggleChannel('guild_channel_test', 'bot_cmd_channel');
+
+      // Inside whitelisted channel -> allowed!
+      const allowedInside = await NoPrefixManager.isAllowed(mockMsg);
+      expect(allowedInside).toBe(true);
+
+      // Outside whitelisted channel -> denied!
+      const mockMsgOutside = { ...mockMsg, channelId: 'general_chat' } as unknown as Message;
+      const allowedOutside = await NoPrefixManager.isAllowed(mockMsgOutside);
+      expect(allowedOutside).toBe(false);
+    });
+
+    it('denies general members outside whitelisted roles when role restrictions are set', async () => {
       const mockMsg = {
         guild: {
           id: 'guild_general_test',
@@ -128,6 +161,7 @@ describe('No-Prefix System & Permission Engine', () => {
       } as unknown as Message;
 
       await NoPrefixManager.setEnabled('guild_general_test', true);
+      await NoPrefixManager.toggleRole('guild_general_test', 'mod_role_123');
       const allowed = await NoPrefixManager.isAllowed(mockMsg);
       expect(allowed).toBe(false);
     });
