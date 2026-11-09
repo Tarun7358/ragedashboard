@@ -425,6 +425,13 @@ export class InteractionRouter {
       return;
     }
 
+    // No-Prefix management buttons — handled directly
+    if (interaction.customId.startsWith('np_btn_')) {
+      const { handleNPButtonInteraction } = await import('../modules/security/noprefix.js');
+      await handleNPButtonInteraction(interaction).catch(console.error);
+      return;
+    }
+
     // Strict Server Owner & Extra Owner Gate for Security, Anti-Nuke, AutoMod, Whitelist, Backup, Config & Admin GUI Buttons
     if (interaction.guild) {
       const cid = interaction.customId || '';
