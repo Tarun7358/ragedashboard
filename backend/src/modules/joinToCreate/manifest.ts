@@ -621,6 +621,26 @@ export async function handleJtcInteraction(interaction: any, context: any) {
       }
     }
 
+    // Also sweep any orphaned empty voice channels inside JTC categories
+    const triggerChannelIds = new Set((config.triggers || []).map((t: any) => t.triggerChannelId));
+    const targetCategoryIds = new Set([
+      config.categoryId,
+      ...(config.triggers || []).map((t: any) => t.categoryId)
+    ].filter(Boolean));
+
+    const allGuildChannels: any[] = Array.from(interaction.guild.channels.cache.values());
+    for (const c of allGuildChannels) {
+      if (c.isVoiceBased() && c.parentId && targetCategoryIds.has(c.parentId)) {
+        if (!triggerChannelIds.has(c.id) && !remaining.some((r: any) => r.channelId === c.id)) {
+          const nonBots = c.members.filter((m: any) => !m.user?.bot).size;
+          if (nonBots === 0) {
+            await c.delete('JTC Admin Manual Clean (Orphaned)').catch(() => { });
+            cleaned++;
+          }
+        }
+      }
+    }
+
     // Also auto-prune stale / deleted trigger channels
     const initialTriggers: any[] = config.triggers || [];
     const validTriggers = initialTriggers.filter((t: any) => interaction.guild.channels.cache.has(t.triggerChannelId));
@@ -1014,39 +1034,58 @@ export async function handleJtcInteraction(interaction: any, context: any) {
 //   locked    – visible but fully locked (Connect denied); only owner
 //   invisible – hidden from channel list (ViewChannel denied); only owner sees it
 //   stage     – public visibility but Speak denied; owner can unmute (like a stage)
-function buildPrivacyOverwrites(privacy: string, guildId: string, memberId: string): any[] {
+function buildPrivacyOverwrites(privacy: string, guildId: string, memberId: string, botId?: string): any[] {
   const owner = [PermissionFlagsBits.Connect, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Speak];
+  const botOverwrites = botId ? [{
+    id: botId,
+    allow: [
+      PermissionFlagsBits.ManageChannels,
+      PermissionFlagsBits.ViewChannel,
+      PermissionFlagsBits.Connect,
+      PermissionFlagsBits.MoveMembers,
+      PermissionFlagsBits.ManageRoles
+    ]
+  }] : [];
+
+  let list: any[] = [];
   switch (privacy) {
     case 'private':
-      return [
+      list = [
         { id: guildId, deny: [PermissionFlagsBits.Connect] },
         { id: memberId, allow: owner }
       ];
+      break;
     case 'locked':
-      return [
+      list = [
         { id: guildId, deny: [PermissionFlagsBits.Connect, PermissionFlagsBits.ViewChannel] },
         { id: memberId, allow: owner }
       ];
+      break;
     case 'invisible':
-      return [
+      list = [
         { id: guildId, deny: [PermissionFlagsBits.ViewChannel] },
         { id: memberId, allow: owner }
       ];
+      break;
     case 'stage':
-      return [
+      list = [
         { id: guildId, deny: [PermissionFlagsBits.Speak], allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.ViewChannel] },
         { id: memberId, allow: [...owner, PermissionFlagsBits.MuteMembers, PermissionFlagsBits.DeafenMembers] }
       ];
+      break;
     case 'sync':
-      return [
+      list = [
         { id: memberId, allow: owner }
       ];
+      break;
     case 'public':
     default:
-      return [
+      list = [
         { id: memberId, allow: [PermissionFlagsBits.ManageChannels] }
       ];
+      break;
   }
+  return [...list, ...botOverwrites];
 }
 
 export const JoinToCreateManifest: ModuleManifest = {
@@ -1689,8 +1728,23 @@ export const JoinToCreateManifest: ModuleManifest = {
                     PermissionFlagsBits.Speak
                   ]
                 });
+                const botId = client?.user?.id || guild?.members?.me?.id;
+                if (botId) {
+                  initialOverwrites.push({
+                    id: botId,
+                    type: 1,
+                    allow: [
+                      PermissionFlagsBits.ManageChannels,
+                      PermissionFlagsBits.Connect,
+                      PermissionFlagsBits.ViewChannel,
+                      PermissionFlagsBits.MoveMembers,
+                      PermissionFlagsBits.ManageRoles
+                    ]
+                  });
+                }
               } else {
-                initialOverwrites = buildPrivacyOverwrites(matchedTrigger.privacy || 'public', guild.id, member.id);
+                const botId = client?.user?.id || guild?.members?.me?.id;
+                initialOverwrites = buildPrivacyOverwrites(matchedTrigger.privacy || 'public', guild.id, member.id, botId);
               }
 
               const createOptions: any = {
@@ -1743,6 +1797,12 @@ export const JoinToCreateManifest: ModuleManifest = {
 
         // 2. Scan and auto-delete all empty JTC channels
         let configChanged = false;
+        const targetCategoryIds = new Set([
+          config.categoryId,
+          ...(config.triggers || []).map((t: any) => t.categoryId)
+        ].filter(Boolean));
+        const triggerChannelIds = new Set((config.triggers || []).map((t: any) => t.triggerChannelId));
+
         for (let i = activeChannels.length - 1; i >= 0; i--) {
           const activeCh = activeChannels[i];
           try {
@@ -1772,30 +1832,70 @@ export const JoinToCreateManifest: ModuleManifest = {
               continue;
             }
 
-            // Don't auto-delete freshly created channels to allow Discord voice connection handover
-            const roomAgeMs = Date.now() - new Date(activeCh.createdAt || 0).getTime();
-            if (roomAgeMs < 10000) continue;
-
             const nonBotMembers = channel.members?.filter ? channel.members.filter((m: any) => !m.user?.bot) : Array.from((channel.members?.values?.() || [])).filter((m: any) => !m.user?.bot);
             const nonBotCount = nonBotMembers?.size !== undefined ? nonBotMembers.size : (nonBotMembers?.length || 0);
+
             if (nonBotCount === 0) {
-              try {
-                await channel.delete('JTC: Channel empty');
-                activeChannels.splice(i, 1);
-                configChanged = true;
-                context.logSyncEvent(`[JTC] Auto-deleted empty channel "${activeCh.name || activeCh.channelId}".`, 'info');
-              } catch (deleteErr: any) {
-                console.error(`[JTC] Failed to delete empty channel ${activeCh.channelId}:`, deleteErr);
-                // Do NOT splice out of activeChannels if delete fails (unless it is missing permissions 50013 or channel was deleted 10003)
-                if (deleteErr.code === 10003 || deleteErr.code === 50001 || deleteErr.code === 50013) {
+              const roomAgeMs = Date.now() - new Date(activeCh.createdAt || 0).getTime();
+              const isLeaveFromHere = oldState?.channelId === activeCh.channelId;
+              const delay = isLeaveFromHere ? 800 : (roomAgeMs < 8000 ? Math.max(1200, 8000 - roomAgeMs) : 0);
+
+              if (delay === 0) {
+                try {
+                  await channel.delete('JTC: Channel empty');
                   activeChannels.splice(i, 1);
                   configChanged = true;
-                  context.logSyncEvent(`[JTC] Cleared empty channel ID ${activeCh.channelId} due to permission/delete error (${deleteErr.code}).`, 'warning');
+                  context.logSyncEvent(`[JTC] Auto-deleted empty channel "${activeCh.name || activeCh.channelId}".`, 'info');
+                } catch (deleteErr: any) {
+                  console.error(`[JTC] Failed to delete empty channel ${activeCh.channelId}:`, deleteErr);
+                  // Do NOT splice out of activeChannels if delete fails (unless it is missing permissions 50013 or channel was deleted 10003)
+                  if (deleteErr.code === 10003 || deleteErr.code === 50001 || deleteErr.code === 50013) {
+                    activeChannels.splice(i, 1);
+                    configChanged = true;
+                    context.logSyncEvent(`[JTC] Cleared empty channel ID ${activeCh.channelId} due to permission/delete error (${deleteErr.code}).`, 'warning');
+                  }
                 }
+              } else {
+                // Schedule timer so it ALWAYS deletes even if no further voice events occur
+                setTimeout(async () => {
+                  try {
+                    const freshCh = guild.channels.cache.get(activeCh.channelId) || await guild.channels.fetch(activeCh.channelId).catch(() => null);
+                    if (freshCh) {
+                      const nb = freshCh.members.filter((m: any) => !m.user?.bot).size;
+                      if (nb === 0) {
+                        await freshCh.delete('JTC: Channel empty (scheduled buffer)').catch(() => { });
+                        const latestMods = context.getModulesState ? context.getModulesState() : [];
+                        const latestJtc = latestMods.find((m: any) => m.id === 'join_to_create');
+                        const curActive = (latestJtc?.config?.activeChannels || []).filter((c: any) => c.channelId !== activeCh.channelId);
+                        context.updateModuleConfig('join_to_create', { activeChannels: curActive });
+                      }
+                    }
+                  } catch (e) {
+                    console.error('[JTC] Timer delete error:', e);
+                  }
+                }, delay);
               }
             }
           } catch (outerErr) {
             console.error(`[JTC] Error in cleanup loop for channel ${activeCh.channelId}:`, outerErr);
+          }
+        }
+
+        // 3. Fallback: Check if oldState channel was an orphaned temporary room in a JTC category
+        if (oldState?.channelId && !triggerChannelIds.has(oldState.channelId)) {
+          const oldCh = guild.channels.cache.get(oldState.channelId);
+          if (oldCh && oldCh.isVoiceBased() && oldCh.parentId && targetCategoryIds.has(oldCh.parentId)) {
+            const nonBots = oldCh.members.filter((m: any) => !m.user?.bot).size;
+            if (nonBots === 0) {
+              setTimeout(async () => {
+                try {
+                  const freshOldCh = guild.channels.cache.get(oldState.channelId) || await guild.channels.fetch(oldState.channelId).catch(() => null);
+                  if (freshOldCh && freshOldCh.members.filter((m: any) => !m.user?.bot).size === 0) {
+                    await freshOldCh.delete('JTC: Orphaned room empty').catch(() => { });
+                  }
+                } catch { }
+              }, 1200);
+            }
           }
         }
 
@@ -2040,6 +2140,26 @@ PrefixRegistry.register({
           cleaned++;
         } else {
           remaining.push(ac);
+        }
+      }
+
+      // Also sweep any orphaned empty voice channels inside JTC categories
+      const triggerChannelIds = new Set((config.triggers || []).map((t: any) => t.triggerChannelId));
+      const targetCategoryIds = new Set([
+        config.categoryId,
+        ...(config.triggers || []).map((t: any) => t.categoryId)
+      ].filter(Boolean));
+
+      const allGuildChannels: any[] = Array.from(message.guild.channels.cache.values());
+      for (const c of allGuildChannels) {
+        if (c.isVoiceBased() && c.parentId && targetCategoryIds.has(c.parentId)) {
+          if (!triggerChannelIds.has(c.id) && !remaining.some((r: any) => r.channelId === c.id)) {
+            const nonBots = c.members.filter((m: any) => !m.user?.bot).size;
+            if (nonBots === 0) {
+              await c.delete('JTC Manual Clean (Orphaned)').catch(() => { });
+              cleaned++;
+            }
+          }
         }
       }
 
