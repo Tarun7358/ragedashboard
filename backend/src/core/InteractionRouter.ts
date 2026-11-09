@@ -158,23 +158,33 @@ export class InteractionRouter {
       const cmd = manifest.commands.find((c: any) => c.name === commandName);
       if (!cmd) continue;
 
-      // 1. Anti-Nuke, AutoMod & Backup Owner / Extra Owner Security Gate for Slash Commands
+      // 1. Anti-Nuke, Moderation & Security Owner / Extra Owner Security Gate for Slash Commands
       const subCmd = interaction.options?.getSubcommand?.(false) || '';
       const isBackupCmd = ['backup', 'backups'].includes(commandName) || manifest.id === 'backups';
-      const isAntiNukeOrAutoMod =
+      const isOwnerOrExtraOwnerOnly =
         isBackupCmd ||
         ['security', 'automod', 'AutoMod', 'Security', 'backups', 'Backups'].includes(cmd.category || manifest.category) ||
-        ['security', 'antinuke', 'automod', 'antilink', 'whitelist-domain', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji', 'prebot', 'backup', 'backups', 'config', 'setup', 'dashboard', 'setup-verify', 'joinguard', 'lockdown', 'quarantine', 'unquarantine'].includes(commandName) ||
+        [
+          // Core Destructive Moderation
+          'ban', 'unban', 'softban', 'hackban', 'tempban',
+          'kick',
+          'mute', 'unmute', 'timeout', 'untimeout',
+          'lock', 'unlock', 'lockdown', 'nuke',
+
+          // Anti-Nuke, Security & Automation
+          'security', 'antinuke', 'automod', 'antilink', 'whitelist-domain', 'extraowner', 'whitelist',
+          'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod',
+          'antiwebhook', 'antiemoji', 'prebot', 'backup', 'backups', 'config', 'setup',
+          'dashboard', 'setup-verify', 'joinguard', 'quarantine', 'unquarantine'
+        ].includes(commandName.toLowerCase()) ||
         (commandName === 'jtc' && ['setup', 'remove'].includes(subCmd.toLowerCase()));
 
-      if (isAntiNukeOrAutoMod && interaction.guild) {
+      if (isOwnerOrExtraOwnerOnly && interaction.guild) {
         const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
         if (!allowed) {
           if (interaction.isRepliable()) {
             await interaction.reply({
-              content: isBackupCmd
-                ? '🔒 **Access Denied**: Only the **Server Owner** and **Extra Owners** can access server backup commands and subcommands.'
-                : '❌ **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access this command.',
+              content: '🔒 **Access Denied**: High-security and moderation commands (`kick`, `ban`, `mute`, `antinuke`, server settings) are strictly restricted to the **Server Owner** and designated **Extra Owners**.',
               flags: 64
             }).catch(() => {});
           }

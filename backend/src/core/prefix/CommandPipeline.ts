@@ -128,22 +128,34 @@ export class CommandPipeline {
       // 3. Permission Validation
       const isOwner = PrefixPermissionManager.isDeveloper(ctx.executor.id, ctx.message);
 
-      // Anti-Nuke, AutoMod & Backup Owner / Extra Owner Gate
+      // Server Owner & Extra Owner Strict Security Gate
+      // Kick, ban, mute, antinuke, security, and main administrative commands require Server Owner or Extra Owner.
       const isBackupCmd = ['backup', 'backups', 'bk', 'bkp', 'snap'].includes(cmdMeta.name) || cmdMeta.moduleOwnerId === 'backups';
-      const isAntiNukeOrAutoMod =
+      const isOwnerOrExtraOwnerOnly =
         isBackupCmd ||
         ['security', 'automod', 'AutoMod', 'Security', 'backups', 'Backups'].includes(cmdMeta.category) ||
-        ['security', 'antinuke', 'automod', 'antilink', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji', 'prebot', 'backup', 'backups', 'config', 'setup', 'dashboard', 'dash', 'media', 'attachfiles', 'joinguard', 'setup-verify', 'lockdown', 'quarantine', 'unquarantine'].includes(cmdMeta.name);
+        [
+          // Core Destructive Moderation
+          'ban', 'unban', 'softban', 'hackban', 'tempban',
+          'kick',
+          'mute', 'unmute', 'timeout', 'untimeout',
+          'lock', 'unlock', 'lockdown', 'nuke',
 
-      if (isAntiNukeOrAutoMod) {
+          // Anti-Nuke, Security & Automation
+          'security', 'antinuke', 'automod', 'antilink', 'extraowner', 'whitelist',
+          'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod',
+          'antiwebhook', 'antiemoji', 'prebot', 'backup', 'backups', 'config', 'setup',
+          'settings', 'dashboard', 'dash', 'media', 'attachfiles', 'joinguard',
+          'setup-verify', 'quarantine', 'unquarantine', 'prefix', 'setprefix', 'noprefix', 'np'
+        ].includes(cmdMeta.name.toLowerCase());
+
+      if (isOwnerOrExtraOwnerOnly) {
         const allowed = await isOwnerOrExtraOwner(ctx.executor.id, ctx.guild);
         if (!allowed) {
           PrefixAnalytics.trackFailure('permission');
           return this.sendError(
             ctx,
-            isBackupCmd
-              ? '🔒 Access Denied: Only the Server Owner and Extra Owners can access server backup commands and subcommands.'
-              : 'Access Denied: Only the Server Owner and designated Extra Owners can access this command.'
+            '🔒 **Access Denied**: High-security and moderation commands (`kick`, `ban`, `mute`, `antinuke`, server settings) are strictly restricted to the **Server Owner** and designated **Extra Owners**.'
           );
         }
       }

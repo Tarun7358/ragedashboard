@@ -191,5 +191,30 @@ describe('No-Prefix System & Permission Engine', () => {
       const allowed = await NoPrefixManager.isAllowed(mockMsg);
       expect(allowed).toBe(true);
     });
+
+    it('allows general members server-wide when no restrictive roles/channels are configured', async () => {
+      const mockMsg = {
+        guild: {
+          id: 'guild_open_noprefix',
+          ownerId: 'owner1'
+        },
+        author: {
+          id: 'general_user_123'
+        },
+        channelId: 'general_chat',
+        member: {
+          permissions: {
+            has: () => false
+          },
+          roles: {
+            cache: new Map()
+          }
+        }
+      } as unknown as Message;
+
+      await NoPrefixManager.setEnabled('guild_open_noprefix', true);
+      const allowed = await NoPrefixManager.isAllowed(mockMsg);
+      expect(allowed).toBe(true);
+    });
   });
 });
