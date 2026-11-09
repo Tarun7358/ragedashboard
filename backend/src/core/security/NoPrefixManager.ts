@@ -18,6 +18,20 @@ export class NoPrefixManager {
     const db = Database.getDb();
     if (!db) return;
 
+    // Detect and drop obsolete table schema if userId column is missing
+    try {
+      const cols = await db.all<any>('PRAGMA table_info(guild_noprefix)');
+      if (cols && cols.length > 0) {
+        const hasUserId = cols.some((c: any) => c.name === 'userId');
+        if (!hasUserId) {
+          console.warn('[NoPrefixManager] Migrating and rebuilding legacy guild_noprefix table...');
+          await db.exec('DROP TABLE IF EXISTS guild_noprefix;');
+        }
+      }
+    } catch (e) {
+      console.error('[NoPrefixManager] Schema check error:', e);
+    }
+
     await db.exec(`
       CREATE TABLE IF NOT EXISTS guild_noprefix_config (
         guildId TEXT PRIMARY KEY,
