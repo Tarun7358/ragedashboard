@@ -15,7 +15,8 @@ import {
   TextDisplayBuilder,
   SeparatorBuilder,
   ThumbnailBuilder,
-  MessageFlags
+  MessageFlags,
+  StringSelectMenuBuilder
 } from 'discord.js';
 import { IJoinToCreate } from '../../models/index.js';
 import {
@@ -42,7 +43,13 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate, not
   const guildIcon = guild?.iconURL({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
 
   const triggerList = triggers.length > 0
-    ? triggers.map((t: any, i: number) => `> **${i + 1}.** <#${t.triggerChannelId}> | \`${t.label || 'Default'}\` | \`Privacy: ${(t.privacy || 'public').toUpperCase()}\``).join('\n')
+    ? triggers.map((t: any, i: number) => {
+        const ch = guild?.channels?.cache?.get(t.triggerChannelId);
+        const chMention = ch ? `<#${t.triggerChannelId}>` : `\`#unknown (${t.triggerChannelId})\``;
+        const rawPrivacy = String(t.privacy || 'public').toLowerCase();
+        const privacyDisplay = rawPrivacy === 'private' ? 'PRIVATE' : 'PUBLIC';
+        return `> **${i + 1}.** ${chMention} | \`${t.label || 'Default'}\` | \`Privacy: ${privacyDisplay}\``;
+      }).join('\n')
     : '> ⚠️ *No Trigger Channels Configured (Click 1-Click Setup below)*';
 
   const cleanNotice = noticeText ? `${noticeText.trim()}\n\n` : '';
@@ -89,6 +96,10 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate, not
       .setLabel('Send Voice Controller')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
+      .setCustomId('jtc_btn_delete_trigger')
+      .setLabel('Delete Trigger')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
       .setCustomId('jtc_btn_refresh_admin')
       .setLabel('Refresh Dashboard')
       .setStyle(ButtonStyle.Secondary)
@@ -117,7 +128,8 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate, not
     `### **Admin Quick Actions**\n` +
     `> **Click 1-Click Auto Setup to create the voice category & trigger voice channel automatically.**\n` +
     `> **Use JTC Master to toggle voice provisioning server-wide.**\n` +
-    `> **Use Clean Stale Channels to sweep and purge all empty rooms immediately.**`
+    `> **Use Clean Stale Channels to sweep empty rooms and purge deleted #unknown triggers.**\n` +
+    `> **Use Delete Trigger (or r!jtc remove) to delete any configured trigger channel.**`
   );
 
   const footer = new TextDisplayBuilder().setContent(`-# ${BRAND_FOOTER}`);
@@ -467,10 +479,23 @@ export async function handleJtcInteraction(interaction: any, context: any) {
         remaining.push(ac);
       }
     }
-    saveConfig({ activeChannels: remaining });
-    context.logSyncEvent(`[JTC] Cleaned ${cleaned} stale voice channels.`, 'info');
 
-    const gui = buildJTCAdminDashboardGUI(interaction.guild, { ...config, activeChannels: remaining });
+    // Also auto-prune stale / deleted trigger channels
+    const initialTriggers: any[] = config.triggers || [];
+    const validTriggers = initialTriggers.filter((t: any) => interaction.guild.channels.cache.has(t.triggerChannelId));
+    const prunedTriggersCount = initialTriggers.length - validTriggers.length;
+
+    saveConfig({ activeChannels: remaining, triggers: validTriggers });
+    config.activeChannels = remaining;
+    config.triggers = validTriggers;
+
+    context.logSyncEvent(`[JTC] Cleaned ${cleaned} stale voice channels, pruned ${prunedTriggersCount} deleted trigger channels.`, 'info');
+
+    const notice = prunedTriggersCount > 0 || cleaned > 0
+      ? `> 🧹 **Clean Stale Channels Summary:** Purged **${cleaned}** empty active rooms and pruned **${prunedTriggersCount}** deleted trigger channels.`
+      : undefined;
+
+    const gui = buildJTCAdminDashboardGUI(interaction.guild, config, notice);
     return respondJtcGui(interaction, gui);
   }
 
@@ -515,6 +540,100 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     await interaction.deferUpdate().catch(() => { });
     const gui = buildJTCAdminDashboardGUI(interaction.guild, config);
     return respondJtcGui(interaction, gui);
+  }
+
+  // 6. Admin: Open Delete Trigger Menu
+  if (customId === 'jtc_btn_delete_trigger') {
+    const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can delete JTC triggers.`, flags: 64 });
+    }
+    const currentTriggers = config.triggers || [];
+    if (currentTriggers.length === 0) {
+      return interaction.reply({ content: `${WRONG_ICON} **No Triggers Configured**: There are no configured trigger channels to delete.`, flags: 64 });
+    }
+
+    const selectOptions: any[] = [];
+    let hasStale = false;
+    currentTriggers.forEach((t: any, idx: number) => {
+      const ch = interaction.guild.channels.cache.get(t.triggerChannelId);
+      const isChannelMissing = !ch;
+      if (isChannelMissing) hasStale = true;
+      const chLabel = ch ? `#${ch.name}` : `#unknown (${t.triggerChannelId})`;
+      selectOptions.push({
+        label: `${idx + 1}. ${chLabel}`.slice(0, 100),
+        value: t.triggerChannelId,
+        description: `Label: ${t.label || 'Default'} | ID: ${t.triggerChannelId}`.slice(0, 100),
+        emoji: ch ? '🔊' : '⚠️'
+      });
+    });
+
+    if (hasStale) {
+      selectOptions.unshift({
+        label: 'Purge All Deleted / #unknown Triggers',
+        value: 'purge_all_stale',
+        description: 'Automatically cleans all triggers for channels deleted in Discord',
+        emoji: '🧹'
+      });
+    }
+
+    selectOptions.push({
+      label: 'Delete ALL Triggers',
+      value: 'delete_all_triggers',
+      description: 'Remove all configured trigger channels entirely',
+      emoji: '🗑️'
+    });
+
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('jtc_select_delete_trigger')
+      .setPlaceholder('Select a trigger channel to delete...')
+      .addOptions(selectOptions.slice(0, 25));
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
+
+    return interaction.reply({
+      content: '🗑️ **Select Trigger Channel to Delete:**\nChoose the trigger channel you want to remove from the system.',
+      components: [row],
+      flags: 64
+    });
+  }
+
+  // Handle select menu for deleting trigger
+  if (interaction.isStringSelectMenu && interaction.isStringSelectMenu() && customId === 'jtc_select_delete_trigger') {
+    const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can delete JTC triggers.`, flags: 64 });
+    }
+    const selected = interaction.values[0];
+    let existingTriggers: any[] = [...(config.triggers || [])];
+    let removedNotice = '';
+
+    if (selected === 'delete_all_triggers') {
+      const count = existingTriggers.length;
+      existingTriggers = [];
+      saveConfig({ triggers: existingTriggers, triggerChannelId: null as any } as any);
+      config.triggers = existingTriggers;
+      removedNotice = `🗑️ Successfully deleted **all ${count}** configured trigger channels.`;
+    } else if (selected === 'purge_all_stale') {
+      const before = existingTriggers.length;
+      existingTriggers = existingTriggers.filter((t: any) => interaction.guild.channels.cache.has(t.triggerChannelId));
+      const removedCount = before - existingTriggers.length;
+      saveConfig({ triggers: existingTriggers });
+      config.triggers = existingTriggers;
+      removedNotice = `🧹 Successfully purged **${removedCount}** deleted/unknown trigger channel(s).`;
+    } else {
+      existingTriggers = existingTriggers.filter((t: any) => t.triggerChannelId !== selected);
+      saveConfig({ triggers: existingTriggers });
+      config.triggers = existingTriggers;
+      removedNotice = `<:ticks:1532620580266836148> Successfully deleted trigger channel (\`${selected}\`).`;
+    }
+
+    context.logSyncEvent(`[JTC] ${removedNotice}`, 'info');
+    await interaction.update({
+      content: `${removedNotice}\n> Click **Refresh Dashboard** on the main dashboard to view the updated list.`,
+      components: []
+    }).catch(() => {});
+    return;
   }
 
   // In-Voice Controls: Extract target channel ID
@@ -1711,10 +1830,118 @@ PrefixRegistry.register({
           remaining.push(ac);
         }
       }
-      saveConfig({ activeChannels: remaining });
+
+      // Also auto-prune stale / deleted trigger channels
+      const initialTriggers: any[] = config.triggers || [];
+      const validTriggers = initialTriggers.filter((t: any) => message.guild!.channels.cache.has(t.triggerChannelId));
+      const prunedTriggers = initialTriggers.length - validTriggers.length;
+
+      saveConfig({ activeChannels: remaining, triggers: validTriggers });
       config.activeChannels = remaining;
-      extra?.logSyncEvent?.(message.guild.id, `[JTC] Cleaned ${cleaned} stale voice channels.`, 'info');
-      const gui = buildJTCAdminDashboardGUI(message.guild, config);
+      config.triggers = validTriggers;
+
+      extra?.logSyncEvent?.(message.guild.id, `[JTC] Cleaned ${cleaned} stale voice channels, pruned ${prunedTriggers} deleted triggers.`, 'info');
+
+      const notice = prunedTriggers > 0 || cleaned > 0
+        ? `> 🧹 **Clean Summary:** Purged **${cleaned}** empty active rooms and pruned **${prunedTriggers}** deleted trigger channel(s).`
+        : undefined;
+
+      const gui = buildJTCAdminDashboardGUI(message.guild, config, notice);
+      return respondJtcGui(message, gui);
+    }
+
+    // Subcommand: remove / delete / del / rem
+    if (sub === 'remove' || sub === 'delete' || sub === 'del' || sub === 'rem') {
+      if (!isOwner) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can remove JTC triggers.` });
+      }
+
+      const existingTriggers: any[] = [...(config.triggers || [])];
+      if (existingTriggers.length === 0) {
+        return message.reply({ content: `${WRONG_ICON} **No Triggers Configured**: There are no configured trigger channels to delete.` });
+      }
+
+      const target = args.slice(1).join(' ').trim();
+      if (!target) {
+        const triggerListSummary = existingTriggers.map((t: any, i: number) => {
+          const ch = message.guild!.channels.cache.get(t.triggerChannelId);
+          const chStr = ch ? `<#${t.triggerChannelId}>` : `\`#unknown (${t.triggerChannelId})\``;
+          return `> **${i + 1}.** ${chStr} (ID: \`${t.triggerChannelId}\`)`;
+        }).join('\n');
+
+        return message.reply({
+          content: `🗑️ **How to Delete a Configured Trigger Channel:**\n` +
+            `${triggerListSummary}\n\n` +
+            `**Usage Options:**\n` +
+            `> • Delete by number: \`r!jtc remove 1\` or \`r!jtc remove 2\`\n` +
+            `> • Delete by mention or ID: \`r!jtc remove <#channel>\` or \`r!jtc remove <ID>\`\n` +
+            `> • Prune all deleted / #unknown channels: \`r!jtc remove stale\`\n` +
+            `> • Delete all triggers: \`r!jtc remove all\``
+        });
+      }
+
+      const lower = target.toLowerCase();
+
+      // Delete all
+      if (lower === 'all') {
+        const count = existingTriggers.length;
+        saveConfig({ triggers: [], triggerChannelId: null as any } as any);
+        config.triggers = [];
+        config.triggerChannelId = null as any;
+        extra?.logSyncEvent?.(message.guild.id, `[JTC] Removed all ${count} trigger channels.`, 'info');
+        const gui = buildJTCAdminDashboardGUI(message.guild, config, `> 🗑️ **All ${count} trigger channels have been deleted.**`);
+        return respondJtcGui(message, gui);
+      }
+
+      // Prune stale / unknown
+      if (lower === 'stale' || lower === 'unknown' || lower === '#unknown') {
+        const before = existingTriggers.length;
+        const valid = existingTriggers.filter((t: any) => message.guild!.channels.cache.has(t.triggerChannelId));
+        const pruned = before - valid.length;
+        if (pruned === 0) {
+          return message.reply({ content: `<:ticks:1532620580266836148> **No Stale Triggers**: All configured trigger channels are active and exist in the server.` });
+        }
+        saveConfig({ triggers: valid });
+        config.triggers = valid;
+        extra?.logSyncEvent?.(message.guild.id, `[JTC] Pruned ${pruned} stale trigger channels.`, 'info');
+        const gui = buildJTCAdminDashboardGUI(message.guild, config, `> 🧹 **Purged ${pruned} deleted / #unknown trigger channel(s).**`);
+        return respondJtcGui(message, gui);
+      }
+
+      // Check if target is a 1-based index (e.g. "1", "2")
+      const idx = parseInt(target, 10);
+      let removedChannelId: string | null = null;
+      let removedLabel = '';
+
+      if (!isNaN(idx) && idx >= 1 && idx <= existingTriggers.length) {
+        const removed = existingTriggers.splice(idx - 1, 1)[0];
+        removedChannelId = removed.triggerChannelId;
+        removedLabel = removed.label || removedChannelId;
+      } else {
+        const rawId = target.replace(/[<#>]/g, '').trim();
+        const foundIdx = existingTriggers.findIndex((t: any) =>
+          t.triggerChannelId === rawId ||
+          (t.label && t.label.toLowerCase() === lower)
+        );
+        if (foundIdx >= 0) {
+          const removed = existingTriggers.splice(foundIdx, 1)[0];
+          removedChannelId = removed.triggerChannelId;
+          removedLabel = removed.label || removedChannelId;
+        }
+      }
+
+      if (!removedChannelId) {
+        return message.reply({
+          content: `${WRONG_ICON} **Trigger Not Found**: Could not find a trigger channel matching "${target}".\n> Run \`r!jtc remove\` to view the list of configured channels.`
+        });
+      }
+
+      saveConfig({ triggers: existingTriggers });
+      config.triggers = existingTriggers;
+      extra?.logSyncEvent?.(message.guild.id, `[JTC] Removed trigger channel ${removedChannelId} (${removedLabel}).`, 'info');
+
+      const notice = `> <:ticks:1532620580266836148> **Trigger Channel Deleted:** Successfully removed \`${removedLabel}\` (\`${removedChannelId}\`). **${existingTriggers.length}** trigger(s) remaining.`;
+      const gui = buildJTCAdminDashboardGUI(message.guild, config, notice);
       return respondJtcGui(message, gui);
     }
 
