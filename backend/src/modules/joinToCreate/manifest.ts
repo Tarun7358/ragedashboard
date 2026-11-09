@@ -48,7 +48,10 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate, not
         const chMention = ch ? `<#${t.triggerChannelId}>` : `\`#unknown (${t.triggerChannelId})\``;
         const rawPrivacy = String(t.privacy || 'public').toLowerCase();
         const privacyDisplay = rawPrivacy === 'private' ? 'PRIVATE' : 'PUBLIC';
-        return `> **${i + 1}.** ${chMention} | \`${t.label || 'Default'}\` | \`Privacy: ${privacyDisplay}\``;
+        const triggerCat = t.categoryId
+          ? `<#${t.categoryId}>`
+          : (config.categoryId ? `<#${config.categoryId}> *(Global Default)*` : '`Auto-Detect (Trigger Category)`');
+        return `> **${i + 1}.** ${chMention} | **Spawn Category:** ${triggerCat} | \`Privacy: ${privacyDisplay}\``;
       }).join('\n')
     : '> ⚠️ *No Trigger Channels Configured (Click 1-Click Setup below)*';
 
@@ -63,7 +66,7 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate, not
       `Automatically provisions customized temporary voice channels with full room owner permissions when members connect to a trigger channel.\n\n` +
       `## **System Telemetry**\n` +
       `> **Master Engine Status:** \`${isMasterEnabled ? 'ACTIVE & RUNNING' : 'DISABLED'}\`\n` +
-      `> **Spawn Category:** ${categoryStr}\n` +
+      `> **Global Default Category:** ${categoryStr}\n` +
       `> **Live Active Rooms:** \`${activeChannels.length} Active Channels\`\n` +
       `> **Room Owner Permissions:** \`Rename, Lock, Hide, Limit, Kick, Claim\`\n\n` +
       `## **Configured Trigger Channels (${triggers.length})**\n${triggerList}`
@@ -121,13 +124,14 @@ export function buildJTCAdminDashboardGUI(guild: any, config: IJoinToCreate, not
     `> **Automatically provisions customized temporary voice channels with full room owner permissions when members connect to a trigger channel.**\n\n` +
     `## **System Telemetry & Controls**\n` +
     `> **Master Engine Status:** \`${isMasterEnabled ? 'ACTIVE & RUNNING' : 'DISABLED'}\`\n` +
-    `> **Spawn Category:** ${categoryStr}\n` +
+    `> **Global Default Category:** ${categoryStr}\n` +
     `> **Live Active Rooms:** \`${activeChannels.length} Active Rooms\`\n` +
     `> **Room Owner Privileges:** \`Rename, Lock, Hide, Limit, Kick, Claim\`\n\n` +
     `## **Configured Trigger Channels (${triggers.length})**\n${triggerList}\n\n` +
     `### **Admin Quick Actions**\n` +
     `> **Click 1-Click Auto Setup to create the voice category & trigger voice channel automatically.**\n` +
     `> **Use JTC Master to toggle voice provisioning server-wide.**\n` +
+    `> **Use Set Category (or r!jtc category) to assign dedicated categories per trigger or server-wide.**\n` +
     `> **Use Clean Stale Channels to sweep empty rooms and purge deleted #unknown triggers.**\n` +
     `> **Use Delete Trigger (or r!jtc remove) to delete any configured trigger channel.**`
   );
@@ -328,46 +332,66 @@ export async function handleJtcInteraction(interaction: any, context: any) {
   let activeChannels: IJoinToCreate['activeChannels'] = config.activeChannels || [];
   const saveConfig = (updated: Partial<IJoinToCreate>) => context.updateModuleConfig('join_to_create', { ...config, ...updated });
 
-  // Handle modal submit for configure category
-  if (interaction.isModalSubmit && interaction.isModalSubmit() && customId === 'jtc_modal_set_category') {
+  // Handle modal submit for configure category (global or per-trigger)
+  if (interaction.isModalSubmit && interaction.isModalSubmit() && customId.startsWith('jtc_modal_set_category')) {
     const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
     if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
       return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC settings.`, flags: 64 });
     }
     const catQuery = (interaction.fields.getTextInputValue('category_query') || '').trim();
-    if (catQuery.toLowerCase() === 'auto' || catQuery.toLowerCase() === 'reset' || catQuery.toLowerCase() === 'none') {
-      saveConfig({ categoryId: null });
-      config.categoryId = null;
-      context.logSyncEvent(`[JTC] Spawn category set to auto-detect.`, 'info');
-      return interaction.reply({ content: '<:ticks:1532620580266836148> Target category reset to **Auto-Detect** (temporary channels will spawn inside each trigger\'s own category).', flags: 64 });
+    const isAuto = catQuery.toLowerCase() === 'auto' || catQuery.toLowerCase() === 'reset' || catQuery.toLowerCase() === 'none';
+    const targetTriggerId = customId.startsWith('jtc_modal_set_category_') && customId !== 'jtc_modal_set_category_global'
+      ? customId.replace('jtc_modal_set_category_', '')
+      : null;
+
+    let targetCatId: string | null = null;
+    let targetCatName = 'Auto-Detect';
+
+    if (!isAuto) {
+      const rawId = catQuery.replace(/[<#>]/g, '').trim();
+      let foundCat: any = null;
+      if (/^\d{17,20}$/.test(rawId)) {
+        foundCat = interaction.guild.channels.cache.get(rawId);
+      }
+      if (!foundCat) {
+        foundCat = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === catQuery.toLowerCase());
+      }
+      if (!foundCat) {
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
+        const qNorm = norm(catQuery);
+        if (qNorm) {
+          foundCat = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && norm(c.name).includes(qNorm));
+        }
+      }
+
+      if (!foundCat || foundCat.type !== ChannelType.GuildCategory) {
+        return interaction.reply({ content: `${WRONG_ICON} Could not find a valid category matching "` + catQuery + `". Please provide the exact name or category ID.`, flags: 64 });
+      }
+      targetCatId = foundCat.id;
+      targetCatName = foundCat.name;
     }
 
-    const rawId = catQuery.replace(/[<#>]/g, '').trim();
-    let foundCat: any = null;
-    if (/^\d{17,20}$/.test(rawId)) {
-      foundCat = interaction.guild.channels.cache.get(rawId);
-    }
-    if (!foundCat) {
-      foundCat = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === catQuery.toLowerCase());
-    }
-    if (!foundCat) {
-      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
-      const qNorm = norm(catQuery);
-      if (qNorm) {
-        foundCat = interaction.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && norm(c.name).includes(qNorm));
+    if (targetTriggerId) {
+      const triggers = [...(config.triggers || [])];
+      const trig = triggers.find((t: any) => t.triggerChannelId === targetTriggerId);
+      if (trig) {
+        trig.categoryId = targetCatId;
+        saveConfig({ triggers });
+        config.triggers = triggers;
+        const triggerChName = interaction.guild.channels.cache.get(targetTriggerId)?.name || targetTriggerId;
+        context.logSyncEvent(`[JTC] Dedicated category for trigger #${triggerChName} set to ${targetCatName} (${targetCatId || 'auto'}).`, 'success');
+        return interaction.reply({
+          content: `<:ticks:1532620580266836148> **Dedicated Trigger Category Updated!**\n> **Trigger:** <#${targetTriggerId}>\n> **Dedicated Spawn Category:** ${targetCatId ? `<#${targetCatId}> (\`${targetCatName}\`)` : '`Auto-Detect (Inherits from trigger / global)`'}\n> Temporary rooms created from this trigger will spawn in this category.`,
+          flags: 64
+        });
       }
     }
 
-    if (!foundCat || foundCat.type !== ChannelType.GuildCategory) {
-      return interaction.reply({ content: `${WRONG_ICON} Could not find a valid category matching "` + catQuery + `". Please provide the exact name or category ID.`, flags: 64 });
-    }
-
-    saveConfig({ categoryId: foundCat.id });
-    config.categoryId = foundCat.id;
-    context.logSyncEvent(`[JTC] Target spawn category updated to #${foundCat.name} (${foundCat.id}).`, 'success');
-
+    saveConfig({ categoryId: targetCatId });
+    config.categoryId = targetCatId;
+    context.logSyncEvent(`[JTC] Global spawn category set to ${targetCatName} (${targetCatId || 'auto'}).`, 'success');
     return interaction.reply({
-      content: '<:ticks:1532620580266836148> **JTC Target Category Updated**!\n> **Category:** <#' + foundCat.id + '> (`' + foundCat.name + '`)\n> **Category ID:** `' + foundCat.id + '`\n> All new temporary voice rooms will now spawn inside this category.',
+      content: `<:ticks:1532620580266836148> **Global Default Category Updated!**\n> **Category:** ${targetCatId ? `<#${targetCatId}> (\`${targetCatName}\`)` : '`Auto-Detect`'}\n> All triggers without a dedicated category will use this spawn category.`,
       flags: 64
     });
   }
@@ -515,22 +539,93 @@ export async function handleJtcInteraction(interaction: any, context: any) {
     }
   }
 
-  // 4b. Admin: Set Category Modal Prompt
+  // 4b. Admin: Set Category Prompt (Select Global vs Specific Trigger)
   if (customId === 'jtc_btn_set_category') {
+    const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
     if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
       return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC administration.`, flags: 64 });
     }
-    const currentCat = config.categoryId ? (interaction.guild.channels.cache.get(config.categoryId)?.name || config.categoryId) : '';
+
+    const triggers = config.triggers || [];
+    if (triggers.length > 1) {
+      const options: any[] = [
+        {
+          label: 'Global Default Category',
+          value: 'global',
+          description: config.categoryId ? `Current: ${interaction.guild.channels.cache.get(config.categoryId)?.name || config.categoryId}`.slice(0, 100) : 'Fallback for triggers without a dedicated category',
+          emoji: '🌐'
+        }
+      ];
+
+      triggers.forEach((t: any, idx: number) => {
+        const ch = interaction.guild.channels.cache.get(t.triggerChannelId);
+        const catCh = t.categoryId ? interaction.guild.channels.cache.get(t.categoryId) : null;
+        options.push({
+          label: `Trigger ${idx + 1}: ${ch?.name || t.label || t.triggerChannelId}`.slice(0, 100),
+          value: `trigger_${t.triggerChannelId}`,
+          description: catCh ? `Dedicated: #${catCh.name}`.slice(0, 100) : 'Currently uses Global Default / Auto',
+          emoji: '🔊'
+        });
+      });
+
+      const menu = new StringSelectMenuBuilder()
+        .setCustomId('jtc_select_category_target')
+        .setPlaceholder('Choose which category to configure...')
+        .addOptions(options.slice(0, 25));
+
+      const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
+      return interaction.reply({
+        content: '📁 **Configure Temporary Voice Spawn Category:**\nSelect whether you want to set the **Global Default Category** or configure a **Dedicated Spawn Category** for a specific trigger:',
+        components: [row],
+        flags: 64
+      });
+    }
+
+    // Single or 0 triggers: directly prompt modal
+    const targetTrigger = triggers[0];
+    const triggerId = targetTrigger ? targetTrigger.triggerChannelId : null;
+    const currentCatId = targetTrigger?.categoryId || config.categoryId;
+    const currentCatName = currentCatId ? (interaction.guild.channels.cache.get(currentCatId)?.name || currentCatId) : '';
+
     const modal = new ModalBuilder()
-      .setCustomId('jtc_modal_set_category')
-      .setTitle('Configure Spawn Category');
+      .setCustomId(triggerId ? `jtc_modal_set_category_${triggerId}` : 'jtc_modal_set_category_global')
+      .setTitle(triggerId ? 'Set Trigger Spawn Category' : 'Set Global Spawn Category');
     const input = new TextInputBuilder()
       .setCustomId('category_query')
-      .setLabel('Category Name or ID (or "auto")')
+      .setLabel('Category Name, ID, or "auto"')
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder(currentCat || 'e.g. 🔊 ┃ VOICE CHANNELS or ID')
+      .setPlaceholder(currentCatName || 'e.g. 🔊 ┃ VOICE CHANNELS, ID, or auto')
       .setRequired(true)
       .setMaxLength(64);
+    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+    return interaction.showModal(modal);
+  }
+
+  // Handle select menu for choosing which category to configure
+  if (interaction.isStringSelectMenu && interaction.isStringSelectMenu() && customId === 'jtc_select_category_target') {
+    const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+    if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+      return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC administration.`, flags: 64 });
+    }
+    const selected = interaction.values[0];
+    const isGlobal = selected === 'global';
+    const triggerId = isGlobal ? null : selected.replace('trigger_', '');
+    const trigger = triggerId ? (config.triggers || []).find((t: any) => t.triggerChannelId === triggerId) : null;
+    const currentCatId = trigger ? trigger.categoryId : config.categoryId;
+    const currentCatName = currentCatId ? (interaction.guild.channels.cache.get(currentCatId)?.name || currentCatId) : '';
+
+    const modal = new ModalBuilder()
+      .setCustomId(isGlobal ? 'jtc_modal_set_category_global' : `jtc_modal_set_category_${triggerId}`)
+      .setTitle(isGlobal ? 'Set Global Spawn Category' : `Set Category: #${interaction.guild.channels.cache.get(triggerId || '')?.name || 'Trigger'}`.slice(0, 45));
+
+    const input = new TextInputBuilder()
+      .setCustomId('category_query')
+      .setLabel('Category Name, ID, or "auto"')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder(currentCatName || 'e.g. 🔊 ┃ VOICE CHANNELS or auto')
+      .setRequired(true)
+      .setMaxLength(64);
+
     modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
     return interaction.showModal(modal);
   }
@@ -1950,37 +2045,95 @@ PrefixRegistry.register({
       if (!isOwner) {
         return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure JTC category.` });
       }
-      const query = args.slice(1).join(' ').trim();
-      if (!query) {
-        const catStr = config.categoryId ? `<#${config.categoryId}>` : '`Auto-Detect (Inherits from trigger channel)`';
-        return message.reply({ content: `📁 **Current JTC Spawn Category:** ${catStr}\n> To change: \`r!jtc category <#category | ID | name>\`\n> To reset to auto: \`r!jtc category auto\`` });
+
+      const triggers: any[] = config.triggers || [];
+      const subArgs = args.slice(1);
+
+      if (subArgs.length === 0) {
+        const globalStr = config.categoryId ? `<#${config.categoryId}>` : '`Auto-Detect`';
+        const triggerLines = triggers.length > 0
+          ? triggers.map((t: any, i: number) => {
+              const ch = message.guild!.channels.cache.get(t.triggerChannelId);
+              const chName = ch ? `<#${t.triggerChannelId}>` : `\`${t.triggerChannelId}\``;
+              const cat = t.categoryId ? `<#${t.categoryId}>` : `${globalStr} *(Global Default)*`;
+              return `> **${i + 1}.** ${chName} → **Spawn Category:** ${cat}`;
+            }).join('\n')
+          : '> *(No triggers configured)*';
+
+        return message.reply({
+          content: `📁 **JTC Spawn Category Configuration:**\n` +
+            `> **Global Default Category:** ${globalStr}\n\n` +
+            `**Configured Triggers & Dedicated Categories:**\n${triggerLines}\n\n` +
+            `**How to Configure:**\n` +
+            `> • Set dedicated category for a trigger: \`r!jtc category <trigger_# | #trigger> <#category | name | ID>\`\n` +
+            `> • Set server-wide global category: \`r!jtc category <#category | name | ID>\`\n` +
+            `> • Reset to auto: \`r!jtc category [trigger_#] auto\``
+        });
       }
-      if (query.toLowerCase() === 'auto' || query.toLowerCase() === 'reset' || query.toLowerCase() === 'none') {
-        saveConfig({ categoryId: null });
-        config.categoryId = null;
-        return message.reply({ content: '<:ticks:1532620580266836148> JTC spawn category reset to **Auto-Detect** (inherits trigger channel\'s category).' });
-      }
-      const rawId = query.replace(/[<#>]/g, '').trim();
-      let foundCat: any = null;
-      if (/^\d{17,20}$/.test(rawId)) {
-        foundCat = message.guild.channels.cache.get(rawId);
-      }
-      if (!foundCat) {
-        foundCat = message.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === query.toLowerCase());
-      }
-      if (!foundCat) {
-        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
-        const qNorm = norm(query);
-        if (qNorm) {
-          foundCat = message.guild.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && norm(c.name).includes(qNorm));
+
+      let targetTrigger: any = null;
+      let categoryQuery = subArgs.join(' ').trim();
+
+      const firstToken = subArgs[0];
+      const trigIdx = parseInt(firstToken, 10);
+      const cleanToken = firstToken.replace(/[<#>]/g, '').trim();
+
+      if (!isNaN(trigIdx) && trigIdx >= 1 && trigIdx <= triggers.length) {
+        targetTrigger = triggers[trigIdx - 1];
+        categoryQuery = subArgs.slice(1).join(' ').trim();
+      } else {
+        const found = triggers.find((t: any) => t.triggerChannelId === cleanToken);
+        if (found) {
+          targetTrigger = found;
+          categoryQuery = subArgs.slice(1).join(' ').trim();
         }
       }
-      if (!foundCat || foundCat.type !== ChannelType.GuildCategory) {
-        return message.reply({ content: `${WRONG_ICON} Could not find a valid category matching "` + query + `". Please mention it or provide its ID.` });
+
+      if (!categoryQuery && targetTrigger) {
+        const cat = targetTrigger.categoryId ? `<#${targetTrigger.categoryId}>` : '`Auto-Detect / Global Default`';
+        return message.reply({ content: `📁 Trigger <#${targetTrigger.triggerChannelId}> spawn category is currently: ${cat}\n> To change: \`r!jtc category ${firstToken} <#category | ID | auto>\`` });
       }
-      saveConfig({ categoryId: foundCat.id });
-      config.categoryId = foundCat.id;
-      return message.reply({ content: '<:ticks:1532620580266836148> Set JTC temporary channel category to **' + foundCat.name + '** (`' + foundCat.id + '`).' });
+
+      const isAuto = categoryQuery.toLowerCase() === 'auto' || categoryQuery.toLowerCase() === 'reset' || categoryQuery.toLowerCase() === 'none';
+      let foundCat: any = null;
+
+      if (!isAuto) {
+        const rawId = categoryQuery.replace(/[<#>]/g, '').trim();
+        if (/^\d{17,20}$/.test(rawId)) {
+          foundCat = message.guild!.channels.cache.get(rawId);
+        }
+        if (!foundCat) {
+          foundCat = message.guild!.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === categoryQuery.toLowerCase());
+        }
+        if (!foundCat) {
+          const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
+          const qNorm = norm(categoryQuery);
+          if (qNorm) {
+            foundCat = message.guild!.channels.cache.find((c: any) => c.type === ChannelType.GuildCategory && norm(c.name).includes(qNorm));
+          }
+        }
+        if (!foundCat || foundCat.type !== ChannelType.GuildCategory) {
+          return message.reply({ content: `${WRONG_ICON} Could not find a valid category matching "${categoryQuery}". Please mention it or provide its exact name / ID.` });
+        }
+      }
+
+      const newCatId = foundCat?.id || null;
+      const newCatDisplay = foundCat ? `<#${foundCat.id}> (\`${foundCat.name}\`)` : '`Auto-Detect`';
+
+      if (targetTrigger) {
+        targetTrigger.categoryId = newCatId;
+        saveConfig({ triggers });
+        config.triggers = triggers;
+        extra?.logSyncEvent?.(message.guild.id, `[JTC] Set dedicated category for trigger #${targetTrigger.triggerChannelId} to ${foundCat?.name || 'Auto'}.`, 'success');
+        const gui = buildJTCAdminDashboardGUI(message.guild, config, `> <:ticks:1532620580266836148> **Dedicated Spawn Category Set:** Trigger <#${targetTrigger.triggerChannelId}> will spawn temporary channels in ${newCatDisplay}.`);
+        return respondJtcGui(message, gui);
+      }
+
+      saveConfig({ categoryId: newCatId });
+      config.categoryId = newCatId;
+      extra?.logSyncEvent?.(message.guild.id, `[JTC] Global spawn category set to ${foundCat?.name || 'Auto'}.`, 'success');
+      const gui = buildJTCAdminDashboardGUI(message.guild, config, `> <:ticks:1532620580266836148> **Global Default Category Set:** All triggers without a dedicated category will spawn into ${newCatDisplay}.`);
+      return respondJtcGui(message, gui);
     }
 
     // Subcommand: toggle
