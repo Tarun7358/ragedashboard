@@ -37,7 +37,11 @@ export class ModuleRegistry {
   }
 
   private fillManifestModules(modules: ModuleState[]) {
-    const alwaysEnabledCore = ['config', 'diagnostics', 'bulk_ops', 'rage-enterprise', 'botstats', 'discord-dashboard', 'brain', 'backups', 'join_role_guard'];
+    const alwaysEnabledCore = [
+      'config', 'diagnostics', 'bulk_ops', 'rage-enterprise', 'botstats',
+      'discord-dashboard', 'brain', 'backups', 'join_role_guard',
+      'join_to_create', 'voice', 'voice_manager', 'voice-protection'
+    ];
     this.manifests.forEach(manifest => {
       if (!modules.find(m => m.id === manifest.id)) {
         const isCore = alwaysEnabledCore.includes(manifest.id);
@@ -526,7 +530,11 @@ export class ModuleRegistry {
 
   private createDefaultModulesState(): ModuleState[] {
     const states: ModuleState[] = [];
-    const alwaysEnabledCore = ['config', 'diagnostics', 'bulk_ops', 'rage-enterprise', 'botstats', 'discord-dashboard', 'brain', 'backups', 'join_role_guard'];
+    const alwaysEnabledCore = [
+      'config', 'diagnostics', 'bulk_ops', 'rage-enterprise', 'botstats',
+      'discord-dashboard', 'brain', 'backups', 'join_role_guard',
+      'join_to_create', 'voice', 'voice_manager', 'voice-protection'
+    ];
     this.manifests.forEach(manifest => {
       const isCore = alwaysEnabledCore.includes(manifest.id);
       states.push({

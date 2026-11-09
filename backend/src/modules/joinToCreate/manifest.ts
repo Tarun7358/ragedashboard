@@ -1583,6 +1583,7 @@ export function resolveVoiceChannelInput(guild: any, query: string, firstMention
 
 PrefixRegistry.register({
   name: 'jtc',
+  moduleOwnerId: 'join_to_create',
   category: 'Voice',
   description: 'Interactive Join-To-Create Voice Control Center & Room Manager in Box UI.',
   usage: 'r!jtc [setup|clean|toggle|lock|hide|limit|rename|claim|bitrate]',
@@ -1591,7 +1592,11 @@ PrefixRegistry.register({
   execute: async (message: Message, args: string[], extra?: any) => {
     if (!message.guild) return;
     const modules = extra?.getModulesState ? extra.getModulesState(message.guild.id) : [];
-    const jtcMod = modules.find((m: any) => m.id === 'join_to_create');
+    let jtcMod = modules.find((m: any) => m.id === 'join_to_create' || m.id === 'joinToCreate');
+    if (!jtcMod || jtcMod.status !== 'enabled') {
+      extra?.toggleModule?.('join_to_create', true);
+      extra?.toggleModule?.('joinToCreate', true);
+    }
     const config: IJoinToCreate = jtcMod?.config || {};
     const activeChannels = config.activeChannels || [];
 

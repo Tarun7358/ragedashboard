@@ -1538,7 +1538,20 @@ export function registerEnableDisableCommands(): void {
         )
       );
 
-      if (target === 'all' && isAlreadyEnabledAll) {
+      if (target === 'all') {
+        // Guarantee all server modules are enabled
+        if (toggleMod) {
+          for (const m of modulesState) {
+            toggleMod(m.id, true);
+          }
+          toggleMod('join_to_create', true);
+          toggleMod('joinToCreate', true);
+        }
+      }
+
+      const hasAnyDisabledModule = modulesState.some((m: any) => m.status === 'disabled' && m.id !== 'rage-enterprise');
+
+      if (target === 'all' && isAlreadyEnabledAll && !hasAnyDisabledModule) {
         // Still guarantee @everyone does not hold Administrator privilege
         await sanitizeEveryoneRolePermissions(guild).catch(() => null);
         if (updateConfig && !secModInit?.config?.enableAllCompleted) {
@@ -2369,13 +2382,41 @@ export function registerEnableDisableCommands(): void {
         return message.reply({ embeds: [card] });
       }
 
+      // C16. ENABLE JOIN-TO-CREATE
+      if (['jtc', 'join_to_create', 'jointocreate', 'vccontrol', 'vcmgr'].includes(target)) {
+        if (toggleMod) {
+          toggleMod('join_to_create', true);
+          toggleMod('joinToCreate', true);
+        }
+
+        const card = buildLimeOverviewCard({
+          title: 'JOIN-TO-CREATE MODULE ACTIVATED',
+          subtitle: 'DYNAMIC VOICE CHANNELS & ROOM CONTROLLER ONLINE',
+          color: Colors.LIME,
+          sections: [
+            {
+              title: 'JOIN-TO-CREATE STATUS',
+              items: [
+                '• **Module Status**: `[ ACTIVE ]`',
+                `• **Setup**: \`${prefix}jtc setup\` — Launch interactive JTC setup wizard`,
+                `• **Management**: \`${prefix}jtc\` — Open voice room manager dashboard`
+              ]
+            }
+          ],
+          footerText: 'Rage Optimiser Enterprise • Join-To-Create Online'
+        });
+
+        if (replyMsg) return replyMsg.edit({ embeds: [card] });
+        return message.reply({ embeds: [card] });
+      }
+
       // D. ENABLE ALL
       if (target === 'all') {
         // 1. Audit pre-existing state of each subsystem to determine what is already running
         const secMod = modulesState.find((m: any) => m.id === 'security');
         const amMod = modulesState.find((m: any) => m.id === 'automod');
         const vpMod = modulesState.find((m: any) => m.id === 'voice-protection');
-        const jtcMod = modulesState.find((m: any) => m.id === 'joinToCreate');
+        const jtcMod = modulesState.find((m: any) => m.id === 'joinToCreate' || m.id === 'join_to_create');
         const jrgMod = modulesState.find((m: any) => m.id === 'join_role_guard' || m.id === 'join-role-guard');
         const logMod = modulesState.find((m: any) => m.id === 'logging');
         const bakMod = modulesState.find((m: any) => m.id === 'backups');
@@ -2493,14 +2534,20 @@ export function registerEnableDisableCommands(): void {
           punishment: currentAmConfig.punishment || 'warn'
         });
 
-        // Enable Voice & JoinGuard & Logging & Backups
+        // Enable All Modules & Subsystems
         if (toggleMod) {
+          for (const m of modulesState) {
+            toggleMod(m.id, true);
+          }
           toggleMod('voice-protection', true);
+          toggleMod('join_to_create', true);
           toggleMod('joinToCreate', true);
           toggleMod('join_role_guard', true);
           toggleMod('join-role-guard', true);
           toggleMod('logging', true);
           toggleMod('backups', true);
+          toggleMod('voice', true);
+          toggleMod('voice_manager', true);
         }
 
         // Auto-configure logging channel if none set

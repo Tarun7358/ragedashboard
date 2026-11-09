@@ -80,7 +80,7 @@ export class CommandPipeline {
         'setup', 'config', 'settings', 'module', 'modules',
         'setup-tickets', 'setup-discord-dashboard', 'security', 'logs',
         'backup', 'audit', 'diagnostics', 'automod', 'automation', 'automations', 'auto',
-        '247', '24/7', 'voicepresence', 'voice', 'vc',
+        '247', '24/7', 'voicepresence', 'voice', 'vc', 'jtc', 'jointocreate', 'vcmgr',
         'prefix', 'setprefix', 'pfx'
       ];
 
@@ -110,6 +110,15 @@ export class CommandPipeline {
           if (toggle) toggle('voice', true);
           isModuleActive = true;
         }
+      }
+
+      if (!isModuleActive && (cmdMeta.moduleOwnerId === 'join_to_create' || ['jtc', 'jointocreate', 'vcmgr'].includes(cmdMeta.name))) {
+        const toggle = ctx.get('toggleModule');
+        if (toggle) {
+          toggle('join_to_create', true);
+          toggle('joinToCreate', true);
+        }
+        isModuleActive = true;
       }
 
       if (cmdMeta.moduleOwnerId !== 'core' && cmdMeta.moduleOwnerId !== 'rage-enterprise' && !isManagementCmd && !isModuleActive) {
