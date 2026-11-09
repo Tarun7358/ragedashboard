@@ -17,6 +17,7 @@ import { FuzzySuggestions } from './prefix/FuzzySuggestions.js';
 import { PrefixAnalytics } from './prefix/PrefixAnalytics.js';
 import { PrefixHelpCenter } from './prefix/PrefixHelpCenter.js';
 import { CommandPipeline } from './prefix/CommandPipeline.js';
+import { NoPrefixManager } from './prefix/NoPrefixManager.js';
 import { InteractionRouter } from './InteractionRouter.js';
 import { PayloadFormatter } from './PayloadFormatter.js';
 import { BrainEventInterceptor } from '../brain/BrainEventInterceptor.js';
@@ -564,6 +565,7 @@ export class Gateway {
       BrainEventInterceptor.init(this.client.user?.id ?? 'unknown');
 
       await PrefixResolver.loadAllPrefixes().catch(console.error);
+      await NoPrefixManager.initialize().catch(console.error);
       await this.client.application?.fetch().catch(() => null);
       this.syncRegistry();
 
@@ -1213,6 +1215,12 @@ export class Gateway {
 
       if (!parsed.commandName) return;
 
+      // Check No-Prefix access authorization if triggered without prefix
+      if (resolveResult.isNoPrefix) {
+        const allowed = await NoPrefixManager.isAllowed(message);
+        if (!allowed) return;
+      }
+
       // Check Maintenance Mode
       const settings = this.getGlobalSettings(message.guildId || undefined);
       if (settings.maintenanceMode) {
@@ -1307,6 +1315,7 @@ export class Gateway {
       // Lookup Command Metadata — single registry path, no executeMap fallback needed
       const cmdMeta = PrefixRegistry.get(parsed.commandName);
       if (!cmdMeta) {
+        if (resolveResult.isNoPrefix) return;
         PrefixAnalytics.trackFailure('unknown');
         const allCmds = PrefixRegistry.getAllCommands().map(c => c.name);
         const suggested = FuzzySuggestions.suggest(parsed.commandName, allCmds);
@@ -1323,6 +1332,7 @@ export class Gateway {
       const cmdGuildId = message.guildId || undefined;
       await CommandPipeline.execute(message, parsed, cmdMeta, this.manifests, {
         guildId: cmdGuildId,
+        isNoPrefix: resolveResult.isNoPrefix || false,
         client: this.client,
         logSyncEvent: (msgOrGuildId: string | undefined, msgOrType?: string, type?: 'info' | 'warn' | 'success') => {
           if (type !== undefined) {

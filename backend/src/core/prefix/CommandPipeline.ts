@@ -375,6 +375,10 @@ export class CommandPipeline {
   }
 
   private static async sendError(ctx: CommandContext, message: string) {
+    if (ctx.extra?.isNoPrefix) {
+      return null;
+    }
+
     const dismissRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`btn_dismiss_${ctx.executor.id}`)

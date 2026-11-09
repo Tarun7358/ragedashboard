@@ -1,10 +1,12 @@
 import { Message } from 'discord.js';
 import { Database } from '../Database.js';
+import { PrefixRegistry } from './PrefixRegistry.js';
 
 export interface PrefixResolveResult {
   matched: boolean;
   isMention: boolean;
   isMentionOnly: boolean;
+  isNoPrefix?: boolean;
   prefixUsed: string;
   commandString: string;
 }
@@ -81,6 +83,7 @@ export class PrefixResolver {
           matched: true,
           isMention: true,
           isMentionOnly,
+          isNoPrefix: false,
           prefixUsed: `@Rage Optimiser`,
           commandString
         };
@@ -98,6 +101,7 @@ export class PrefixResolver {
         matched: true,
         isMention: false,
         isMentionOnly: false,
+        isNoPrefix: false,
         prefixUsed,
         commandString
       };
@@ -113,9 +117,29 @@ export class PrefixResolver {
           matched: true,
           isMention: false,
           isMentionOnly: false,
+          isNoPrefix: false,
           prefixUsed,
           commandString
         };
+      }
+    }
+
+    // 4. Check No-Prefix Command
+    if (message.guild) {
+      const trimmed = content.trim();
+      const firstWord = trimmed.split(/\s+/)[0]?.toLowerCase();
+      if (firstWord) {
+        const cmdMeta = PrefixRegistry.get(firstWord);
+        if (cmdMeta) {
+          return {
+            matched: true,
+            isMention: false,
+            isMentionOnly: false,
+            isNoPrefix: true,
+            prefixUsed: '',
+            commandString: trimmed
+          };
+        }
       }
     }
 
