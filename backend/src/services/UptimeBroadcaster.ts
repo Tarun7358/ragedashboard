@@ -5,12 +5,20 @@ import {
   AttachmentBuilder,
   Message,
   PermissionsBitField,
-  EmbedBuilder
+  EmbedBuilder,
+  ContainerBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  MessageFlags
 } from 'discord.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Database } from '../core/Database.js';
+import { EmailService } from './EmailService.js';
 import { PrefixRegistry } from '../core/prefix/PrefixRegistry.js';
 import { SQUARE_TICK_ICON, WRONG_ICON, Colors } from '../core/UIFactory.js';
 
@@ -202,11 +210,13 @@ export class UptimeBroadcaster {
     }
   }
 
+  public static readonly BANNER_URL = 'https://cdn.discordapp.com/attachments/1520048350643359856/1566028194719596584/uptime-banner.png?ex=6ae70ce9&is=6ae5bb69&hm=b7c147180bdfb1483667de0db05e1da0a784c11fb164a366d6f5d4283de5f99b&';
+
   /**
-   * Format embed matching exact user reference screenshot with outer container box
+   * Format Discord Components V2 Box UI container matching exact reference layout
    */
-  public static formatEmbed(client: Client): EmbedBuilder {
-    const uptimeSec = process.uptime();
+  public static formatContainer(client: Client): ContainerBuilder {
+    const uptimeSec = client.uptime ? Math.floor(client.uptime / 1000) : Math.floor(process.uptime());
     const days = Math.floor(uptimeSec / 86400);
     const hours = Math.floor(uptimeSec / 3600) % 24;
     const mins = Math.floor(uptimeSec / 60) % 60;
@@ -224,30 +234,113 @@ export class UptimeBroadcaster {
     const wsPing = Math.max(1, Math.round(client.ws?.ping || 24));
     const guildCount = client.guilds?.cache?.size || 1;
     const botId = client.user?.id || 'bot';
+    const botAvatar = client.user?.displayAvatarURL({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
     const tick = this.getTickEmoji(client);
+
+    const mem = process.memoryUsage();
+    const heapMb = (mem.heapUsed / 1024 / 1024).toFixed(1);
+    const rssMb = (mem.rss / 1024 / 1024).toFixed(1);
+    const isDbConnected = Boolean(Database.getDb());
+    const isGmailReady = EmailService.isConfigured();
+    const gmailStatus = isGmailReady ? 'OAuth2 / SMTP Active' : 'SMTP/IMAP Ready';
+
+    const bodyContent = [
+      `<@${botId}> * **Live : ${liveStr}**`,
+      '',
+      `> ${tick} **Core Gateway:** WS 443 Connected [Latency:\u00A0\`${wsPing}ms\`]`,
+      `> ${tick} **Memory Overhead:** Heap \`${heapMb} MB\` [RSS:\u00A0\`${rssMb} MB\`]`,
+      `> ${tick} **SQL Database:** SQLite WAL Mode [\`${isDbConnected ? 'Connected & Healthy' : 'Connecting'}\`]`,
+      `> ${tick} **Gmail Connectors:** OAuth2 Secure Bridge [\`${gmailStatus}\`]`,
+      `> ${tick} **YouTube API v3:** Realtime RSS Feed Polling Active`,
+      `> ${tick} **Antinuke Sentinels:** Armed & Securing \`${guildCount} Servers\``
+    ].join('\n');
+
+    const sec = new SectionBuilder()
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(bodyContent)
+      )
+      .setThumbnailAccessory(
+        new ThumbnailBuilder().setURL(botAvatar)
+      );
+
+    const mg = new MediaGalleryBuilder().addItems(
+      new MediaGalleryItemBuilder().setURL(this.BANNER_URL)
+    );
+
+    const footer = new TextDisplayBuilder().setContent('-# Rage Optimiser Enterprise • High-Availability Infrastructure');
+
+    return new ContainerBuilder()
+      .addSectionComponents(sec)
+      .addMediaGalleryComponents(mg)
+      .addTextDisplayComponents(footer);
+  }
+
+  /**
+   * Returns full message payload (Components V2 container with fallback to Embed)
+   */
+  public static formatPayload(client: Client): any {
+    try {
+      const container = this.formatContainer(client);
+      return {
+        flags: MessageFlags.IsComponentsV2,
+        components: [container]
+      };
+    } catch {
+      return {
+        embeds: [this.formatEmbed(client)]
+      };
+    }
+  }
+
+  /**
+   * Format fallback embed matching exact user reference layout
+   */
+  public static formatEmbed(client: Client): EmbedBuilder {
+    const uptimeSec = client.uptime ? Math.floor(client.uptime / 1000) : Math.floor(process.uptime());
+    const days = Math.floor(uptimeSec / 86400);
+    const hours = Math.floor(uptimeSec / 3600) % 24;
+    const mins = Math.floor(uptimeSec / 60) % 60;
+    const secs = Math.floor(uptimeSec % 60);
+
+    let liveStr = '';
+    if (days > 0) {
+      liveStr = `${days} Days ${hours} Hours ${mins} Mins`;
+    } else if (hours > 0) {
+      liveStr = `${hours} Hours ${mins} Mins`;
+    } else {
+      liveStr = `${mins} Mins ${secs} Secs`;
+    }
+
+    const wsPing = Math.max(1, Math.round(client.ws?.ping || 24));
+    const guildCount = client.guilds?.cache?.size || 1;
+    const botId = client.user?.id || 'bot';
+    const botAvatar = client.user?.displayAvatarURL({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
+    const tick = this.getTickEmoji(client);
+
+    const mem = process.memoryUsage();
+    const heapMb = (mem.heapUsed / 1024 / 1024).toFixed(1);
+    const rssMb = (mem.rss / 1024 / 1024).toFixed(1);
+    const isDbConnected = Boolean(Database.getDb());
+    const isGmailReady = EmailService.isConfigured();
+    const gmailStatus = isGmailReady ? 'OAuth2 / SMTP Active' : 'SMTP/IMAP Ready';
 
     const description = [
       `<@${botId}> * **Live : ${liveStr}**`,
       '',
-      `> ${tick} **Core Gateway:** WS 443 Connected [Latency:\u00A0${wsPing}ms]`,
-      `> ${tick} **Redis Cluster:** In-Memory Cache Active [0.8ms]`,
-      `> ${tick} **SQL Database:** SQLite WAL Mode [Integrity:\u00A0100%]`,
-      `> ${tick} **Discord REST API:** 50 Route Buckets Synchronized [0\u00A0Drops]`,
-      `> ${tick} **Gmail Connectors:** OAuth2 Secure Bridge [SMTP/IMAP\u00A0Ready]`,
+      `> ${tick} **Core Gateway:** WS 443 Connected [Latency:\u00A0\`${wsPing}ms\`]`,
+      `> ${tick} **Memory Overhead:** Heap \`${heapMb} MB\` [RSS:\u00A0\`${rssMb} MB\`]`,
+      `> ${tick} **SQL Database:** SQLite WAL Mode [\`${isDbConnected ? 'Connected & Healthy' : 'Connecting'}\`]`,
+      `> ${tick} **Gmail Connectors:** OAuth2 Secure Bridge [\`${gmailStatus}\`]`,
       `> ${tick} **YouTube API v3:** Realtime RSS Feed Polling Active`,
-      `> ${tick} **Antinuke Sentinels:** Armed & Securing ${guildCount} Servers`
+      `> ${tick} **Antinuke Sentinels:** Armed & Securing \`${guildCount} Servers\``
     ].join('\n');
 
-    const embed = new EmbedBuilder()
+    return new EmbedBuilder()
       .setColor(0x2B2D31)
-      .setDescription(description);
-
-    const banner = this.getBannerAttachment();
-    if (banner) {
-      embed.setImage(`attachment://${banner.name || 'uptime-banner.png'}`);
-    }
-
-    return embed;
+      .setThumbnail(botAvatar)
+      .setDescription(description)
+      .setImage(this.BANNER_URL)
+      .setFooter({ text: 'Rage Optimiser Enterprise • High-Availability Infrastructure' });
   }
 
   /**
@@ -313,14 +406,27 @@ export class UptimeBroadcaster {
 
       // If existing message exists and is in the same channel, edit it
       if (targetMsg && targetMsg.channelId === channel.id) {
-        const embed = this.formatEmbed(this.client);
-        const editPayload: any = { content: null, embeds: [embed] };
-        const banner = this.getBannerAttachment();
-        const firstAtt = targetMsg.attachments.first();
-        if (!firstAtt || (banner && firstAtt.name !== banner.name)) {
-          if (banner) editPayload.files = [banner];
+        if (!targetMsg.flags?.has?.(MessageFlags.IsComponentsV2)) {
+          // Legacy embed message: delete and replace with fresh Components V2 Box UI container
+          await targetMsg.delete().catch(() => {});
+          const newMsg = await channel.send(this.formatPayload(this.client));
+          await Database.run(
+            'UPDATE uptime_monitors SET messageId = ?, lastUpdated = ? WHERE guildId = ?',
+            [newMsg.id, Date.now(), channel.guildId]
+          );
+          return { success: true, messageId: newMsg.id };
         }
-        await targetMsg.edit(editPayload);
+        try {
+          await targetMsg.edit(this.formatPayload(this.client));
+        } catch {
+          await targetMsg.delete().catch(() => {});
+          const newMsg = await channel.send(this.formatPayload(this.client));
+          await Database.run(
+            'UPDATE uptime_monitors SET messageId = ?, lastUpdated = ? WHERE guildId = ?',
+            [newMsg.id, Date.now(), channel.guildId]
+          );
+          return { success: true, messageId: newMsg.id };
+        }
         await Database.run(
           'UPDATE uptime_monitors SET lastUpdated = ? WHERE guildId = ?',
           [Date.now(), channel.guildId]
@@ -328,15 +434,13 @@ export class UptimeBroadcaster {
         return { success: true, messageId: targetMsg.id };
       }
 
-      // Otherwise post a new live message with the default GIF attachment inside the embed
-      const embed = this.formatEmbed(this.client);
-      const sendPayload: any = { embeds: [embed] };
-      const banner = this.getBannerAttachment();
-      if (banner) {
-        sendPayload.files = [banner];
+      // Otherwise post a new live message with Components V2 Container Box UI
+      let newMsg: Message;
+      try {
+        newMsg = await channel.send(this.formatPayload(this.client));
+      } catch {
+        newMsg = await channel.send({ embeds: [this.formatEmbed(this.client)] });
       }
-
-      const newMsg = await channel.send(sendPayload);
       await Database.run(
         'INSERT OR REPLACE INTO uptime_monitors (guildId, channelId, messageId, lastUpdated) VALUES (?, ?, ?, ?)',
         [channel.guildId, channel.id, newMsg.id, Date.now()]
@@ -405,20 +509,28 @@ export class UptimeBroadcaster {
             continue;
           }
 
-          const embed = this.formatEmbed(this.client);
-          const editPayload: any = { content: null, embeds: [embed] };
-          const banner = this.getBannerAttachment();
-          const firstAtt = msg.attachments.first();
-          if (!firstAtt || (banner && firstAtt.name !== banner.name)) {
-            if (banner) editPayload.files = [banner];
+          if (!msg.flags?.has?.(MessageFlags.IsComponentsV2)) {
+            // Legacy embed message: delete and replace with fresh Components V2 Box UI
+            await msg.delete().catch(() => {});
+            const newMsg = await chan.send(this.formatPayload(this.client));
+            await Database.run(
+              'UPDATE uptime_monitors SET messageId = ?, lastUpdated = ? WHERE guildId = ?',
+              [newMsg.id, Date.now(), row.guildId]
+            ).catch(() => {});
+            continue;
           }
 
-          await msg.edit(editPayload).catch(async (err: any) => {
-            if (err.code === 10008) {
-              // Unknown Message
-              await Database.run('DELETE FROM uptime_monitors WHERE guildId = ?', [row.guildId]).catch(() => { });
-            }
-          });
+          try {
+            await msg.edit(this.formatPayload(this.client));
+          } catch {
+            await msg.delete().catch(() => {});
+            const newMsg = await chan.send(this.formatPayload(this.client));
+            await Database.run(
+              'UPDATE uptime_monitors SET messageId = ?, lastUpdated = ? WHERE guildId = ?',
+              [newMsg.id, Date.now(), row.guildId]
+            ).catch(() => {});
+            continue;
+          }
           await Database.run(
             'UPDATE uptime_monitors SET lastUpdated = ? WHERE guildId = ?',
             [Date.now(), row.guildId]
@@ -523,17 +635,14 @@ export function registerUptimeCommands(): void {
       }
 
       // ── DEFAULT: SHOW ONE-OFF LIVE PREVIEW ──────────────────────────
-      const embed = UptimeBroadcaster.formatEmbed(message.client);
-      const banner = UptimeBroadcaster.getBannerAttachment();
-
-      const sendPayload: any = { embeds: [embed] };
-      if (banner) {
-        sendPayload.files = [banner];
+      try {
+        await message.reply(UptimeBroadcaster.formatPayload(message.client));
+      } catch {
+        const embed = UptimeBroadcaster.formatEmbed(message.client);
+        await message.reply({ embeds: [embed] }).catch((err: any) => {
+          console.error('[UptimeBroadcaster] Error sending preview message:', err);
+        });
       }
-
-      await message.reply(sendPayload).catch((err: any) => {
-        console.error('[UptimeBroadcaster] Error sending preview message:', err);
-      });
     }
   });
 }

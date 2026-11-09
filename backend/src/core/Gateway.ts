@@ -1,8 +1,8 @@
-import { Client, GatewayIntentBits, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags, Options, ActivityType, AuditLogEvent } from 'discord.js';
+import { Client, GatewayIntentBits, Partials, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags, Options, ActivityType, AuditLogEvent, TextChannel, DMChannel, NewsChannel, ThreadChannel, MessagePayload } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } from '@discordjs/voice';
 import { DiscordResourceRegistry, ModuleManifest, ModuleState } from './types.js';
 import { Database } from './Database.js';
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, SectionBuilder, TextDisplayBuilder, SeparatorBuilder, ThumbnailBuilder } from 'discord.js';
 import { Embeds, Colors, Components, buildRichCard, buildStatusCard, buildLimeOverviewCard, VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, CONFIG_ICON, BOT_ICON, LINK_ICON, MEMBER_ICON, TIMER_ICON } from './UIFactory.js';
 import type { PublicFeedManager } from './PublicFeedManager.js';
 import { AnalyticsService } from './AnalyticsService.js';
@@ -40,7 +40,41 @@ import {
  * transformContentToLimeCard — now a thin passthrough to PayloadFormatter.normalize().
  * All formatting logic lives in PayloadFormatter (single source of truth).
  */
-function transformContentToLimeCard(options: any, user: any) {
+
+// UNIVERSAL BOX UI CHANNEL SEND HOOKS (Ensures all modules & events use Box UI)
+try {
+  const patchChannelSend = (proto: any) => {
+    if (!proto || !proto.send || proto._box_ui_patched) return;
+    const origSend = proto.send;
+    proto.send = async function (opts: any) {
+      // Message.reply() hands channel.send() a MessagePayload whose real options live in .options.
+      // Normalizing the wrapper itself produced an empty "System Notification" card.
+      if (opts instanceof MessagePayload) {
+        const raw: any = opts.options || {};
+        const normalized = PayloadFormatter.normalize(raw);
+        if (normalized !== raw && normalized && typeof normalized === 'object') {
+          const preserved: any = {};
+          for (const k of Object.keys(raw)) {
+            if (!['content', 'embeds', 'components', 'flags', 'ephemeral'].includes(k)) preserved[k] = raw[k];
+          }
+          opts.options = { ...preserved, ...normalized };
+        }
+        return origSend.call(this, opts);
+      }
+      const norm = PayloadFormatter.normalize(opts);
+      return origSend.call(this, norm);
+    };
+    proto._box_ui_patched = true;
+  };
+  patchChannelSend(TextChannel.prototype);
+  patchChannelSend(DMChannel.prototype);
+  patchChannelSend(NewsChannel.prototype);
+  patchChannelSend(ThreadChannel.prototype);
+} catch (hookErr) {
+  console.warn('[Gateway] Universal channel send hook initialization notice:', hookErr);
+}
+
+function transformContentToLimeCard(options: any, user?: any) {
   return PayloadFormatter.normalize(options, user);
 }
 
@@ -168,6 +202,7 @@ export function wrapInteraction(interaction: any) {
 
   if (originalEditReply) {
     interaction.editReply = async function (options?: any) {
+      options = transformContentToLimeCard(options, interaction.user);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] editReply skipped: interaction is dead (deferReply failed previously)');
         return;
@@ -209,6 +244,7 @@ export function wrapInteraction(interaction: any) {
 
   if (originalFollowUp) {
     interaction.followUp = async function (options?: any) {
+      options = transformContentToLimeCard(options, interaction.user);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] followUp skipped: interaction is dead (deferReply failed previously)');
         return;
@@ -227,6 +263,7 @@ export function wrapInteraction(interaction: any) {
 
   if (originalUpdate) {
     interaction.update = async function (options?: any) {
+      options = transformContentToLimeCard(options, interaction.user);
       if (interaction._defer_failed) {
         console.warn('[wrapInteraction] update skipped: interaction is dead (deferReply failed previously)');
         return;
@@ -271,7 +308,94 @@ export function wrapInteraction(interaction: any) {
   return interaction;
 }
 
+export class BlockedDMSettings {
+  private static blocked = new Set<string>();
+  private static initialized = false;
+
+  public static async init(): Promise<void> {
+    if (this.initialized) return;
+    try {
+      const db = Database.getDb();
+      if (db) {
+        await db.exec(`
+          CREATE TABLE IF NOT EXISTS blocked_dm_alerts (
+            userId TEXT,
+            guildId TEXT,
+            blockedAt INTEGER,
+            PRIMARY KEY (userId, guildId)
+          );
+        `);
+        const rows = await db.all<any>('SELECT userId, guildId FROM blocked_dm_alerts');
+        for (const row of rows) {
+          this.blocked.add(`${row.userId}:${row.guildId}`);
+        }
+      }
+      this.initialized = true;
+    } catch {
+      this.initialized = true;
+    }
+  }
+
+  public static isBlocked(userId: string, guildId: string): boolean {
+    if (!this.initialized) {
+      this.init().catch(() => { });
+    }
+    return this.blocked.has(`${userId}:${guildId}`);
+  }
+
+  public static async block(userId: string, guildId: string): Promise<void> {
+    await this.init();
+    this.blocked.add(`${userId}:${guildId}`);
+    try {
+      const db = Database.getDb();
+      if (db) {
+        await db.run(
+          'INSERT OR IGNORE INTO blocked_dm_alerts (userId, guildId, blockedAt) VALUES (?, ?, ?)',
+          [userId, guildId, Date.now()]
+        );
+      }
+    } catch { }
+  }
+
+  public static async unblock(userId: string, guildId: string): Promise<void> {
+    await this.init();
+    this.blocked.delete(`${userId}:${guildId}`);
+    try {
+      const db = Database.getDb();
+      if (db) {
+        await db.run(
+          'DELETE FROM blocked_dm_alerts WHERE userId = ? AND guildId = ?',
+          [userId, guildId]
+        );
+      }
+    } catch { }
+  }
+
+  public static getBlockedGuildsForUser(userId: string): string[] {
+    const list: string[] = [];
+    const prefix = `${userId}:`;
+    for (const key of this.blocked) {
+      if (key.startsWith(prefix)) {
+        list.push(key.substring(prefix.length));
+      }
+    }
+    return list;
+  }
+
+  public static async toggle(userId: string, guildId: string): Promise<boolean> {
+    await this.init();
+    if (this.isBlocked(userId, guildId)) {
+      await this.unblock(userId, guildId);
+      return false;
+    } else {
+      await this.block(userId, guildId);
+      return true;
+    }
+  }
+}
+
 export class Gateway {
+  private static dmNotificationCooldowns = new Map<string, number>();
   public client: Client;
   private manifests: ModuleManifest[] = [];
   private router!: InteractionRouter;
@@ -339,8 +463,18 @@ export class Gateway {
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildPresences,
         GatewayIntentBits.GuildBans,
+        GatewayIntentBits.GuildModeration,
         GatewayIntentBits.GuildInvites,
-        GatewayIntentBits.GuildIntegrations
+        GatewayIntentBits.GuildIntegrations,
+        GatewayIntentBits.GuildWebhooks,
+        GatewayIntentBits.GuildEmojisAndStickers
+      ],
+      partials: [
+        Partials.GuildMember,
+        Partials.User,
+        Partials.Channel,
+        Partials.Message,
+        Partials.Reaction
       ],
       sweepers: {
         ...Options.DefaultSweeperSettings,
@@ -468,10 +602,10 @@ export class Gateway {
           const secMod = this.getModulesState(gId)?.find((m: any) => m.id === 'security');
           const isSecActive = secMod?.status === 'enabled' || secMod?.config?.antiNukeEnabled === true;
           if (isSecActive) {
-            import('../modules/backups/manifest.js').then(m => m.ensureRageRoleAtTop(g)).catch(() => {});
+            import('../modules/backups/manifest.js').then(m => m.ensureRageRoleAtTop(g)).catch(() => { });
             import('../modules/security/enable.js').then(m => {
-              m.repairRageBotAdminPermissions(g).catch(() => {});
-            }).catch(() => {});
+              m.repairRageBotAdminPermissions(g).catch(() => { });
+            }).catch(() => { });
           }
         }
         this.dispatchEventForGuild('ready', gId);
@@ -511,6 +645,12 @@ export class Gateway {
 
     this.client.on('guildCreate', async (guild) => {
       this.logSyncEvent(`Discord Event: Bot joined new guild "${guild.name}" (${guild.id}).`, 'success');
+      try {
+        const secMod = this.getModulesState(guild.id)?.find((m: any) => m.id === 'security');
+        if (secMod?.config?.enableAllCompleted) {
+          this.updateModuleConfig(guild.id, 'security', { ...secMod.config, enableAllCompleted: false });
+        }
+      } catch { }
       void (async () => {
         let inviterId: string | undefined;
         let inviterName: string | undefined;
@@ -547,10 +687,10 @@ export class Gateway {
         const ownerTag = owner?.user?.username ?? `ID:${guild.ownerId}`;
         const { EmailService } = await import('../services/EmailService.js');
         EmailService.sendNewGuildAlert({
-          guildName:   guild.name,
-          guildId:     guild.id,
+          guildName: guild.name,
+          guildId: guild.id,
           ownerTag,
-          ownerId:     guild.ownerId,
+          ownerId: guild.ownerId,
           memberCount: guild.memberCount
         });
       } catch { /* non-fatal */ }
@@ -643,36 +783,10 @@ export class Gateway {
     });
 
     this.client.on('guildDelete', async (guild) => {
+      if (!guild.available) return; // outage, not a real removal
       this.logSyncEvent(guild.id, `CRITICAL ALERT: Bot was removed/kicked from server "${guild.name}" (${guild.id}).`, 'warn');
-      this.broadcast({ type: 'GUILD_REMOVED', guildId: guild.id, guildName: guild.name });
 
       try {
-        const reinviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${this.client.user?.id}&permissions=8&scope=bot%20applications.commands&guild_id=${guild.id}`;
-        const owner = await this.client.users.fetch(guild.ownerId).catch(() => null);
-        if (owner) {
-          const alertEmbed = buildLimeOverviewCard({
-            title: 'ALERT • BOT REMOVED FROM SERVER',
-            subtitle: `SECURITY INCIDENT IN ${guild.name.toUpperCase()}`,
-            color: Colors.DANGER,
-            sections: [
-              {
-                title: '<a:success_check:1546134620087783526> BOT REMOVAL DETECTED',
-                items: [
-                  `Rage Optimiser was removed from **${guild.name}**.`,
-                  `If this kick was unauthorized or an anti-nuke attack, click below to re-authorize the bot instantly.`
-                ]
-              }
-            ],
-            footerText: 'Rage Optimiser Enterprise • Security Auto-Recovery'
-          });
-
-          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setLabel('Re-Authorize Bot Now').setStyle(ButtonStyle.Link).setURL(reinviteUrl)
-          );
-
-          await owner.send({ embeds: [alertEmbed], components: [row] }).catch(() => { });
-        }
-
         // Trigger OAuth2 silent user auto-rejoin using stored access tokens with guilds.join scope
         const result = await OAuthService.attemptAutoRejoinForGuild(guild.id);
         if (result.attempted > 0) {
@@ -761,7 +875,7 @@ export class Gateway {
       if (newMember.guild?.id) DashboardSyncService.triggerSync(newMember.guild.id);
       this.dispatchEvent('guildMemberUpdate', oldMember, newMember);
       // AdvSec: Mass nickname change detection
-      handleNicknameChange(this.client, oldMember as any, newMember as any, this).catch(() => {});
+      handleNicknameChange(this.client, oldMember as any, newMember as any, this).catch(() => { });
     });
 
     this.client.on('guildUpdate', (oldGuild, newGuild) => {
@@ -778,7 +892,7 @@ export class Gateway {
       this.publicFeed?.addEvent('Members', `**${member.user.username}** joined the server`);
       AnalyticsService.incrementMetric(guildId, 'joins').catch(() => { });
       // AdvSec: Raid wave detection
-      handleMemberJoinRaidCheck(this.client, member as any, this).catch(() => {});
+      handleMemberJoinRaidCheck(this.client, member as any, this).catch(() => { });
     });
 
     this.client.on('guildMemberRemove', (member) => {
@@ -801,26 +915,26 @@ export class Gateway {
 
     // AdvSec: Thread spam / mass thread delete protection
     this.client.on('threadCreate', (thread) => {
-      handleThreadCreate(this.client, thread, this).catch(() => {});
+      handleThreadCreate(this.client, thread, this).catch(() => { });
     });
 
     this.client.on('threadDelete', (thread) => {
-      handleThreadDelete(this.client, thread, this).catch(() => {});
+      handleThreadDelete(this.client, thread, this).catch(() => { });
     });
 
     // AdvSec: AutoMod rule deletion protection
     this.client.on('autoModerationRuleDelete' as any, (rule: any) => {
-      handleAutoModRuleDelete(this.client, rule, this).catch(() => {});
+      handleAutoModRuleDelete(this.client, rule, this).catch(() => { });
     });
 
     // AdvSec: Scheduled event spam protection
     this.client.on('guildScheduledEventCreate', (event) => {
-      handleScheduledEventCreate(this.client, event, this).catch(() => {});
+      handleScheduledEventCreate(this.client, event, this).catch(() => { });
     });
 
     // AdvSec: Slash command permission override alert
     this.client.on('applicationCommandPermissionsUpdate' as any, (data: any) => {
-      handleCommandPermissionsUpdate(this.client, data, this).catch(() => {});
+      handleCommandPermissionsUpdate(this.client, data, this).catch(() => { });
     });
 
     // ── REALTIME SERVER & AUDIT LOG SYNC LISTENERS ──
@@ -831,6 +945,7 @@ export class Gateway {
       const executorTag = entry?.executor?.tag || entry?.executor?.username || 'System';
       this.logSyncEvent(guildId, `Audit Log Real-Time Sync: [${actionName}] by ${executorTag} at ${new Date().toLocaleTimeString()}`, 'info');
       DashboardSyncService.triggerSync(guildId, 300);
+      this.dispatchEventForGuild('guildAuditLogEntryCreate', guildId, entry, guild).catch(() => { });
     });
 
     this.client.on('guildBanAdd', (ban) => {
@@ -859,14 +974,6 @@ export class Gateway {
       }
     });
 
-    this.client.on('webhookUpdate', (channel) => {
-      const guildId = (channel as any)?.guild?.id;
-      if (guildId) {
-        this.logSyncEvent(guildId, `Discord Event: Webhooks updated in #${(channel as any).name}. Data synced at ${new Date().toLocaleTimeString()}`, 'info');
-        DashboardSyncService.triggerSync(guildId, 500);
-      }
-    });
-
     // ── Single interactionCreate listener via InteractionRouter ─────────────
     // All interaction types (slash, button, selectMenu, modal, autocomplete, help)
     // are routed through InteractionRouter.route() — no double-dispatch, no race conditions.
@@ -885,9 +992,33 @@ export class Gateway {
     this.client.on('interactionCreate', (raw) => this.router.route(raw));
 
     this.client.on('messageCreate', async (message) => {
-      if (!message.author || message.author.bot) return;
+      if (!message.author) return;
+      if (message.author.id === this.client.user?.id) return;
 
-      console.log(`[Gateway] Received message in #${(message.channel as any)?.name || message.channelId}: "${message.content}" (length: ${message.content?.length || 0}) from ${message.author.username}`);
+      // Zero-Trust Security Interception: Bots and Webhooks do not trigger commands, XP, or DM notifications,
+      // but MUST be dispatched to Security & AutoMod to prevent unauthorized mass pings and link raids.
+      if (message.author.bot || message.webhookId) {
+        this.dispatchEvent('messageCreate', message);
+        return;
+      }
+
+      const rawReply = message.reply.bind(message);
+      message.reply = async function (options: any) {
+        const norm = PayloadFormatter.normalize(options, message.author);
+        const sent = await rawReply(norm);
+        if (sent && typeof sent.edit === 'function') {
+          const rawEdit = sent.edit.bind(sent);
+          sent.edit = async function (editOptions: any) {
+            const normEdit = PayloadFormatter.normalize(editOptions, message.author);
+            return rawEdit(normEdit);
+          };
+        }
+        return sent;
+      };
+
+      if (process.env.DEBUG_MESSAGES === 'true') {
+        console.log(`[Gateway] Received message in #${(message.channel as any)?.name || message.channelId}: "${message.content}" (length: ${message.content?.length || 0}) from ${message.author.username}`);
+      }
 
       if (message.content !== undefined && message.content.length === 0) {
         console.warn(`⚠️ [Gateway Warning]: Message content received is EMPTY! This occurs when MESSAGE CONTENT INTENT is disabled in the Discord Developer Portal under Bot -> Privileged Gateway Intents.`);
@@ -900,39 +1031,102 @@ export class Gateway {
 
         // DM notify users who were tagged/mentioned directly
         if (message.mentions.users.size > 0 && message.guild) {
-          const verifiedIcon = '<:ticks:1532620580266836148>';
-          const shieldIcon = '<a:success_check:1546134620087783526>';
           message.mentions.users.forEach(async (user) => {
             if (user.id === message.author.id || user.bot) return;
             try {
-              const guildIcon = message.guild?.iconURL({ size: 256 }) ?? undefined;
+              if (BlockedDMSettings.isBlocked(user.id, message.guild!.id)) return;
+
+              // DM Rate Limit: 1 DM per user per 30 seconds to prevent Discord DM quarantine
+              const dmKey = `${user.id}:${message.guild!.id}`;
+              const lastDm = Gateway.dmNotificationCooldowns.get(dmKey) || 0;
+              if (Date.now() - lastDm < 30000) return;
+              Gateway.dmNotificationCooldowns.set(dmKey, Date.now());
+
+              const guildIcon = message.guild?.iconURL({ size: 256 }) ?? message.author.displayAvatarURL({ size: 256 }) ?? 'https://cdn.discordapp.com/embed/avatars/0.png';
               const msgContext = message.content
                 ? (message.content.length > 500 ? message.content.substring(0, 500) + '…' : message.content)
                 : '*(No text content)*';
 
-              const dmEmbed = new EmbedBuilder()
-                .setColor(0x84cc16)
-                .setThumbnail(guildIcon || message.author.displayAvatarURL({ size: 256 }) || null)
-                .setDescription([
-                  `> • **MENTION ALERT NOTIFICATION**`,
-                  `> • **RAGE OPTIMISER ALERT SYSTEM**`,
-                  `> `,
-                  `> ${verifiedIcon} **Mentioned By**: ${message.author} (\`${message.author.username}\`)`,
-                  `> ${shieldIcon} **Server**: **${message.guild?.name}**`,
-                  `> ${shieldIcon} **Channel**: ${message.channel.toString()}`,
-                  `> `,
-                  `> ${verifiedIcon} __**Message Content**__`,
-                  `> ${msgContext}`
-                ].join('\n'))
-                .setFooter({ text: 'Rage Optimiser • Mention Alert Engine' })
-                .setTimestamp();
+              // Clean any emojis from category for a clean text UI
+              const parentName = (message.channel as any)?.parent?.name;
+              const cleanParent = parentName
+                ? parentName.replace(/<a?:[a-zA-Z0-9_]+:\d+>|[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim()
+                : '';
 
-              const jumpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder().setLabel('Jump to Message').setURL(message.url).setStyle(ButtonStyle.Link)
+              // Clickable Discord channel mention pill: <#channelId>
+              const channelMention = `<#${message.channelId}>`;
+              const channelDisplay = cleanParent
+                ? `${cleanParent} › ${channelMention}`
+                : channelMention;
+
+              const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                new ButtonBuilder()
+                  .setLabel('Go to channel')
+                  .setURL(message.url)
+                  .setStyle(ButtonStyle.Link),
+                new ButtonBuilder()
+                  .setCustomId(`dm_reply:${message.channelId}:${message.id}`)
+                  .setLabel('Reply')
+                  .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                  .setCustomId(`dm_block_server:${message.guild!.id}`)
+                  .setLabel('Block Server Messages')
+                  .setStyle(ButtonStyle.Secondary)
               );
 
-              await user.send({ embeds: [dmEmbed], components: [jumpRow] }).catch(() => { });
-            } catch (err) { }
+              // Send via Discord Components V2 Container (buttons inside the card, above footer)
+              try {
+                const sec = new SectionBuilder()
+                  .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(`# **Rage Notification : ${message.guild?.name}**`)
+                  )
+                  .setThumbnailAccessory(
+                    new ThumbnailBuilder().setURL(guildIcon)
+                  );
+
+                const sep = new SeparatorBuilder().setDivider(true);
+
+                const body = new TextDisplayBuilder().setContent(
+                  `# **Tagged By:** ${message.author}\n**Channel: ${channelDisplay}**\n**Message: ${msgContext}**`
+                );
+
+                const footer = new TextDisplayBuilder().setContent('-# Rage Secure Dm');
+
+                const container = new ContainerBuilder()
+                  .addSectionComponents(sec)
+                  .addSeparatorComponents(sep)
+                  .addTextDisplayComponents(body)
+                  .addActionRowComponents(actionRow)
+                  .addTextDisplayComponents(footer);
+
+                await user.send({
+                  flags: MessageFlags.IsComponentsV2,
+                  components: [container]
+                });
+              } catch (v2Err) {
+                console.warn('[Gateway] Components V2 send fallback:', (v2Err as any)?.message);
+                const divider = '──────────────────────────────────────────';
+                const dmEmbed = new EmbedBuilder()
+                  .setColor(0x0a0a0c)
+                  .setThumbnail(guildIcon)
+                  .setDescription([
+                    `# **Rage Notification : ${message.guild?.name}**`,
+                    `\u200B`,
+                    `\u200B`,
+                    `${divider}`,
+                    `# **Tagged By:** ${message.author}`,
+                    `**Channel: ${channelDisplay}**`,
+                    `**Message: ${msgContext}**`
+                  ].join('\n'))
+                  .setFooter({ text: 'Rage Secure Dm' });
+
+                await user.send({ embeds: [dmEmbed], components: [actionRow] }).catch(() => { });
+              }
+            } catch (err: any) {
+              if (err?.code === 50007) {
+                BlockedDMSettings.block(user.id, message.guild!.id);
+              }
+            }
           });
         }
       }
@@ -941,7 +1135,7 @@ export class Gateway {
       const resolveResult = PrefixResolver.resolvePrefix(message, this.client.user?.id);
       if (!resolveResult.matched) return;
 
-      console.log(`[Gateway] Prefix matched for "${message.content}" -> commandString: "${resolveResult.commandString}"`);
+      console.log(`[Gateway] Prefix matched -> commandString: "${resolveResult.commandString}"`);
 
       // Handle standalone bot mention
       if (resolveResult.isMentionOnly) {
@@ -1025,7 +1219,7 @@ export class Gateway {
         const isOwner = PrefixPermissionManager.isDeveloper(message.author.id, message);
         if (!isOwner) {
           const mainEmbed = Embeds.warn(
-            '🚧 Maintenance Mode Active',
+            'Maintenance Mode Active',
             'The server is currently in **lockdown mode**. All public bot commands are temporarily disabled.\n\nPlease check back shortly.',
             { module: 'system', footer: 'Rage Optimiser Enterprise  •  System Maintenance' }
           );
@@ -1094,55 +1288,15 @@ export class Gateway {
       // Handle built-in prefix command: r!ping
       if (parsed.commandName === 'ping') {
         const wsPing = Math.max(1, Math.round(this.client.ws.ping));
-        const uptimeSec = process.uptime();
-        const startTime = Math.floor((Date.now() - uptimeSec * 1000) / 1000);
-        const heapMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
-
-        const getStatus = (ms: number) => {
-          if (ms < 100) return `${VERIFIED_ICON} Ultra Fast`;
-          if (ms < 250) return `${TIMER_ICON} Normal Speed`;
-          if (ms < 500) return `${TIMER_ICON} Moderate Lag`;
-          return `${WRONG_ICON} High Latency`;
-        };
-
-        const sentMsg = await message.reply(`${TIMER_ICON} Measuring ping...`).catch(() => null);
-        const roundTrip = sentMsg ? Math.max(1, sentMsg.createdTimestamp - message.createdTimestamp) : 10;
         const pingColor = wsPing < 150 ? Colors.LIME : wsPing < 300 ? Colors.WARN : Colors.DANGER;
 
-        const shardId = this.client.shard?.ids[0] ?? 0;
-        const totalShards = this.client.shard?.count ?? 1;
-        const shardStr = this.client.shard ? `#${shardId}/${totalShards} ONLINE` : `#0 ONLINE`;
+        const embed = new EmbedBuilder()
+          .setTitle('WebSocket Latency')
+          .setColor(pingColor)
+          .setDescription(`> **WebSocket Latency:** \`${wsPing}ms\``)
+          .setFooter({ text: 'Rage Optimiser - Speed Test' });
 
-        const embed = buildLimeOverviewCard({
-          title: 'LATENCY & SPEED MONITOR',
-          subtitle: 'LIVE SYSTEM PERFORMANCE',
-          color: pingColor,
-          sections: [
-            {
-              title: `${SHIELD_ICON} GATEWAY & API LATENCY`,
-              items: [
-                `WebSocket Latency: \`${wsPing}ms\` — ${getStatus(wsPing)}`,
-                `REST Round-Trip: \`${roundTrip}ms\` — ${getStatus(roundTrip)}`,
-                `Online Since: <t:${startTime}:R>`
-              ]
-            },
-            {
-              title: `${CONFIG_ICON} HARDWARE & NODE ENVIRONMENT`,
-              items: [
-                `RAM Heap: \`${heapMb} MB\``,
-                `Shard: \`${shardStr}\``,
-                `Runtime: \`Node.js ${process.version}\``
-              ]
-            }
-          ],
-          footerText: 'Rage Optimiser Enterprise • Speed Test'
-        });
-
-        if (sentMsg) {
-          return sentMsg.edit({ content: null, embeds: [embed] }).catch(() => { });
-        } else {
-          return message.reply({ embeds: [embed] }).catch(() => { });
-        }
+        return message.reply({ embeds: [embed] }).catch(() => { });
       }
 
       // Handle built-in prefix command: r!help
@@ -1279,17 +1433,19 @@ export class Gateway {
       this.dispatchEvent('messageReactionRemove', reaction, user);
     });
 
-    this.client.on('guildUpdate', (oldGuild, newGuild) => {
-      this.dispatchEvent('guildUpdate', oldGuild, newGuild);
-    });
-
     // BUG-007 FIX: 'webhookUpdate' is a deprecated alias that mapped to channelUpdate.
     // 'webhooksUpdate' is the correct Discord.js v14 event for webhook CRUD operations.
     this.client.on('webhooksUpdate', (channel) => {
+      const guildId = (channel as any)?.guild?.id;
+      if (guildId) {
+        this.logSyncEvent(guildId, `Discord Event: Webhooks updated in #${(channel as any).name}. Data synced at ${new Date().toLocaleTimeString()}`, 'info');
+        DashboardSyncService.triggerSync(guildId, 500);
+      }
       this.dispatchEvent('webhooksUpdate', channel);
     });
 
     this.client.on('guildDelete', async (guild) => {
+      if (!guild.available) return; // Ignore temporary Discord guild outages
       console.log(`[Gateway] Bot removed from server "${guild.name || guild.id}" (${guild.id})`);
       this.logSyncEvent(guild.id, `Discord Event: Bot was removed from server "${guild.name || guild.id}".`, 'warn');
       this.dispatchEvent('guildDelete', guild);
@@ -1454,6 +1610,13 @@ export class Gateway {
         ) {
           console.log(`[Gateway] Intercepted soundboard raw packet: ${packet.t}`);
           handleSoundboardEffect(packet.d);
+        } else if (packet.t === 'VOICE_CHANNEL_STATUS_UPDATE') {
+          this.dispatchEvent('voiceChannelStatusUpdate', {
+            guildId: packet.d?.guild_id || packet.d?.guildId,
+            channelId: packet.d?.id || packet.d?.channel_id,
+            status: packet.d?.status,
+            ...packet.d
+          });
         }
       }
     });
@@ -1481,11 +1644,11 @@ export class Gateway {
   private async syncSingleGuild(guildId: string) {
     if (!this.client || !this.client.isReady() || !this.client.token) return;
     try {
-      const guild = await this.client.guilds.fetch({ guild: guildId, withCounts: true } as any);
+      const guild = this.client.guilds.cache.get(guildId) || await this.client.guilds.fetch({ guild: guildId, withCounts: true } as any);
       if (!guild) return;
 
-      const roles = await guild.roles.fetch();
-      const channels = await guild.channels.fetch();
+      const roles: any = guild.roles.cache.size > 0 ? guild.roles.cache : await guild.roles.fetch();
+      const channels: any = guild.channels.cache.size > 0 ? guild.channels.cache : await guild.channels.fetch();
 
       // OP 8 FIX: Do NOT call guild.members.fetch({ withPresences: true }) here.
       // That sends op 8 (REQUEST_GUILD_MEMBERS) to the Gateway on EVERY 30s sync
@@ -1499,7 +1662,7 @@ export class Gateway {
       reg.memberCount = guild.approximateMemberCount ?? guild.memberCount;
       reg.onlineCount = exactOnlineCount;
 
-      reg.roles = roles.map(r => ({
+      reg.roles = roles.map((r: any) => ({
         id: r.id,
         name: r.name,
         color: r.hexColor,
@@ -1508,8 +1671,8 @@ export class Gateway {
         position: r.position
       }));
 
-      reg.channels = channels.filter(c => c && (c.type === ChannelType.GuildText || c.type === ChannelType.GuildCategory || c.type === ChannelType.GuildVoice))
-        .map(c => ({
+      reg.channels = channels.filter((c: any) => c && (c.type === ChannelType.GuildText || c.type === ChannelType.GuildCategory || c.type === ChannelType.GuildVoice))
+        .map((c: any) => ({
           id: c!.id,
           name: c!.name,
           type: c!.type === ChannelType.GuildText ? 'text' : (c!.type === ChannelType.GuildVoice ? 'voice' : 'category'),
@@ -1664,6 +1827,9 @@ export class Gateway {
       if (first.guild && typeof first.guild === 'object') {
         if (first.guild.id) return first.guild.id;
       }
+      if (first.id && (first.channels || first.roles || first.members || first.ownerId)) {
+        return first.id;
+      }
 
       if (first.newState && first.newState.guild) return first.newState.guild.id;
       if (first.oldState && first.oldState.guild) return first.oldState.guild.id;
@@ -1683,13 +1849,35 @@ export class Gateway {
 
     const guildId = guildIdOverride || resolveGuildId(args) || process.env.GUILD_ID || 'default_guild';
 
+    // O(1) indexed event lookup across manifests (rebuilt automatically if manifests list changes)
+    const selfAny = this as any;
+    if (!selfAny._eventIndex || selfAny._eventIndexRef !== this.manifests) {
+      const idx = new Map<string, Array<{ m: any; ev: any }>>();
+      for (const m of this.manifests) {
+        if (!m.events) continue;
+        for (const ev of m.events) {
+          if (!ev?.name) continue;
+          let list = idx.get(ev.name);
+          if (!list) {
+            list = [];
+            idx.set(ev.name, list);
+          }
+          list.push({ m, ev });
+        }
+      }
+      selfAny._eventIndex = idx;
+      selfAny._eventIndexRef = this.manifests;
+    }
+
+    const matchingHandlers: Array<{ m: any; ev: any }> = selfAny._eventIndex.get(eventName) || [];
+    if (matchingHandlers.length === 0) return;
+
     // Collect and await all matching handler promises so callers (like InteractionRouter)
     // can await the full round-trip before Discord's 3-second interaction window closes.
     const handlerPromises: Promise<void>[] = [];
 
-    this.manifests.forEach(m => {
-      const ev = m.events?.find((e: any) => e.name === eventName);
-      if (ev) {
+    matchingHandlers.forEach(({ m, ev }) => {
+      {
         const contextObj = {
           guildId,
           logSyncEvent: (msgOrGuildId: string | undefined, msgOrType?: string, type?: 'info' | 'warn' | 'success') => {
@@ -1703,6 +1891,7 @@ export class Gateway {
           getRegistry: () => this.getRegistry(guildId),
           getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId || guildId),
           updateModuleConfig: (id: string, config: Record<string, any>) => this.updateModuleConfig(guildId, id, config),
+          toggleModule: (id: string, enabledOverride?: boolean) => (this as any).toggleModule ? (this as any).toggleModule(guildId, id, enabledOverride) : null,
           triggerEmergencyLock: (gId?: string) => this.triggerEmergencyLock(gId || guildId),
           client: this.client,
           registry: {
@@ -1747,16 +1936,20 @@ export class Gateway {
     const voiceModule = modules.find((m: any) => m.id === 'voice');
     if (!voiceModule) return;
 
+    const vpModule = modules.find((m: any) => m.id === 'voice-protection' || m.id === 'voice_protection');
+    const isVpEnabled = Boolean(vpModule && vpModule.status === 'enabled' && vpModule.config?.enabled !== false);
+
     if (voiceModule.status !== 'enabled') {
       const currentConnection = getVoiceConnection(guildId);
-      if (currentConnection) {
+      const vsD = this.getVoiceState(guildId);
+      if (currentConnection && vsD.lastChannelId && !isVpEnabled) {
         this.logSyncEvent(guildId, 'Voice Presence: Disconnecting from voice channel (Module disabled).', 'info');
         try {
           currentConnection.destroy();
         } catch (e) { }
-        const vsD = this.getVoiceState(guildId);
         vsD.connection = null;
         vsD.connectTime = null;
+        vsD.lastChannelId = null;
         vsD.retryCount = 0;
 
         // Reset transient stats
@@ -1778,7 +1971,7 @@ export class Gateway {
           (currentConn as any)._presenceListener = null;
           currentConn.removeAllListeners();
           currentConn.destroy();
-        } catch (e) {}
+        } catch (e) { }
         const vsD = this.getVoiceState(guildId);
         vsD.connection = null;
         vsD.connectTime = null;
@@ -1803,9 +1996,10 @@ export class Gateway {
     }
 
     const currentConnection = getVoiceConnection(guildId);
+    const activeConnChannelId = currentConnection?.joinConfig?.channelId || this.getVoiceState(guildId).lastChannelId;
 
-    // If channel changed, destroy old connection and reconnect
-    if (currentConnection && this.getVoiceState(guildId).lastChannelId !== channelId) {
+    // If channel changed (and voice-protection isn't actively overriding), destroy old connection and reconnect
+    if (currentConnection && activeConnChannelId !== channelId && !isVpEnabled) {
       this.logSyncEvent(guildId, `Voice Presence: Target channel changed to #${channel.name}. Reconnecting...`, 'info');
       try {
         currentConnection.destroy();
@@ -1814,6 +2008,10 @@ export class Gateway {
       vs.connection = null;
       vs.connectTime = null;
       vs.retryCount = 0;
+    } else if (currentConnection) {
+      const vs = this.getVoiceState(guildId);
+      vs.lastChannelId = currentConnection.joinConfig?.channelId || channelId;
+      if (!vs.connectTime) vs.connectTime = Date.now();
     }
 
     const reconnectDelay = Number(config.reconnectDelay || 5000);
@@ -1867,11 +2065,14 @@ export class Gateway {
         throw new Error('Missing ViewChannel or Connect permissions on voice channel');
       }
 
+      const vpMod = modules.find((m: any) => m.id === 'voice-protection' || m.id === 'voice_protection');
+      const needsAudioReceive = Boolean(vpMod && vpMod.status === 'enabled' && vpMod.config?.enabled !== false);
+
       const connection = joinVoiceChannel({
         channelId: channel.id,
         guildId: guild.id,
         adapterCreator: guild.voiceAdapterCreator,
-        selfDeaf: true,
+        selfDeaf: !needsAudioReceive,
         selfMute: false
       });
 

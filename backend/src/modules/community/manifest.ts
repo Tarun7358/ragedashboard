@@ -1,4 +1,4 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, PermissionFlagsBits } from 'discord.js';
 import path from 'path';
 import fs from 'fs';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
@@ -121,8 +121,16 @@ export function buildLimeWelcomePayload(config: any, member: any, countOverride?
   }
 
   const imgUrl = embedCfg.imageUrl || cfg.imageUrl || cfg.bannerUrl || DEFAULT_WELCOME_IMAGE_URL;
+  let files: AttachmentBuilder[] | undefined = undefined;
   if (imgUrl && imgUrl !== 'none' && imgUrl !== 'off') {
-    embed.setImage(imgUrl);
+    const localPath = resolveWelcomeImagePath(imgUrl);
+    if (localPath) {
+      const attachment = new AttachmentBuilder(localPath, { name: 'welcome-banner.png' });
+      embed.setImage('attachment://welcome-banner.png');
+      files = [attachment];
+    } else if (/^https?:\/\//i.test(imgUrl)) {
+      embed.setImage(imgUrl);
+    }
   }
 
   const rawFooter = embedCfg.footer ?? cfg.footer ?? DEFAULT_LIME_FOOTER;
@@ -130,7 +138,7 @@ export function buildLimeWelcomePayload(config: any, member: any, countOverride?
     embed.setFooter({ text: parseWelcomeVariables(rawFooter, member, countOverride, cfg) });
   }
 
-  return { content, embeds: [embed] };
+  return { content, embeds: [embed], ...(files ? { files } : {}) };
 }
 
 export function registerWelcomeCommands(): void {
@@ -200,7 +208,7 @@ export function registerWelcomeCommands(): void {
               '> • **Card Style**: Lime GG Modern Graphic Matrix',
               `> • **Banner Image**: \`${img.slice(0, 65)}...\``
             ].join('\n'))
-            .setImage(img && img !== 'none' ? img : null)
+            .setImage(img && /^https?:\/\//i.test(img) ? img : null)
             .setFooter({ text: BRAND_FOOTER })
             .setTimestamp();
 
@@ -262,7 +270,7 @@ export function registerWelcomeCommands(): void {
               `> \`${newUrl}\``,
               '> \nRun `r!welcome test` to preview the updated greeting card.'
             ].join('\n'))
-            .setImage(newUrl !== 'none' ? newUrl : null)
+            .setImage(newUrl && /^https?:\/\//i.test(newUrl) ? newUrl : null)
             .setFooter({ text: BRAND_FOOTER })
             .setTimestamp();
 
@@ -706,7 +714,7 @@ export const CommunityManifest: ModuleManifest = {
             '> **Card Style**: Lime GG Modern Graphic Matrix',
             `> **Banner Image**: \`${img.slice(0, 65)}...\``
           ].join('\n'))
-          .setImage(img && img !== 'none' ? img : null)
+          .setImage(img && /^https?:\/\//i.test(img) ? img : null)
           .setFooter({ text: BRAND_FOOTER })
           .setTimestamp();
 
@@ -1003,13 +1011,20 @@ export const CommunityManifest: ModuleManifest = {
     {
       name: 'command_remindme',
       handler: async (client: any, interaction: any, context: any) => {
-        const time = interaction.options.getString('time');
-        const message = interaction.options.getString('message');
-        let ms = 60000;
-        if (time.endsWith('s')) ms = parseInt(time) * 1000;
-        else if (time.endsWith('m')) ms = parseInt(time) * 60000;
-        else if (time.endsWith('h')) ms = parseInt(time) * 3600000;
-        
+        const time = interaction.options.getString('time') || '';
+        const message = interaction.options.getString('message') || '';
+        let ms = NaN;
+        if (time.endsWith('s')) ms = parseInt(time, 10) * 1000;
+        else if (time.endsWith('m')) ms = parseInt(time, 10) * 60000;
+        else if (time.endsWith('h')) ms = parseInt(time, 10) * 3600000;
+        else if (time.endsWith('d')) ms = parseInt(time, 10) * 86400000;
+        else ms = parseInt(time, 10) * 60000;
+
+        if (isNaN(ms) || ms < 1000) {
+          return interaction.reply({ content: '❌ Please specify a valid duration of at least `1s` (e.g., `10m`, `1h`, `1d`).', flags: 64 });
+        }
+        ms = Math.min(ms, 2147483647);
+
         await interaction.reply(`✅ I will remind you in ${time}.`);
         setTimeout(() => {
           interaction.user.send(`⏰ **Reminder:** ${message}`).catch(() => {});
@@ -1139,9 +1154,12 @@ export const CommunityManifest: ModuleManifest = {
     {
       name: 'command_color',
       handler: async (client: any, interaction: any, context: any) => {
-        let hex = interaction.options.getString('hex');
+        let hex = (interaction.options.getString('hex') || '').trim();
         if (!hex.startsWith('#')) hex = '#' + hex;
-        
+        if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+          return interaction.reply({ content: '❌ Invalid hex color code. Please provide a 6-digit hex color like `#ff0000`.', flags: 64 });
+        }
+
         const embed = new EmbedBuilder()
           .setTitle(`Color Preview: ${hex}`)
           .setColor(hex as any)
@@ -1153,9 +1171,19 @@ export const CommunityManifest: ModuleManifest = {
     {
       name: 'command_embed-builder',
       handler: async (client: any, interaction: any, context: any) => {
+        const canManage = interaction.user?.id === interaction.guild?.ownerId ||
+          Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.ManageMessages)) ||
+          Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.ManageGuild)) ||
+          Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.Administrator)) ||
+          Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.ManageMessages)) ||
+          Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator));
+        if (!canManage) {
+          return interaction.reply({ content: '🔒 **Access Denied**: You require **Manage Messages** or **Administrator** permission to build custom embeds.', flags: 64 });
+        }
         const title = interaction.options.getString('title');
         const desc = interaction.options.getString('description');
-        const color = interaction.options.getString('color') || '#4f8cff';
+        const rawColor = (interaction.options.getString('color') || '#4f8cff').trim();
+        const color = /^#?[0-9A-Fa-f]{6}$/.test(rawColor) ? (rawColor.startsWith('#') ? rawColor : `#${rawColor}`) : '#4f8cff';
         const footer = interaction.options.getString('footer');
         const image = interaction.options.getString('image');
 
@@ -1166,7 +1194,7 @@ export const CommunityManifest: ModuleManifest = {
           .setTimestamp();
         
         if (footer) embed.setFooter({ text: footer });
-        if (image) embed.setImage(image);
+        if (image && /^https?:\/\//i.test(image.trim())) embed.setImage(image.trim());
 
         await interaction.reply({ embeds: [embed] });
       }
@@ -1181,6 +1209,16 @@ export const CommunityManifest: ModuleManifest = {
         if (!commModule || commModule.status !== 'enabled') return;
 
         const config = commModule.config;
+
+        if (config.autoRoleId && !member.user?.bot) {
+          try {
+            const role = member.guild.roles.cache.get(config.autoRoleId) || await member.guild.roles.fetch(config.autoRoleId).catch(() => null);
+            if (role && !role.managed && !role.permissions?.has?.(PermissionFlagsBits.Administrator)) {
+              await member.roles.add(config.autoRoleId, 'Community Welcome Auto-Role').catch(() => {});
+            }
+          } catch {}
+        }
+
         const channelId = config.welcomeChannelId;
         if (!channelId) return;
 
@@ -1289,7 +1327,7 @@ export const CommunityManifest: ModuleManifest = {
 
         try {
           const content = (message.content || '').trim().toLowerCase();
-          const isAfkCommand = /^[!r\.\/+]?\s*afk\b/i.test(content) || content.includes('afk');
+          const isAfkCommand = /^[!r\.\/+]?\s*afk\b/i.test(content);
 
           // Remove AFK if the user speaks (and it's NOT the AFK setting command itself)
           const status = await getUserAFK(guildId, message.author.id);

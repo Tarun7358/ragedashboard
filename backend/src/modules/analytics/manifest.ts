@@ -1,5 +1,6 @@
 import { ModuleManifest } from '../../core/types.js';
-import { MessageFlags } from 'discord.js';
+import { MessageFlags, PermissionFlagsBits } from 'discord.js';
+import { isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import {
   Colors, buildRichCard, buildListCard, buildStatusCard,
   VERIFIED_ICON, WRONG_ICON, BOT_ICON, MEMBER_ICON, INFO_ICON, TIMER_ICON, CONFIG_ICON,
@@ -39,7 +40,7 @@ export const AnalyticsManifest: any = {
 
         // ─── OVERVIEW ────────────────────────────────────────────
         if (!sub) {
-          const voiceCount = client.voiceStates?.cache?.size || 0;
+          const voiceCount = interaction.guild?.voiceStates?.cache?.filter((vs: any) => vs.channelId && !vs.member?.user?.bot).size || 0;
           const userCount = client.users?.cache?.size || interaction.guild?.memberCount || 1;
 
           const { embeds, components } = buildRichCard({
@@ -80,7 +81,7 @@ export const AnalyticsManifest: any = {
 
         // ─── VOICE ───────────────────────────────────────────────
         if (sub === 'voice') {
-          const voiceCount = client.voiceStates?.cache?.size || 0;
+          const voiceCount = interaction.guild?.voiceStates?.cache?.filter((vs: any) => vs.channelId && !vs.member?.user?.bot).size || 0;
           const { embeds, components } = buildRichCard({
             emoji: TIMER_ICON,
             title: 'Voice Channel Analytics',
@@ -130,6 +131,20 @@ export const AnalyticsManifest: any = {
           return interaction.reply({ embeds, components });
         }
 
+        if (sub === 'reports' || sub === 'export' || sub === 'reset-stats') {
+          const userId = interaction.user?.id || interaction.author?.id;
+          const isOwner = interaction.guild ? await isOwnerOrExtraOwner(userId, interaction.guild) : false;
+          const isAdmin = isOwner ||
+            Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.Administrator)) ||
+            Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator));
+          if (!isAdmin) {
+            return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Administrator permissions are required for ` + sub + `.`, flags: 64 });
+          }
+          if (sub === 'reset-stats' && !isOwner) {
+            return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and **Extra Owners** can reset server analytics.`, flags: 64 });
+          }
+        }
+
         if (sub === 'reports') {
           return interaction.reply({ content: `${VERIFIED_ICON} **Analytics Report Compiled**: Weekly summary ready. Download via the Web Dashboard.`, flags: 64 });
         }
@@ -145,7 +160,7 @@ export const AnalyticsManifest: any = {
 
         // ─── LIVE ────────────────────────────────────────────────
         if (sub === 'live') {
-          const voiceCount = client.voiceStates?.cache?.size || 0;
+          const voiceCount = interaction.guild?.voiceStates?.cache?.filter((vs: any) => vs.channelId && !vs.member?.user?.bot).size || 0;
           const onlineCount = client.users?.cache?.size || 1;
           const { embeds, components } = buildStatusCard({
             emoji: INFO_ICON,
@@ -170,7 +185,7 @@ export function registerAnalyticsCommands() {
     description: 'Enterprise Real-Time Server Telemetry, Voice & Growth Metrics Tracker',
     category: 'Management',
     usage: 'r!analytics [guild | voice | commands | retention | live | reports | export]',
-    aliases: ['stats', 'telemetry', 'metrics', 'growth'],
+    aliases: ['anl', 'telemetry', 'metrics', 'growth'],
     userPermissions: [],
     cooldownSeconds: 3,
     examples: [

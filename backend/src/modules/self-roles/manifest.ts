@@ -160,13 +160,19 @@ export const SelfRolesManifest: ModuleManifest = {
             if (hasRole) {
               return interaction.reply({ content: `<a:lovemail:1527647157371535420> You already have the **${targetRole.name}** role.`, flags: 64 });
             }
-            await member.roles.add(targetRole.id, 'Self-roles: r!iam command').catch(() => null);
+            const ok = await member.roles.add(targetRole.id, 'Self-roles: r!iam command').then(() => true).catch(() => false);
+            if (!ok) {
+              return interaction.reply({ content: `${WRONG_ICON} Failed to assign role **${targetRole.name}**. Check bot role hierarchy and permissions.`, flags: 64 });
+            }
             return interaction.reply({ content: `${VERIFIED_ICON} Added role **${targetRole.name}** to your profile!`, flags: 64 });
           } else {
             if (!hasRole) {
               return interaction.reply({ content: `${WRONG_ICON} You do not have the **${targetRole.name}** role.`, flags: 64 });
             }
-            await member.roles.remove(targetRole.id, 'Self-roles: r!iamnot command').catch(() => null);
+            const ok = await member.roles.remove(targetRole.id, 'Self-roles: r!iamnot command').then(() => true).catch(() => false);
+            if (!ok) {
+              return interaction.reply({ content: `${WRONG_ICON} Failed to remove role **${targetRole.name}**. Check bot role hierarchy and permissions.`, flags: 64 });
+            }
             return interaction.reply({ content: `${VERIFIED_ICON} Removed role **${targetRole.name}** from your profile!`, flags: 64 });
           }
         }
@@ -272,6 +278,41 @@ export const SelfRolesManifest: ModuleManifest = {
           });
         }
 
+        // --- REMOVE ROLE FROM MENU ---
+        if (sub === 'removerole' || sub === 'delrole') {
+          const menuName = (interaction.options?.getString('menu') || interaction.parsed?.args?.[1])?.toLowerCase();
+          const roleArg = interaction.options?.getRole('role') || interaction.parsed?.args?.[2];
+
+          if (!menuName || !roleArg) {
+            return interaction.reply({ content: `${WRONG_ICON} Syntax: \`r!selfroles removerole <menu_name> <@role>\``, flags: 64 });
+          }
+
+          const menu = menus.find(m => m.name === menuName);
+          if (!menu) {
+            return interaction.reply({ content: `${WRONG_ICON} Menu \`${menuName}\` not found. List active menus with \`r!selfroles list\`.`, flags: 64 });
+          }
+
+          let roleId: string | undefined;
+          if (roleArg?.id) roleId = roleArg.id;
+          else if (typeof roleArg === 'string') {
+            const cleanId = roleArg.replace(/[<@&>]/g, '');
+            const roleObj = guild.roles.cache.get(cleanId) || guild.roles.cache.find((r: any) => r.name.toLowerCase() === roleArg.toLowerCase());
+            roleId = roleObj ? roleObj.id : cleanId;
+          }
+
+          const before = menu.options.length;
+          menu.options = menu.options.filter(o => o.roleId !== roleId);
+          if (menu.options.length === before) {
+            return interaction.reply({ content: `${WRONG_ICON} That role is not in menu \`${menuName}\`.`, flags: 64 });
+          }
+
+          saveMenus(menus);
+          return interaction.reply({
+            content: `${VERIFIED_ICON} Removed role <@&${roleId}> from menu \`${menuName}\` (${menu.options.length} roles remaining).`,
+            flags: 64
+          });
+        }
+
         // --- PUBLISH / SEND MENU ---
         if (sub === 'send' || sub === 'publish') {
           const menuName = (interaction.options?.getString('menu') || interaction.parsed?.args?.[1])?.toLowerCase();
@@ -290,6 +331,8 @@ export const SelfRolesManifest: ModuleManifest = {
             return interaction.reply({ content: `${WRONG_ICON} Cannot send menu \`${menuName}\` because it has 0 roles configured. Add roles first using \`r!selfroles addrole ${menuName} @Role\`.`, flags: 64 });
           }
 
+          const cappedOptions = menu.options.slice(0, 25);
+
           const cardEmbed = buildLimeOverviewCard({
             title: `${VIP_ICON} ${menu.title.toUpperCase()}`,
             subtitle: `${menu.mode === 'single' ? 'SELECT 1 ROLE' : 'TOGGLE ROLES BELOW'}`,
@@ -297,7 +340,7 @@ export const SelfRolesManifest: ModuleManifest = {
             sections: [
               {
                 title: `${MEMBER_ICON} AVAILABLE ROLES`,
-                items: menu.options.map(o => `${o.emoji ? o.emoji + ' ' : '▪️ '}**${o.label}** — <@&${o.roleId}>`)
+                items: cappedOptions.map(o => `${o.emoji ? o.emoji + ' ' : '▪️ '}**${o.label}** — <@&${o.roleId}>`)
               }
             ],
             footerText: `Rage Optimiser • Self Roles System • Menu: ${menu.name}`
@@ -310,24 +353,26 @@ export const SelfRolesManifest: ModuleManifest = {
               .setCustomId(`sr_select:${menu.id}`)
               .setPlaceholder(menu.placeholder || 'Select roles to add or remove...')
               .setMinValues(0)
-              .setMaxValues(menu.mode === 'single' ? 1 : menu.options.length);
+              .setMaxValues(menu.mode === 'single' ? 1 : cappedOptions.length);
 
-            menu.options.forEach(o => {
+            cappedOptions.forEach(o => {
               const opt = new StringSelectMenuOptionBuilder()
                 .setLabel(o.label)
                 .setValue(o.roleId)
                 .setDescription(o.description || `Toggle ${o.label} role`);
-              if (o.emoji) opt.setEmoji(o.emoji);
+              if (o.emoji) {
+                try { opt.setEmoji(o.emoji); } catch {}
+              }
               select.addOptions(opt);
             });
 
             components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
           } else {
-            // Buttons format (up to 5 per row)
+            // Buttons format (up to 5 per row, max 25 buttons)
             const rows: ActionRowBuilder<ButtonBuilder>[] = [];
             let currentRow = new ActionRowBuilder<ButtonBuilder>();
 
-            menu.options.forEach((o, i) => {
+            cappedOptions.forEach((o, i) => {
               if (i > 0 && i % 5 === 0) {
                 rows.push(currentRow);
                 currentRow = new ActionRowBuilder<ButtonBuilder>();
@@ -336,6 +381,9 @@ export const SelfRolesManifest: ModuleManifest = {
                 .setCustomId(`sr_btn:${menu.id}:${o.roleId}`)
                 .setLabel(o.label)
                 .setStyle(ButtonStyle.Secondary);
+              if (o.emoji) {
+                try { btn.setEmoji(o.emoji); } catch {}
+              }
               currentRow.addComponents(btn);
             });
 
@@ -459,11 +507,11 @@ export const SelfRolesManifest: ModuleManifest = {
             const currentlyHas = member.roles.cache.has(rId);
 
             if (shouldHave && !currentlyHas) {
-              await member.roles.add(rId, 'Self-roles selection').catch(() => null);
-              addedRoles.push(rId);
+              const ok = await member.roles.add(rId, 'Self-roles selection').then(() => true).catch(() => false);
+              if (ok) addedRoles.push(rId);
             } else if (!shouldHave && currentlyHas) {
-              await member.roles.remove(rId, 'Self-roles deselection').catch(() => null);
-              removedRoles.push(rId);
+              const ok = await member.roles.remove(rId, 'Self-roles deselection').then(() => true).catch(() => false);
+              if (ok) removedRoles.push(rId);
             }
           }
 
@@ -490,7 +538,10 @@ export const SelfRolesManifest: ModuleManifest = {
           const hasRole = member.roles.cache.has(roleId);
 
           if (hasRole) {
-            await member.roles.remove(roleId, 'Self-roles button toggle').catch(() => null);
+            const ok = await member.roles.remove(roleId, 'Self-roles button toggle').then(() => true).catch(() => false);
+            if (!ok) {
+              return interaction.reply({ content: `${WRONG_ICON} Failed to remove role **${role.name}**. Check bot role hierarchy and permissions.`, flags: MessageFlags.Ephemeral });
+            }
             return interaction.reply({ content: `${WRONG_ICON} Removed role **${role.name}**!`, flags: MessageFlags.Ephemeral });
           } else {
             // Single-select mode enforce
@@ -502,7 +553,10 @@ export const SelfRolesManifest: ModuleManifest = {
                 }
               }
             }
-            await member.roles.add(roleId, 'Self-roles button toggle').catch(() => null);
+            const ok = await member.roles.add(roleId, 'Self-roles button toggle').then(() => true).catch(() => false);
+            if (!ok) {
+              return interaction.reply({ content: `${WRONG_ICON} Failed to grant role **${role.name}**. Check bot role hierarchy and permissions.`, flags: MessageFlags.Ephemeral });
+            }
             return interaction.reply({ content: `${VERIFIED_ICON} Granted role **${role.name}**!`, flags: MessageFlags.Ephemeral });
           }
         }
@@ -548,24 +602,47 @@ export function registerSelfRolesCommands() {
     name: 'selfroles',
     description: 'Enterprise Interactive Self-Roles Engine (Select Menus, Buttons, Direct r!iam commands)',
     category: 'Roles',
-    usage: 'r!selfroles [create <name> <title> | addrole <menu> <@role> | send <menu> [#channel] | list | delete <menu>]',
-    aliases: ['selfrole', 'roleselect', 'rolemenu', 'iam', 'iamnot'],
+    usage: 'r!selfroles [create <name> <title> | addrole <menu> <@role> | removerole <menu> <@role> | send <menu> [#channel] | list | delete <menu>]',
+    aliases: ['selfrole', 'roleselect', 'rolemenu'],
     userPermissions: ['Administrator'],
     cooldownSeconds: 3,
     examples: [
       'r!selfroles create region Region Roles',
       'r!selfroles addrole region @NA 🌎 North America',
-      'r!selfroles send region #roles',
-      'r!iam @NA',
-      'r!iamnot @NA'
+      'r!selfroles send region #roles'
     ],
     moduleOwnerId: 'self-roles',
     subcommands: [
       { name: 'create <name> <title>', description: 'Create a new interactive self-role category panel', examples: ['r!selfroles create platform Choose Platform'] },
       { name: 'addrole <menu> <@role> [emoji] [label]', description: 'Add a role with optional emoji & label to a self-role panel', examples: ['r!selfroles addrole platform @PC 💻 PC Gaming'] },
+      { name: 'removerole <menu> <@role>', description: 'Remove a role from a self-role panel', examples: ['r!selfroles removerole platform @PC'] },
       { name: 'send <menu> [#channel]', description: 'Publish the interactive self-role panel to a channel', examples: ['r!selfroles send platform #roles'] },
       { name: 'list', description: 'List all active self-role panels configured in the server', examples: ['r!selfroles list'] },
       { name: 'delete <menu>', description: 'Delete a self-role panel configuration', examples: ['r!selfroles delete platform'] }
     ]
+  });
+
+  PrefixRegistry.register({
+    name: 'iam',
+    description: 'Self-assign an allowed self-role',
+    category: 'Roles',
+    usage: 'r!iam <@role | role_name>',
+    aliases: [],
+    userPermissions: [],
+    cooldownSeconds: 3,
+    examples: ['r!iam @NA', 'r!iam PC Gaming'],
+    moduleOwnerId: 'self-roles'
+  });
+
+  PrefixRegistry.register({
+    name: 'iamnot',
+    description: 'Remove a self-assigned role from yourself',
+    category: 'Roles',
+    usage: 'r!iamnot <@role | role_name>',
+    aliases: [],
+    userPermissions: [],
+    cooldownSeconds: 3,
+    examples: ['r!iamnot @NA', 'r!iamnot PC Gaming'],
+    moduleOwnerId: 'self-roles'
   });
 }

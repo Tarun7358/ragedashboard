@@ -303,14 +303,6 @@ async function bootstrap() {
   }
 }
 
-process.on('uncaughtException', (err) => {
-  Logger.error(`🔥 CRITICAL: Uncaught Exception: ${err?.message || err}\nStack: ${err?.stack || 'N/A'}`, 'uncaught');
-});
-
-process.on('unhandledRejection', (reason) => {
-  Logger.error(`🔥 CRITICAL: Unhandled Rejection: ${reason instanceof Error ? reason.message : reason}\nStack: ${reason instanceof Error ? reason.stack : 'N/A'}`, 'unhandled');
-});
-
 const handleGracefulShutdown = async (signal: string) => {
   console.log(`\n[Process] Received ${signal}. Initiating clean shutdown...`);
   try {

@@ -1,7 +1,7 @@
 import { ModuleState, DiscordResourceRegistry, ModuleManifest, LogEntry } from './types.js';
 import { Database } from './Database.js';
 import { migrateToUnifiedWhitelist, loadExtraOwnersCache } from '../utils/whitelistCheck.js';
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { DashboardSyncService } from '../services/DashboardSyncService.js';
 
 
@@ -37,15 +37,21 @@ export class ModuleRegistry {
   }
 
   private fillManifestModules(modules: ModuleState[]) {
+    const alwaysEnabledCore = ['config', 'diagnostics', 'bulk_ops', 'rage-enterprise', 'botstats', 'discord-dashboard', 'brain', 'backups', 'join_role_guard'];
     this.manifests.forEach(manifest => {
       if (!modules.find(m => m.id === manifest.id)) {
+        const isCore = alwaysEnabledCore.includes(manifest.id);
         modules.push({
           id: manifest.id,
           name: manifest.name,
-          status: 'enabled',
+          status: isCore ? 'enabled' : 'disabled',
           progress: 0,
           errors: [],
-          config: {}
+          config: manifest.id === 'security'
+            ? { antiNukeEnabled: false }
+            : manifest.id === 'automod'
+            ? { autoModEnabled: false, blockLinks: false }
+            : {}
         });
       }
     });
@@ -304,7 +310,7 @@ export class ModuleRegistry {
                     .setDescription(finalMsg)
                     .setColor(color as any)
                     .setTimestamp();
-                  await channel.send({ embeds: [embed] });
+                  await channel.send({ embeds: [embed], flags: MessageFlags.SuppressNotifications });
                 }
               }
             }
@@ -413,7 +419,7 @@ export class ModuleRegistry {
         //   - if progress > 0 and no errors → 'enabled'
         //   - otherwise → 'error'
         if (mod.status !== 'disabled') {
-          mod.status = 'enabled';
+          mod.status = errors.length === 0 ? 'enabled' : 'error';
         }
       }
     });

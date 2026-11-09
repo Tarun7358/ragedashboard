@@ -1,3 +1,4 @@
+import { PayloadFormatter } from '../PayloadFormatter.js';
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -164,11 +165,11 @@ export class PrefixHelpCenter {
         `> ${ARROW_ICON} Type **\`${currentPrefix}help\`** to open the Master Command Matrix.`,
         `> ${ARROW_ICON} Use the select menu below to explore available command modules.`
       ].join('\n'))
-      .setFooter({ text: 'Rage Optimiser Enterprise • Advanced Security & Management' })
+      .setFooter({ text: 'Rage Optimiser Enterprise - Advanced Security & Management' })
       .setTimestamp();
 
     const components = this.buildComponents('home', 1, 1);
-    return message.reply({ embeds: [embed], components });
+    return message.reply(PayloadFormatter.normalize({ embeds: [embed], components }, message.client.user));
   }
 
   private static searchCommands(query: string): PrefixCommandMeta[] {
@@ -194,11 +195,11 @@ export class PrefixHelpCenter {
         `Found **${results.length}** commands matching your search query:\n`,
         ...results.map(c => `> ${ARROW_ICON} **\`${prefix}${c.name}\`** — ${c.description} (\`${c.category}\`)`)
       ].join('\n'))
-      .setFooter({ text: 'Rage Optimiser Enterprise • Advanced Security & Management' })
+      .setFooter({ text: 'Rage Optimiser Enterprise - Advanced Security & Management' })
       .setTimestamp();
 
     const components = this.buildComponents('home', 1, 1);
-    return message.reply({ embeds: [embed], components });
+    return message.reply(PayloadFormatter.normalize({ embeds: [embed], components }, message.client.user));
   }
 
   public static async sendRootHelp(message: Message, prefix: string, latency: number, updateInteraction?: any): Promise<any> {
@@ -221,7 +222,7 @@ export class PrefixHelpCenter {
       ...categories.map(cat => {
         const meta = this.getCategoryMeta(cat);
         const count = PrefixRegistry.getCommandsByCategory(cat).length;
-        return `• ${meta.icon} **${cat}** — \`${count} commands\``;
+        return `- ${meta.icon} **${cat}** — \`${count} commands\``;
       }),
       `\n--------------------------------------------------`,
       `*Select a module from the menu below or type \`${prefix}help <command_name>\` or \`${prefix}help <cmd> <subcmd>\` for detailed manuals.*`
@@ -234,7 +235,7 @@ export class PrefixHelpCenter {
       .setDescription(this.fitDescription(descLines, categories, prefix))
       .setThumbnail(botUser?.displayAvatarURL({ size: 256 }) ?? null)
       .setImage(DEFAULT_HELP_BANNER)
-      .setFooter({ text: 'Rage Optimiser Enterprise • 29 Defense Rules • Zero-Latency Rollback' })
+      .setFooter({ text: 'Rage Optimiser Enterprise - 29 Defense Rules - Zero-Latency Rollback' })
       .setTimestamp();
 
     const selectMenu = new StringSelectMenuBuilder()
@@ -267,13 +268,14 @@ export class PrefixHelpCenter {
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnInvite, btnSupport);
 
+    const helpPayload = PayloadFormatter.normalize({ embeds: [embed], components: [row1, row2] }, botUser);
     if (updateInteraction) {
-      return updateInteraction.update({ embeds: [embed], components: [row1, row2] }).catch((err: any) => {
+      return updateInteraction.update(helpPayload).catch((err: any) => {
         console.error('[PrefixHelpCenter] Failed to update root help:', err?.message || err);
       });
     }
     try {
-      return await message.reply({ embeds: [embed], components: [row1, row2] });
+      return await message.reply(helpPayload);
     } catch (err: any) {
       console.error('[PrefixHelpCenter] Failed to send root help embed:', err?.message || err, err?.rawError ? JSON.stringify(err.rawError) : '');
       const plain = `**Rage Optimiser Command Hub**\nPrefix: \`${prefix}\`\nModules: ${categories.map(c => `\`${c}\``).join(', ')}\n\nUse \`${prefix}help <module>\` or \`${prefix}help <command>\`.`;
@@ -289,7 +291,7 @@ export class PrefixHelpCenter {
     if (full.length <= 4000) return full;
     const compact = [
       ...lines.slice(0, 7),
-      categories.map(cat => `\`${cat}\` (${PrefixRegistry.getCommandsByCategory(cat).length})`).join(' • '),
+      categories.map(cat => `\`${cat}\` (${PrefixRegistry.getCommandsByCategory(cat).length})`).join(' - '),
       `\n*Select a module from the menu below or type \`${prefix}help <command_name>\` for detailed manuals.*`
     ].join('\n');
     return compact.length <= 4000 ? compact : compact.slice(0, 3990) + '…';
@@ -344,7 +346,7 @@ export class PrefixHelpCenter {
       .setDescription(embedDesc)
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
       .setImage(DEFAULT_HELP_BANNER)
-      .setFooter({ text: `Rage Optimiser Enterprise • Module Commands: ${visibleCmds.length} • High Performance` })
+      .setFooter({ text: `Rage Optimiser Enterprise - Module Commands: ${visibleCmds.length} - High Performance` })
       .setTimestamp();
 
     const categories = PrefixRegistry.getCategories();
@@ -375,7 +377,7 @@ export class PrefixHelpCenter {
     const btnHome = new ButtonBuilder()
       .setCustomId(`help_btn_home${execSuffix}`)
       .setLabel('Home Center')
-      .setStyle(ButtonStyle.Success);
+      .setStyle(ButtonStyle.Secondary);
 
     const btnClose = new ButtonBuilder()
       .setCustomId(`help_btn_close${execSuffix}`)
@@ -402,10 +404,11 @@ export class PrefixHelpCenter {
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnComponents);
 
+    const modPayload = PayloadFormatter.normalize({ embeds: [embed], components: [row1, row2] }, message.client.user);
     if (updateInteraction) {
-      return updateInteraction.update({ embeds: [embed], components: [row1, row2] }).catch(() => {});
+      return updateInteraction.update(modPayload).catch(() => {});
     }
-    return message.reply({ embeds: [embed], components: [row1, row2] }).catch(() => {});
+    return message.reply(modPayload).catch(() => {});
   }
 
   public static async sendCommandHelp(message: Message, cmd: PrefixCommandMeta, prefix: string, updateInteraction?: any): Promise<any> {
@@ -416,7 +419,7 @@ export class PrefixHelpCenter {
 
     const embed = new EmbedBuilder()
       .setColor(hasPermission ? 0x84cc16 : 0xEF4444)
-      .setAuthor({ name: 'Rage Optimiser Enterprise • Command Manual' })
+      .setAuthor({ name: 'Rage Optimiser Enterprise - Command Manual' })
       .setTitle(`${hasPermission ? SHIELD_ICON : WRONG_ICON} Command Manual: ${prefix}${cmd.name}`)
       .setDescription([
         `> **Description**: ${cmd.description}`,
@@ -432,14 +435,14 @@ export class PrefixHelpCenter {
         { name: 'Bot Permission', value: cmd.botPermissions && cmd.botPermissions.length > 0 ? cmd.botPermissions.map(p => `\`${p}\``).join(', ') : '`SendMessages`', inline: true }
       )
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
-      .setFooter({ text: `Rage Optimiser • Tip: Use ${prefix}help ${cmd.name} <subcommand> for targeted manual` })
+      .setFooter({ text: `Rage Optimiser - Tip: Use ${prefix}help ${cmd.name} <subcommand> for targeted manual` })
       .setTimestamp();
 
     if (cmd.subcommands && cmd.subcommands.length > 0) {
       const subLines: string[] = [];
       cmd.subcommands.forEach(s => {
         const subNameClean = s.name.startsWith(cmd.name) ? s.name : `${cmd.name} ${s.name}`;
-        subLines.push(`• **\`${prefix}${subNameClean}\`**\n> └ ${s.description}`);
+        subLines.push(`- **\`${prefix}${subNameClean}\`**\n> └ ${s.description}`);
       });
 
       const fullSubText = subLines.join('\n');
@@ -478,10 +481,11 @@ export class PrefixHelpCenter {
 
     const components = this.buildComponents(cmd.category, 1, 1, executorId);
 
+    const cmdPayload = PayloadFormatter.normalize({ embeds: [embed], components }, message.client.user);
     if (updateInteraction) {
-      return updateInteraction.update({ embeds: [embed], components }).catch(() => {});
+      return updateInteraction.update(cmdPayload).catch(() => {});
     }
-    return message.reply({ embeds: [embed], components }).catch(() => {});
+    return message.reply(cmdPayload).catch(() => {});
   }
 
   public static async sendSubcommandHelp(message: Message, mainCmd: PrefixCommandMeta, subCmd: any, prefix: string, updateInteraction?: any): Promise<any> {
@@ -492,7 +496,7 @@ export class PrefixHelpCenter {
 
     const embed = new EmbedBuilder()
       .setColor(hasPermission ? 0x84cc16 : 0xEF4444)
-      .setAuthor({ name: 'Rage Optimiser Enterprise • Targeted Subcommand Manual' })
+      .setAuthor({ name: 'Rage Optimiser Enterprise - Targeted Subcommand Manual' })
       .setTitle(`${hasPermission ? SHIELD_ICON : WRONG_ICON} Subcommand Manual: ${displayUsage}`)
       .setDescription([
         `> **Description**: ${subCmd.description || 'Subcommand execution mode for ' + mainCmd.name}`,
@@ -508,7 +512,7 @@ export class PrefixHelpCenter {
         { name: 'Bot Permission', value: mainCmd.botPermissions && mainCmd.botPermissions.length > 0 ? mainCmd.botPermissions.map(p => `\`${p}\``).join(', ') : '`SendMessages`', inline: true }
       )
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
-      .setFooter({ text: `Rage Optimiser • Back to parent manual: ${prefix}help ${mainCmd.name}` })
+      .setFooter({ text: `Rage Optimiser - Back to parent manual: ${prefix}help ${mainCmd.name}` })
       .setTimestamp();
 
     if (subCmd.examples && subCmd.examples.length > 0) {
@@ -531,10 +535,11 @@ export class PrefixHelpCenter {
 
     const components = this.buildComponents(mainCmd.category, 1, 1, executorId);
 
+    const subPayload = PayloadFormatter.normalize({ embeds: [embed], components }, message.client.user);
     if (updateInteraction) {
-      return updateInteraction.update({ embeds: [embed], components }).catch(() => {});
+      return updateInteraction.update(subPayload).catch(() => {});
     }
-    return message.reply({ embeds: [embed], components }).catch(() => {});
+    return message.reply(subPayload).catch(() => {});
   }
 
   private static buildComponents(currentCategory: string, currentPage: number, totalPages: number, executorId?: string): ActionRowBuilder<any>[] {
@@ -594,7 +599,7 @@ export class PrefixHelpCenter {
     const btnClose = new ButtonBuilder()
       .setCustomId(`help_btn_close${execSuffix}`)
       .setLabel('Close')
-      .setStyle(ButtonStyle.Danger);
+      .setStyle(ButtonStyle.Secondary);
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
       btnHome,

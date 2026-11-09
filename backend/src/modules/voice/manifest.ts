@@ -39,7 +39,7 @@ export const VoiceManifest: ModuleManifest = {
     {
       name: '247',
       description: 'Manage 24/7 bot voice presence — keep the bot alive in a voice channel permanently.',
-      aliases: ['24/7', '24-7', 'vc', 'voice', 'vp'],
+      aliases: ['24/7', '24-7', 'vp'],
       usage: 'r!247 <join|leave|status|set> [#channel]',
       examples: [
         'r!247 join #General',

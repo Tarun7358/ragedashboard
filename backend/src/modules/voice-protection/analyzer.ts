@@ -14,6 +14,7 @@ interface UserMonitorState {
 
 const activeMonitors: Map<string, Map<string, UserMonitorState>> = new Map();
 const activeSubscriptions: Map<string, Map<string, any>> = new Map();
+const guildContexts: Map<string, any> = new Map();
 let analysisInterval: NodeJS.Timeout | null = null;
 
 export function startMonitoringUser(
@@ -24,6 +25,10 @@ export function startMonitoringUser(
   config: any,
   context: any
 ) {
+  if (context) {
+    guildContexts.set(guildId, context);
+  }
+
   let guildMonitors = activeMonitors.get(guildId);
   if (!guildMonitors) {
     guildMonitors = new Map();
@@ -61,8 +66,17 @@ export function startMonitoringUser(
     guildMonitors.set(userId, monitorState);
     guildSubs.set(userId, stream);
 
+    const cleanupSub = () => {
+      guildSubs?.delete(userId);
+    };
+    stream.once('end', cleanupSub);
+    stream.once('close', cleanupSub);
+    stream.once('error', cleanupSub);
+
     stream.on('data', (chunk: Buffer) => {
-      monitorState.audioBuffer = Buffer.concat([monitorState.audioBuffer, chunk]);
+      if (monitorState.audioBuffer.length < 65536) {
+        monitorState.audioBuffer = Buffer.concat([monitorState.audioBuffer, chunk]);
+      }
       monitorState.lastActiveTime = Date.now();
     });
 
@@ -106,6 +120,9 @@ export function stopMonitoringAllInGuild(guildId: string) {
 }
 
 export function startAnalysisLoop(client: any, getModulesState: (guildId: string) => any, context: any) {
+  if (context?.guildId) {
+    guildContexts.set(context.guildId, context);
+  }
   if (analysisInterval) return;
 
   analysisInterval = setInterval(async () => {
@@ -123,6 +140,7 @@ export function startAnalysisLoop(client: any, getModulesState: (guildId: string
       const threshold = config.threshold ?? 85;
       const duration = config.duration ?? 3;
       const maxWindow = config.rollingAverageWindow ?? 20;
+      const ctx = guildContexts.get(guildId) || context;
 
       for (const [userId, state] of guildMonitors.entries()) {
         const idleTime = Date.now() - state.lastActiveTime;
@@ -157,7 +175,7 @@ export function startAnalysisLoop(client: any, getModulesState: (guildId: string
                 Math.round(avgRms),
                 peak,
                 config,
-                context
+                ctx
               );
               state.speakingStartTime = null;
               state.rollingWindow = [];

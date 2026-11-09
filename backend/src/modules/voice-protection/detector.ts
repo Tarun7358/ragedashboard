@@ -73,7 +73,9 @@ export async function updateVoiceChannelConnection(guild: any, config: any, cont
   if (bestChannel) {
     if (!currentConnection) {
       // Connect to the channel
-      const permissions = bestChannel.permissionsFor(guild.members.me);
+      const me = guild.members?.me;
+      if (!me) return;
+      const permissions = bestChannel.permissionsFor(me);
       if (!permissions?.has('ViewChannel') || !permissions?.has('Connect') || !permissions?.has('MuteMembers')) {
         if (context.logSyncEvent) {
           context.logSyncEvent(
@@ -120,7 +122,9 @@ export async function updateVoiceChannelConnection(guild: any, config: any, cont
           : 0;
 
         if (isManualOverride || maxHumans > currentHumans) {
-          const permissions = bestChannel.permissionsFor(guild.members.me);
+          const me = guild.members?.me;
+          if (!me) return;
+          const permissions = bestChannel.permissionsFor(me);
           if (!permissions?.has('ViewChannel') || !permissions?.has('Connect') || !permissions?.has('MuteMembers')) {
             return;
           }
@@ -173,6 +177,9 @@ export async function handleVoiceStateUpdate(
   config: any,
   context: any
 ) {
+  const member = newState.member || oldState.member;
+  if (member?.user?.bot) return;
+
   const guild = newState.guild || oldState.guild;
   if (!guild) return;
 
@@ -180,6 +187,18 @@ export async function handleVoiceStateUpdate(
   if (!config.enabled) return;
 
   const memberId = newState.id;
+
+  // If a human user joins a voice channel while server-muted and has an expired temp mute, unmute immediately
+  if (newState.channelId && newState.serverMute === true && config.autoUnmute !== false && Array.isArray(config.activeMutes) && config.activeMutes.length > 0) {
+    const now = Date.now();
+    const expiredForUser = config.activeMutes.some((m: any) => m.userId === memberId && now >= m.unmuteAt);
+    if (expiredForUser) {
+      await member?.voice?.setMute?.(false, 'Voice Protection: Temporary mute expired').catch(() => {});
+      const remainingMutes = config.activeMutes.filter((m: any) => !(m.userId === memberId && now >= m.unmuteAt));
+      config.activeMutes = remainingMutes;
+      await context.updateModuleConfig?.('voice-protection', { activeMutes: remainingMutes });
+    }
+  }
 
   // 1. Channel Hopping Detection
   if (newState.channelId && oldState.channelId !== newState.channelId) {
@@ -190,6 +209,7 @@ export async function handleVoiceStateUpdate(
     joinHistory.set(memberId, history);
 
     if (history.length > 3) {
+      joinHistory.delete(memberId);
       await executePunishment(
         client,
         guildId,
@@ -214,6 +234,7 @@ export async function handleVoiceStateUpdate(
     muteHistory.set(memberId, history);
 
     if (history.length > 5) {
+      muteHistory.delete(memberId);
       await executePunishment(
         client,
         guildId,

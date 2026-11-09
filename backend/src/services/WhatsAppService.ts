@@ -65,7 +65,7 @@ export class WhatsAppService {
   // ─── Configuration ───────────────────────────────────────────────────────────
 
   public static isEnabled(): boolean {
-    return process.env.WHATSAPP_ENABLED === 'true';
+    return process.env.WHATSAPP_ENABLED === 'true' && process.env.WHATSAPP_TELEMETRY !== 'false';
   }
 
   public static getOwnerNumber(): string {
@@ -276,9 +276,23 @@ export class WhatsAppService {
       const msgRetryMap = new Map<string, number>();
       const msgRetryCounterCache = {
         get: (key: string) => msgRetryMap.get(key),
-        set: (key: string, value: any) => msgRetryMap.set(key, value),
+        set: (key: string, value: any) => {
+          if (msgRetryMap.size > 5000) {
+            const firstKey = msgRetryMap.keys().next().value;
+            if (firstKey !== undefined) msgRetryMap.delete(firstKey);
+          }
+          msgRetryMap.set(key, value);
+        },
         del: (key: string) => msgRetryMap.delete(key),
       };
+
+      // Clean up previous socket instance before creating a new one
+      if (this.socket) {
+        try {
+          this.socket.ev?.removeAllListeners?.();
+          this.socket.end?.(undefined);
+        } catch {}
+      }
 
       const sock = makeWASocket({
         auth: state,
@@ -935,8 +949,9 @@ export class WhatsAppService {
               await member.roles.remove(cfg.quarantineRoleId).catch(() => {});
             }
 
-            if (userEntry?.originalRoles) {
-              for (const rId of userEntry.originalRoles) {
+            const rolesToRestore = userEntry?.originalRoles || userEntry?.roles || userEntry?.roleIds || [];
+            if (Array.isArray(rolesToRestore)) {
+              for (const rId of rolesToRestore) {
                 await member.roles.add(rId).catch(() => {});
               }
             }
@@ -1373,12 +1388,14 @@ export class WhatsAppService {
   // ─── Outbound Alert API ───────────────────────────────────────────────────────
 
   public static async sendAlert(text: string): Promise<boolean> {
+    if (!this.isEnabled()) return false;
     const targetJid = this.getGroupJid() || this.getOwnerJid();
     if (!targetJid) return false;
     return this.sendRaw(targetJid, text);
   }
 
   public static async sendSecurityAlert(payload: SecurityAlertPayload): Promise<boolean> {
+    if (!this.isEnabled()) return false;
     const text =
       `> *[SECURITY THREAT DETECTED]*\n` +
       `────────────────────────────\n` +
@@ -1395,6 +1412,7 @@ export class WhatsAppService {
   }
 
   public static async sendTicketAlert(ticket: TicketAlertPayload): Promise<boolean> {
+    if (!this.isEnabled()) return false;
     const text =
       `> *[NEW SUPPORT TICKET OPENED]*\n` +
       `────────────────────────────\n` +
@@ -1408,6 +1426,7 @@ export class WhatsAppService {
   }
 
   public static async send2FAVerificationCode(code: string, purpose: string, guildName?: string): Promise<boolean> {
+    if (!this.isEnabled()) return false;
     const text =
       `> *[2FA VERIFICATION CODE]*\n` +
       `────────────────────────────\n` +
@@ -1421,6 +1440,7 @@ export class WhatsAppService {
   }
 
   public static async sendSystemAlert(title: string, message: string): Promise<boolean> {
+    if (!this.isEnabled()) return false;
     const text =
       `> *[SYSTEM ALERT: ${title.toUpperCase()}]*\n` +
       `────────────────────────────\n` +

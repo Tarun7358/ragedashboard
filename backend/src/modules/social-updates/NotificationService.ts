@@ -61,7 +61,8 @@ export class NotificationService {
     const isLive = data['video.live'] === 'true';
     const isPremiere = data['video.premiere'] === 'true';
     const isShort = data['video.short'] === 'true';
-    const isInstagram = !!data['profile.username'] && (!!data['post.id'] || data['provider'] === 'instagram');
+    const provider = (data['provider'] || (data['video.id'] ? 'youtube' : (data['post.id'] ? 'instagram' : ''))).toLowerCase();
+    const isInstagram = provider === 'instagram';
 
     const defaultFooter = isLive
       ? '{channel.name} • Live Stream'
@@ -109,6 +110,7 @@ export class NotificationService {
     const cfg = TemplateEngine.resolveEmbedConfig(merged as Record<string, any>, data) as EmbedConfig;
 
     const embed = new EmbedBuilder();
+    const validUrl = (u?: string) => (u && /^https?:\/\//i.test(u.trim()) ? u.trim() : undefined);
 
     // Color
     if (cfg.color) {
@@ -121,15 +123,24 @@ export class NotificationService {
     if (cfg.authorEnabled && cfg.authorName) {
       embed.setAuthor({
         name: cfg.authorName.substring(0, 256),
-        iconURL: cfg.authorIcon || undefined,
-        url: cfg.authorUrl || undefined
+        iconURL: validUrl(cfg.authorIcon),
+        url: validUrl(cfg.authorUrl)
       });
     }
 
     // Title
     if (cfg.titleEnabled && cfg.title) {
-      embed.setTitle(cfg.title.substring(0, 256));
-      if (cfg.titleUrl) embed.setURL(cfg.titleUrl);
+      const rawTitleLines = cfg.title.split('\n').map(l => l.trim()).filter(Boolean);
+      const singleLineTitle = (rawTitleLines[0] || cfg.title).substring(0, 256);
+      embed.setTitle(singleLineTitle);
+      const safeTitleUrl = validUrl(cfg.titleUrl);
+      if (safeTitleUrl) embed.setURL(safeTitleUrl);
+
+      // If the title had multiline content and description is empty, preserve remaining lines in description
+      if (rawTitleLines.length > 1 && !cfg.description) {
+        cfg.description = rawTitleLines.slice(1).join('\n');
+        cfg.descriptionEnabled = true;
+      }
     }
 
     // Description
@@ -138,13 +149,15 @@ export class NotificationService {
     }
 
     // Thumbnail
-    if (cfg.thumbnailEnabled && cfg.thumbnail) {
-      try { embed.setThumbnail(cfg.thumbnail); } catch {}
+    const safeThumb = cfg.thumbnailEnabled ? validUrl(cfg.thumbnail) : undefined;
+    if (safeThumb) {
+      try { embed.setThumbnail(safeThumb); } catch {}
     }
 
     // Image
-    if (cfg.imageEnabled && cfg.image) {
-      try { embed.setImage(cfg.image); } catch {}
+    const safeImage = cfg.imageEnabled ? validUrl(cfg.image) : undefined;
+    if (safeImage) {
+      try { embed.setImage(safeImage); } catch {}
     }
 
     // Fields
@@ -164,7 +177,7 @@ export class NotificationService {
     if (cfg.footerEnabled && cfg.footerText) {
       embed.setFooter({
         text: cfg.footerText.substring(0, 2048),
-        iconURL: cfg.footerIcon || undefined
+        iconURL: validUrl(cfg.footerIcon)
       });
     }
 

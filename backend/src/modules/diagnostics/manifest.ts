@@ -1,8 +1,9 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, EmbedBuilder } from 'discord.js';
 import fs from 'fs';
 import { Colors, Embeds, buildLimeOverviewCard, fmt, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, MEMBER_ICON, BOT_ICON, INFO_ICON } from '../../core/UIFactory.js';
 import { UptimeBroadcaster } from '../../services/UptimeBroadcaster.js';
+import { Database } from '../../core/Database.js';
 
 function getPingStatus(ms: number) {
   if (ms < 100) return `${VERIFIED_ICON} Ultra Fast`;
@@ -13,41 +14,18 @@ function getPingStatus(ms: number) {
 
 function createPingEmbed(client: any, roundTripMs: number, wsPingMs: number) {
   const ws = Math.max(1, Math.round(wsPingMs));
-  const rt = Math.max(1, Math.round(roundTripMs));
-  const uptimeSec = process.uptime();
-  const startTime = Math.floor((Date.now() - uptimeSec * 1000) / 1000);
-  const heapMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
 
-  return buildLimeOverviewCard({
-    title: 'LATENCY & SPEED MONITOR',
-    subtitle: 'LIVE SYSTEM DIAGNOSTICS & TELEMETRY',
-    color: ws < 150 ? Colors.BRAND : ws < 300 ? Colors.WARN : Colors.DANGER,
-    sections: [
-      {
-        title: '<:link:1532620952087826602> CONNECTION PERFORMANCE',
-        items: [
-          `WebSocket Latency: \`${ws}ms\` — ${getPingStatus(ws)}`,
-          `REST Round-Trip: \`${rt}ms\` — ${getPingStatus(rt)}`,
-          `Online Uptime: <t:${startTime}:R>`
-        ]
-      },
-      {
-        title: '<:config:1532425712844144701> INFRASTRUCTURE & RUNTIME',
-        items: [
-          `RAM Heap Usage: \`${heapMb} MB\``,
-          `Shard Cluster Status: \`#0 ONLINE\``,
-          `Node.js Engine: \`${process.version}\``
-        ]
-      }
-    ],
-    footerText: 'Rage Optimiser Enterprise • Diagnostics Telemetry'
-  });
+  return new EmbedBuilder()
+    .setTitle('WebSocket Latency')
+    .setColor(ws < 150 ? Colors.BRAND : ws < 300 ? Colors.WARN : Colors.DANGER)
+    .setDescription(`> **WebSocket Latency:** \`${ws}ms\``)
+    .setFooter({ text: 'Rage Optimiser - Speed Test' });
 }
 
 function createPingComponents(userId: string) {
   const button = new ButtonBuilder()
     .setCustomId(`ping_refresh_${userId}`)
-    .setLabel('Refresh Diagnostics')
+    .setLabel('Refresh Latency')
     .setStyle(ButtonStyle.Success);
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(button)];
 }
@@ -265,7 +243,7 @@ export const DiagnosticsManifest: ModuleManifest = {
 
         if (sub === 'database') {
           try {
-            const db = context.db;
+            const db = context?.db || Database.getDb();
             const status = db ? `${VERIFIED_ICON} Operational` : `${WRONG_ICON} Offline / Unavailable`;
             const embed = buildLimeOverviewCard({
               title: 'DATABASE ENGINE STATUS',

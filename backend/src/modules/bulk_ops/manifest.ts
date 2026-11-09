@@ -149,15 +149,24 @@ export const BulkOpsManifest: ModuleManifest = {
           return interaction.reply({ content: '<a:warning:1546155193303957504> Bulk commands must be run inside a server.', flags: 64 });
         }
 
-        if (sub && (sub === 'role-add' || sub === 'role-remove' || sub === 'role-purge')) {
+        if (sub && (sub === 'role-add' || sub === 'role-remove' || sub === 'role-purge' || sub === 'mass-ban')) {
           const { isOwnerOrExtraOwner, checkWhitelistPermission } = await import('../../utils/whitelistCheck.js');
           const isOwner = await isOwnerOrExtraOwner(interaction.user.id, guild);
-          const isWhitelisted = await checkWhitelistPermission(interaction.user.id, guild, context, sub === 'role-add' ? 'anti_role_grant' : 'anti_role_remove');
-          if (!isOwner && !isWhitelisted) {
-            return interaction.reply({
-              content: '<a:warning:1546155193303957504> 🔒 **Access Denied**: Bulk role operations can only be executed by the **Server Owner**, **Extra Owners**, and **Whitelisted Members**.\nNormal Administrator permissions are not sufficient.',
-              flags: 64
-            });
+          if (sub === 'mass-ban') {
+            if (!isOwner) {
+              return interaction.reply({
+                content: '<a:warning:1546155193303957504> 🔒 **Access Denied**: Mass ban can only be executed by the **Server Owner** or **Extra Owners**.',
+                flags: 64
+              });
+            }
+          } else {
+            const isWhitelisted = await checkWhitelistPermission(interaction.user.id, guild, context, sub === 'role-add' ? 'anti_role_grant' : 'anti_role_remove');
+            if (!isOwner && !isWhitelisted) {
+              return interaction.reply({
+                content: '<a:warning:1546155193303957504> 🔒 **Access Denied**: Bulk role operations can only be executed by the **Server Owner**, **Extra Owners**, and **Whitelisted Members**.\nNormal Administrator permissions are not sufficient.',
+                flags: 64
+              });
+            }
           }
         }
 
@@ -196,6 +205,25 @@ export const BulkOpsManifest: ModuleManifest = {
               return interaction.editReply({ content: '<a:warning:1546155193303957504> Please specify a valid target role to add.' });
             }
 
+            const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+            const isOwner = await isOwnerOrExtraOwner(interaction.user.id, guild);
+            const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+            const execMember = interaction.member?.roles?.highest ? interaction.member : await guild.members.fetch(interaction.user.id).catch(() => null);
+            if (role.managed || role.id === guild.id) {
+              return interaction.editReply({ content: '<a:warning:1546155193303957504> Cannot bulk assign managed/integration roles or `@everyone`.' });
+            }
+            if (botMember && role.position >= botMember.roles.highest.position) {
+              return interaction.editReply({ content: '<a:warning:1546155193303957504> Target role is equal to or higher than the bot\'s highest role.' });
+            }
+            if (!isOwner) {
+              if (role.permissions?.has?.(PermissionFlagsBits.Administrator)) {
+                return interaction.editReply({ content: '<a:warning:1546155193303957504> Only the **Server Owner** or **Extra Owners** can bulk assign roles with `Administrator` permissions.' });
+              }
+              if (execMember && role.position >= execMember.roles.highest.position) {
+                return interaction.editReply({ content: '<a:warning:1546155193303957504> Target role is equal to or higher than your highest role.' });
+              }
+            }
+
             const filterRole = interaction.options.getRole('filter_role');
             const members = await guild.members.fetch().catch(() => guild.members.cache);
             let targets = members.filter((m: any) => !m.user.bot);
@@ -218,6 +246,25 @@ export const BulkOpsManifest: ModuleManifest = {
             const role = interaction.options.getRole('role');
             if (!role) {
               return interaction.editReply({ content: '<a:warning:1546155193303957504> Please specify a valid target role to remove.' });
+            }
+
+            const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+            const isOwner = await isOwnerOrExtraOwner(interaction.user.id, guild);
+            const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+            const execMember = interaction.member?.roles?.highest ? interaction.member : await guild.members.fetch(interaction.user.id).catch(() => null);
+            if (role.managed || role.id === guild.id) {
+              return interaction.editReply({ content: '<a:warning:1546155193303957504> Cannot bulk remove managed/integration roles or `@everyone`.' });
+            }
+            if (botMember && role.position >= botMember.roles.highest.position) {
+              return interaction.editReply({ content: '<a:warning:1546155193303957504> Target role is equal to or higher than the bot\'s highest role.' });
+            }
+            if (!isOwner) {
+              if (role.permissions?.has?.(PermissionFlagsBits.Administrator)) {
+                return interaction.editReply({ content: '<a:warning:1546155193303957504> Only the **Server Owner** or **Extra Owners** can bulk remove roles with `Administrator` permissions.' });
+              }
+              if (execMember && role.position >= execMember.roles.highest.position) {
+                return interaction.editReply({ content: '<a:warning:1546155193303957504> Target role is equal to or higher than your highest role.' });
+              }
             }
 
             const filterRole = interaction.options.getRole('filter_role');
@@ -243,8 +290,8 @@ export const BulkOpsManifest: ModuleManifest = {
               : guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildText);
             let count = 0;
             for (const [, ch] of channels) {
-              await ch.permissionOverwrites.edit(guild.id, { SendMessages: false }).catch(() => {});
-              count++;
+              const res = await ch.permissionOverwrites.edit(guild.id, { SendMessages: false }).catch(() => null);
+              if (res) count++;
             }
             logBulk('Channel Lock', count);
             return interaction.editReply({ embeds: [buildMinimalCard('Locked Channels', `**${count} text channels**`)] });
@@ -258,8 +305,8 @@ export const BulkOpsManifest: ModuleManifest = {
               : guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildText);
             let count = 0;
             for (const [, ch] of channels) {
-              await ch.permissionOverwrites.edit(guild.id, { SendMessages: null }).catch(() => {});
-              count++;
+              const res = await ch.permissionOverwrites.edit(guild.id, { SendMessages: null }).catch(() => null);
+              if (res) count++;
             }
             logBulk('Channel Unlock', count);
             return interaction.editReply({ embeds: [buildMinimalCard('Unlocked Channels', `**${count} text channels**`)] });
@@ -273,8 +320,8 @@ export const BulkOpsManifest: ModuleManifest = {
               : guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildText);
             let count = 0;
             for (const [, ch] of channels) {
-              await ch.permissionOverwrites.edit(guild.id, { ViewChannel: false }).catch(() => {});
-              count++;
+              const res = await ch.permissionOverwrites.edit(guild.id, { ViewChannel: false }).catch(() => null);
+              if (res) count++;
             }
             logBulk('Channel Hide', count);
             return interaction.editReply({ embeds: [buildMinimalCard('Hidden Channels', `**${count} channels**`)] });
@@ -288,8 +335,8 @@ export const BulkOpsManifest: ModuleManifest = {
               : guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildText);
             let count = 0;
             for (const [, ch] of channels) {
-              await ch.permissionOverwrites.edit(guild.id, { ViewChannel: null }).catch(() => {});
-              count++;
+              const res = await ch.permissionOverwrites.edit(guild.id, { ViewChannel: null }).catch(() => null);
+              if (res) count++;
             }
             logBulk('Channel Unhide', count);
             return interaction.editReply({ embeds: [buildMinimalCard('Unhidden Channels', `**${count} channels**`)] });
@@ -297,15 +344,15 @@ export const BulkOpsManifest: ModuleManifest = {
 
           // CHANNEL SLOWMODE
           if (sub === 'channel-slowmode') {
-            const seconds = Math.max(interaction.options.getInteger('seconds') ?? 0, 0);
+            const seconds = Math.min(Math.max(interaction.options.getInteger('seconds') ?? 0, 0), 21600);
             const cat = interaction.options.getChannel('category');
             const channels = cat
               ? guild.channels.cache.filter((c: any) => c.parentId === cat.id && c.type === ChannelType.GuildText)
               : guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildText);
             let count = 0;
             for (const [, ch] of channels) {
-              await ch.setRateLimitPerUser(seconds).catch(() => {});
-              count++;
+              const res = await ch.setRateLimitPerUser(seconds).catch(() => null);
+              if (res) count++;
             }
             logBulk('Channel Slowmode', count);
             return interaction.editReply({ embeds: [buildMinimalCard('Set Slowmode', `**${seconds}s on ${count} channels**`)] });
@@ -323,9 +370,9 @@ export const BulkOpsManifest: ModuleManifest = {
             const channels = guild.channels.cache.filter((c: any) => c.parentId === cat.id);
             let count = 0;
             for (const [, ch] of channels) {
-              const newName = `${prefix}${ch.name}${suffix}`;
-              await ch.setName(newName).catch(() => {});
-              count++;
+              const newName = `${prefix}${ch.name}${suffix}`.slice(0, 100);
+              const res = await ch.setName(newName).catch(() => null);
+              if (res) count++;
               await new Promise(r => setTimeout(r, 200));
             }
             logBulk('Rename Channels', count);
@@ -341,6 +388,8 @@ export const BulkOpsManifest: ModuleManifest = {
             let remaining = amount;
             let totalDeleted = 0;
             let beforeId: string | undefined = undefined;
+            let scans = 0;
+            const maxScans = 10;
 
             if (amount > 100) {
               const initEmbed = new EmbedBuilder()
@@ -349,7 +398,8 @@ export const BulkOpsManifest: ModuleManifest = {
               await interaction.editReply({ embeds: [initEmbed] });
             }
 
-            while (remaining > 0) {
+            while (remaining > 0 && scans < maxScans) {
+              scans++;
               const fetchLimit = Math.min(remaining, 100);
               const limitToFetch = user ? 100 : fetchLimit;
               
@@ -415,6 +465,7 @@ export const BulkOpsManifest: ModuleManifest = {
             if (ids.length === 0) return interaction.editReply({ content: '<a:warning:1546155193303957504> No valid user IDs provided.' });
             let count = 0;
             for (const id of ids) {
+              if (id === guild.ownerId || id === client.user?.id || id === interaction.user.id) continue;
               const res = await guild.members.ban(id, { reason }).catch(() => null);
               if (res) count++;
               await new Promise(r => setTimeout(r, 200));
@@ -459,16 +510,16 @@ export const BulkOpsManifest: ModuleManifest = {
             if (cat) {
               const channels = guild.channels.cache.filter((c: any) => c.parentId === cat.id);
               for (const [, ch] of channels) {
-                await ch.lockPermissions().catch(() => {});
-                count++;
+                const res = await ch.lockPermissions().catch(() => null);
+                if (res) count++;
               }
             } else {
               const categories = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildCategory);
               for (const [catId] of categories) {
                 const children = guild.channels.cache.filter((c: any) => c.parentId === catId);
                 for (const [, ch] of children) {
-                  await ch.lockPermissions().catch(() => {});
-                  count++;
+                  const res = await ch.lockPermissions().catch(() => null);
+                  if (res) count++;
                 }
               }
             }

@@ -185,8 +185,9 @@ export async function handleVerificationGuiInteraction(interaction: any, context
 
   if (!customId.startsWith('ver_btn_') && customId !== 'ver_role_select') return;
 
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: `${WRONG_ICON} Administrator permission required.`, flags: 64 });
+  const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+  if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+    return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure Verification settings.`, flags: 64 });
   }
 
   const modules = context.getModulesState ? context.getModulesState() : [];
@@ -196,9 +197,26 @@ export async function handleVerificationGuiInteraction(interaction: any, context
 
   // 0. Interactive Role Select Menu
   if (customId === 'ver_role_select') {
-    await interaction.deferUpdate().catch(() => {});
     const selectedRoleId = interaction.values?.[0];
     if (selectedRoleId) {
+      const role = interaction.guild.roles.cache.get(selectedRoleId) || await interaction.guild.roles.fetch(selectedRoleId).catch(() => null);
+      const botHighest = interaction.guild.members?.me?.roles?.highest?.position;
+      const DANGEROUS_PERMS = [
+        PermissionFlagsBits.Administrator,
+        PermissionFlagsBits.ManageGuild,
+        PermissionFlagsBits.ManageRoles,
+        PermissionFlagsBits.ManageChannels,
+        PermissionFlagsBits.KickMembers,
+        PermissionFlagsBits.BanMembers,
+        PermissionFlagsBits.ManageWebhooks
+      ];
+      if (!role || role.managed || role.id === interaction.guild.id || (typeof botHighest === 'number' && role.position >= botHighest) || DANGEROUS_PERMS.some(p => role.permissions?.has?.(p))) {
+        return interaction.reply({
+          content: `${WRONG_ICON} Cannot select a managed role, a role equal to/above the bot's highest role, or a role with administrative/dangerous permissions.`,
+          flags: 64
+        }).catch(() => {});
+      }
+      await interaction.deferUpdate().catch(() => {});
       saveConfig({ verifiedRoleId: selectedRoleId });
       context.logSyncEvent(`[Verification] Selected verified access role <@&${selectedRoleId}>.`, 'success');
       const count = await getVerifiedUsersCount(interaction.guildId);
@@ -303,6 +321,10 @@ PrefixRegistry.register({
   execute: async (message: Message) => {
     try {
       if (!message.guild) return;
+      const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+      if (!(await isOwnerOrExtraOwner(message.author.id, message.guild))) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can run verification setup.` });
+      }
       const payload = buildPublicVerificationCard(message.guild);
       return message.reply(payload);
     } catch (err: any) {
@@ -329,14 +351,30 @@ PrefixRegistry.register({
     if (!member || !guild) return;
 
     const sub = args?.[0]?.toLowerCase();
-    const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild);
+    const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+    const isOwnerOrExtra = await isOwnerOrExtraOwner(member.user.id, guild);
 
     if (sub === 'setup' || sub === 'card' || sub === 'panel') {
+      if (!isOwnerOrExtra) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can deploy the verification card.` });
+      }
       const payload = buildPublicVerificationCard(guild);
       return message.reply(payload);
     }
 
-    if (isAdmin && (!sub || sub === 'config' || sub === 'gui' || sub === 'admin')) {
+    if (sub === 'config' || sub === 'gui' || sub === 'admin') {
+      if (!isOwnerOrExtra) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access the Verification Control Center.` });
+      }
+      const modules = extra?.getModulesState ? extra.getModulesState(guild.id) : [];
+      const verModule = modules.find((m: any) => m.id === 'verification');
+      const config = verModule?.config || {};
+      const count = await getVerifiedUsersCount(guild.id);
+      const payload = buildVerificationAdminDashboardGUI(guild, config, count);
+      return message.reply(payload);
+    }
+
+    if (isOwnerOrExtra && !sub) {
       const modules = extra?.getModulesState ? extra.getModulesState(guild.id) : [];
       const verModule = modules.find((m: any) => m.id === 'verification');
       const config = verModule?.config || {};
@@ -496,6 +534,7 @@ export const VerificationManifest: ModuleManifest = {
     {
       name: 'guildMemberAdd',
       handler: async (client: any, member: any, context: any) => {
+        if (member.user?.bot) return;
         const modules = context.getModulesState ? context.getModulesState() : [];
         const verModule = modules.find((m: any) => m.id === 'verification');
         if (!verModule || verModule.status !== 'enabled') return;
@@ -520,6 +559,11 @@ export const VerificationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const guild = interaction.guild;
         if (!guild) return;
+
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        if (!(await isOwnerOrExtraOwner(interaction.user.id, guild))) {
+          return interaction.reply({ content: 'Only the Server Owner or Extra Owners can run verification setup.', flags: 64 });
+        }
 
         // Auto-enable verification module if not enabled
         if (context.toggleModule) {
@@ -569,8 +613,9 @@ export const VerificationManifest: ModuleManifest = {
         const guild = interaction.guild;
         if (!guild) return;
 
-        const isAdmin = member?.permissions?.has?.(PermissionFlagsBits.Administrator) || member?.permissions?.has?.(PermissionFlagsBits.ManageGuild);
-        if (isAdmin) {
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const isOwnerOrExtra = await isOwnerOrExtraOwner(interaction.user.id, guild);
+        if (isOwnerOrExtra) {
           const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
           const verModule = modules.find((m: any) => m.id === 'verification');
           const config = verModule?.config || {};

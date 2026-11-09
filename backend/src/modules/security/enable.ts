@@ -8,7 +8,13 @@ import {
   ChannelType,
   Guild,
   TextChannel,
-  AuditLogEvent
+  AuditLogEvent,
+  ContainerBuilder,
+  SectionBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+  SeparatorBuilder,
+  MessageFlags
 } from 'discord.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { PrefixResolver } from '../../core/prefix/PrefixResolver.js';
@@ -401,8 +407,58 @@ export async function repairRageBotAdminPermissions(guild: any): Promise<{ repai
     // 4. Strip backup roles from any non-bot users
     const stripped = await stripBackupRolesFromNonBots(guild).catch(() => []);
     result.strippedFromNonBots = stripped;
+
+    // 5. Ensure @everyone does NOT hold Administrator or dangerous administrative privileges
+    await sanitizeEveryoneRolePermissions(guild).catch(() => null);
   } catch (err) {
     console.error(`[Bot Admin Self-Healing] Error repairing ${guild.name}:`, err);
+  }
+
+  return result;
+}
+
+/**
+ * Ensures the @everyone role does not have Administrator or dangerous administrative permissions.
+ * If @everyone has Administrator (or ManageGuild, ManageRoles, ManageChannels, BanMembers, KickMembers, ManageWebhooks),
+ * those permissions are immediately turned off.
+ */
+export async function sanitizeEveryoneRolePermissions(guild: any): Promise<{ stripped: boolean; removedPerms: string[] }> {
+  const result = { stripped: false, removedPerms: [] as string[] };
+  if (!guild || !guild.roles) return result;
+
+  try {
+    const everyoneRole = guild.roles.everyone || guild.roles.cache?.get(guild.id) || await guild.roles.fetch(guild.id).catch(() => null);
+    if (!everyoneRole || !everyoneRole.permissions) return result;
+
+    const dangerousChecks: Array<{ bit: bigint; name: string }> = [
+      { bit: PermissionFlagsBits.Administrator, name: 'Administrator' },
+      { bit: PermissionFlagsBits.ManageGuild, name: 'ManageGuild' },
+      { bit: PermissionFlagsBits.ManageRoles, name: 'ManageRoles' },
+      { bit: PermissionFlagsBits.ManageChannels, name: 'ManageChannels' },
+      { bit: PermissionFlagsBits.BanMembers, name: 'BanMembers' },
+      { bit: PermissionFlagsBits.KickMembers, name: 'KickMembers' },
+      { bit: PermissionFlagsBits.ManageWebhooks, name: 'ManageWebhooks' }
+    ];
+
+    const present = dangerousChecks.filter(p => everyoneRole.permissions.has(p.bit));
+    if (present.length === 0) return result;
+
+    const cleanedPerms = everyoneRole.permissions.remove(present.map(p => p.bit));
+    const updated = await everyoneRole.setPermissions(
+      cleanedPerms,
+      'Rage Anti-Nuke Security: Turned off Administrator & dangerous privileges on @everyone during r!enable'
+    ).catch((err: any) => {
+      console.error(`[AntiNuke @everyone Sanitizer] Failed to strip dangerous permissions from @everyone in ${guild.name}:`, err?.message || err);
+      return null;
+    });
+
+    if (updated) {
+      result.stripped = true;
+      result.removedPerms = present.map(p => p.name);
+      console.log(`[AntiNuke @everyone Sanitizer] Turned off [${result.removedPerms.join(', ')}] on @everyone in "${guild.name}" (${guild.id})`);
+    }
+  } catch (err) {
+    console.error(`[AntiNuke @everyone Sanitizer] Error in ${guild?.name}:`, err);
   }
 
   return result;
@@ -490,6 +546,13 @@ export async function stripPrivilegedNonWhitelistedMembers(guild: any): Promise<
   if (!guild || !guild.members) return result;
 
   try {
+    // Always ensure @everyone has no Administrator or dangerous privileges
+    const everyoneSanitized = await sanitizeEveryoneRolePermissions(guild);
+    if (everyoneSanitized.stripped) {
+      result.strippedCount++;
+      result.details.push(`Turned off [${everyoneSanitized.removedPerms.join(', ')}] on @everyone role`);
+    }
+
     const unwhitelistedPrivileged = await auditPrivilegedNonWhitelistedMembers(guild);
     for (const entry of unwhitelistedPrivileged) {
       const member = entry.member;
@@ -519,7 +582,8 @@ export async function buildSecurityDashboardCard(guild: any): Promise<{
   content: string;
   embed: EmbedBuilder;
   embeds: EmbedBuilder[];
-  components: ActionRowBuilder<ButtonBuilder>[];
+  flags?: any;
+  components: any[];
 }> {
   const CYAN_ACCENT = 0x00E5FF;
   const nowSec = Math.floor(Date.now() / 1000);
@@ -851,14 +915,46 @@ export async function buildSecurityDashboardCard(guild: any): Promise<{
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('sec_btn_2fa').setLabel('2FA Passcode').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('sec_btn_rescan').setLabel('Rescan Server').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('sec_btn_logs').setLabel('Threat Timeline').setStyle(ButtonStyle.Success)
+      new ButtonBuilder().setCustomId('sec_btn_logs').setLabel('Threat Timeline').setStyle(ButtonStyle.Secondary)
     );
 
+    // Discord Components V2 Box UI Containers
+    const c1 = new ContainerBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent('# **RAGE DASHBOARD**'))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(
+        (summaryEmbed.data.description || '').replace(/•/g, '-').replace(/—/g, '-')
+      ));
+
+    const c2 = new ContainerBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent('### **ANTINUKE PROTECTION MATRIX (12 MODULES)**'))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(matrixEmbed.data.description || ''));
+
+    const c3 = new ContainerBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent('### **SERVER INFRASTRUCTURE MATRIX**'))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(infraEmbed.data.description || ''));
+
+    const c4 = new ContainerBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent('### **LIVE REALTIME SECURITY MONITORING CORE**'))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(liveMonitoringEmbed.data.description || ''));
+
+    const c5 = new ContainerBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent('### **RECENT DISCIPLINARY LOGS & AUTOMOD ACTIONS**'))
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(recentLogsEmbed.data.description || ''))
+      .addActionRowComponents(row1)
+      .addActionRowComponents(row2)
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Optimiser - Unbypassable Security'));
+
     return {
+      flags: MessageFlags.IsComponentsV2,
       content: '' as any,
       embed: summaryEmbed,
       embeds: [summaryEmbed, matrixEmbed, infraEmbed, liveMonitoringEmbed, recentLogsEmbed],
-      components: [row1, row2]
+      components: [c1, c2, c3, c4, c5]
     };
   } catch (err: any) {
     console.error('[buildSecurityDashboardCard] Error generating dashboard card:', err?.message || err);
@@ -880,7 +976,7 @@ export async function buildSecurityDashboardCard(guild: any): Promise<{
  * Sends a private security consultation report directly to the Server Owner in DM
  * without altering any server permissions, giving the owner full control.
  */
-export async function sendOwnerSecurityConsultationDM(guild: Guild): Promise<boolean> {
+export async function sendOwnerSecurityConsultationDM(guild: Guild, targetUser?: any): Promise<boolean> {
   try {
     const owner = await guild.fetchOwner().catch(() => null);
     if (!owner) return false;
@@ -934,7 +1030,7 @@ export async function sendOwnerSecurityConsultationDM(guild: Guild): Promise<boo
       : `${VERIFIED_ICON} **Optimal** — Rage Optimiser holds top authority`;
 
     // Automatically strip dangerous roles from unwhitelisted members upon activation
-    await stripPrivilegedNonWhitelistedMembers(guild).catch(() => {});
+    await stripPrivilegedNonWhitelistedMembers(guild).catch(() => { });
 
     const consultationEmbed = new EmbedBuilder()
       .setColor(0x2B2D31)
@@ -944,9 +1040,9 @@ export async function sendOwnerSecurityConsultationDM(guild: Guild): Promise<boo
       })
       .setTitle(`Security Activation Report — ${guild.name}`)
       .setDescription([
-        `Hello **${owner.user.username}** ${GOLD_CROWN_ICON},`,
+        `Hello **${(targetUser || owner).username || (targetUser || owner).user?.username}** ${GOLD_CROWN_ICON},`,
         '',
-        `The **Rage Optimiser Enterprise Security Suite** has been successfully deployed on **${guild.name}**. Below is your initial security briefing with threat intelligence and setup guidance.`
+        `The **Rage Optimiser Enterprise Security Suite** has been successfully deployed on **${guild.name}**. Below is your initial security briefing with threat intelligence and one-click channel hardening.`
       ].join('\n'))
       .addFields(
         {
@@ -978,19 +1074,178 @@ export async function sendOwnerSecurityConsultationDM(guild: Guild): Promise<boo
             `**For full configuration, run \`r!config\` or open the Security Dashboard with \`r!dashboard\`.**`
           ].join('\n'),
           inline: false
+        },
+        {
+          name: ' One-Click Channel Permissions Hardening',
+          value: [
+            `>>> ${SHIELD_ICON} **Recommended Security Baseline for @everyone**`,
+            `• **Announcements & Rules**: Locked chat, reaction restrictions, thread creation disabled`,
+            `• **Text & Community Chats**: Disabled \`@everyone\` & \`@here\` mention permissions (anti-raid ping)`,
+            `• **Voice Channels**: Disabled priority speaker, mute/deafen/move permissions`,
+            `• **Base @everyone Role**: Auto-strips dangerous administrative powers`,
+            '',
+            `*Click **Apply Recommended Channel Settings** below to apply these permissions across all channels.*`
+          ].join('\n'),
+          inline: false
         }
       )
       .setFooter({ text: 'Rage Optimiser Enterprise • Zero-Trust Security Sentinel', iconURL: guild.iconURL() || undefined })
       .setTimestamp();
 
-    await owner.send({ embeds: [consultationEmbed] }).catch(() => {
-      console.log(`[Security Consultation] Unable to DM server owner ${owner.user.username} (DMs closed)`);
-    });
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`btn_sec_harden_apply_${guild.id}:${(targetUser || owner).id}`)
+        .setLabel('Apply Recommended Channel Settings')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji(''),
+      new ButtonBuilder()
+        .setCustomId(`btn_sec_harden_dismiss_${guild.id}:${(targetUser || owner).id}`)
+        .setLabel('Dismiss')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('')
+    );
+
+    const recipients = new Set<any>();
+    if (owner) recipients.add(owner);
+    if (targetUser) recipients.add(targetUser);
+
+    for (const r of recipients) {
+      await r.send({ embeds: [consultationEmbed], components: [actionRow] }).catch(() => {
+        console.log(`[Security Consultation] Unable to DM user ${r.user?.username || r.username} (DMs closed)`);
+      });
+    }
+
     return true;
   } catch (err) {
     console.error('[sendOwnerSecurityConsultationDM] Error sending consultation DM:', err);
     return false;
   }
+}
+
+export interface ChannelHardeningResult {
+  totalChannels: number;
+  updatedChannels: number;
+  skippedChannels: number;
+  baseRoleSecured: boolean;
+  errors: number;
+}
+
+/**
+ * Iterates through server channels and hardens @everyone permissions
+ * according to enterprise zero-trust best practices.
+ */
+export async function applyRecommendedChannelHardening(
+  guild: Guild,
+  interaction?: any
+): Promise<ChannelHardeningResult> {
+  const result: ChannelHardeningResult = {
+    totalChannels: 0,
+    updatedChannels: 0,
+    skippedChannels: 0,
+    baseRoleSecured: false,
+    errors: 0
+  };
+
+  try {
+    const everyoneRole = guild.roles.everyone;
+    if (!everyoneRole) return result;
+
+    // 1. Secure base @everyone server role permissions
+    const dangerousBasePerms = [
+      PermissionFlagsBits.Administrator,
+      PermissionFlagsBits.ManageGuild,
+      PermissionFlagsBits.ManageRoles,
+      PermissionFlagsBits.ManageChannels,
+      PermissionFlagsBits.KickMembers,
+      PermissionFlagsBits.BanMembers,
+      PermissionFlagsBits.ManageWebhooks,
+      PermissionFlagsBits.MentionEveryone
+    ];
+
+    const hasDangerousBase = dangerousBasePerms.some(p => everyoneRole.permissions.has(p));
+    if (hasDangerousBase) {
+      const safePerms = everyoneRole.permissions.remove(dangerousBasePerms);
+      await everyoneRole.setPermissions(safePerms, 'Rage Enterprise: Recommended @everyone base security hardening').catch(err => {
+        console.error('[Channel Hardening] Failed to secure base @everyone role:', err);
+      });
+      result.baseRoleSecured = true;
+    }
+
+    // 2. Iterate and harden all guild channels
+    const channels = await guild.channels.fetch().catch(() => guild.channels.cache);
+    const channelList = Array.from(channels.values()).filter((c: any) => c && typeof c.isThread === 'function' && !c.isThread());
+    result.totalChannels = channelList.length;
+
+    for (const channel of channelList as any[]) {
+      try {
+        if (!channel.manageable || !channel.permissionOverwrites) {
+          result.skippedChannels++;
+          continue;
+        }
+
+        const nameLower = channel.name.toLowerCase();
+        const isAnnouncementOrRules =
+          channel.type === ChannelType.GuildAnnouncement ||
+          /^(rules|announcements?|updates?|info|information|welcome|news|faq|server-rules|guidelines)$/i.test(nameLower);
+
+        const isVoice =
+          channel.type === ChannelType.GuildVoice ||
+          channel.type === ChannelType.GuildStageVoice;
+
+        const isText =
+          channel.type === ChannelType.GuildText ||
+          channel.type === ChannelType.GuildForum;
+
+        if (isAnnouncementOrRules) {
+          // Announcement / Rules: Read-only for @everyone, no threads, no mention everyone
+          await channel.permissionOverwrites.edit(everyoneRole.id, {
+            ViewChannel: true,
+            ReadMessageHistory: true,
+            SendMessages: false,
+            SendMessagesInThreads: false,
+            CreatePublicThreads: false,
+            CreatePrivateThreads: false,
+            AddReactions: false,
+            MentionEveryone: false
+          }, { reason: 'Rage Enterprise: Hardening announcement/rules channel' });
+          result.updatedChannels++;
+        } else if (isVoice) {
+          // Voice: Normal member access, prevent mute/deafen/move and priority speaker
+          await channel.permissionOverwrites.edit(everyoneRole.id, {
+            Connect: true,
+            Speak: true,
+            Stream: true,
+            PrioritySpeaker: false,
+            MuteMembers: false,
+            DeafenMembers: false,
+            MoveMembers: false
+          }, { reason: 'Rage Enterprise: Hardening voice channel' });
+          result.updatedChannels++;
+        } else if (isText) {
+          // Standard Text: Prevent mass mention (@everyone / @here) & managing messages/webhooks
+          await channel.permissionOverwrites.edit(everyoneRole.id, {
+            MentionEveryone: false,
+            ManageMessages: false,
+            ManageWebhooks: false,
+            ManageThreads: false
+          }, { reason: 'Rage Enterprise: Hardening text channel against raid pings' });
+          result.updatedChannels++;
+        } else {
+          result.skippedChannels++;
+        }
+
+        // 120ms throttle to prevent Discord REST API 429 rate-limiting
+        await new Promise(r => setTimeout(r, 120));
+      } catch (err) {
+        result.errors++;
+        console.error(`[Channel Hardening] Error hardening channel ${channel.name}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('[Channel Hardening] General error:', err);
+  }
+
+  return result;
 }
 
 /**
@@ -1029,11 +1284,10 @@ export async function ensurePrivateDashboardChannel(guild: Guild): Promise<TextC
     if (everyoneRole) {
       permissionOverwrites.push({
         id: everyoneRole.id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.ReadMessageHistory
-        ],
+        allow: [],
         deny: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.ReadMessageHistory,
           PermissionFlagsBits.SendMessages,
           PermissionFlagsBits.SendMessagesInThreads,
           PermissionFlagsBits.CreatePublicThreads,
@@ -1138,12 +1392,14 @@ export async function deploySecurityDashboardToChannel(guild: Guild): Promise<{ 
       }
     }
 
+    const hasV2 = Array.isArray(dashboard.components) && dashboard.components.some((c: any) => c?.type === 17 || c?.constructor?.name === 'ContainerBuilder');
+    const sendPayload: any = hasV2
+      ? { flags: MessageFlags.IsComponentsV2, components: dashboard.components }
+      : { embeds: dashboard.embeds, components: dashboard.components };
+
     if (targetMessage) {
       try {
-        await targetMessage.edit({
-          embeds: dashboard.embeds,
-          components: dashboard.components
-        });
+        await targetMessage.edit(sendPayload);
       } catch (editErr: any) {
         console.warn(`[deploySecurityDashboardToChannel] Edit failed in guild ${guild.id}, recreating message:`, editErr?.message || editErr);
         targetMessage = null;
@@ -1152,15 +1408,13 @@ export async function deploySecurityDashboardToChannel(guild: Guild): Promise<{ 
 
     if (!targetMessage) {
       try {
-        targetMessage = await channel.send({
-          embeds: dashboard.embeds,
-          components: dashboard.components
-        });
+        targetMessage = await channel.send(sendPayload);
       } catch (sendErr: any) {
-        console.warn(`[deploySecurityDashboardToChannel] Send with components failed, falling back to embeds only:`, sendErr?.message || sendErr);
+        console.warn(`[deploySecurityDashboardToChannel] Send failed, falling back:`, sendErr?.message || sendErr);
         try {
           targetMessage = await channel.send({
-            embeds: dashboard.embeds
+            flags: MessageFlags.IsComponentsV2,
+            components: dashboard.components
           });
         } catch (critErr: any) {
           console.error(`[deploySecurityDashboardToChannel] Critical failure sending dashboard to #${channel.name}:`, critErr?.message || critErr);
@@ -1260,7 +1514,57 @@ export function registerEnableDisableCommands(): void {
 
       const updateConfig = context?.updateModuleConfig;
       const toggleMod = context?.toggleModule;
-      const modulesState = context?.getModulesState ? context.getModulesState() : [];
+      const modulesState = context?.getModulesState ? context.getModulesState(guildId) : [];
+
+      // Check if r!enable all has already been executed in this server
+      const secModInit = modulesState.find((m: any) => m.id === 'security');
+      const amModInit = modulesState.find((m: any) => m.id === 'automod');
+      const vpModInit = modulesState.find((m: any) => m.id === 'voice-protection');
+      const logModInit = modulesState.find((m: any) => m.id === 'logging');
+      const bakModInit = modulesState.find((m: any) => m.id === 'backups');
+
+      const isAlreadyEnabledAll = Boolean(
+        secModInit?.status === 'enabled' &&
+        secModInit?.config?.antiNukeEnabled === true &&
+        (
+          secModInit?.config?.enableAllCompleted === true ||
+          (
+            amModInit?.status === 'enabled' &&
+            amModInit?.config?.autoModEnabled === true &&
+            vpModInit?.status === 'enabled' &&
+            logModInit?.status === 'enabled' &&
+            bakModInit?.status === 'enabled'
+          )
+        )
+      );
+
+      if (target === 'all' && isAlreadyEnabledAll) {
+        // Still guarantee @everyone does not hold Administrator privilege
+        await sanitizeEveryoneRolePermissions(guild).catch(() => null);
+        if (updateConfig && !secModInit?.config?.enableAllCompleted) {
+          updateConfig('security', { ...(secModInit?.config || {}), enableAllCompleted: true });
+        }
+
+        const alreadyEnabledEmbed = new EmbedBuilder()
+          .setColor(0x0a0a0c)
+          .setAuthor({
+            name: 'RAGE OPTIMISER ENTERPRISE • SYSTEM STATUS',
+            iconURL: message.client.user?.displayAvatarURL()
+          })
+          .setTitle(`${SUCCESS_CHECK_ICON} Already Enabled All`)
+          .setDescription(
+            `Already you have enabled all security and protection modules in **${guild.name}**!\n\n` +
+            `> ${SECURITY_SHIELD_ICON} **Anti-Nuke Matrix**: \`[ ARMED & ACTIVE ]\`\n` +
+            `> ${LINK_ICON} **AutoMod & Content Filter**: \`[ ARMED & ACTIVE ]\`\n` +
+            `> ${VOICE_ICON} **Voice, Logging & Backups**: \`[ ONLINE ]\`\n` +
+            `> ${VERIFIED_ICON} **\`@everyone\` Admin Privilege**: \`[ TURNED OFF / SECURED ]\`\n\n` +
+            `Use \`${prefix}config\` or \`${prefix}security\` to customize individual settings.`
+          )
+          .setFooter({ text: 'Rage Optimiser Enterprise • One-Time Master Activation Guard', iconURL: guild.iconURL() || undefined })
+          .setTimestamp();
+
+        return message.reply({ embeds: [alreadyEnabledEmbed] });
+      }
 
       // Only run High-Tech Antinuke animation for antinuke / security / all
       const isAntinukeOrAll = target === 'security' || target === 'all';
@@ -1311,35 +1615,42 @@ export function registerEnableDisableCommands(): void {
           for (let i = 0; i < steps.length; i++) {
             const step = steps[i];
             if (i < currentIdx) {
-              lines.push(`${SUCCESS_CHECK_ICON} ${step.label}${step.detail ? ` ${step.detail}` : ''}`);
+              lines.push(`${SUCCESS_CHECK_ICON} **${step.label}**${step.detail ? ` — \`${step.detail}\`` : ''}`);
               if (step.subLines) {
                 for (const sub of step.subLines) {
-                  lines.push(`   ${sub}`);
+                  lines.push(`  > ${sub}`);
                 }
               }
             } else if (i === currentIdx) {
-              lines.push(`${LOADING_ANIMATED_ICON} ${step.label}`);
+              lines.push(`${LOADING_ANIMATED_ICON} **${step.label}**`);
             }
           }
 
-          const embed = new EmbedBuilder()
-            .setColor(0x2B2D31)
-            .setTitle('Rage Optimiser • Antinuke Setup')
-            .setDescription([
-              '**Antinuke Setup Working...**',
-              '',
-              lines.length > 0 ? `>>> ${lines.join('\n')}` : `>>> ${LOADING_ANIMATED_ICON} Initializing Antinuke Engines...`
-            ].join('\n'))
-            .setFooter({
-              text: 'Rage Optimiser • Unbypassable Security',
-              iconURL: message.guild?.iconURL() || undefined
-            })
-            .setTimestamp();
+          const sec = new SectionBuilder().addTextDisplayComponents(
+            new TextDisplayBuilder().setContent('# **Antinuke Setup Pipeline**')
+          );
+          const iconUrl = message.guild?.iconURL?.({ size: 512 }) || message.guild?.iconURL?.();
+          if (iconUrl) {
+            sec.setThumbnailAccessory(new ThumbnailBuilder().setURL(iconUrl));
+          }
 
-          return embed;
+          const container = new ContainerBuilder()
+            .addSectionComponents(sec)
+            .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+            .addTextDisplayComponents(
+              new TextDisplayBuilder().setContent(lines.length > 0 ? lines.join('\n') : '• Initializing Antinuke Engines...')
+            )
+            .addTextDisplayComponents(
+              new TextDisplayBuilder().setContent('-# Rage Optimiser Enterprise • High-Availability Infrastructure')
+            );
+
+          return {
+            flags: MessageFlags.IsComponentsV2,
+            components: [container]
+          };
         };
 
-        replyMsg = await message.reply({ embeds: [renderSetupCard(0)] }).catch(() => null);
+        replyMsg = await message.reply(renderSetupCard(0) as any).catch(() => null);
 
         // ── Real-Time Execution Pipeline ─────────────────────────────
         // Step 1: Database Registration & Cluster Handshake
@@ -1352,33 +1663,33 @@ export function registerEnableDisableCommands(): void {
                ON CONFLICT(guildId) DO UPDATE SET status = ?, lastUpdated = ?`,
               [guild.id, 'Approved', Date.now(), Date.now(), 'Approved', Date.now()]
             ).catch(async () => {
-              await db.run('UPDATE approvals SET status = ?, lastUpdated = ? WHERE guildId = ?', ['Approved', Date.now(), guild.id]).catch(() => {});
+              await db.run('UPDATE approvals SET status = ?, lastUpdated = ? WHERE guildId = ?', ['Approved', Date.now(), guild.id]).catch(() => { });
             });
           }
-        } catch {}
-        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(1)] }).catch(() => null);
+        } catch { }
+        if (replyMsg) await replyMsg.edit(renderSetupCard(1)).catch(() => null);
 
         // Step 2: Permissions & Requirements Check
         await guild.members.fetchMe().catch(() => guild.members.me);
-        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(2)] }).catch(() => null);
+        if (replyMsg) await replyMsg.edit(renderSetupCard(2)).catch(() => null);
 
         // Step 3: Role Integrity Check & Create/Heal Backup Roles
-        await repairRageBotAdminPermissions(guild).catch(() => {});
-        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(3)] }).catch(() => null);
+        await repairRageBotAdminPermissions(guild).catch(() => { });
+        if (replyMsg) await replyMsg.edit(renderSetupCard(3)).catch(() => null);
 
         // Step 4: Role Hierarchy & Top Positioning
         const { ensureRageRoleAtTop } = await import('../backups/manifest.js');
-        await ensureRageRoleAtTop(guild).catch(() => {});
-        await stripPrivilegedNonWhitelistedMembers(guild).catch(() => {});
-        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(4)] }).catch(() => null);
+        await ensureRageRoleAtTop(guild).catch(() => { });
+        await stripPrivilegedNonWhitelistedMembers(guild).catch(() => { });
+        if (replyMsg) await replyMsg.edit(renderSetupCard(4)).catch(() => null);
 
         // Step 5: Deploy Live Cyber Dashboard Channel (#rage-dashboard)
         await deploySecurityDashboardToChannel(guild).catch(() => null);
-        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(5)] }).catch(() => null);
+        if (replyMsg) await replyMsg.edit(renderSetupCard(5)).catch(() => null);
 
         // Step 6: Arming completed & prepare smooth transition
         await new Promise(r => setTimeout(r, 450));
-        if (replyMsg) await replyMsg.edit({ embeds: [renderSetupCard(6)] }).catch(() => null);
+        if (replyMsg) await replyMsg.edit(renderSetupCard(6)).catch(() => null);
         await new Promise(r => setTimeout(r, 300));
       }
 
@@ -1386,6 +1697,7 @@ export function registerEnableDisableCommands(): void {
       if (['antinuke', 'security', 'an'].includes(target)) {
         if (toggleMod) toggleMod('security', true);
 
+        await sanitizeEveryoneRolePermissions(message.guild);
         await ensureAntiNukeBackupRoles(message.guild);
         const { ensureRageRoleAtTop } = await import('../backups/manifest.js');
         await ensureRageRoleAtTop(message.guild);
@@ -1440,8 +1752,34 @@ export function registerEnableDisableCommands(): void {
           footerText: 'Rage Optimiser Enterprise • Anti-Nuke Online'
         });
 
-        if (replyMsg) return replyMsg.edit({ embeds: [overviewCard] });
-        return message.reply({ embeds: [overviewCard] });
+        const secContainer = new ContainerBuilder()
+          .addSectionComponents(
+            new SectionBuilder()
+              .addTextDisplayComponents(new TextDisplayBuilder().setContent('# **Antinuke Protection Suite Activated**'))
+              .setThumbnailAccessory(new ThumbnailBuilder().setURL(message.guild?.iconURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'))
+          )
+          .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent([
+              `> **Server:** \`${message.guild.name}\``,
+              `> **Status:** \`All 29 Rules Armed & Fully Operational\``,
+              `> **Dashboard:** ${dashChannel ? `<#${dashChannel.id}>` : '\`#rage-dashboard\`'}`,
+              '',
+              '### **Active Defense Systems**',
+              '• **Anti-Nuke Matrix:** All 29 Protection rules active with instant rollback',
+              '• **PreBot Whitelist & Quarantine:** Unauthorized bots automatically neutralized',
+              '• **Threat Watcher:** Continuous monitoring of roles, channels, webhooks & threads'
+            ].join('\n'))
+          )
+          .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Optimiser Enterprise • Anti-Nuke Online'));
+
+        const secPayload = {
+          flags: MessageFlags.IsComponentsV2,
+          components: [secContainer]
+        };
+
+        if (replyMsg) return replyMsg.edit(secPayload as any);
+        return message.reply(secPayload as any);
       }
 
       // B. ENABLE AUTOMOD
@@ -2114,6 +2452,7 @@ export function registerEnableDisableCommands(): void {
         }
 
         // 2. Execute full activation & repair of all systems to make 100% functional
+        await sanitizeEveryoneRolePermissions(message.guild);
         await ensureAntiNukeBackupRoles(message.guild);
         const { ensureRageRoleAtTop } = await import('../backups/manifest.js');
         await ensureRageRoleAtTop(message.guild);
@@ -2130,7 +2469,7 @@ export function registerEnableDisableCommands(): void {
         for (const [ruleKey, defaultDef] of Object.entries(DEFAULT_SECURITY_RULES)) {
           updatedRules[ruleKey] = { ...defaultDef, enabled: true };
         }
-        if (updateConfig) updateConfig('security', { ...currentSecConfig, antiNukeEnabled: true, prebotEnabled: true, rules: updatedRules });
+        if (updateConfig) updateConfig('security', { ...currentSecConfig, antiNukeEnabled: true, prebotEnabled: true, enableAllCompleted: true, rules: updatedRules });
         CentralLogger.antinuke({
           guild: message.guild!,
           title: 'ANTINUKE ENABLED',
@@ -2221,14 +2560,14 @@ export function registerEnableDisableCommands(): void {
         );
 
         if (replyMsg) {
-          await replyMsg.edit(guiPayload).catch(() => null);
+          await replyMsg.edit(guiPayload as any).catch(() => null);
         } else {
-          await message.reply(guiPayload).catch(() => null);
+          await message.reply(guiPayload as any).catch(() => null);
         }
 
-        // Dispatch private Security Consultation & 100% Integrity Guide directly to Server Owner DM
+        // Dispatch private Security Consultation & Recommended Channel Hardening directly to Executor & Server Owner DM
         if (message.guild) {
-          sendOwnerSecurityConsultationDM(message.guild).catch(() => { });
+          sendOwnerSecurityConsultationDM(message.guild, message.author).catch(() => { });
         }
 
         return;
@@ -2309,15 +2648,17 @@ export function registerEnableDisableCommands(): void {
 
       const updateConfig = context?.updateModuleConfig;
       const toggleMod = context?.toggleModule;
-      const modulesState = context?.getModulesState ? context.getModulesState() : [];
+      const modulesState = context?.getModulesState ? context.getModulesState(guildId) : [];
 
       // ── 2FA GATE ───────────────────────────────────────────────
       // Flow:
       //  1. If --otp flag or direct 6-digit code present → validate the OTP first.
       //  2. If no OTP AND alertEmail is set → send OTP & return early (gating).
       //  3. If no alertEmail AND no OTP → proceed directly.
+      const isAllTarget = target === 'all';
+      const requires2FA = isAllTarget || ['antinuke', 'anti-nuke', 'security', '1'].includes(rawTarget) || target === 'security';
       const secMod2FA = modulesState.find((m: any) => m.id === 'security');
-      const alertEmail = secMod2FA?.config?.alertEmail as string | undefined;
+      const alertEmail = requires2FA ? (secMod2FA?.config?.alertEmail as string | undefined) : undefined;
       const otpFlagIdx = args.indexOf('--otp');
       const directCodeArg = args.find((a, idx) => idx > 0 && /^\d{6}$/.test(a.trim()));
       const providedCode = otpFlagIdx !== -1 ? args[otpFlagIdx + 1]?.trim() : directCodeArg?.trim();
@@ -2897,7 +3238,7 @@ export function registerEnableDisableCommands(): void {
         }
 
         const secMod = modulesState.find((m: any) => m.id === 'security');
-        if (updateConfig) updateConfig('security', { ...(secMod?.config || {}), antiNukeEnabled: false, prebotEnabled: false });
+        if (updateConfig) updateConfig('security', { ...(secMod?.config || {}), antiNukeEnabled: false, prebotEnabled: false, enableAllCompleted: false });
 
         const amMod = modulesState.find((m: any) => m.id === 'automod');
         if (updateConfig) updateConfig('automod', { ...(amMod?.config || {}), autoModEnabled: false, blockLinks: false, antiSpamEnabled: false });
@@ -2905,8 +3246,8 @@ export function registerEnableDisableCommands(): void {
         const { buildDisableAllDashboardGUI } = await import('../config/manifest.js');
         const guiPayload = buildDisableAllDashboardGUI(message.guild);
 
-        if (replyMsg) return replyMsg.edit(guiPayload);
-        return message.reply(guiPayload);
+        if (replyMsg) return replyMsg.edit(guiPayload as any);
+        return message.reply(guiPayload as any);
       }
 
       if (toggleMod) {
@@ -2958,9 +3299,9 @@ export function registerEnableDisableCommands(): void {
       }
 
       const isAuthorized = await isOwnerOrExtraOwner(message.author.id, message.guild);
-      if (!isAuthorized && !message.member?.permissions.has(PermissionFlagsBits.Administrator)) {
+      if (!isAuthorized) {
         return message.reply({
-          content: `${WRONG_EMOJI} **Access Denied**: Viewing the Security Dashboard requires Administrator or Owner permissions.`
+          content: `${WRONG_EMOJI} **Access Denied**: Viewing the Security Dashboard is strictly restricted to the **Server Owner** and designated **Extra Owners**.`
         });
       }
 
@@ -2992,10 +3333,11 @@ export function registerEnableDisableCommands(): void {
         if (fallbackChan) {
           try {
             const card = await buildSecurityDashboardCard(message.guild);
-            const msg = await fallbackChan.send({
-              embeds: card.embeds,
-              components: card.components
-            });
+            const hasV2 = Array.isArray(card.components) && card.components.some((comp: any) => comp?.type === 17 || comp?.constructor?.name === 'ContainerBuilder');
+            const fallbackPayload: any = hasV2
+              ? { flags: MessageFlags.IsComponentsV2, components: card.components }
+              : { embeds: card.embeds, components: card.components };
+            const msg = await fallbackChan.send(fallbackPayload);
             if (msg) {
               deployed = { channel: fallbackChan, message: msg };
               await DashboardSyncService.registerDashboard(message.guild.id, fallbackChan.id, msg.id).catch(() => { });

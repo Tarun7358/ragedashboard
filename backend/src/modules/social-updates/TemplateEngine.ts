@@ -125,6 +125,7 @@ export class TemplateEngine {
 
     if (provider === 'youtube') {
       return {
+        'provider': 'youtube',
         'channel.name': 'Awesome Channel',
         'channel.id': 'UCxxxxxxxxxxxxxxxxxxxxxxxxx',
         'channel.url': 'https://www.youtube.com/channel/UCxxxxxxxxxxxxxxxxxxxxxxxxx',
@@ -149,6 +150,7 @@ export class TemplateEngine {
     }
 
     return {
+      'provider': 'instagram',
       'post.caption': '📸 Check out this amazing photo! #photography #awesome',
       'post.image': '',
       'post.url': 'https://www.instagram.com/p/sample/',

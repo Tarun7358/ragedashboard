@@ -11,6 +11,7 @@ import { SocialSubscriptionRepository } from './SocialSubscriptionRepository.js'
 import { NotificationService } from './NotificationService.js';
 import { TemplateEngine } from './TemplateEngine.js';
 import { PendingQueueCache } from './ComparisonEngine.js';
+import { ProviderManager } from './ProviderManager.js';
 
 export interface QueueJob {
   id: string;
@@ -147,33 +148,22 @@ export class NotificationQueue {
       let embedConfig: any = {};
       try { embedConfig = JSON.parse(sub.embedConfig); } catch {}
 
-      const provider = sub.provider;
+      const provider = sub.provider || 'youtube';
+      let providerData: Record<string, string> = {};
+      try {
+        if (ProviderManager.has(provider)) {
+          const providerInstance = ProviderManager.getProvider(provider);
+          providerData = providerInstance.prepareTemplateData(job.item, {
+            sourceId: sub.sourceId,
+            sourceName: sub.sourceName,
+            sourceAvatar: sub.sourceAvatar
+          });
+        }
+      } catch {}
+
       const templateData: Record<string, string> = {
-        'post.caption': job.item.description || '',
-        'post.image': job.item.thumbnailUrl || '',
-        'post.url': job.item.url,
-        'post.publish_date': job.item.publishedAt,
-        'post.id': job.item.id,
-        'profile.name': sub.sourceName,
-        'profile.username': sub.sourceId,
-        'profile.avatar': sub.sourceAvatar || '',
-        'profile.url': provider === 'youtube'
-          ? `https://www.youtube.com/channel/${sub.sourceId}`
-          : `https://www.instagram.com/${sub.sourceId}/`,
-        'video.title': job.item.title,
-        'video.url': job.item.url,
-        'video.thumbnail': job.item.thumbnailUrl || '',
-        'video.description': job.item.description || '',
-        'video.publish_date': job.item.publishedAt,
-        'video.live': job.item.isLive ? 'true' : '',
-        'video.short': job.item.isShort ? 'true' : '',
-        'video.premiere': job.item.isPremiere ? 'true' : '',
-        'channel.name': sub.sourceName,
-        'channel.id': sub.sourceId,
-        'channel.avatar': sub.sourceAvatar || '',
-        'channel.url': provider === 'youtube'
-          ? `https://www.youtube.com/channel/${sub.sourceId}`
-          : `https://www.instagram.com/${sub.sourceId}/`,
+        'provider': provider,
+        ...providerData,
         'discord.channel': `#${channel.name}`,
         'discord.guild': channel.guild?.name || '',
         'server.name': channel.guild?.name || '',

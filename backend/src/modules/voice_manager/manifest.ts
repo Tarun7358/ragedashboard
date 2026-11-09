@@ -1,6 +1,17 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { PermissionFlagsBits, ChannelType, MessageFlags, Message, EmbedBuilder } from 'discord.js';
 import { Colors, buildRichCard, buildListCard, buildStatusCard, buildSuccessCard, buildErrorCard, buildPermCard, MEMBER_ICON, SHIELD_ICON, VERIFIED_ICON, WRONG_ICON, INFO_ICON, VOICE_ICON, ARROW_ICON, BRAND_FOOTER } from '../../core/UIFactory.js';
+import {
+  VoiceStatusState,
+  getVoiceStatusConfig,
+  saveVoiceStatusConfig,
+  setVoiceChannelStatus,
+  getHumanMemberCount,
+  processVoiceStateUpdate,
+  processVoiceChannelStatusUpdate,
+  startupVoiceStatusSweep,
+  IVoiceStatusTarget
+} from './VoiceStatusManager.js';
 
 export const VoiceManagerManifest: ModuleManifest = {
   id: 'voice_manager',
@@ -180,6 +191,60 @@ export const VoiceManagerManifest: ModuleManifest = {
           type: 1
         }
       ]
+    },
+    {
+      name: 'vcstatus',
+      description: 'Configure automated Voice Channel status when empty',
+      options: [
+        {
+          name: 'set',
+          description: 'Set default voice channel status applied when empty',
+          type: 1,
+          options: [
+            { name: 'channel', type: 7, description: 'Target voice channel', required: true, channel_types: [2, 13] },
+            { name: 'status', type: 3, description: 'Status message to set when empty (e.g. ✨ Playing Under Stars 🦋)', required: true }
+          ]
+        },
+        {
+          name: 'remove',
+          description: 'Remove auto-status monitoring from a voice channel',
+          type: 1,
+          options: [
+            { name: 'channel', type: 7, description: 'Voice channel to remove', required: true, channel_types: [2, 13] }
+          ]
+        },
+        {
+          name: 'list',
+          description: 'List all voice channels configured with auto-status',
+          type: 1
+        },
+        {
+          name: 'reset',
+          description: 'Force reset a voice channel status (to clean/empty or default)',
+          type: 1,
+          options: [
+            { name: 'channel', type: 7, description: 'Voice channel to reset', required: true, channel_types: [2, 13] },
+            {
+              name: 'mode',
+              type: 3,
+              description: 'Reset mode: clean (removes status completely) or default (re-applies default text)',
+              required: false,
+              choices: [
+                { name: 'Clean (Removes status completely so it never shows)', value: 'clean' },
+                { name: 'Default (Re-apply configured default status)', value: 'default' }
+              ]
+            }
+          ]
+        },
+        {
+          name: 'clear',
+          description: 'Clear voice channel status immediately and stop auto-status monitoring',
+          type: 1,
+          options: [
+            { name: 'channel', type: 7, description: 'Voice channel to clear', required: true, channel_types: [2, 13] }
+          ]
+        }
+      ]
     }
   ],
   events: [
@@ -189,13 +254,34 @@ export const VoiceManagerManifest: ModuleManifest = {
         const sub = interaction.options.getSubcommand(false);
         const guild = interaction.guild;
 
+        if (!guild) return;
         if (sub === 'move') {
           const { handleVoiceProtectionMoveCommand } = await import('../voice-protection/commands.js');
           return handleVoiceProtectionMoveCommand(client, interaction, context);
         }
 
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.MoveMembers)) {
+        const executorId = interaction.user?.id || interaction.author?.id;
+        const memberObj = interaction.member || (executorId ? await guild.members.fetch(executorId).catch(() => null) : null);
+        const isGuildOwner = executorId === guild.ownerId;
+        const hasMovePerm = isGuildOwner ||
+          Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.MoveMembers)) ||
+          Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.Administrator)) ||
+          Boolean(memberObj?.permissions?.has?.(PermissionFlagsBits.MoveMembers)) ||
+          Boolean(memberObj?.permissions?.has?.(PermissionFlagsBits.Administrator));
+
+        if (!hasMovePerm) {
           return interaction.reply(buildPermCard('Move Members'));
+        }
+
+        if (['lock', 'unlock', 'rename', 'limit', 'clean', 'cleanup'].includes(sub)) {
+          const hasManageChan = isGuildOwner ||
+            Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.ManageChannels)) ||
+            Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.Administrator)) ||
+            Boolean(memberObj?.permissions?.has?.(PermissionFlagsBits.ManageChannels)) ||
+            Boolean(memberObj?.permissions?.has?.(PermissionFlagsBits.Administrator));
+          if (!hasManageChan) {
+            return interaction.reply(buildPermCard('Manage Channels'));
+          }
         }
 
         const logVoiceAction = (action: string, details: string) => {
@@ -302,7 +388,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         // FREEZE
         if (sub === 'freeze') {
           const channel = interaction.options.getChannel('channel');
-          await channel.permissionOverwrites.edit(guild.id, { Connect: false });
+          await channel.permissionOverwrites.edit(guild.id, { Connect: false }).catch(() => {});
           logVoiceAction('Freeze', `#${channel.name}`);
           return interaction.reply({ content: `<:ticks:1532620580266836148> Frozen ${channel}. No new users can join.`, flags: 64 });
         }
@@ -310,7 +396,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         // UNFREEZE
         if (sub === 'unfreeze') {
           const channel = interaction.options.getChannel('channel');
-          await channel.permissionOverwrites.edit(guild.id, { Connect: null });
+          await channel.permissionOverwrites.edit(guild.id, { Connect: null }).catch(() => {});
           logVoiceAction('Unfreeze', `#${channel.name}`);
           return interaction.reply({ content: `<:ticks:1532620580266836148> Unfrozen ${channel}. Users can now join.`, flags: 64 });
         }
@@ -318,7 +404,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         // LOCK
         if (sub === 'lock') {
           const channel = interaction.options.getChannel('channel');
-          await channel.permissionOverwrites.edit(guild.id, { Connect: false });
+          await channel.permissionOverwrites.edit(guild.id, { Connect: false }).catch(() => {});
           logVoiceAction('Lock', `#${channel.name}`);
           return interaction.reply({ content: `<a:success_check:1546134620087783526> Locked ${channel}.`, flags: 64 });
         }
@@ -326,7 +412,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         // UNLOCK
         if (sub === 'unlock') {
           const channel = interaction.options.getChannel('channel');
-          await channel.permissionOverwrites.edit(guild.id, { Connect: null });
+          await channel.permissionOverwrites.edit(guild.id, { Connect: null }).catch(() => {});
           logVoiceAction('Unlock', `#${channel.name}`);
           return interaction.reply({ content: `<:ticks:1532620580266836148> Unlocked ${channel}.`, flags: 64 });
         }
@@ -335,7 +421,7 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'rename') {
           const channel = interaction.options.getChannel('channel');
           const name = interaction.options.getString('name');
-          await channel.setName(name);
+          await channel.setName(name).catch(() => {});
           logVoiceAction('Rename', `#${channel.name} → ${name}`);
           return interaction.reply({ content: `<:ticks:1532620580266836148> Renamed channel to **${name}**.`, flags: 64 });
         }
@@ -345,36 +431,60 @@ export const VoiceManagerManifest: ModuleManifest = {
           const channel = interaction.options.getChannel('channel');
           const limit = interaction.options.getInteger('limit');
           if (channel.type !== ChannelType.GuildVoice) return interaction.reply({ content: '<a:warning:1546155193303957504> Not a voice channel.', flags: 64 });
-          await channel.setUserLimit(limit);
+          await channel.setUserLimit(limit).catch(() => {});
           return interaction.reply({ content: `<:ticks:1532620580266836148> Set user limit to **${limit === 0 ? 'unlimited' : limit}** for ${channel}.`, flags: 64 });
         }
 
-        // CLEANUP
-        if (sub === 'cleanup') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+        // CLEANUP / CLEAN
+        if (sub === 'cleanup' || sub === 'clean') {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels) && !isGuildOwner) {
             return interaction.reply({ content: '<a:success_check:1546134620087783526> Manage Channels permission required.', flags: 64 });
           }
           await interaction.deferReply({ flags: 64 });
-          const voiceChannels = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildVoice && c.members.size === 0);
+          const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
+          const jtcMod = modules.find((m: any) => m.id === 'join_to_create');
+          const jtcConfig = jtcMod?.config || {};
+          const activeChannels: any[] = jtcConfig.activeChannels || [];
+          const activeIds = new Set(activeChannels.map((ac: any) => ac.channelId));
+          const triggerIds = new Set([
+            ...(jtcConfig.triggers || []).map((t: any) => t.triggerChannelId),
+            jtcConfig.triggerChannelId,
+            jtcConfig.hubChannelId
+          ].filter(Boolean));
+
+          const voiceChannels = guild.channels.cache.filter((c: any) => {
+            if (c.type !== ChannelType.GuildVoice) return false;
+            const nonBots = c.members?.filter ? c.members.filter((m: any) => !m.user?.bot).size : c.members?.size || 0;
+            if (nonBots > 0) return false;
+            if (c.id === guild.afkChannelId || triggerIds.has(c.id)) return false;
+            if (activeIds.has(c.id)) return true;
+            return /'s (channel|room)$/i.test(c.name);
+          });
+
           let count = 0;
+          const deletedIds = new Set<string>();
           for (const [, channel] of voiceChannels) {
-            if (channel.id !== guild.afkChannelId) {
-              await channel.delete('Voice Cleanup').catch(() => {});
+            await channel.delete('Voice Cleanup').then(() => {
               count++;
-            }
+              deletedIds.add(channel.id);
+            }).catch(() => {});
           }
-          logVoiceAction('Cleanup', `Deleted ${count} empty voice channels`);
-          return interaction.editReply({ content: `<:ticks:1532620580266836148> Cleaned up **${count}** empty voice channels.` });
+          if (deletedIds.size > 0 && jtcMod && context.updateModuleConfig) {
+            const remainingActive = activeChannels.filter((ac: any) => !deletedIds.has(ac.channelId));
+            context.updateModuleConfig('join_to_create', { ...jtcConfig, activeChannels: remainingActive });
+          }
+          logVoiceAction('Cleanup', `Deleted ${count} empty temporary voice channels`);
+          return interaction.editReply({ content: `<:ticks:1532620580266836148> Cleaned up **${count}** empty temporary voice channels.` });
         }
 
         // PULL
         if (sub === 'pull') {
           const user = interaction.options.getUser('user');
-          const member = guild.members.cache.get(user.id);
+          const member = guild.members.cache.get(user.id) || await guild.members.fetch(user.id).catch(() => null);
           if (!member) return interaction.reply({ content: '<a:warning:1546155193303957504> Member not found.', flags: 64 });
-          if (!interaction.member.voice?.channel) return interaction.reply({ content: '<a:warning:1546155193303957504> You must be in a voice channel.', flags: 64 });
+          if (!interaction.member?.voice?.channel) return interaction.reply({ content: '<a:warning:1546155193303957504> You must be in a voice channel.', flags: 64 });
           if (!member.voice?.channel) return interaction.reply({ content: `<a:warning:1546155193303957504> ${user.username} is not in a voice channel.`, flags: 64 });
-          await member.voice.setChannel(interaction.member.voice.channel);
+          await member.voice.setChannel(interaction.member.voice.channel).catch(() => {});
           logVoiceAction('Pull', `${user.username} → #${interaction.member.voice.channel.name}`);
           return interaction.reply({ content: `<:ticks:1532620580266836148> Pulled ${user} to your channel.`, flags: 64 });
         }
@@ -448,11 +558,11 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'drag') {
           const user = interaction.options.getUser('user');
           const channel = interaction.options.getChannel('channel');
-          const member = guild.members.cache.get(user.id);
+          const member = guild.members.cache.get(user.id) || await guild.members.fetch(user.id).catch(() => null);
           if (!member || !member.voice?.channel) {
             return interaction.reply({ content: '<a:warning:1546155193303957504> User is not currently in a voice channel.', flags: 64 });
           }
-          await member.voice.setChannel(channel);
+          await member.voice.setChannel(channel).catch(() => {});
           logVoiceAction('Drag', `Moved ${user.username} to #${channel.name}`);
           return interaction.reply({ content: `<:ticks:1532620580266836148> Successfully dragged ${user} to ${channel}.`, flags: 64 });
         }
@@ -515,31 +625,13 @@ export const VoiceManagerManifest: ModuleManifest = {
         if (sub === 'disconnect') {
           const user = interaction.options.getUser('user');
           const reason = interaction.options.getString('reason') || 'Voice disconnect';
-          const member = guild.members.cache.get(user.id);
+          const member = guild.members.cache.get(user.id) || await guild.members.fetch(user.id).catch(() => null);
           if (!member || !member.voice?.channel) {
             return interaction.reply({ content: '<a:warning:1546155193303957504> User is not currently in a voice channel.', flags: 64 });
           }
           await member.voice.disconnect(reason).catch(() => {});
           logVoiceAction('Disconnect', `Disconnected ${user.username} from voice`);
           return interaction.reply({ content: `<:ticks:1532620580266836148> Disconnected ${user} from voice.`, flags: 64 });
-        }
-
-        // CLEAN
-        if (sub === 'clean') {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
-            return interaction.reply({ content: '<a:success_check:1546134620087783526> Manage Channels permission required.', flags: 64 });
-          }
-          await interaction.deferReply({ flags: 64 });
-          const voiceChannels = guild.channels.cache.filter((c: any) => c.type === ChannelType.GuildVoice && c.members.size === 0);
-          let count = 0;
-          for (const [, channel] of voiceChannels) {
-            if (channel.id !== guild.afkChannelId) {
-              await channel.delete('Voice Cleanup').catch(() => {});
-              count++;
-            }
-          }
-          logVoiceAction('Cleanup', `Deleted ${count} empty VCs`);
-          return interaction.editReply({ content: `<:ticks:1532620580266836148> Cleaned up **${count}** empty voice channels.` });
         }
 
         // SESSIONS
@@ -565,6 +657,250 @@ export const VoiceManagerManifest: ModuleManifest = {
           content: `<:config:1532425712844144701> **Voice Management Hub**\nUse \`r!voice status\`, \`r!voice info\`, \`r!voice cleanup\`, \`r!voice lock\`, or \`r!voice mass-drag\`.`,
           flags: 64
         });
+      }
+    },
+    {
+      name: 'command_vcstatus',
+      handler: async (client: any, interaction: any, context: any) => {
+        if (!interaction.guild) return;
+        const authorMember = interaction.member || await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        const hasPerm = authorMember?.permissions?.has(PermissionFlagsBits.ManageChannels) ||
+                        authorMember?.permissions?.has(PermissionFlagsBits.Administrator) ||
+                        interaction.user.id === interaction.guild.ownerId;
+        if (!hasPerm) {
+          const permEmbed = new EmbedBuilder()
+            .setColor(Colors.DANGER)
+            .setTitle(`${SHIELD_ICON} Permission Denied`)
+            .setDescription(`You require \`Manage Channels\` or \`Administrator\` permission to configure automated Voice Channel statuses.`)
+            .setFooter({ text: BRAND_FOOTER });
+          return interaction.reply({ embeds: [permEmbed], flags: 64 });
+        }
+
+        const sub = interaction.options.getSubcommand();
+        const guildId = interaction.guildId;
+        const config = getVoiceStatusConfig(context, guildId);
+
+        if (sub === 'set') {
+          const targetChannel = interaction.options.getChannel('channel');
+          const statusText = interaction.options.getString('status');
+
+          if (!targetChannel || (!targetChannel.isVoiceBased?.() && targetChannel.type !== ChannelType.GuildVoice && targetChannel.type !== ChannelType.GuildStageVoice)) {
+            return interaction.reply({ content: `${WRONG_ICON} Please select a valid voice or stage channel.`, flags: 64 });
+          }
+
+          const existingIndex = config.channels.findIndex(c => c.channelId === targetChannel.id);
+          const channelObj: IVoiceStatusTarget = {
+            channelId: targetChannel.id,
+            defaultStatus: statusText,
+            enabled: true,
+            createdAt: existingIndex >= 0 ? config.channels[existingIndex].createdAt : Date.now(),
+            lastUpdated: Date.now()
+          };
+
+          if (existingIndex >= 0) {
+            config.channels[existingIndex] = channelObj;
+          } else {
+            config.channels.push(channelObj);
+          }
+
+          await saveVoiceStatusConfig(context, guildId, config);
+
+          const humanCount = getHumanMemberCount(targetChannel);
+          let appliedNow = false;
+          let applyError = '';
+
+          if (humanCount === 0) {
+            const res = await setVoiceChannelStatus(targetChannel, statusText);
+            appliedNow = res.success;
+            if (!res.success) applyError = res.error || '';
+          }
+
+          const embed = new EmbedBuilder()
+            .setColor(Colors.LIME)
+            .setTitle(`${VERIFIED_ICON} Voice Channel Auto-Status Configured`)
+            .setDescription([
+              `> **Voice Channel**: ${targetChannel} (\`#${targetChannel.name}\`)`,
+              `> **Default Status**: \`${statusText}\``,
+              `> **Current Occupants**: \`${humanCount} human members\``,
+              `> **Status Applied**: ${appliedNow ? '`Applied Immediately (Channel Empty)`' : humanCount > 0 ? '`Saved (Will apply once channel empties)`' : '`Saved`'}`
+            ].join('\n'))
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+
+          if (applyError) {
+            embed.addFields({ name: '⚠️ Notice', value: `Could not apply immediately: \`${applyError}\`.\nEnsure bot has \`Set Voice Channel Status\` permission.` });
+          }
+
+          return interaction.reply({ embeds: [embed] });
+        }
+
+        if (sub === 'remove') {
+          const targetChannel = interaction.options.getChannel('channel');
+          const index = config.channels.findIndex(c => c.channelId === targetChannel.id);
+          if (index !== -1) {
+            config.channels.splice(index, 1);
+            await saveVoiceStatusConfig(context, guildId, config);
+          }
+
+          // Clear voice status in Discord immediately and clear in-memory timers
+          await setVoiceChannelStatus(targetChannel, '');
+          VoiceStatusState.clearPendingTimer(targetChannel.id);
+          VoiceStatusState.setCurrentStatus(targetChannel.id, '');
+          VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+          const embed = new EmbedBuilder()
+            .setColor(Colors.LIME)
+            .setTitle(`${VERIFIED_ICON} Auto-Status Removed & Cleared`)
+            .setDescription(`Successfully removed auto-status monitoring and cleared the voice status from ${targetChannel}.\n\n> This channel will **not show that voice status anymore**.`)
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+
+          return interaction.reply({ embeds: [embed] });
+        }
+
+        if (sub === 'list') {
+          if (config.channels.length === 0) {
+            const emptyEmbed = new EmbedBuilder()
+              .setColor(Colors.WARN)
+              .setTitle(`${VOICE_ICON} Voice Channel Auto-Statuses`)
+              .setDescription(`No voice channels are currently configured with auto-status.\n\n> ${ARROW_ICON} **Set One**: \`/vcstatus set channel:#vc status:Your Status\``)
+              .setFooter({ text: BRAND_FOOTER });
+            return interaction.reply({ embeds: [emptyEmbed] });
+          }
+
+          const lines = config.channels.map((c, i) => {
+            const ch = interaction.guild.channels.cache.get(c.channelId);
+            const name = ch ? `#${ch.name}` : `ID: ${c.channelId}`;
+            const occupants = ch ? getHumanMemberCount(ch) : '?';
+            return `**${i + 1}.** <#${c.channelId}> (\`${name}\`)\n> **Default Status**: \`${c.defaultStatus}\`\n> **Live Members**: \`${occupants} occupants\` • **Enabled**: \`${c.enabled}\``;
+          });
+
+          const embed = new EmbedBuilder()
+            .setColor(Colors.BRAND)
+            .setTitle(`${VOICE_ICON} Configured Voice Channel Auto-Statuses`)
+            .setDescription(lines.join('\n\n'))
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+
+          return interaction.reply({ embeds: [embed] });
+        }
+
+        if (sub === 'reset') {
+          const targetChannel = interaction.options.getChannel('channel');
+          const mode = interaction.options.getString('mode') || 'clean';
+
+          if (mode === 'clean') {
+            const index = config.channels.findIndex(c => c.channelId === targetChannel.id);
+            if (index !== -1) {
+              config.channels.splice(index, 1);
+              await saveVoiceStatusConfig(context, guildId, config);
+            }
+
+            await setVoiceChannelStatus(targetChannel, '');
+            VoiceStatusState.clearPendingTimer(targetChannel.id);
+            VoiceStatusState.setCurrentStatus(targetChannel.id, '');
+            VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+            const embed = new EmbedBuilder()
+              .setColor(Colors.LIME)
+              .setTitle(`${VERIFIED_ICON} Voice Status Cleaned & Reset`)
+              .setDescription(`Successfully reset and cleared voice status for ${targetChannel}.\n\n> Auto-status monitoring has been stopped. The channel will **not show that voice status anymore**.`)
+              .setFooter({ text: BRAND_FOOTER })
+              .setTimestamp();
+
+            return interaction.reply({ embeds: [embed] });
+          }
+
+          const targetConfig = config.channels.find(c => c.channelId === targetChannel.id);
+          if (!targetConfig) {
+            await setVoiceChannelStatus(targetChannel, '');
+            VoiceStatusState.clearPendingTimer(targetChannel.id);
+            VoiceStatusState.setCurrentStatus(targetChannel.id, '');
+            VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+            return interaction.reply({
+              embeds: [
+                new EmbedBuilder()
+                  .setColor(Colors.LIME)
+                  .setTitle(`${VERIFIED_ICON} Voice Status Cleared`)
+                  .setDescription(`${targetChannel} was not configured for auto-status, so any residual voice status text has been completely cleared.`)
+                  .setFooter({ text: BRAND_FOOTER })
+                  .setTimestamp()
+              ]
+            });
+          }
+
+          const res = await setVoiceChannelStatus(targetChannel, targetConfig.defaultStatus);
+          if (!res.success) {
+            return interaction.reply({ content: `${WRONG_ICON} Failed to set voice status: \`${res.error}\``, flags: 64 });
+          }
+
+          VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+          const embed = new EmbedBuilder()
+            .setColor(Colors.LIME)
+            .setTitle(`${VERIFIED_ICON} Voice Status Re-Applied`)
+            .setDescription([
+              `Successfully re-applied default status for ${targetChannel}:`,
+              `> \`${targetConfig.defaultStatus}\``,
+              '',
+              `💡 **To remove status permanently so it NEVER shows again**:`,
+              `> Use \`/vcstatus clear\` or \`/vcstatus remove\``
+            ].join('\n'))
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+
+          return interaction.reply({ embeds: [embed] });
+        }
+
+        if (sub === 'clear') {
+          const targetChannel = interaction.options.getChannel('channel');
+
+          // 1. Remove from config so auto-status never re-applies it
+          const index = config.channels.findIndex(c => c.channelId === targetChannel.id);
+          if (index !== -1) {
+            config.channels.splice(index, 1);
+            await saveVoiceStatusConfig(context, guildId, config);
+          }
+
+          // 2. Clear from Discord
+          const res = await setVoiceChannelStatus(targetChannel, '');
+          VoiceStatusState.clearPendingTimer(targetChannel.id);
+          VoiceStatusState.setCurrentStatus(targetChannel.id, '');
+          VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+          if (!res.success) {
+            return interaction.reply({ content: `${WRONG_ICON} Failed to clear voice status: \`${res.error}\``, flags: 64 });
+          }
+
+          const embed = new EmbedBuilder()
+            .setColor(Colors.LIME)
+            .setTitle(`${VERIFIED_ICON} Voice Status Cleared`)
+            .setDescription(`Successfully cleared voice status for ${targetChannel} and removed auto-status monitoring.\n\n> This channel will **not show that voice status anymore**.`)
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+
+          return interaction.reply({ embeds: [embed] });
+        }
+      }
+    },
+    {
+      name: 'voiceStateUpdate',
+      handler: async (client: any, data: any, context: any) => {
+        const { oldState, newState } = data || {};
+        await processVoiceStateUpdate(client, oldState, newState, context);
+      }
+    },
+    {
+      name: 'voiceChannelStatusUpdate',
+      handler: async (client: any, data: any, context: any) => {
+        processVoiceChannelStatusUpdate(client, data, context);
+      }
+    },
+    {
+      name: 'ready',
+      handler: async (client: any, _data: any, context: any) => {
+        await startupVoiceStatusSweep(client, context);
       }
     }
   ]
@@ -992,7 +1328,7 @@ export function registerVoiceManagerCommands() {
       const overwrites: any = { Connect: false, SendMessages: false };
       if (makePrivate) overwrites.ViewChannel = false;
 
-      await targetChannel.permissionOverwrites.edit(message.guild.id, overwrites);
+      await targetChannel.permissionOverwrites.edit(message.guild.id, overwrites).catch(() => {});
 
       context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} locked voice channel #${targetChannel.name}`, 'warn');
 
@@ -1077,7 +1413,7 @@ export function registerVoiceManagerCommands() {
         Connect: null,
         SendMessages: null,
         ViewChannel: null
-      });
+      }).catch(() => {});
 
       context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} unlocked voice channel #${targetChannel.name}`, 'info');
 
@@ -1093,6 +1429,393 @@ export function registerVoiceManagerCommands() {
         .setTimestamp();
 
       return message.reply({ embeds: [successEmbed] });
+    }
+  });
+
+  // Prefix Command: r!vcstatus
+  PrefixRegistry.register({
+    name: 'vcstatus',
+    category: 'Voice',
+    description: 'Configure automated voice channel status when empty.',
+    usage: 'r!vcstatus <set|remove|list|reset|clear> [#voice-channel] [status text]',
+    aliases: ['autovcstatus', 'setvcstatus', 'voicestatus'],
+    cooldownSeconds: 3,
+    examples: [
+      'r!vcstatus set #General ✨ Playing Under Stars 🦋',
+      'r!vcstatus set ✨ Playing Under Stars 🦋',
+      'r!vcstatus remove #General',
+      'r!vcstatus list',
+      'r!vcstatus reset #General',
+      'r!vcstatus clear #General'
+    ],
+    moduleOwnerId: 'voice_manager',
+    dangerLevel: 'Low',
+    execute: async (message: Message, args: string[], context?: any) => {
+      if (!message.guild) return;
+      const authorMember = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+      const hasPerm = authorMember?.permissions.has(PermissionFlagsBits.ManageChannels) ||
+                      authorMember?.permissions.has(PermissionFlagsBits.Administrator) ||
+                      message.author.id === message.guild.ownerId;
+      if (!hasPerm) {
+        const permEmbed = new EmbedBuilder()
+          .setColor(Colors.DANGER)
+          .setTitle(`${SHIELD_ICON} Permission Denied`)
+          .setDescription(`You require \`Manage Channels\` or \`Administrator\` permission to configure automated Voice Channel statuses.\n\n> ${INFO_ICON} **Required Permissions**: \`MANAGE_CHANNELS\` or \`ADMINISTRATOR\``)
+          .setFooter({ text: BRAND_FOOTER });
+        return message.reply({ embeds: [permEmbed] });
+      }
+
+      const guildId = message.guild.id;
+      const config = getVoiceStatusConfig(context, guildId);
+      const action = (args[0] || '').toLowerCase();
+
+      // HELPER: Resolve channel from args or fallback to author's active VC
+      const resolveChannelAndStatus = () => {
+        let targetChannel: any = null;
+        let statusStartIndex = 1;
+
+        if (args[1] || message.mentions.channels.size > 0) {
+          const mentioned = message.mentions.channels.first();
+          if (mentioned && mentioned.isVoiceBased()) {
+            targetChannel = mentioned;
+            statusStartIndex = 2;
+          } else if (args[1]) {
+            const rawId = args[1].replace(/[<#>]/g, '');
+            const found = message.guild!.channels.cache.get(rawId) ||
+                          message.guild!.channels.cache.find((c: any) => c.isVoiceBased() && c.name.toLowerCase() === args[1].toLowerCase());
+            if (found && found.isVoiceBased()) {
+              targetChannel = found;
+              statusStartIndex = 2;
+            }
+          }
+        }
+
+        if (!targetChannel) {
+          const authorVoiceState = message.guild!.voiceStates?.cache?.get(message.author.id);
+          const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+          if (authorChannelId) {
+            targetChannel = message.guild!.channels.cache.get(authorChannelId);
+            statusStartIndex = 1;
+          }
+        }
+
+        const statusText = args.slice(statusStartIndex).join(' ').trim();
+        return { targetChannel, statusText };
+      };
+
+      // ── SUBCOMMAND: SET ──
+      if (action === 'set') {
+        const { targetChannel, statusText } = resolveChannelAndStatus();
+
+        if (!targetChannel || !targetChannel.isVoiceBased()) {
+          const noVcEmbed = new EmbedBuilder()
+            .setColor(Colors.WARN)
+            .setTitle(`${VOICE_ICON} Voice Channel Required`)
+            .setDescription(`Please specify a voice channel or join one.\n\n> ${ARROW_ICON} **Usage**: \`r!vcstatus set [#voice-channel] <status text>\`\n> **Example**: \`r!vcstatus set #General ✨ Playing Under Stars 🦋\``)
+            .setFooter({ text: BRAND_FOOTER });
+          return message.reply({ embeds: [noVcEmbed] });
+        }
+
+        if (!statusText) {
+          const noStatusEmbed = new EmbedBuilder()
+            .setColor(Colors.WARN)
+            .setTitle(`${INFO_ICON} Status Text Required`)
+            .setDescription(`Please provide the status message to display when the channel is empty.\n\n> ${ARROW_ICON} **Example**: \`r!vcstatus set ${targetChannel} ✨ Playing Under Stars 🦋\``)
+            .setFooter({ text: BRAND_FOOTER });
+          return message.reply({ embeds: [noStatusEmbed] });
+        }
+
+        const existingIndex = config.channels.findIndex(c => c.channelId === targetChannel.id);
+        const channelObj: IVoiceStatusTarget = {
+          channelId: targetChannel.id,
+          defaultStatus: statusText,
+          enabled: true,
+          createdAt: existingIndex >= 0 ? config.channels[existingIndex].createdAt : Date.now(),
+          lastUpdated: Date.now()
+        };
+
+        if (existingIndex >= 0) {
+          config.channels[existingIndex] = channelObj;
+        } else {
+          config.channels.push(channelObj);
+        }
+
+        await saveVoiceStatusConfig(context, guildId, config);
+
+        const humanCount = getHumanMemberCount(targetChannel);
+        let appliedNow = false;
+        let applyError = '';
+
+        if (humanCount === 0) {
+          const res = await setVoiceChannelStatus(targetChannel, statusText);
+          appliedNow = res.success;
+          if (!res.success) applyError = res.error || '';
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor(Colors.LIME)
+          .setTitle(`${VERIFIED_ICON} Voice Channel Auto-Status Configured`)
+          .setDescription([
+            `> **Status**: \`Configured & Active\``,
+            `> **Voice Channel**: ${targetChannel} (\`#${targetChannel.name}\`)`,
+            `> **Default Status**: \`${statusText}\``,
+            `> **Current Occupants**: \`${humanCount} human member(s)\``,
+            `> **Behavior**: ${appliedNow ? '`Applied Immediately (Channel Empty)`' : humanCount > 0 ? '`Saved (Will apply once all members leave)`' : '`Saved`'}`,
+            `> **Smart Override**: If users set a custom status while inside, their custom status is preserved until the channel empties out.`
+          ].join('\n'))
+          .setFooter({ text: BRAND_FOOTER })
+          .setTimestamp();
+
+        if (applyError) {
+          embed.addFields({
+            name: '⚠️ Notice',
+            value: `Could not apply status immediately: \`${applyError}\`.\nPlease ensure the bot has \`Set Voice Channel Status\` permission.`
+          });
+        }
+
+        context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} configured auto-status for #${targetChannel.name}: "${statusText}"`, 'info');
+        return message.reply({ embeds: [embed] });
+      }
+
+      // ── SUBCOMMAND: REMOVE / DELETE ──
+      if (action === 'remove' || action === 'delete' || action === 'del') {
+        const { targetChannel } = resolveChannelAndStatus();
+        if (!targetChannel) {
+          return message.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(Colors.WARN)
+                .setTitle(`${VOICE_ICON} Voice Channel Required`)
+                .setDescription(`Specify the channel to remove: \`r!vcstatus remove [#voice-channel]\`.`)
+                .setFooter({ text: BRAND_FOOTER })
+            ]
+          });
+        }
+
+        const index = config.channels.findIndex(c => c.channelId === targetChannel.id);
+        if (index !== -1) {
+          config.channels.splice(index, 1);
+          await saveVoiceStatusConfig(context, guildId, config);
+        }
+
+        // Clear voice status in Discord immediately and clear in-memory state
+        await setVoiceChannelStatus(targetChannel, '');
+        VoiceStatusState.clearPendingTimer(targetChannel.id);
+        VoiceStatusState.setCurrentStatus(targetChannel.id, '');
+        VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+        context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} removed auto-status for #${targetChannel.name}`, 'info');
+
+        const embed = new EmbedBuilder()
+          .setColor(Colors.LIME)
+          .setTitle(`${VERIFIED_ICON} Auto-Status Removed & Cleared`)
+          .setDescription(`Successfully removed auto-status monitoring and cleared the voice status from ${targetChannel}.\n\n> This channel will **not show that voice status anymore**.`)
+          .setFooter({ text: BRAND_FOOTER })
+          .setTimestamp();
+
+        return message.reply({ embeds: [embed] });
+      }
+
+      // ── SUBCOMMAND: LIST ──
+      if (action === 'list') {
+        if (config.channels.length === 0) {
+          const emptyEmbed = new EmbedBuilder()
+            .setColor(Colors.WARN)
+            .setTitle(`${VOICE_ICON} Voice Channel Auto-Statuses`)
+            .setDescription(`No voice channels are currently configured for auto-status.\n\n> ${ARROW_ICON} **Set One**: \`r!vcstatus set [#voice-channel] <status text>\``)
+            .setFooter({ text: BRAND_FOOTER });
+          return message.reply({ embeds: [emptyEmbed] });
+        }
+
+        const lines = config.channels.map((c, i) => {
+          const ch = message.guild!.channels.cache.get(c.channelId);
+          const name = ch ? `#${ch.name}` : `ID: ${c.channelId}`;
+          const occupants = ch ? getHumanMemberCount(ch) : '?';
+          return `**${i + 1}.** <#${c.channelId}> (\`${name}\`)\n> **Default Status**: \`${c.defaultStatus}\`\n> **Live Occupants**: \`${occupants} member(s)\` • **Active**: \`${c.enabled}\``;
+        });
+
+        const embed = new EmbedBuilder()
+          .setColor(Colors.BRAND)
+          .setTitle(`${VOICE_ICON} Configured Voice Channel Auto-Statuses`)
+          .setDescription(lines.join('\n\n'))
+          .setFooter({ text: BRAND_FOOTER })
+          .setTimestamp();
+
+        return message.reply({ embeds: [embed] });
+      }
+
+      // ── SUBCOMMAND: RESET ──
+      if (action === 'reset') {
+        const { targetChannel, statusText } = resolveChannelAndStatus();
+        if (!targetChannel) {
+          return message.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(Colors.WARN)
+                .setTitle(`${VOICE_ICON} Voice Channel Required`)
+                .setDescription(`Specify the voice channel to reset: \`r!vcstatus reset [#voice-channel]\`\nTo completely remove and stop voice status: \`r!vcstatus reset [#voice-channel] clean\``)
+                .setFooter({ text: BRAND_FOOTER })
+            ]
+          });
+        }
+
+        const isCleanRequest = statusText.toLowerCase() === 'clean' ||
+                               statusText.toLowerCase() === 'clear' ||
+                               statusText.toLowerCase() === 'none' ||
+                               statusText.toLowerCase() === 'off' ||
+                               statusText.toLowerCase() === 'remove';
+
+        if (isCleanRequest) {
+          const index = config.channels.findIndex(c => c.channelId === targetChannel.id);
+          if (index !== -1) {
+            config.channels.splice(index, 1);
+            await saveVoiceStatusConfig(context, guildId, config);
+          }
+
+          await setVoiceChannelStatus(targetChannel, '');
+          VoiceStatusState.clearPendingTimer(targetChannel.id);
+          VoiceStatusState.setCurrentStatus(targetChannel.id, '');
+          VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+          return message.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(Colors.LIME)
+                .setTitle(`${VERIFIED_ICON} Voice Status Cleaned & Reset`)
+                .setDescription(`Successfully reset and cleared voice status for ${targetChannel}.\n\n> Auto-status monitoring has been stopped. The channel will **not show that voice status anymore**.`)
+                .setFooter({ text: BRAND_FOOTER })
+                .setTimestamp()
+            ]
+          });
+        }
+
+        const targetConfig = config.channels.find(c => c.channelId === targetChannel.id);
+        if (!targetConfig) {
+          await setVoiceChannelStatus(targetChannel, '');
+          VoiceStatusState.clearPendingTimer(targetChannel.id);
+          VoiceStatusState.setCurrentStatus(targetChannel.id, '');
+          VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+          return message.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(Colors.LIME)
+                .setTitle(`${VERIFIED_ICON} Voice Status Cleared`)
+                .setDescription(`${targetChannel} was not configured for auto-status, so any residual voice status text has been completely cleared.`)
+                .setFooter({ text: BRAND_FOOTER })
+                .setTimestamp()
+            ]
+          });
+        }
+
+        const res = await setVoiceChannelStatus(targetChannel, targetConfig.defaultStatus);
+        if (!res.success) {
+          return message.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(Colors.DANGER)
+                .setTitle(`${WRONG_ICON} Failed to Set Voice Status`)
+                .setDescription(`Error: \`${res.error}\`\nEnsure bot has \`Set Voice Channel Status\` permission.`)
+                .setFooter({ text: BRAND_FOOTER })
+            ]
+          });
+        }
+
+        VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+        const embed = new EmbedBuilder()
+          .setColor(Colors.LIME)
+          .setTitle(`${VERIFIED_ICON} Voice Status Re-Applied`)
+          .setDescription([
+            `Successfully re-applied default status for ${targetChannel}:`,
+            `> \`${targetConfig.defaultStatus}\``,
+            '',
+            `💡 **To remove status permanently so it NEVER shows again**:`,
+            `> Run \`r!vcstatus clear ${targetChannel}\` or \`r!vcstatus reset ${targetChannel} clean\``
+          ].join('\n'))
+          .setFooter({ text: BRAND_FOOTER })
+          .setTimestamp();
+
+        return message.reply({ embeds: [embed] });
+      }
+
+      // ── SUBCOMMAND: CLEAR ──
+      if (action === 'clear') {
+        const { targetChannel } = resolveChannelAndStatus();
+        if (!targetChannel) {
+          return message.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(Colors.WARN)
+                .setTitle(`${VOICE_ICON} Voice Channel Required`)
+                .setDescription(`Specify the voice channel to clear: \`r!vcstatus clear [#voice-channel]\`.`)
+                .setFooter({ text: BRAND_FOOTER })
+            ]
+          });
+        }
+
+        // 1. Remove from config so auto-status never re-applies it
+        const index = config.channels.findIndex(c => c.channelId === targetChannel.id);
+        if (index !== -1) {
+          config.channels.splice(index, 1);
+          await saveVoiceStatusConfig(context, guildId, config);
+        }
+
+        // 2. Clear from Discord
+        const res = await setVoiceChannelStatus(targetChannel, '');
+        VoiceStatusState.clearPendingTimer(targetChannel.id);
+        VoiceStatusState.setCurrentStatus(targetChannel.id, '');
+        VoiceStatusState.setManualOverride(targetChannel.id, false);
+
+        if (!res.success) {
+          return message.reply({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(Colors.DANGER)
+                .setTitle(`${WRONG_ICON} Failed to Clear Status`)
+                .setDescription(`Error: \`${res.error}\``)
+                .setFooter({ text: BRAND_FOOTER })
+            ]
+          });
+        }
+
+        return message.reply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(Colors.LIME)
+              .setTitle(`${VERIFIED_ICON} Voice Status Cleared`)
+              .setDescription(`Successfully cleared voice status for ${targetChannel} and removed auto-status monitoring.\n\n> This channel will **not show that voice status anymore**.`)
+              .setFooter({ text: BRAND_FOOTER })
+              .setTimestamp()
+          ]
+        });
+      }
+
+      // ── DEFAULT: HELP & OVERVIEW ──
+      const helpEmbed = new EmbedBuilder()
+        .setColor(Colors.BRAND)
+        .setTitle(`${VOICE_ICON} Voice Channel Auto-Status Management`)
+        .setDescription([
+          `> Automatically applies a preset status to a voice channel when there is no one inside, and preserves custom user statuses while users are active.`,
+          '',
+          `**Commands**:`,
+          `• \`r!vcstatus set [#channel] <status text>\` — Configure default status applied when empty`,
+          `• \`r!vcstatus remove [#channel]\` — Remove channel from auto-status monitoring`,
+          `• \`r!vcstatus list\` — View all monitored voice channels & their live statuses`,
+          `• \`r!vcstatus reset [#channel]\` — Force reset voice channel status immediately`,
+          `• \`r!vcstatus clear [#channel]\` — Clear current voice channel status immediately`,
+          '',
+          `**Examples**:`,
+          `\`r!vcstatus set #General ✨ Playing Under Stars 🦋\``,
+          `\`r!vcstatus set Chill & Vibe 24/7\` *(uses your current VC)*`,
+          `\`r!vcstatus list\``,
+          `\`r!vcstatus reset #General\``,
+          '',
+          `> ${INFO_ICON} **Note**: The bot requires the \`Set Voice Channel Status\` permission in Discord.`
+        ].join('\n'))
+        .setFooter({ text: BRAND_FOOTER });
+
+      return message.reply({ embeds: [helpEmbed] });
     }
   });
 

@@ -87,13 +87,16 @@ export class YouTubeProvider extends BaseProvider {
     const base = super.prepareTemplateData(item, source);
     return {
       ...base,
+      'provider': 'youtube',
       'channel.url': `https://www.youtube.com/channel/${source.sourceId}`,
-      'post.caption': item.description || '',
-      'post.image': item.thumbnailUrl || '',
-      'post.url': item.url,
-      'profile.name': source.sourceName,
-      'profile.username': source.sourceId,
-      'profile.avatar': source.sourceAvatar || ''
+      'channel.name': source.sourceName,
+      'channel.id': source.sourceId,
+      'channel.avatar': source.sourceAvatar || '',
+      'video.id': item.id,
+      'video.title': item.title,
+      'video.url': item.url,
+      'video.thumbnail': item.thumbnailUrl || '',
+      'video.description': item.description || ''
     };
   }
 }

@@ -1,6 +1,7 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import {
-  ChannelType, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, Message, RoleSelectMenuBuilder, UserSelectMenuBuilder
+  ChannelType, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, Message, RoleSelectMenuBuilder, UserSelectMenuBuilder,
+  ContainerBuilder, SectionBuilder, TextDisplayBuilder, SeparatorBuilder, ThumbnailBuilder, MessageFlags
 } from 'discord.js';
 import { ITicket, ITicketConfig, ITicketCategory } from '../../models/index.js';
 import {
@@ -141,9 +142,128 @@ export function buildTicketSupportPanelComponents(): ActionRowBuilder<ButtonBuil
   const openBtn = new ButtonBuilder()
     .setCustomId('btn_open_ticket_modal')
     .setLabel('Create Ticket')
-    .setStyle(ButtonStyle.Success);
+    .setStyle(ButtonStyle.Secondary);
 
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(openBtn)];
+}
+
+export function buildTicketSupportPanelContainer(opts: {
+  guild: any;
+  title?: string;
+  description?: string;
+  guidelines?: string;
+  footerWarning?: string;
+}): ContainerBuilder {
+  const serverName = opts.guild?.name || 'Community Server';
+  let title = opts.title || 'Support Desk';
+  title = title.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim() || 'Support Desk';
+
+  const desc = opts.description || 'Create a ticket if you face any issues, faq on rage we are ready to support you always';
+  const cleanDesc = desc.replace(/\s*,\s*/g, ', ').replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+
+  let footerWarning = (opts.footerWarning && opts.footerWarning.trim().length > 0)
+    ? opts.footerWarning.trim()
+    : DEFAULT_TICKET_FOOTER_WARNING;
+  footerWarning = footerWarning.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
+
+  const guildIcon = opts.guild?.iconURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
+
+  const sec = new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`# **${serverName} • ${title}**`)
+    )
+    .setThumbnailAccessory(
+      new ThumbnailBuilder().setURL(guildIcon)
+    );
+
+  const sep = new SeparatorBuilder().setDivider(true);
+
+  const bodyContent = [
+    `**Server:** \`${serverName}\``,
+    `**Status:** \`Active & Monitored 24/7\``,
+    `**Turnaround:** \`Under 24 Hours SLA\``,
+    ``,
+    `> **"${cleanDesc}"**`,
+    ``,
+    `### **Submission Guidelines**`,
+    `**Give your details when creating a ticket, reasons & questions:**`,
+    `• **Response Time:** Issues acknowledged within \`24 hours\`.`,
+    `• **Resolution SLA:** Target resolution within \`48 hours\`.`,
+    ``,
+    `> ⚠️ **Important Notice:** **${footerWarning}**`,
+    `> **Spamming or opening frivolous tickets will result in an immediate support blacklist.**`
+  ].join('\n');
+
+  const body = new TextDisplayBuilder().setContent(bodyContent);
+
+  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('btn_open_ticket_modal')
+      .setLabel('Create Ticket')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  const footer = new TextDisplayBuilder().setContent(`-# Rage Secure Support Desk • ${serverName}`);
+
+  return new ContainerBuilder()
+    .addSectionComponents(sec)
+    .addSeparatorComponents(sep)
+    .addTextDisplayComponents(body)
+    .addActionRowComponents(actionRow)
+    .addTextDisplayComponents(footer);
+}
+
+export function buildTicketSupportPanelPayload(opts: {
+  guild: any;
+  title?: string;
+  description?: string;
+  guidelines?: string;
+  footerWarning?: string;
+}): any {
+  try {
+    const container = buildTicketSupportPanelContainer(opts);
+    return {
+      flags: MessageFlags.IsComponentsV2,
+      components: [container]
+    };
+  } catch {
+    const embed = buildTicketSupportPanelEmbed(opts);
+    return {
+      embeds: [embed],
+      components: buildTicketSupportPanelComponents()
+    };
+  }
+}
+
+export async function sendOrEditTicketPanel(target: any, opts: any, isEdit: boolean = false): Promise<any> {
+  const payload = buildTicketSupportPanelPayload(opts);
+  if (isEdit && target && typeof target.edit === 'function') {
+    // If target message is a legacy embed (not Components V2), Discord rejects converting to Components V2.
+    // Replace it cleanly with a fresh Components V2 Box UI message!
+    if (!target.flags?.has?.(MessageFlags.IsComponentsV2)) {
+      try {
+        const chan = target.channel;
+        await target.delete().catch(() => {});
+        return await chan.send(payload);
+      } catch {}
+    }
+    try {
+      return await target.edit(payload);
+    } catch {
+      try {
+        const chan = target.channel;
+        await target.delete().catch(() => {});
+        return await chan.send(payload);
+      } catch {}
+    }
+  }
+
+  // Otherwise send fresh to channel
+  if (target && typeof target.send === 'function') {
+    return await target.send(payload);
+  } else if (target?.channel && typeof target.channel.send === 'function') {
+    return await target.channel.send(payload);
+  }
 }
 
 function getDefaultConfig(): ITicketConfig {
@@ -243,29 +363,35 @@ async function generateHtmlTranscript(channel: any, ticket: ITicket, guild: any)
 // ─────────────────────────────────────────────
 // UI EMBED BUILDERS matching video
 // ─────────────────────────────────────────────
-function buildDashboardComponents(config: ITicketConfig, guild: any, selectedPanelId?: string) {
+function buildDashboardComponents(config: ITicketConfig, guild: any, selectedPanelId?: string, statusMessage?: string) {
   const adminRoleMention = config.defaultAdminRoleId ? `<@&${config.defaultAdminRoleId}>` : 'None';
   const activePanelsCount = config.activePanels ? config.activePanels.length : 0;
   const guidelinesStatus = config.panelGuidelines ? 'Customized' : 'Official Template (Active)';
   const catObj = config.categoryId ? (guild.channels.cache.get(config.categoryId) || null) : null;
   const categoryDisplay = catObj ? `${catObj.name} (\`${catObj.id}\`)` : (config.categoryId ? `\`${config.categoryId}\`` : '`Auto-Detect / TICKETS`');
 
+  let desc =
+    `> **Server:** ${guild.name}\n` +
+    `> **Max Tickets Per User:** \`${config.maxOpenPerUser || 1}\`\n` +
+    `> **Default Admin Role:** ${adminRoleMention}\n` +
+    `> **Ticket Category:** ${categoryDisplay}\n` +
+    `> **Panel Guidelines:** \`${guidelinesStatus}\`\n` +
+    `> **Active Panels:** ${activePanelsCount === 0 ? '\`None configured\`' : `\`${activePanelsCount} active\``}\n` +
+    `> **Logged History:** \`${config.ticketCounter || 0}\` tickets recorded`;
+
+  if (statusMessage) {
+    desc = `> **Status:** \`${statusMessage}\`\n\n` + desc;
+  }
+
   const embed = new EmbedBuilder()
     .setTitle('Ticket Management Dashboard')
     .setColor(0x2b2d31)
-    .setDescription(
-      `**Server:** ${guild.name}\n` +
-      `**Max Tickets Per User:** \`${config.maxOpenPerUser || 1}\`\n` +
-      `**Default Admin Role:** ${adminRoleMention}\n` +
-      `**Ticket Category:** ${categoryDisplay}\n` +
-      `**Panel Guidelines:** \`${guidelinesStatus}\`\n` +
-      `**Active Panels:** ${activePanelsCount === 0 ? '\`None configured\`' : `\`${activePanelsCount} active\``}\n` +
-      `**Logged History:** \`${config.ticketCounter || 0}\` tickets recorded`
-    )
-    .setThumbnail(guild.iconURL() || undefined);
+    .setDescription(desc)
+    .setThumbnail(guild.iconURL?.({ size: 512 }) || undefined);
 
+  // All buttons use default Secondary color (no green, no blurple)
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('tkmgr_btn_update_panel').setLabel('Update Panel').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('tkmgr_btn_update_panel').setLabel('Update Panel').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('tkmgr_btn_create_panel').setLabel('Create Panel').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('tkmgr_btn_set_category').setLabel('Set Category').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('tkmgr_btn_edit_guidelines').setLabel('Panel Guidelines').setStyle(ButtonStyle.Secondary)
@@ -297,31 +423,65 @@ function buildDashboardComponents(config: ITicketConfig, guild: any, selectedPan
     components.push(selectRow);
 
     const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('tkmgr_btn_sync_live_panel').setLabel('Sync Live Panel Embed').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('tkmgr_btn_sync_live_panel').setLabel('Sync Live Panel Embed').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('tkmgr_btn_preview_panel').setLabel('Preview Panel Embed').setStyle(ButtonStyle.Secondary)
     );
     components.push(row3);
   }
 
-  return { embed, components };
+  // Discord Components V2 Box UI Container
+  const header = new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`# **Ticket Management Dashboard**`)
+    )
+    .setThumbnailAccessory(
+      new ThumbnailBuilder().setURL(guild.iconURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png')
+    );
+
+  const container = new ContainerBuilder()
+    .addSectionComponents(header)
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(desc));
+
+  for (const r of components) {
+    container.addActionRowComponents(r);
+  }
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`-# Rage Secure Support Desk • ${guild.name}`)
+  );
+
+  return {
+    embed,
+    components,
+    container,
+    payload: {
+      flags: MessageFlags.IsComponentsV2,
+      components: [container]
+    } as any
+  };
 }
 
-function buildTicketControlPanelEmbed(ticket: ITicket) {
+function buildTicketControlPanelEmbed(ticket: ITicket, guild?: any) {
+  const guildIcon = guild?.iconURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
+  const desc = [
+    `> **Ticket Number:** \`#${ticket.id.replace('ticket_', '')}\``,
+    `> **Category:** ${ticket.category || 'General Support'}`,
+    `> **Creator:** <@${ticket.userId}>`,
+    `> **Claimed By:** ${ticket.claimedBy ? `<@${ticket.claimedBy}>` : 'Unclaimed'}`,
+    `> **Lock Status:** \`${ticket.lockStatus || 'Unlocked'}\``,
+    `> **Priority:** \`${ticket.priority || 'Normal'}\``,
+    `> **Blacklist Status:** \`Clear\``,
+    `> **Voice Channel:** \`None\``,
+    `> **Auto-Close:** \`Disabled\``,
+    `> **Reason:** ${ticket.subject || 'Give your ticket reasons'}`
+  ].join('\n');
+
   const embed = new EmbedBuilder()
     .setTitle('Ticket Control Panel (Staff Only)')
     .setColor(0x2b2d31)
-    .setDescription(
-      `**Ticket Number:** \`#${ticket.id.replace('ticket_', '')}\`\n` +
-      `**Category:** ${ticket.category || 'General Support'}\n` +
-      `**Creator:** <@${ticket.userId}>\n` +
-      `**Claimed By:** ${ticket.claimedBy ? `<@${ticket.claimedBy}>` : 'Unclaimed'}\n` +
-      `**Lock Status:** \`${ticket.lockStatus || 'Unlocked'}\`\n` +
-      `**Priority:** \`${ticket.priority || 'Normal'}\`\n` +
-      `**Blacklist Status:** \`Clear\`\n` +
-      `**Voice Channel:** \`None\`\n` +
-      `**Auto-Close:** \`Disabled\`\n` +
-      `**Reason:** ${ticket.subject || 'Give your ticket reasons'}`
-    );
+    .setDescription(desc)
+    .setThumbnail(guildIcon);
 
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('btn_in_add_mod').setLabel('Add Moderator').setStyle(ButtonStyle.Secondary),
@@ -347,18 +507,45 @@ function buildTicketControlPanelEmbed(ticket: ITicket) {
     new ButtonBuilder().setCustomId('btn_control_refresh').setLabel('Refresh').setStyle(ButtonStyle.Secondary)
   );
 
-  return { embed, components: [row1, row2, row3, row4] };
+  const sec = new SectionBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('# **Ticket Control Panel (Staff Only)**'))
+    .setThumbnailAccessory(new ThumbnailBuilder().setURL(guildIcon));
+
+  const container = new ContainerBuilder()
+    .addSectionComponents(sec)
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(desc))
+    .addActionRowComponents(row1)
+    .addActionRowComponents(row2)
+    .addActionRowComponents(row3)
+    .addActionRowComponents(row4)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Secure Support Desk • Staff Control Engine'));
+
+  return {
+    embed,
+    components: [row1, row2, row3, row4],
+    container,
+    payload: {
+      flags: MessageFlags.IsComponentsV2,
+      components: [container]
+    } as any
+  };
 }
 
-function buildTicketPriorityPanelEmbed(channelName: string, currentPriority: string) {
+function buildTicketPriorityPanelEmbed(channelName: string, currentPriority: string, guild?: any) {
+  const guildIcon = guild?.iconURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
+  const desc = [
+    `> **Channel:** \`#${channelName}\``,
+    `> **Current Priority:** \`${currentPriority}\``,
+    ``,
+    `Select new priority level below:`
+  ].join('\n');
+
   const embed = new EmbedBuilder()
     .setTitle('Ticket Priority Panel')
     .setColor(0x2b2d31)
-    .setDescription(
-      `**Channel:** \`#${channelName}\`\n` +
-      `**Current Priority:** ${currentPriority}\n\n` +
-      `Select new priority level below:`
-    );
+    .setDescription(desc)
+    .setThumbnail(guildIcon);
 
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId('prio_btn_high').setLabel('High Priority').setStyle(ButtonStyle.Secondary),
@@ -370,7 +557,27 @@ function buildTicketPriorityPanelEmbed(channelName: string, currentPriority: str
     new ButtonBuilder().setCustomId('prio_btn_reset').setLabel('Reset Priority').setStyle(ButtonStyle.Secondary)
   );
 
-  return { embed, components: [row1, row2] };
+  const sec = new SectionBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('# **Ticket Priority Panel**'))
+    .setThumbnailAccessory(new ThumbnailBuilder().setURL(guildIcon));
+
+  const container = new ContainerBuilder()
+    .addSectionComponents(sec)
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(desc))
+    .addActionRowComponents(row1)
+    .addActionRowComponents(row2)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Secure Support Desk • Priority Control'));
+
+  return {
+    embed,
+    components: [row1, row2],
+    container,
+    payload: {
+      flags: MessageFlags.IsComponentsV2,
+      components: [container]
+    } as any
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -715,14 +922,13 @@ async function handleTicketInteraction(interaction: any, context: any) {
             if (chan && chan.isTextBased()) {
               const msg = await (chan as any).messages?.fetch(panel.id).catch(() => null);
               if (msg) {
-                const newEmbed = buildTicketSupportPanelEmbed({
+                await sendOrEditTicketPanel(msg, {
                   guild,
                   title,
                   description,
                   guidelines,
                   footerWarning
-                });
-                await msg.edit({ embeds: [newEmbed], components: buildTicketSupportPanelComponents() }).catch(() => { });
+                }, true).catch(() => { });
                 syncedCount++;
               }
             }
@@ -730,12 +936,9 @@ async function handleTicketInteraction(interaction: any, context: any) {
         }
       }
 
-      const { embed, components } = buildDashboardComponents(config, guild);
-      return interaction.editReply({
-        content: `${VERIFIED_ICON} Panel guidelines and template updated successfully!${syncedCount > 0 ? ` (Auto-synced **${syncedCount}** live support panel(s))` : ''}`,
-        embeds: [embed],
-        components
-      });
+      const statusText = `Panel guidelines and template updated successfully!${syncedCount > 0 ? ` (Auto-synced ${syncedCount} live support panel(s))` : ''}`;
+      const { payload, embed, components } = buildDashboardComponents(config, guild, undefined, statusText);
+      return interaction.editReply(payload || { embeds: [embed], components });
     }
 
     // Handle Set User Limit Modal Submit
@@ -746,8 +949,8 @@ async function handleTicketInteraction(interaction: any, context: any) {
       config.maxOpenPerUser = limit;
       context.updateModuleConfig('tickets', config);
 
-      const { embed, components } = buildDashboardComponents(config, guild);
-      return interaction.editReply({ content: `${VERIFIED_ICON} Max tickets per user set to **${limit}**.`, embeds: [embed], components });
+      const { payload, embed, components } = buildDashboardComponents(config, guild, undefined, `Max tickets per user set to ${limit}.`);
+      return interaction.editReply(payload || { embeds: [embed], components });
     }
 
     // Handle Set Admin Role Modal Submit
@@ -760,8 +963,8 @@ async function handleTicketInteraction(interaction: any, context: any) {
       config.defaultAdminRoleId = targetRole.id;
       context.updateModuleConfig('tickets', config);
 
-      const { embed, components } = buildDashboardComponents(config, guild);
-      return interaction.editReply({ content: `${VERIFIED_ICON} Default ticket admin role set to ${targetRole}.`, embeds: [embed], components });
+      const { payload, embed, components } = buildDashboardComponents(config, guild, undefined, `Default ticket admin role set to ${targetRole.name}.`);
+      return interaction.editReply(payload || { embeds: [embed], components });
     }
 
     // Handle Set Category Modal Submit
@@ -791,8 +994,8 @@ async function handleTicketInteraction(interaction: any, context: any) {
       config.categoryId = targetCat.id;
       context.updateModuleConfig('tickets', config);
 
-      const { embed, components } = buildDashboardComponents(config, guild);
-      return interaction.editReply({ content: `${VERIFIED_ICON} Ticket category configured to **${targetCat.name}** (\`${targetCat.id}\`). All new tickets will be created here!`, embeds: [embed], components });
+      const { payload, embed, components } = buildDashboardComponents(config, guild, undefined, `Ticket category configured to ${targetCat.name} (${targetCat.id}).`);
+      return interaction.editReply(payload || { embeds: [embed], components });
     }
 
     // Handle Add Moderator Modal Submit
@@ -941,8 +1144,8 @@ async function handleTicketInteraction(interaction: any, context: any) {
     await interaction.deferUpdate().catch(() => { });
     const val = interaction.values?.[0] || '';
     const panelId = val.replace('panel_', '');
-    const { embed, components } = buildDashboardComponents(config, guild, panelId);
-    return interaction.editReply({ embeds: [embed], components });
+    const { embed, components, payload } = buildDashboardComponents(config, guild, panelId);
+    return interaction.editReply(payload || { embeds: [embed], components });
   }
 
   if (interaction.customId === 'tkmgr_btn_delete_panel') {
@@ -984,14 +1187,14 @@ async function handleTicketInteraction(interaction: any, context: any) {
     context.updateModuleConfig('tickets', config);
 
     // Auto-update dashboard right there in-place!
-    const { embed, components } = buildDashboardComponents(config, guild);
-    return interaction.editReply({ embeds: [embed], components });
+    const { embed, components, payload } = buildDashboardComponents(config, guild);
+    return interaction.editReply(payload || { embeds: [embed], components });
   }
 
   if (interaction.customId === 'tkmgr_btn_refresh') {
     await interaction.deferUpdate().catch(() => { });
-    const { embed, components } = buildDashboardComponents(config, guild);
-    return interaction.editReply({ embeds: [embed], components });
+    const { embed, components, payload } = buildDashboardComponents(config, guild);
+    return interaction.editReply(payload || { embeds: [embed], components });
   }
 
   // Edit Guidelines & Support Panel Content Modal Trigger
@@ -999,10 +1202,10 @@ async function handleTicketInteraction(interaction: any, context: any) {
     return showCustomizeGuidelinesModal(interaction, config);
   }
 
-  // Preview Panel Embed
+  // Preview Panel Embed / Container
   if (interaction.customId === 'tkmgr_btn_preview_panel') {
     await interaction.deferReply({ flags: 64 }).catch(() => { });
-    const previewEmbed = buildTicketSupportPanelEmbed({
+    const payload = buildTicketSupportPanelPayload({
       guild,
       title: config.panelTitle,
       description: config.panelDescription,
@@ -1010,10 +1213,20 @@ async function handleTicketInteraction(interaction: any, context: any) {
       footerWarning: config.panelFooterWarning
     });
 
-    return interaction.editReply({
-      content: '**Ticket Support Panel Preview:**\n*(This is how members will see your support panel)*',
-      embeds: [previewEmbed],
-      components: buildTicketSupportPanelComponents()
+    return interaction.editReply(payload).catch(async () => {
+      const previewEmbed = buildTicketSupportPanelEmbed({
+        guild,
+        title: config.panelTitle,
+        description: config.panelDescription,
+        guidelines: config.panelGuidelines,
+        footerWarning: config.panelFooterWarning
+      });
+
+      return interaction.editReply({
+        content: '**Ticket Support Panel Preview:**\n*(This is how members will see your support panel)*',
+        embeds: [previewEmbed],
+        components: buildTicketSupportPanelComponents()
+      });
     });
   }
 
@@ -1030,14 +1243,13 @@ async function handleTicketInteraction(interaction: any, context: any) {
         if (chan && chan.isTextBased()) {
           const msg = await (chan as any).messages?.fetch(panel.id).catch(() => null);
           if (msg) {
-            const updatedEmbed = buildTicketSupportPanelEmbed({
+            await sendOrEditTicketPanel(msg, {
               guild,
               title: config.panelTitle,
               description: config.panelDescription,
               guidelines: config.panelGuidelines,
               footerWarning: config.panelFooterWarning
-            });
-            await msg.edit({ embeds: [updatedEmbed], components: buildTicketSupportPanelComponents() }).catch(() => { });
+            }, true).catch(() => { });
             updatedCount++;
           }
         }
@@ -1057,14 +1269,13 @@ async function handleTicketInteraction(interaction: any, context: any) {
               e.title?.toLowerCase().includes('support') || e.author?.name?.toLowerCase().includes('support')
             );
             if (hasOpenBtn || hasSupportEmbed) {
-              const updatedEmbed = buildTicketSupportPanelEmbed({
+              await sendOrEditTicketPanel(msg, {
                 guild,
                 title: config.panelTitle,
                 description: config.panelDescription,
                 guidelines: config.panelGuidelines,
                 footerWarning: config.panelFooterWarning
-              });
-              await msg.edit({ embeds: [updatedEmbed], components: buildTicketSupportPanelComponents() }).catch(() => { });
+              }, true).catch(() => { });
               updatedCount++;
               if (!activePanels.some((p: any) => p.id === msg.id)) {
                 activePanels.push({
@@ -1095,17 +1306,13 @@ async function handleTicketInteraction(interaction: any, context: any) {
       });
     } else {
       // If none found to edit, deploy a fresh panel right into current channel
-      const liveEmbed = buildTicketSupportPanelEmbed({
+      const postedMsg = await sendOrEditTicketPanel(interaction.channel, {
         guild,
         title: config.panelTitle,
         description: config.panelDescription,
         guidelines: config.panelGuidelines,
         footerWarning: config.panelFooterWarning
-      });
-      const postedMsg = await (interaction.channel as any).send({
-        embeds: [liveEmbed],
-        components: buildTicketSupportPanelComponents()
-      });
+      }, false);
       activePanels.push({
         id: postedMsg.id,
         channelId: interaction.channel.id,
@@ -1144,18 +1351,13 @@ async function handleTicketInteraction(interaction: any, context: any) {
       if (fetched && fetched.isTextBased()) targetChan = fetched;
     }
 
-    const liveEmbed = buildTicketSupportPanelEmbed({
+    const postedMsg = await sendOrEditTicketPanel(targetChan, {
       guild,
       title,
       description,
       guidelines,
       footerWarning
-    });
-
-    const postedMsg = await (targetChan as any).send({
-      embeds: [liveEmbed],
-      components: buildTicketSupportPanelComponents()
-    });
+    }, false);
 
     const newPanel = {
       id: postedMsg.id,
@@ -1189,18 +1391,13 @@ async function handleTicketInteraction(interaction: any, context: any) {
       if (fetched && fetched.isTextBased()) targetChan = fetched;
     }
 
-    const liveEmbed = buildTicketSupportPanelEmbed({
+    const postedMsg = await sendOrEditTicketPanel(targetChan, {
       guild,
       title,
       description,
       guidelines: config.panelGuidelines,
       footerWarning: config.panelFooterWarning
-    });
-
-    const postedMsg = await (targetChan as any).send({
-      embeds: [liveEmbed],
-      components: buildTicketSupportPanelComponents()
-    });
+    }, false);
 
     const newPanel = {
       id: postedMsg.id,
@@ -1252,13 +1449,23 @@ async function handleTicketInteraction(interaction: any, context: any) {
 
   if (interaction.customId === 'btn_in_set_priority') {
     await interaction.deferReply({ flags: 64 }).catch(() => { });
-    const { embed, components } = buildTicketPriorityPanelEmbed((interaction.channel as any).name, 'Normal');
+    const currentTickets: ITicket[] = config.activeTickets || [];
+    const ticket = currentTickets.find(t => t.channelId === interaction.channel.id);
+    const { embed, components } = buildTicketPriorityPanelEmbed((interaction.channel as any).name, ticket?.priority || 'Normal');
     return interaction.editReply({ embeds: [embed], components });
   }
 
   if (interaction.customId.startsWith('prio_btn_')) {
     await interaction.deferReply({ flags: 64 }).catch(() => { });
-    const level = interaction.customId.replace('prio_btn_', '').toUpperCase();
+    const rawLevel = interaction.customId.replace('prio_btn_', '').toUpperCase();
+    const level = rawLevel === 'RESET' ? 'NORMAL' : rawLevel;
+    const currentTickets: ITicket[] = config.activeTickets || [];
+    const ticket = currentTickets.find(t => t.channelId === interaction.channel.id);
+    if (ticket) {
+      ticket.priority = level;
+      config.activeTickets = currentTickets;
+      context?.updateModuleConfig?.('tickets', { ...config, activeTickets: config.activeTickets });
+    }
     return interaction.editReply({ content: `${VERIFIED_ICON} Ticket priority set to **${level}**.` });
   }
 
@@ -1278,6 +1485,16 @@ async function handleTicketInteraction(interaction: any, context: any) {
 
   if (interaction.customId === 'btn_control_lock') {
     await interaction.deferReply({ flags: 64 }).catch(() => { });
+    const currentTickets: ITicket[] = config.activeTickets || [];
+    const ticket = currentTickets.find(t => t.channelId === interaction.channel.id);
+    if (ticket) {
+      ticket.lockStatus = 'Locked';
+      config.activeTickets = currentTickets;
+      context?.updateModuleConfig?.('tickets', { ...config, activeTickets: config.activeTickets });
+      if (ticket.userId) {
+        await interaction.channel.permissionOverwrites?.edit?.(ticket.userId, { SendMessages: false }).catch(() => { });
+      }
+    }
     const currentName = interaction.channel.name;
     const newName = `[ Locked ] ${currentName.replace(/\[.*?\]/g, '').trim()}`;
     await interaction.channel.setName(newName).catch(() => { });
@@ -1286,6 +1503,16 @@ async function handleTicketInteraction(interaction: any, context: any) {
 
   if (interaction.customId === 'btn_control_unlock') {
     await interaction.deferReply({ flags: 64 }).catch(() => { });
+    const currentTickets: ITicket[] = config.activeTickets || [];
+    const ticket = currentTickets.find(t => t.channelId === interaction.channel.id);
+    if (ticket) {
+      ticket.lockStatus = 'Unlocked';
+      config.activeTickets = currentTickets;
+      context?.updateModuleConfig?.('tickets', { ...config, activeTickets: config.activeTickets });
+      if (ticket.userId) {
+        await interaction.channel.permissionOverwrites?.edit?.(ticket.userId, { SendMessages: true }).catch(() => { });
+      }
+    }
     const currentName = interaction.channel.name;
     const newName = `[ Current ] ${currentName.replace(/\[.*?\]/g, '').trim()}`;
     await interaction.channel.setName(newName).catch(() => { });
@@ -1609,7 +1836,21 @@ async function closeTicketChannel(
   if (!channel) return;
 
   const currentTickets: ITicket[] = config.activeTickets || [];
-  const ticket = currentTickets.find(t => t.channelId === channel.id) || {
+  const matchedTicket = currentTickets.find(t => t.channelId === channel.id);
+
+  if (
+    !matchedTicket &&
+    !channel.name?.startsWith('ticket-') &&
+    !channel.name?.includes('Resolved') &&
+    !channel.name?.includes('Locked')
+  ) {
+    const errMsg = `${WRONG_ICON} This command can only be used inside an active ticket channel.`;
+    if (interaction.deferred || interaction.replied) return interaction.editReply({ content: errMsg });
+    if (interaction.reply) return interaction.reply({ content: errMsg, flags: 64 });
+    return;
+  }
+
+  const ticket = matchedTicket || {
     id: channel.id,
     category: 'Support',
     userTag: interaction.user?.username || interaction.author?.username || 'Member'
@@ -1758,8 +1999,8 @@ export function registerTicketsCommands() {
       const ticketMod = modules.find((m: any) => m.id === 'tickets');
       const config: ITicketConfig = { ...getDefaultConfig(), ...(ticketMod?.config || {}) };
 
-      const { embed, components } = buildDashboardComponents(config, message.guild);
-      return message.reply({ embeds: [embed], components });
+      const { embed, components, payload } = buildDashboardComponents(config, message.guild);
+      return message.reply(payload || { embeds: [embed], components });
     }
   });
 
@@ -1933,25 +2174,6 @@ export function registerTicketsCommands() {
         return message.reply({ content: `🔔 Support Ping: ${adminRoles || '@here'} — Member ${message.author} requested assistance!` });
       }
 
-      // 3. Close Ticket (Ticket Creator OR Support Staff/Admin)
-      if (sub === 'close') {
-        const currentTickets: ITicket[] = config.activeTickets || [];
-        const ticket = currentTickets.find(t => t.channelId === message.channel.id);
-        const isCreator = ticket && ticket.userId === message.author.id;
-        const isAuthorized = await isTicketStaffOrAdmin(message.author.id, message.guild, config);
-        if (!isAuthorized && !isCreator) {
-          return message.reply({ content: `${WRONG_ICON} Access Denied: Only the ticket creator or Support Staff can close this ticket.` });
-        }
-
-        const fakeInteraction: any = {
-          guild: message.guild,
-          user: message.author,
-          channel: message.channel,
-          reply: async (opts: any) => message.reply(opts)
-        };
-        return closeTicketChannel(message.client, fakeInteraction, context, config);
-      }
-
       // 4. HTML Transcript (Ticket Creator OR Support Staff/Admin)
       if (sub === 'transcript' || sub === 'log') {
         const currentTickets: ITicket[] = config.activeTickets || [];
@@ -1975,31 +2197,42 @@ export function registerTicketsCommands() {
 
       // 5. Help Command
       if (sub === 'help') {
-        const helpEmbed = new EmbedBuilder()
-          .setTitle('🎫 Ticket System Commands')
-          .setColor(0x2b2d31)
-          .setDescription(
-            `**General Member Commands:**\n` +
-            `• \`r!ticket open [reason]\` — Create a new support ticket\n` +
-            `• \`r!ticket close\` — Close your open ticket\n` +
-            `• \`r!ticket ping\` — Ping support staff\n` +
-            `• \`r!ticket transcript\` — Export HTML transcript of ticket\n\n` +
-            `**Staff Ticket Controls (In-Ticket):**\n` +
-            `• \`r!ticket add @user\` — Add moderator/user to this ticket\n` +
-            `• \`r!ticket remove @user\` — Remove user from this ticket\n` +
-            `• \`r!ticket claim\` — Claim current ticket\n` +
-            `• \`r!ticket lock\` / \`r!ticket unlock\` — Lock/unlock channel\n` +
-            `• \`r!ticket priority <level>\` — Update priority (Low/Normal/High/Urgent)\n\n` +
-            `**Admin & Configuration:**\n` +
-            `• \`r!ticket category [id|name]\` — Set or view ticket category\n` +
-            `• \`r!ticket adminrole @role\` — Configure default admin role\n` +
-            `• \`r!ticket limit <num>\` — Set maximum tickets per user\n` +
-            `• \`r!ticket deploy\` — Deploy a support ticket panel\n` +
-            `• \`r!ticket deletepanel\` — Delete support panel from channel\n` +
-            `• \`r!ticket blacklist @user\` — Blacklist user from opening tickets\n` +
-            `• \`r!ticket purge\` — Clean old ticket channels`
-          );
-        return message.reply({ embeds: [helpEmbed] });
+        const sec = new SectionBuilder()
+          .addTextDisplayComponents(new TextDisplayBuilder().setContent('# **Ticket System Commands & Subcommands**'))
+          .setThumbnailAccessory(new ThumbnailBuilder().setURL(message.guild.iconURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png'));
+
+        const helpBody = [
+          `### **General Member Commands**`,
+          `> • \`r!ticket open [reason]\` — Create a new support ticket`,
+          `> • \`r!ticket close\` — Close your open ticket with transcript`,
+          `> • \`r!ticket ping\` — Ping assigned support staff`,
+          `> • \`r!ticket transcript\` — Export HTML transcript of ticket`,
+          ``,
+          `### **Staff In-Ticket Controls**`,
+          `> • \`r!ticket add @user\` — Add moderator/user to this ticket`,
+          `> • \`r!ticket remove @user\` — Remove user from this ticket`,
+          `> • \`r!ticket claim\` — Claim current ticket ownership`,
+          `> • \`r!ticket lock\` / \`r!ticket unlock\` — Lock or unlock ticket channel`,
+          `> • \`r!ticket priority <level>\` — Update priority (Low/Normal/High/Urgent)`,
+          ``,
+          `### **Admin & System Configuration**`,
+          `> • \`r!ticket deploy\` — Deploy a live support ticket panel`,
+          `> • \`r!ticket category [id]\` — Set or view ticket category`,
+          `> • \`r!ticket adminrole @role\` — Configure default admin role`,
+          `> • \`r!ticket limit <num>\` — Set maximum tickets per user`,
+          `> • \`r!ticket blacklist @user\` — Blacklist user from opening tickets`
+        ].join('\n');
+
+        const container = new ContainerBuilder()
+          .addSectionComponents(sec)
+          .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
+          .addTextDisplayComponents(new TextDisplayBuilder().setContent(helpBody))
+          .addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Secure Support Desk • Command Reference'));
+
+        return message.reply({
+          flags: MessageFlags.IsComponentsV2,
+          components: [container]
+        } as any);
       }
 
       // ─────────────────────────────────────────────
@@ -2008,7 +2241,7 @@ export function registerTicketsCommands() {
       // ─────────────────────────────────────────────
       const isStaffOrAdmin = await isTicketStaffOrAdmin(message.author.id, message.guild, config);
       const isOwner = await isOwnerOrExtraOwner(message.author.id, message.guild);
-      if (!isStaffOrAdmin && !isOwner) {
+      if (!isStaffOrAdmin && !isOwner && sub !== 'close') {
         return message.reply({ content: `${WRONG_ICON} Access Denied: Only Administrators and Support Staff can manage tickets.` });
       }
 
@@ -2059,14 +2292,13 @@ export function registerTicketsCommands() {
             if (ch && ch.isTextBased()) {
               const msg = await (ch as any).messages?.fetch(p.id).catch(() => null);
               if (msg) {
-                const liveEmbed = buildTicketSupportPanelEmbed({
+                await sendOrEditTicketPanel(msg, {
                   guild: message.guild,
                   title: config.panelTitle,
                   description: config.panelDescription,
                   guidelines: config.panelGuidelines,
                   footerWarning: config.panelFooterWarning
-                });
-                await msg.edit({ embeds: [liveEmbed], components: buildTicketSupportPanelComponents() }).catch(() => {});
+                }, true).catch(() => {});
                 updated++;
               }
             }
@@ -2086,14 +2318,13 @@ export function registerTicketsCommands() {
                   e.title?.toLowerCase().includes('support') || e.author?.name?.toLowerCase().includes('support')
                 );
                 if (hasOpenButton || hasSupportEmbed) {
-                  const liveEmbed = buildTicketSupportPanelEmbed({
+                  await sendOrEditTicketPanel(msg, {
                     guild: message.guild,
                     title: config.panelTitle,
                     description: config.panelDescription,
                     guidelines: config.panelGuidelines,
                     footerWarning: config.panelFooterWarning
-                  });
-                  await msg.edit({ embeds: [liveEmbed], components: buildTicketSupportPanelComponents() }).catch(() => {});
+                  }, true).catch(() => {});
                   updated++;
                   if (!activePanels.some((p: any) => p.id === msg.id)) {
                     activePanels.push({
@@ -2118,17 +2349,13 @@ export function registerTicketsCommands() {
           return statusMsg.edit({ content: `${VERIFIED_ICON} Successfully updated **${updated}** support panel message(s) with the redesigned UI!` });
         } else {
           // If no message found to update, deploy a fresh one in current channel
-          const liveEmbed = buildTicketSupportPanelEmbed({
+          const postedMsg = await sendOrEditTicketPanel(message.channel, {
             guild: message.guild,
             title: config.panelTitle,
             description: config.panelDescription,
             guidelines: config.panelGuidelines,
             footerWarning: config.panelFooterWarning
-          });
-          const postedMsg = await (message.channel as any).send({
-            embeds: [liveEmbed],
-            components: buildTicketSupportPanelComponents()
-          });
+          }, false);
           activePanels.push({
             id: postedMsg.id,
             channelId: message.channel.id,
@@ -2145,24 +2372,19 @@ export function registerTicketsCommands() {
 
       // GUI Management Dashboard
       if (sub === 'config' || sub === 'manager' || sub === 'tkmgr' || sub === 'dashboard' || sub === 'gui') {
-        const { embed, components } = buildDashboardComponents(config, message.guild);
-        return message.reply({ embeds: [embed], components });
+        const { embed, components, payload } = buildDashboardComponents(config, message.guild);
+        return message.reply(payload || { embeds: [embed], components });
       }
 
       // Direct Deploy Support Panel to Channel
       if (sub === 'deploy' || sub === 'send' || sub === 'panel' || sub === 'setup') {
-        const liveEmbed = buildTicketSupportPanelEmbed({
+        const postedMsg = await sendOrEditTicketPanel(message.channel, {
           guild: message.guild,
           title: config.panelTitle,
           description: config.panelDescription,
           guidelines: config.panelGuidelines,
           footerWarning: config.panelFooterWarning
-        });
-
-        const postedMsg = await (message.channel as any).send({
-          embeds: [liveEmbed],
-          components: buildTicketSupportPanelComponents()
-        });
+        }, false);
 
         const newPanel = {
           id: postedMsg.id,
@@ -2221,14 +2443,13 @@ export function registerTicketsCommands() {
               if (chan && chan.isTextBased()) {
                 const msg = await (chan as any).messages?.fetch(panel.id).catch(() => null);
                 if (msg) {
-                  const updatedEmbed = buildTicketSupportPanelEmbed({
+                  await sendOrEditTicketPanel(msg, {
                     guild: message.guild,
                     title: config.panelTitle,
                     description: config.panelDescription,
                     guidelines: config.panelGuidelines,
                     footerWarning: config.panelFooterWarning
-                  });
-                  await msg.edit({ embeds: [updatedEmbed] }).catch(() => { });
+                  }, true).catch(() => { });
                   synced++;
                 }
               }
@@ -2261,12 +2482,22 @@ export function registerTicketsCommands() {
           category: 'General Support',
           subject: 'Support Ticket'
         } as any;
-        const { embed, components } = buildTicketControlPanelEmbed(ticket);
-        return message.reply({ embeds: [embed], components });
+        const { embed, components, payload } = buildTicketControlPanelEmbed(ticket, message.guild);
+        return message.reply(payload || { embeds: [embed], components });
       }
 
       // Lock Ticket Channel
       if (sub === 'lock') {
+        const currentTickets: ITicket[] = config.activeTickets || [];
+        const ticket = currentTickets.find(t => t.channelId === message.channel.id);
+        if (ticket) {
+          ticket.lockStatus = 'Locked';
+          config.activeTickets = currentTickets;
+          context?.updateModuleConfig?.('tickets', { ...config, activeTickets: config.activeTickets });
+          if (ticket.userId) {
+            await (message.channel as any).permissionOverwrites?.edit?.(ticket.userId, { SendMessages: false }).catch(() => { });
+          }
+        }
         const currentName = (message.channel as any).name || '';
         const newName = `[ Locked ] ${currentName.replace(/\[.*?\]/g, '').trim()}`;
         await (message.channel as any).setName(newName).catch(() => { });
@@ -2275,6 +2506,16 @@ export function registerTicketsCommands() {
 
       // Unlock Ticket Channel
       if (sub === 'unlock') {
+        const currentTickets: ITicket[] = config.activeTickets || [];
+        const ticket = currentTickets.find(t => t.channelId === message.channel.id);
+        if (ticket) {
+          ticket.lockStatus = 'Unlocked';
+          config.activeTickets = currentTickets;
+          context?.updateModuleConfig?.('tickets', { ...config, activeTickets: config.activeTickets });
+          if (ticket.userId) {
+            await (message.channel as any).permissionOverwrites?.edit?.(ticket.userId, { SendMessages: true }).catch(() => { });
+          }
+        }
         const currentName = (message.channel as any).name || '';
         const newName = `[ Current ] ${currentName.replace(/\[.*?\]/g, '').trim()}`;
         await (message.channel as any).setName(newName).catch(() => { });
@@ -2333,6 +2574,13 @@ export function registerTicketsCommands() {
       // Set Priority
       if (sub === 'priority' || sub === 'prio') {
         const level = args[1]?.toUpperCase() || 'NORMAL';
+        const currentTickets: ITicket[] = config.activeTickets || [];
+        const ticket = currentTickets.find(t => t.channelId === message.channel.id);
+        if (ticket) {
+          ticket.priority = level.toLowerCase() as any;
+          config.activeTickets = currentTickets;
+          context?.updateModuleConfig?.('tickets', { ...config, activeTickets: config.activeTickets });
+        }
         return message.reply({ content: `${VERIFIED_ICON} Ticket priority updated to **${level}**.` });
       }
 
@@ -2362,14 +2610,27 @@ export function registerTicketsCommands() {
 
       // Purge / Clean Old Ticket Channels & Records
       if (sub === 'purge' || sub === 'clean' || sub === 'clear' || sub === 'deleteall') {
-        const ticketChannels = message.guild.channels.cache.filter(
-          (c: any) => c.isTextBased() && (
-            c.name.includes('support') ||
-            c.name.includes('ticket-') ||
-            c.name.includes('[ Resolved ]') ||
-            c.name.includes('[ Locked ]')
-          )
-        );
+        const activeTicketChannelIds = new Set((config.activeTickets || []).map((t: any) => t.channelId));
+        const protectedChannelIds = new Set<string>([
+          ...((config as any).panelChannelId ? [(config as any).panelChannelId] : []),
+          ...((config as any).logChannelId ? [(config as any).logChannelId] : []),
+          ...(config.transcriptChannelId ? [config.transcriptChannelId] : []),
+          ...((config.activePanels || []).map((p: any) => p.channelId).filter(Boolean)),
+          ...(((config as any).panels || []).map((p: any) => p.channelId).filter(Boolean))
+        ]);
+
+        const ticketChannels = message.guild.channels.cache.filter((c: any) => {
+          if (!c.isTextBased() || protectedChannelIds.has(c.id)) return false;
+          const lowerName = (c.name || '').toLowerCase();
+          return (
+            activeTicketChannelIds.has(c.id) ||
+            lowerName.startsWith('ticket-') ||
+            lowerName.startsWith('[ open ]') ||
+            lowerName.startsWith('[ claimed ]') ||
+            lowerName.startsWith('[ locked ]') ||
+            lowerName.startsWith('[ resolved ]')
+          );
+        });
 
         let deletedCount = 0;
         for (const [id, chan] of ticketChannels) {
@@ -2423,7 +2684,12 @@ export function registerTicketsCommands() {
         const isCreator = ticket && ticket.userId === message.author.id;
         const isAuthorized = await isTicketStaffOrAdmin(message.author.id, message.guild, config);
 
-        if (!ticket && !(message.channel as any).name?.includes('ticket-') && !(message.channel as any).name?.includes('support')) {
+        if (
+          !ticket &&
+          !(message.channel as any).name?.startsWith('ticket-') &&
+          !(message.channel as any).name?.includes('Resolved') &&
+          !(message.channel as any).name?.includes('Locked')
+        ) {
           return message.reply({ content: `${WRONG_ICON} This command can only be used inside an active ticket channel.` });
         }
 
@@ -2450,8 +2716,8 @@ export function registerTicketsCommands() {
       }
 
       // Default fallback: show Dashboard
-      const { embed, components } = buildDashboardComponents(config, message.guild);
-      return message.reply({ embeds: [embed], components });
+      const { embed, components, payload } = buildDashboardComponents(config, message.guild);
+      return message.reply(payload || { embeds: [embed], components });
     }
   });
 
@@ -2476,7 +2742,12 @@ export function registerTicketsCommands() {
       const isCreator = ticket && ticket.userId === message.author.id;
       const isAuthorized = await isTicketStaffOrAdmin(message.author.id, message.guild, config);
 
-      if (!ticket && !(message.channel as any).name?.includes('ticket-') && !(message.channel as any).name?.includes('support')) {
+      if (
+        !ticket &&
+        !(message.channel as any).name?.startsWith('ticket-') &&
+        !(message.channel as any).name?.includes('Resolved') &&
+        !(message.channel as any).name?.includes('Locked')
+      ) {
         return message.reply({ content: `${WRONG_ICON} This command can only be used inside an active ticket channel.` });
       }
 

@@ -81,7 +81,7 @@ export class SlidingWindowSpamDetector {
   private static pruneOldLogs() {
     const now = Date.now();
     for (const [key, logs] of this.userWindows.entries()) {
-      const valid = logs.filter(l => now - l.timestamp < 10000);
+      const valid = logs.filter(l => now - l.timestamp < 60000);
       if (valid.length === 0) {
         this.userWindows.delete(key);
       } else {
@@ -90,7 +90,7 @@ export class SlidingWindowSpamDetector {
     }
   }
 
-  public static checkSpam(guildId: string, userId: string, channelId: string, content: string): { isSpam: boolean; reason: string } {
+  public static checkSpam(guildId: string, userId: string, channelId: string, content: string, maxMessages = 5, windowMs = 5000): { isSpam: boolean; reason: string } {
     this.init();
     const key = `${guildId}_${userId}`;
     const now = Date.now();
@@ -103,21 +103,20 @@ export class SlidingWindowSpamDetector {
     const logs = this.userWindows.get(key)!;
     logs.push({ timestamp: now, contentHash: hash, channelId });
 
-    const recentLogs = logs.filter(l => now - l.timestamp < 5000);
+    const recentLogs = logs.filter(l => now - l.timestamp < windowMs);
 
-    const burstLogs = recentLogs.filter(l => now - l.timestamp < 3000);
-    if (burstLogs.length >= 5) {
-      return { isSpam: true, reason: `Rapid message burst (${burstLogs.length} msgs / 3s)` };
+    if (recentLogs.length >= maxMessages) {
+      return { isSpam: true, reason: `Rapid message burst (${recentLogs.length} msgs / ${Math.round(windowMs / 1000)}s)` };
     }
 
     const sameContentLogs = recentLogs.filter(l => l.contentHash === hash);
     if (sameContentLogs.length >= 3 && content.length > 5) {
-      return { isSpam: true, reason: `Repeated duplicate message (${sameContentLogs.length}x / 5s)` };
+      return { isSpam: true, reason: `Repeated duplicate message (${sameContentLogs.length}x / ${Math.round(windowMs / 1000)}s)` };
     }
 
     const distinctChannels = new Set(recentLogs.filter(l => l.contentHash === hash).map(l => l.channelId));
     if (distinctChannels.size >= 3) {
-      return { isSpam: true, reason: `Cross-channel spam raid (${distinctChannels.size} channels / 5s)` };
+      return { isSpam: true, reason: `Cross-channel spam raid (${distinctChannels.size} channels / ${Math.round(windowMs / 1000)}s)` };
     }
 
     return { isSpam: false, reason: '' };
@@ -1510,7 +1509,7 @@ export const AutomodManifest: ModuleManifest = {
         const blockLinks = config.blockLinks !== false && config.antiLinkEnabled !== false;
 
         // Strip Discord custom/animated emojis (<:name:id>, <a:name:id>), mentions, channels and timestamp tags so emojis NEVER get flagged as links
-        const contentForLinkCheck = content
+        let contentForLinkCheck = content
           .replace(/<a?:[a-zA-Z0-9_]+:\d+>/g, ' ')
           .replace(/<@!?[0-9]+>/g, ' ')
           .replace(/<@&[0-9]+>/g, ' ')
@@ -1518,46 +1517,48 @@ export const AutomodManifest: ModuleManifest = {
           .replace(/<t:\d+(:[tTdDfFR])?>/g, ' ')
           .trim();
 
+        if (config.allowInvites) {
+          contentForLinkCheck = contentForLinkCheck
+            .replace(/(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord(?:app)?\.com\/invite|dsc\.gg)\/[a-zA-Z0-9-]+/gi, ' ')
+            .trim();
+        }
+
         const LINK_REGEX = /(?:https?:\/\/|ftps?:\/\/|www\.|discord(?:app)?\.(?:gg|com\/invite)\/|[a-zA-Z0-9-]+\.(?:com|net|org|gg|io|me|xyz|co|uk|in|info|online|site|app|tech|store|top|live|shop|vip|fun|club|pro|link|bot|ai|dev|[a-zA-Z]{2,})\b)/i;
-        const hasLink = LINK_REGEX.test(contentForLinkCheck) ||
+        const hasLink = Boolean(contentForLinkCheck) && (
+          LINK_REGEX.test(contentForLinkCheck) ||
           contentForLinkCheck.includes('http://') ||
           contentForLinkCheck.includes('https://') ||
           contentForLinkCheck.includes('www.') ||
           contentForLinkCheck.includes('discord.gg/') ||
           contentForLinkCheck.includes('discord.com/invite/') ||
-          contentForLinkCheck.includes('dsc.gg/');
+          contentForLinkCheck.includes('dsc.gg/')
+        );
 
         if (blockLinks && hasLink) {
           if ((message as any)._antiLinkHandled || isMessageAntiLinkHandled(message.id)) return;
 
-          // Check Discord Invite bypass rule
-          const isOnlyDiscordInvite = (contentForLinkCheck.includes('discord.gg/') || contentForLinkCheck.includes('discord.com/invite/')) && !contentForLinkCheck.includes('http://') && !contentForLinkCheck.includes('https://');
-          if (isOnlyDiscordInvite && config.allowInvites) {
-            return;
-          }
-
           // Check User-Configured Domain Whitelist Bypass (only if explicitly set by admin)
           const ignoredDomains: string[] = config.ignoredDomains || [];
-          if (ignoredDomains.length > 0) {
-            const isDomainWhitelisted = ignoredDomains.some((d: string) => d && contentForLinkCheck.includes(d.toLowerCase()));
-            if (isDomainWhitelisted) {
-              return;
+          const extractedDomains = extractDomainsFromText(contentForLinkCheck);
+          const allDomainsWhitelisted = ignoredDomains.length > 0 &&
+            extractedDomains.length > 0 &&
+            extractedDomains.every((domain: string) => isDomainWhitelisted(domain, ignoredDomains));
+
+          if (!allDomainsWhitelisted) {
+            const ignoredChannels: string[] = config.ignoredChannels || [];
+            const ignoredRoles: string[] = config.ignoredRoles || [];
+
+            const isChannelIgnored = ignoredChannels.includes(message.channel.id);
+            const hasIgnoredRole = message.member?.roles?.cache?.some((r: any) => ignoredRoles.includes(r.id));
+            const isWhitelisted = await checkWhitelistPermission(message.author.id, message.guild, context, 'anti_link');
+            const isUrlCmd = isUrlCommandBypass(message, client?.user?.id);
+
+            if (!isChannelIgnored && !hasIgnoredRole && !isWhitelisted && !isUrlCmd) {
+              (message as any)._antiLinkHandled = true;
+              markMessageAntiLinkHandled(message.id);
+              deleted = true;
+              reason = 'Posting unauthorized links';
             }
-          }
-
-          const ignoredChannels: string[] = config.ignoredChannels || [];
-          const ignoredRoles: string[] = config.ignoredRoles || [];
-
-          const isChannelIgnored = ignoredChannels.includes(message.channel.id);
-          const hasIgnoredRole = message.member?.roles?.cache?.some((r: any) => ignoredRoles.includes(r.id));
-          const isWhitelisted = await checkWhitelistPermission(message.author.id, message.guild, context, 'anti_link');
-          const isUrlCmd = isUrlCommandBypass(message, client?.user?.id);
-
-          if (!isChannelIgnored && !hasIgnoredRole && !isWhitelisted && !isUrlCmd) {
-            (message as any)._antiLinkHandled = true;
-            markMessageAntiLinkHandled(message.id);
-            deleted = true;
-            reason = 'Posting unauthorized links';
           }
         }
 
@@ -1591,13 +1592,26 @@ export const AutomodManifest: ModuleManifest = {
           }
         }
 
+        // 4b. Emoji Spam Filter
+        if (!deleted && config.maxEmojis && config.maxEmojis > 0) {
+          const customEmojis = message.content.match(/<a?:[a-zA-Z0-9_]+:\d+>/g) || [];
+          const unicodeEmojis = message.content.match(/\p{Extended_Pictographic}/gu) || [];
+          const emojiCount = customEmojis.length + unicodeEmojis.length;
+          if (emojiCount > config.maxEmojis) {
+            deleted = true;
+            reason = `Excessive emojis (${emojiCount}/${config.maxEmojis})`;
+          }
+        }
+
         // 5. Sliding Window Anti-Spam & Cross-Channel Raid Protection
-        if (!deleted && message.guild) {
+        if (!deleted && message.guild && config.antiSpamEnabled) {
           const spamCheck = SlidingWindowSpamDetector.checkSpam(
             message.guild.id,
             message.author.id,
             message.channel.id,
-            message.content
+            message.content,
+            config.maxSpamMessages || 5,
+            (config.spamWindowSeconds || 5) * 1000
           );
           if (spamCheck.isSpam) {
             deleted = true;

@@ -5,6 +5,9 @@ import { PrefixPermissionManager } from './PrefixPermissionManager.js';
 import { PrefixAnalytics } from './PrefixAnalytics.js';
 import { SyntheticInteraction } from './SyntheticInteraction.js';
 import { ParsedCommand, PrefixParser } from './PrefixParser.js';
+import { isOwnerOrExtraOwner, checkWhitelistPermission } from '../../utils/whitelistCheck.js';
+import { CommandGuard } from '../security/CommandGuard.js';
+import { PayloadFormatter } from '../PayloadFormatter.js';
 
 export class CommandContext {
   public message: Message;
@@ -116,17 +119,23 @@ export class CommandPipeline {
       // 3. Permission Validation
       const isOwner = PrefixPermissionManager.isDeveloper(ctx.executor.id, ctx.message);
 
-      // Anti-Nuke & AutoMod Owner / Extra Owner Gate
-      const isAntiNukeOrAutoMod = ['security', 'automod', 'AutoMod', 'Security'].includes(cmdMeta.category) ||
-        ['security', 'antinuke', 'automod', 'antilink', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji'].includes(cmdMeta.name) ||
-        (cmdMeta.name === 'config' && ['security', 'antinuke', 'automod', 'antilink', 'whitelist', 'extraowner', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji'].includes(ctx.args[0]?.toLowerCase()));
+      // Anti-Nuke, AutoMod & Backup Owner / Extra Owner Gate
+      const isBackupCmd = ['backup', 'backups', 'bk', 'bkp', 'snap'].includes(cmdMeta.name) || cmdMeta.moduleOwnerId === 'backups';
+      const isAntiNukeOrAutoMod =
+        isBackupCmd ||
+        ['security', 'automod', 'AutoMod', 'Security', 'backups', 'Backups'].includes(cmdMeta.category) ||
+        ['security', 'antinuke', 'automod', 'antilink', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji', 'prebot', 'backup', 'backups', 'config', 'setup', 'dashboard', 'dash', 'media', 'attachfiles', 'joinguard', 'setup-verify', 'lockdown', 'quarantine', 'unquarantine'].includes(cmdMeta.name);
 
       if (isAntiNukeOrAutoMod) {
-        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
         const allowed = await isOwnerOrExtraOwner(ctx.executor.id, ctx.guild);
         if (!allowed) {
           PrefixAnalytics.trackFailure('permission');
-          return this.sendError(ctx, 'Access Denied: Only the Guild Owner and Extra Owners can access Anti-Nuke and AutoMod features.');
+          return this.sendError(
+            ctx,
+            isBackupCmd
+              ? '🔒 Access Denied: Only the Server Owner and Extra Owners can access server backup commands and subcommands.'
+              : 'Access Denied: Only the Server Owner and designated Extra Owners can access this command.'
+          );
         }
       }
 
@@ -135,7 +144,6 @@ export class CommandPipeline {
         (cmdMeta.name === 'role' && ['add', 'remove', 'create', 'delete', 'grant'].includes(ctx.args[0]?.toLowerCase()));
 
       if (isRoleCommand && ctx.guild) {
-        const { isOwnerOrExtraOwner, checkWhitelistPermission } = await import('../../utils/whitelistCheck.js');
         const isOwner = await isOwnerOrExtraOwner(ctx.executor.id, ctx.guild);
         const getModules = ctx.get('getModulesState');
         const isWhitelisted = await checkWhitelistPermission(ctx.executor.id, ctx.guild, { getModulesState: getModules ? () => getModules() : () => [] }, 'anti_role_grant');
@@ -151,11 +159,36 @@ export class CommandPipeline {
           !['open', 'create', 'ping', 'pingadmin', 'close', 'transcript', 'log'].includes(ctx.args[0]?.toLowerCase()));
 
       if (isTicketCommand && ctx.guild) {
-        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
         const allowed = await isOwnerOrExtraOwner(ctx.executor.id, ctx.guild);
         if (!allowed) {
           PrefixAnalytics.trackFailure('permission');
           return this.sendError(ctx, 'Access Denied: Only the Server Owner and Extra Owners can manage tickets.');
+        }
+      }
+
+      // Make sure the executor's GuildMember is resolved so permission checks cannot fail open.
+      if (!ctx.message.member && ctx.guild) {
+        await ctx.guild.members.fetch(ctx.executor.id).catch(() => null);
+      }
+
+      // Central dangerous-command gate (exact permission, protected targets, hierarchy, rate limit)
+      {
+        if (CommandGuard.isGuarded(cmdMeta.name, cmdMeta.moduleOwnerId)) {
+          const getMods = ctx.get('getModulesState');
+          const guildId = ctx.guild.id;
+          const verdict = await CommandGuard.evaluate({
+            guild: ctx.guild,
+            executorId: ctx.executor.id,
+            commandName: cmdMeta.name,
+            moduleId: cmdMeta.moduleOwnerId,
+            targetIds: CommandGuard.targetsFromMessage(ctx.message, ctx.args),
+            getModules: () => (getMods ? getMods(guildId) : []),
+            context: { getModulesState: getMods ? () => getMods(guildId) : () => [] }
+          });
+          if (!verdict.allowed) {
+            PrefixAnalytics.trackFailure('permission');
+            return this.sendError(ctx, `Access Denied: ${verdict.reason}`);
+          }
         }
       }
 
@@ -320,14 +353,14 @@ export class CommandPipeline {
       });
 
       if (confirmation.customId === 'confirm_yes') {
-        await confirmation.update({ content: '<:ticks:1532620580266836148> Command confirmed. Starting execution...', embeds: [], components: [] });
+        await confirmation.update(PayloadFormatter.normalize({ content: '<:ticks:1532620580266836148> Command confirmed. Starting execution...', components: [] }, ctx.executor)).catch(() => {});
         return true;
       } else {
-        await confirmation.update({ content: '<a:warning:1546155193303957504> Command cancelled.', embeds: [], components: [] });
+        await confirmation.update(PayloadFormatter.normalize({ content: '<a:warning:1546155193303957504> Command cancelled.', components: [] }, ctx.executor)).catch(() => {});
         return false;
       }
     } catch {
-      await response.edit({ content: '<a:loading:1546134304625528882> Command timed out due to inactivity.', embeds: [], components: [] }).catch(() => {});
+      await response.edit(PayloadFormatter.normalize({ content: '<a:loading:1546134304625528882> Command timed out due to inactivity.', components: [] }, ctx.executor)).catch(() => {});
       return false;
     }
   }

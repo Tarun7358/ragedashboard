@@ -19,12 +19,14 @@
  * All routing logic that was previously inlined in Gateway is now here.
  */
 
-import { PermissionFlagsBits } from 'discord.js';
+import { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
 import { PayloadFormatter } from './PayloadFormatter.js';
+import { BlockedDMSettings } from './Gateway.js';
 import { PrefixHelpCenter } from './prefix/PrefixHelpCenter.js';
 import { AnalyticsService } from './AnalyticsService.js';
 import { PrefixCooldownManager } from './prefix/PrefixCooldownManager.js';
-import { protections } from '../utils/whitelistCheck.js';
+import { protections, isOwnerOrExtraOwner, checkWhitelistPermission } from '../utils/whitelistCheck.js';
+import { CommandGuard } from './security/CommandGuard.js';
 
 export type RouterDispatch = (eventName: string, ...args: any[]) => Promise<void>;
 export type RouterWrap = (interaction: any) => any;
@@ -156,20 +158,23 @@ export class InteractionRouter {
       const cmd = manifest.commands.find((c: any) => c.name === commandName);
       if (!cmd) continue;
 
-      // 1. Anti-Nuke & AutoMod Owner / Extra Owner Security Gate for Slash Commands
+      // 1. Anti-Nuke, AutoMod & Backup Owner / Extra Owner Security Gate for Slash Commands
       const subCmd = interaction.options?.getSubcommand?.(false) || '';
+      const isBackupCmd = ['backup', 'backups'].includes(commandName) || manifest.id === 'backups';
       const isAntiNukeOrAutoMod =
-        ['security', 'automod', 'AutoMod', 'Security'].includes(cmd.category || manifest.category) ||
-        ['security', 'antinuke', 'automod', 'antilink', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji', 'prebot'].includes(commandName) ||
-        (commandName === 'config' && ['security', 'antinuke', 'automod', 'antilink', 'whitelist', 'extraowner', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji'].includes(subCmd.toLowerCase()));
+        isBackupCmd ||
+        ['security', 'automod', 'AutoMod', 'Security', 'backups', 'Backups'].includes(cmd.category || manifest.category) ||
+        ['security', 'antinuke', 'automod', 'antilink', 'whitelist-domain', 'extraowner', 'whitelist', 'member_whitelist', 'blacklist', 'upm', 'antirole', 'antichannel', 'antimod', 'antiwebhook', 'antiemoji', 'prebot', 'backup', 'backups', 'config', 'setup', 'dashboard', 'setup-verify', 'joinguard', 'lockdown', 'quarantine', 'unquarantine'].includes(commandName) ||
+        (commandName === 'jtc' && ['setup', 'remove'].includes(subCmd.toLowerCase()));
 
       if (isAntiNukeOrAutoMod && interaction.guild) {
-        const { isOwnerOrExtraOwner } = await import('../utils/whitelistCheck.js');
         const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
         if (!allowed) {
           if (interaction.isRepliable()) {
             await interaction.reply({
-              content: '❌ **Access Denied**: Only the Guild Owner and Extra Owners can access Anti-Nuke and AutoMod features.',
+              content: isBackupCmd
+                ? '🔒 **Access Denied**: Only the **Server Owner** and **Extra Owners** can access server backup commands and subcommands.'
+                : '❌ **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access this command.',
               flags: 64
             }).catch(() => {});
           }
@@ -183,7 +188,6 @@ export class InteractionRouter {
         (commandName === 'bulk' && ['role-add', 'role-remove', 'role-purge'].includes(subCmd.toLowerCase()));
 
       if (isRoleCommand && interaction.guild) {
-        const { isOwnerOrExtraOwner, checkWhitelistPermission } = await import('../utils/whitelistCheck.js');
         const isOwner = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
         const isWhitelisted = await checkWhitelistPermission(interaction.user.id, interaction.guild, this.buildExtraContext(cmdGuildId), 'anti_role_grant');
         if (!isOwner && !isWhitelisted) {
@@ -194,6 +198,32 @@ export class InteractionRouter {
             }).catch(() => {});
           }
           return;
+        }
+      }
+
+      // 1c. Central dangerous-command gate (exact permission, protected targets, hierarchy, rate limit)
+      if (interaction.guild) {
+        if (CommandGuard.isGuarded(commandName, manifest.id)) {
+          const guardCtx = this.buildExtraContext(cmdGuildId);
+          const verdict = await CommandGuard.evaluate({
+            guild: interaction.guild,
+            executorId: interaction.user.id,
+            commandName,
+            moduleId: manifest.id,
+            targetIds: CommandGuard.targetsFromInteraction(interaction),
+            getModules: () => guardCtx.getModulesState(cmdGuildId),
+            context: guardCtx
+          });
+          if (!verdict.allowed) {
+            this.ctx.logSyncEvent(`Blocked /${commandName} from ${interaction.user.username}: ${verdict.reason}`, 'warn');
+            if (interaction.isRepliable()) {
+              await interaction.reply({
+                content: `**Access Denied**: ${verdict.reason}`,
+                flags: 64
+              }).catch(() => {});
+            }
+            return;
+          }
         }
       }
 
@@ -208,9 +238,14 @@ export class InteractionRouter {
         if (reqPerms.length > 0) {
           const hasAdmin = (interaction.member.permissions as any)?.has?.(PermissionFlagsBits.Administrator);
           if (!hasAdmin) {
+            const { resolvePermissionFlag } = await import('./security/CommandGuard.js');
+            const memberPerms: any = typeof (interaction.member.permissions as any) === 'string'
+              ? ((await interaction.guild?.members?.fetch?.(interaction.user.id).catch(() => null))?.permissions ?? null)
+              : interaction.member.permissions;
             const missing = reqPerms.filter((p: string) => {
-              const flag = (PermissionFlagsBits as any)[p] || (PermissionFlagsBits as any)[p.replace(/\s+/g, '')];
-              return flag ? !(interaction.member.permissions as any).has(flag) : false;
+              const flag = resolvePermissionFlag(p);
+              // Fail closed: unknown permission names or an unresolved member count as missing.
+              return flag && memberPerms ? !memberPerms.has(flag) : true;
             });
             if (missing.length > 0) {
               if (interaction.isRepliable()) {
@@ -254,9 +289,115 @@ export class InteractionRouter {
   // ── Buttons ─────────────────────────────────────────────────────────────
 
   private async handleButton(interaction: any): Promise<void> {
+    // DM Mention Notification Action Buttons
+    if (interaction.customId.startsWith('dm_reply:')) {
+      const parts = interaction.customId.split(':');
+      const channelId = parts[1];
+      const messageId = parts[2] || '';
+
+      const modal = new ModalBuilder()
+        .setCustomId(`modal_dm_reply:${channelId}:${messageId}`)
+        .setTitle('Reply to Channel');
+
+      const textInput = new TextInputBuilder()
+        .setCustomId('dm_reply_content')
+        .setLabel('Your Reply Message')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Type what you want to send directly to the channel...')
+        .setRequired(true)
+        .setMaxLength(2000);
+
+      const row = new ActionRowBuilder<TextInputBuilder>().addComponents(textInput);
+      modal.addComponents(row);
+
+      return interaction.showModal(modal).catch(console.error);
+    }
+
+    if (interaction.customId.startsWith('dm_block_server:')) {
+      const serverId = interaction.customId.split(':')[1];
+      const nowBlocked = await BlockedDMSettings.toggle(interaction.user.id, serverId);
+
+      // Dynamically update the button on the DM message so the user immediately sees the new state
+      try {
+        if (interaction.message && interaction.message.components?.length > 0) {
+          const rawComponents = interaction.message.components;
+          const updatedComponents = rawComponents.map((comp: any) => {
+            const compJson = typeof comp.toJSON === 'function' ? comp.toJSON() : comp;
+            // Handle Components V2 Container (type 17)
+            if (compJson.type === 17 && Array.isArray(compJson.components)) {
+              return {
+                ...compJson,
+                components: compJson.components.map((inner: any) => {
+                  if (inner.type === 1 && Array.isArray(inner.components)) {
+                    return {
+                      ...inner,
+                      components: inner.components.map((btn: any) => {
+                        if (btn.custom_id && btn.custom_id.startsWith('dm_block_server:')) {
+                          return {
+                            ...btn,
+                            label: nowBlocked ? 'Unblock Server Messages' : 'Block Server Messages',
+                            style: nowBlocked ? 4 : 2
+                          };
+                        }
+                        return btn;
+                      })
+                    };
+                  }
+                  return inner;
+                })
+              };
+            }
+            // Handle traditional ActionRow (type 1)
+            if (compJson.type === 1 && Array.isArray(compJson.components)) {
+              return {
+                ...compJson,
+                components: compJson.components.map((btn: any) => {
+                  if (btn.custom_id && btn.custom_id.startsWith('dm_block_server:')) {
+                    return {
+                      ...btn,
+                      label: nowBlocked ? 'Unblock Server Messages' : 'Block Server Messages',
+                      style: nowBlocked ? 4 : 2
+                    };
+                  }
+                  return btn;
+                })
+              };
+            }
+            return compJson;
+          });
+
+          const hasV2 = updatedComponents.some((c: any) => c?.type === 17);
+          const editPayload: any = hasV2
+            ? { flags: MessageFlags.IsComponentsV2, components: updatedComponents }
+            : { components: updatedComponents };
+          await interaction.message.edit(editPayload).catch(() => {});
+        }
+      } catch (e) {
+        console.warn('[dm_block_server] Failed to update button component:', e);
+      }
+
+      if (nowBlocked) {
+        return interaction.reply({
+          content: 'You will no longer receive mention alerts from this server.\nClick **Unblock Server Messages** at any time to re-enable them.',
+          flags: 64
+        }).catch(() => {});
+      } else {
+        return interaction.reply({
+          content: 'Mention alerts from this server have been re-enabled.',
+          flags: 64
+        }).catch(() => {});
+      }
+    }
+
     // Executor-ownership guard: if customId ends with :<userId>, only that user may interact
+    // Exempt public role/ticket buttons whose customId ends with a Role/Channel/Entity Snowflake ID
+    const isPublicColonCustomId =
+      interaction.customId.startsWith('sr_btn:') ||
+      interaction.customId.startsWith('rr_btn:') ||
+      interaction.customId.startsWith('dm_block_server:') ||
+      interaction.customId.startsWith('dm_reply:');
     const parts = interaction.customId.split(':');
-    if (parts.length > 1) {
+    if (parts.length > 1 && !isPublicColonCustomId) {
       const targetExecutorId = parts[parts.length - 1];
       if (/^\d{17,20}$/.test(targetExecutorId) && interaction.user.id !== targetExecutorId) {
         return interaction.reply({
@@ -284,14 +425,54 @@ export class InteractionRouter {
       return;
     }
 
+    // Strict Server Owner & Extra Owner Gate for Security, Anti-Nuke, AutoMod, Whitelist, Backup, Config & Admin GUI Buttons
+    if (interaction.guild) {
+      const cid = interaction.customId || '';
+      const isOwnerOnlyButton =
+        cid.startsWith('btn_sec_') ||
+        cid.startsWith('sec_') ||
+        cid.startsWith('select_sec_') ||
+        cid.startsWith('an_') ||
+        cid.startsWith('btn_an_') ||
+        cid.startsWith('btn_enable_all_') ||
+        cid.startsWith('wl_') ||
+        cid.startsWith('btn_al_') ||
+        cid.startsWith('al_') ||
+        cid.startsWith('backup_') ||
+        cid.startsWith('ver_btn_') ||
+        cid.startsWith('owner_') ||
+        cid.startsWith('config_btn_') ||
+        cid.startsWith('mon_') ||
+        cid.startsWith('prebot_') ||
+        cid === 'jtc_btn_auto_setup' ||
+        cid === 'jtc_btn_set_category' ||
+        cid === 'jtc_btn_toggle_master' ||
+        cid === 'jtc_btn_clean_stale' ||
+        cid === 'jtc_btn_send_voice_panel' ||
+        cid === 'jtc_btn_refresh_admin';
+
+      if (isOwnerOnlyButton) {
+        const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+        if (!allowed) {
+          return interaction.reply({
+            content: '<:wrong:1532620780796510259> **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access this control.',
+            flags: 64
+          }).catch(() => {});
+        }
+      }
+    }
+
     // Auto-defer for slow button handlers (1.0 s eager safety net)
     // EXCEPTION: Do NOT auto-defer button interactions that trigger a Modal popup,
     // as Discord rejects interaction.showModal() if deferUpdate() or deferReply() has been called.
     const isModalTrigger =
       interaction.customId === 'btn_open_ticket_modal' ||
       interaction.customId === 'btn_ticket_open_direct' ||
+      interaction.customId === 'btn_ticket_close' ||
+      interaction.customId === 'btn_in_close' ||
       interaction.customId.startsWith('tkmgr_btn_') ||
       interaction.customId.startsWith('btn_in_add_mod') ||
+      interaction.customId.startsWith('btn_in_remove_mod') ||
       interaction.customId.startsWith('btn_social_add_') ||
       interaction.customId === 'btn_social_add_yt' ||
       interaction.customId === 'btn_social_add_ig' ||
@@ -299,6 +480,9 @@ export class InteractionRouter {
       interaction.customId === 'btn_sec_open_otp_modal' ||
       interaction.customId.startsWith('btn_sec_cat_custom_thresh_') ||
       interaction.customId === 'btn_disable_enter_code' ||
+      interaction.customId === 'jtc_btn_set_category' ||
+      interaction.customId.startsWith('jtc_btn_rename_') ||
+      interaction.customId.startsWith('dm_reply:') ||
       interaction.customId.includes('modal');
 
     let deferred = false;
@@ -315,7 +499,6 @@ export class InteractionRouter {
       await this.ctx.dispatchEvent(`button_${interaction.customId}`, interaction);
 
       // Prefix-based generic dispatchers for modules that use wildcard patterns.
-      // These are fired concurrently after the primary handler has already acknowledged.
       const genericPrefixes: Array<[string, string]> = [
         ['backup_confirm', 'button_backup_confirm'],
         ['gw_enter_',    'button_gw_enter_generic'],
@@ -341,18 +524,22 @@ export class InteractionRouter {
         ['btn_sub_',     'button_social_generic'],
         ['btn_al_',      'button_al_generic'],
         ['select_al_',   'button_al_generic'],
-        ['al_',          'button_al_generic']
+        ['al_',          'button_al_generic'],
+        ['prebot_',      'button_prebot_generic']
       ];
 
       const dispatched = new Set<string>();
       for (const [prefix, event] of genericPrefixes) {
+        if (interaction.replied) break;
         if (interaction.customId.startsWith(prefix) && !dispatched.has(event)) {
           dispatched.add(event);
           await this.ctx.dispatchEvent(event, interaction);
         }
       }
 
-      await this.ctx.dispatchEvent('interactionCreate', interaction);
+      if (!interaction.replied) {
+        await this.ctx.dispatchEvent('interactionCreate', interaction);
+      }
     } finally {
       if (deferTimer) clearTimeout(deferTimer);
     }
@@ -380,6 +567,36 @@ export class InteractionRouter {
       return;
     }
 
+    // Strict Server Owner & Extra Owner Gate for Security, Anti-Nuke, AutoMod, Whitelist & Config Select Menus
+    if (interaction.guild) {
+      const cid = interaction.customId || '';
+      const isOwnerOnlySelect =
+        cid.startsWith('select_sec_') ||
+        cid.startsWith('btn_sec_') ||
+        cid.startsWith('sec_') ||
+        cid.startsWith('an_') ||
+        cid.startsWith('select_an_') ||
+        cid.startsWith('wl_') ||
+        cid.startsWith('select_wl_') ||
+        cid.startsWith('select_al_') ||
+        cid.startsWith('btn_al_') ||
+        cid.startsWith('al_') ||
+        cid === 'ver_role_select' ||
+        cid === 'setup_preset_select' ||
+        cid === 'config_category_select' ||
+        cid.startsWith('prebot_');
+
+      if (isOwnerOnlySelect) {
+        const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+        if (!allowed) {
+          return interaction.reply({
+            content: '<:wrong:1532620780796510259> **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access this control.',
+            flags: 64
+          }).catch(() => {});
+        }
+      }
+    }
+
     const isModalTrigger = interaction.customId === 'ticket_select_category' || interaction.customId.startsWith('ticket_select_');
     const deferTimer = isModalTrigger ? null : setTimeout(() => {
       if (!interaction.replied && !interaction.deferred) {
@@ -405,18 +622,22 @@ export class InteractionRouter {
         ['wl_',              'button_wl_generic'],
         ['select_wl_',       'button_wl_generic'],
         ['jtc_',             'button_jtc_generic'],
-        ['ver_',             'button_ver_generic']
+        ['ver_',             'button_ver_generic'],
+        ['prebot_',          'select_prebot_generic']
       ];
 
       const dispatched = new Set<string>();
       for (const [prefix, event] of genericPrefixes) {
+        if (interaction.replied) break;
         if (interaction.customId.startsWith(prefix) && !dispatched.has(event)) {
           dispatched.add(event);
           await this.ctx.dispatchEvent(event, interaction);
         }
       }
 
-      await this.ctx.dispatchEvent('interactionCreate', interaction);
+      if (!interaction.replied) {
+        await this.ctx.dispatchEvent('interactionCreate', interaction);
+      }
     } finally {
       if (deferTimer) clearTimeout(deferTimer);
     }
@@ -426,6 +647,63 @@ export class InteractionRouter {
 
   private async handleModal(interaction: any): Promise<void> {
     try {
+      // DM Reply Modal Submission
+      if (interaction.customId.startsWith('modal_dm_reply:')) {
+        const parts = interaction.customId.split(':');
+        const channelId = parts[1];
+        const messageId = parts[2];
+        const replyContent = interaction.fields.getTextInputValue('dm_reply_content');
+
+        try {
+          const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+          if (!channel || !channel.isTextBased()) {
+            return interaction.reply({
+              content: 'Could not send reply: Channel not found or unavailable.',
+              flags: 64
+            }).catch(() => {});
+          }
+
+          let sent = false;
+          if (messageId) {
+            const targetMsg = await channel.messages.fetch(messageId).catch(() => null);
+            if (targetMsg) {
+              await targetMsg.reply({
+                content: `**Reply from ${interaction.user}:**\n${replyContent}`
+              }).catch(() => {});
+              sent = true;
+            }
+          }
+
+          if (!sent) {
+            await channel.send({
+              content: `**Reply from ${interaction.user}:**\n${replyContent}`
+            }).catch(() => {});
+          }
+
+          return interaction.reply({
+            content: 'Your reply has been sent directly to the channel.',
+            flags: 64
+          }).catch(() => {});
+        } catch (err: any) {
+          return interaction.reply({
+            content: `Failed to send reply: ${err.message || 'Unknown error'}`
+          }).catch(() => {});
+        }
+      }
+
+      if (interaction.guild) {
+        const cid = interaction.customId || '';
+        if (cid.startsWith('modal_sec_') || cid.startsWith('sec_')) {
+          const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+          if (!allowed) {
+            return interaction.reply({
+              content: '<:wrong:1532620780796510259> **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can access this control.',
+              flags: 64
+            }).catch(() => {});
+          }
+        }
+      }
+
       await this.ctx.dispatchEvent(`modal_${interaction.customId}`, interaction);
 
       const genericPrefixes: Array<[string, string]> = [
@@ -446,13 +724,16 @@ export class InteractionRouter {
 
       const dispatched = new Set<string>();
       for (const [prefix, event] of genericPrefixes) {
+        if (interaction.replied) break;
         if (interaction.customId.startsWith(prefix) && !dispatched.has(event)) {
           dispatched.add(event);
           await this.ctx.dispatchEvent(event, interaction);
         }
       }
 
-      await this.ctx.dispatchEvent('interactionCreate', interaction);
+      if (!interaction.replied) {
+        await this.ctx.dispatchEvent('interactionCreate', interaction);
+      }
     } catch (err) {
       console.error('[InteractionRouter] Error handling modal submit:', err);
     }

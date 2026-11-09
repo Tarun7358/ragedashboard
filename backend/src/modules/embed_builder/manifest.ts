@@ -1,10 +1,11 @@
 import {
-  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder,
+  EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, PermissionFlagsBits,
   TextInputBuilder, TextInputStyle, MessageFlags, TextChannel, Message
 } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedRepository } from './EmbedRepository.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
+import { isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import {
   Colors, buildLimeOverviewCard, VERIFIED_ICON, WRONG_ICON, BOT_ICON,
   MEMBER_ICON, INFO_ICON, TIMER_ICON, CONFIG_ICON, SHIELD_ICON, fmt
@@ -41,33 +42,35 @@ export function parseColor(colorInput?: string): number {
  */
 export function buildCustomEmbed(data: Record<string, any>): EmbedBuilder {
   const embed = new EmbedBuilder();
+  const validUrl = (u?: any) => (typeof u === 'string' && /^https?:\/\//i.test(u.trim()) ? u.trim() : undefined);
 
   if (data.title) embed.setTitle(String(data.title));
   if (data.description) embed.setDescription(String(data.description));
   if (data.color) embed.setColor(parseColor(String(data.color)));
   else embed.setColor(Colors.BRAND);
 
-  if (data.url) embed.setURL(String(data.url));
+  const safeUrl = validUrl(data.url);
+  if (safeUrl) embed.setURL(safeUrl);
 
   if (data.author) {
     if (typeof data.author === 'string') {
       embed.setAuthor({ name: data.author });
     } else if (typeof data.author === 'object' && data.author.name) {
       embed.setAuthor({
-        name: data.author.name,
-        iconURL: data.author.icon_url || data.author.iconURL,
-        url: data.author.url
+        name: String(data.author.name),
+        iconURL: validUrl(data.author.icon_url || data.author.iconURL),
+        url: validUrl(data.author.url)
       });
     }
   }
 
   if (data.thumbnail) {
-    const url = typeof data.thumbnail === 'string' ? data.thumbnail : data.thumbnail.url;
+    const url = validUrl(typeof data.thumbnail === 'string' ? data.thumbnail : data.thumbnail.url);
     if (url) embed.setThumbnail(url);
   }
 
   if (data.image) {
-    const url = typeof data.image === 'string' ? data.image : data.image.url;
+    const url = validUrl(typeof data.image === 'string' ? data.image : data.image.url);
     if (url) embed.setImage(url);
   }
 
@@ -76,8 +79,8 @@ export function buildCustomEmbed(data: Record<string, any>): EmbedBuilder {
       embed.setFooter({ text: data.footer });
     } else if (typeof data.footer === 'object' && data.footer.text) {
       embed.setFooter({
-        text: data.footer.text,
-        iconURL: data.footer.icon_url || data.footer.iconURL
+        text: String(data.footer.text),
+        iconURL: validUrl(data.footer.icon_url || data.footer.iconURL)
       });
     }
   } else {
@@ -85,7 +88,9 @@ export function buildCustomEmbed(data: Record<string, any>): EmbedBuilder {
   }
 
   if (data.timestamp) {
-    embed.setTimestamp(new Date(data.timestamp));
+    const tsDate = new Date(data.timestamp);
+    if (!isNaN(tsDate.getTime())) embed.setTimestamp(tsDate);
+    else embed.setTimestamp();
   } else {
     embed.setTimestamp();
   }
@@ -122,6 +127,16 @@ export function registerEmbedPrefixCommands(): void {
     dangerLevel: 'Low',
     hidden: false,
     execute: async (message: Message, args: string[]) => {
+      if (!message.guild) return;
+      const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+      const isOwner = await isOwnerOrExtraOwner(message.author.id, message.guild);
+      const canManageEmbeds = isOwner ||
+        Boolean(member?.permissions?.has?.(PermissionFlagsBits.ManageMessages)) ||
+        Boolean(member?.permissions?.has?.(PermissionFlagsBits.ManageGuild)) ||
+        Boolean(member?.permissions?.has?.(PermissionFlagsBits.Administrator));
+      if (!canManageEmbeds) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: You require **Manage Messages** or **Manage Server** permission to use the Embed Builder.` });
+      }
       const sub = args[0]?.toLowerCase() || 'help';
 
       if (sub === 'help') {
@@ -204,8 +219,9 @@ export function registerEmbedPrefixCommands(): void {
 
         return message.reply({
           content: `${VERIFIED_ICON} **Quick Embed Draft Created**:`,
-          embeds: [embed]
-        });
+          embeds: [embed],
+          _rawEmbed: true
+        } as any);
       }
 
       if (sub === 'delete') {
@@ -319,6 +335,22 @@ export const EmbedBuilderManifest: ModuleManifest = {
     {
       name: 'command_embed',
       handler: async (client: any, interaction: any) => {
+        if (!interaction.guild) return;
+        const userId = interaction.user?.id || interaction.author?.id;
+        const isOwner = await isOwnerOrExtraOwner(userId, interaction.guild);
+        const canManageEmbeds = isOwner ||
+          Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.ManageMessages)) ||
+          Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.ManageGuild)) ||
+          Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.Administrator)) ||
+          Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.ManageMessages)) ||
+          Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild)) ||
+          Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator));
+        if (!canManageEmbeds) {
+          return interaction.reply({
+            content: `${WRONG_ICON} **Access Denied**: You require **Manage Messages** or **Manage Server** permission to use the Embed Builder.`,
+            flags: MessageFlags.Ephemeral
+          });
+        }
         const sub = interaction.options.getSubcommand(false);
 
         // ─── CREATE MODAL OR DRAFT ──────────────────────────────
@@ -380,8 +412,9 @@ export const EmbedBuilderManifest: ModuleManifest = {
 
           return interaction.reply({
             content: `${VERIFIED_ICON} **Custom Embed Draft Rendered**:`,
-            embeds: [embed]
-          });
+            embeds: [embed],
+            _rawEmbed: true
+          } as any);
         }
 
         // ─── SEND PRESET ─────────────────────────────────────────
@@ -428,8 +461,9 @@ export const EmbedBuilderManifest: ModuleManifest = {
           const embed = buildCustomEmbed(embedData);
           return interaction.reply({
             content: `${VERIFIED_ICON} Saved custom embed preset **"${name.toLowerCase()}"** to database! Preview:`,
-            embeds: [embed]
-          });
+            embeds: [embed],
+            _rawEmbed: true
+          } as any);
         }
 
         // ─── JSON IMPORT / EXPORT ────────────────────────────────
@@ -510,8 +544,9 @@ export const EmbedBuilderManifest: ModuleManifest = {
 
           return interaction.reply({
             content: `${VERIFIED_ICON} Rendered preview for field **"${title}"**:`,
-            embeds: [embed]
-          });
+            embeds: [embed],
+            _rawEmbed: true
+          } as any);
         }
 
         // ─── LIST PRESETS ────────────────────────────────────────
@@ -548,7 +583,7 @@ export const EmbedBuilderManifest: ModuleManifest = {
       }
     },
     {
-      name: 'interaction_embed_builder_modal',
+      name: 'modal_embed_builder_modal_submit',
       handler: async (client: any, interaction: any) => {
         if (interaction.customId !== 'embed_builder_modal_submit') return;
 
@@ -562,8 +597,9 @@ export const EmbedBuilderManifest: ModuleManifest = {
 
         return interaction.reply({
           content: `${VERIFIED_ICON} **Interactive Custom Embed Created Successfully!**`,
-          embeds: [embed]
-        });
+          embeds: [embed],
+          _rawEmbed: true
+        } as any);
       }
     }
   ]

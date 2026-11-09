@@ -119,6 +119,25 @@ export async function checkRoleAssignment(
 
   // Rage Optimiser Assigned the Role
   if (executor.id === client.user.id) {
+    if (newMember.user?.bot) {
+      let prebotRoleName: string | undefined;
+      try {
+        const { Database } = await import('../../core/Database.js');
+        const db = Database.getDb();
+        if (db) {
+          const row = (await db.get<any>('SELECT roleName FROM prebot_whitelist WHERE guildId = ? AND botId = ?', [guild.id, newMember.id]).catch(() => null))
+            || (await db.get<any>('SELECT roleName FROM prebots WHERE guildId = ? AND botId = ?', [guild.id, newMember.id]).catch(() => null));
+          prebotRoleName = row?.roleName;
+        }
+      } catch {}
+      const allRolesArePrebotTrusted = addedRoles.every((r: any) =>
+        r.managed ||
+        (typeof r.name === 'string' && (r.name.startsWith('[Trusted]') || (prebotRoleName && r.name === prebotRoleName)))
+      );
+      if (allRolesArePrebotTrusted) {
+        return 'IGNORE_EVENT';
+      }
+    }
     if (hasDangerousPerms) {
       if (debugMode) {
         console.log(`[JoinGuard Debug] [Guild ${guild.id}] Rage Optimiser assigned a role with dangerous permissions to ${newMember.user.username}. Allowing check.`);
@@ -270,8 +289,9 @@ export const JoinRoleAssignmentGuardManifest: ModuleManifest = {
     {
       name: 'command_joinguard',
       handler: async (client: any, interaction: any, context: any) => {
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-          return interaction.reply({ content: `${WRONG_ICON} Administrator permissions required.`, flags: 64 });
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        if (!interaction.guild || !(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
+          return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure Join Guard.`, flags: 64 });
         }
 
         const guildId = interaction.guild?.id || interaction.guildId;

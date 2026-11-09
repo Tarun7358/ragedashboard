@@ -40,6 +40,17 @@ export function isModuleBypassed(enabledModules: string[] | undefined, ruleId?: 
 
   const cleanRule = ruleId.toLowerCase();
 
+  // If full bypass or all protections are granted
+  if (
+    enabledModules.includes('*') ||
+    enabledModules.includes('all') ||
+    enabledModules.includes('all_bypasses') ||
+    enabledModules.includes('FULL_BYPASS') ||
+    protections.every(p => enabledModules.includes(p.key))
+  ) {
+    return true;
+  }
+
   // If the exact key or name is enabled
   if (enabledModules.includes(cleanRule) || enabledModules.includes(ruleId)) return true;
 
@@ -72,8 +83,8 @@ export function isModuleBypassed(enabledModules: string[] | undefined, ruleId?: 
   }
 
   // Attachment / file upload mapping
-  if (cleanRule === 'anti_attachment' || cleanRule === 'antiattachment' || cleanRule === 'attachments') {
-    if (enabledModules.includes('anti_attachment') || enabledModules.includes('antiattachment') || enabledModules.includes('Automod') || enabledModules.includes('automod')) return true;
+  if (cleanRule === 'anti_attachment' || cleanRule === 'antiattachment' || cleanRule === 'attachments' || cleanRule === 'anti_files' || cleanRule === 'antifiles' || cleanRule === 'anti_file' || cleanRule === 'blockfiles' || cleanRule === 'dangerous_files') {
+    if (enabledModules.includes('anti_attachment') || enabledModules.includes('antiattachment') || enabledModules.includes('Automod') || enabledModules.includes('automod') || enabledModules.includes('anti_files')) return true;
   }
 
   // Voice protection mapping
@@ -189,7 +200,7 @@ export async function isOwnerOrExtraOwner(userId: string, guild: any): Promise<b
 }
 
 export async function checkWhitelistPermission(userId: string, guild: any, context: any, ruleId?: string): Promise<boolean> {
-  if (!guild) return false;
+  if (!guild || !userId) return false;
 
   // 1. Guild owner always has permission
   if (userId === guild.ownerId || 
@@ -209,23 +220,93 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
     }
   }
 
-  const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
+  let modules = context?.getModulesState ? context.getModulesState(guild.id) : [];
 
-  // 2. Check member_whitelist (users / roles / bots in unified member_whitelist)
-  const mwModule = modules.find((m: any) => m && m.id === 'member_whitelist');
-  const members = mwModule?.config?.members || [];
+  // DB Fallback if in-memory modules state is unavailable or empty
+  let mwModule = modules.find((m: any) => m && m.id === 'member_whitelist');
+  let secModule = modules.find((m: any) => m && m.id === 'security');
+  let members = mwModule?.config?.members || [];
+  let secConfig = secModule?.config || {};
+
+  if ((members.length === 0 || !secModule) && guild.id) {
+    try {
+      const db = Database.getDb();
+      if (db) {
+        const row = await db.get<any>('SELECT modules FROM guild_configs WHERE guildId = ?', [guild.id]);
+        if (row?.modules) {
+          try {
+            const parsed = JSON.parse(row.modules);
+            if (Array.isArray(parsed)) {
+              if (members.length === 0) {
+                const dbMw = parsed.find((m: any) => m && m.id === 'member_whitelist');
+                if (Array.isArray(dbMw?.config?.members)) members = dbMw.config.members;
+              }
+              if (!secModule) {
+                const dbSec = parsed.find((m: any) => m && m.id === 'security');
+                if (dbSec?.config) secConfig = dbSec.config;
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
+  // Detect if executor / target is a bot
+  const member = guild.members?.cache?.get(userId) || (guild.members?.fetch ? await guild.members.fetch(userId).catch(() => null) : null);
+  let isBot = member?.user?.bot ?? (guild.client?.users?.cache?.get(userId)?.bot ?? false);
+  if (!isBot && guild.client?.users?.fetch) {
+    try {
+      const u = await guild.client.users.fetch(userId).catch(() => null);
+      if (u?.bot) isBot = true;
+    } catch {}
+  }
+
+  // 2. FULL ACCESS FOR WHITELISTED BOTS:
+  // Whitelisted bots perform automated features (temp channels, auto-roles, tickets, alerts, embeds, level-up).
+  // Once whitelisted in member_whitelist, security whitelist, or prebot_whitelist,
+  // bots have 100% full unhindered access with zero module locks or AutoMod restrictions.
+  if (isBot) {
+    // Check PreBot Whitelist in DB
+    if (guild.id) {
+      try {
+        const db = Database.getDb();
+        if (db) {
+          const prebot = await db.get<any>('SELECT botId FROM prebot_whitelist WHERE guildId = ? AND botId = ?', [guild.id, userId]);
+          if (prebot) return true; // Full access for whitelisted bot
+        }
+      } catch {}
+    }
+
+    // Check member_whitelist (ANY active entry for this bot grants full clearance)
+    const isBotInMw = members.some((m: any) =>
+      m &&
+      (m.userId === userId || m.id === userId || m.targetId === userId) &&
+      (m.status !== 'inactive' && m.status !== 'disabled')
+    );
+    if (isBotInMw) return true;
+
+    // Check security whitelist
+    const secWhitelist = secConfig.whitelist || [];
+    const isBotInSec = secWhitelist.some((w: any) => {
+      if (!w) return false;
+      if (typeof w === 'string') return w === userId;
+      return (w.targetId === userId || w.userId === userId || w.id === userId);
+    });
+    if (isBotInSec) return true;
+  }
+
+  // 3. Check member_whitelist (users / roles in unified member_whitelist)
   const isWhitelistedMember = members.some((m: any) => 
     m && 
     (m.userId === userId || m.id === userId || m.targetId === userId) && 
     (m.status !== 'inactive' && m.status !== 'disabled') && 
-    (!m.type || m.type === 'member' || m.type === 'user') &&
+    (!m.type || m.type === 'member' || m.type === 'user' || m.type === 'bot') &&
     isModuleBypassed(m.enabledModules, ruleId)
   );
   if (isWhitelistedMember) return true;
 
-  // 3. Check security whitelist
-  const secModule = modules.find((m: any) => m && m.id === 'security');
-  const secConfig = secModule?.config || {};
+  // 4. Check security whitelist (for human users)
   const secWhitelist = secConfig.whitelist || [];
   const isSecWhitelisted = secWhitelist.some((w: any) => {
     if (!w) return false;
@@ -234,21 +315,14 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
   });
   if (isSecWhitelisted) return true;
 
-  // Fetch member for role and local config checks
-  const member = guild.members?.cache?.get(userId) || (guild.members?.fetch ? await guild.members.fetch(userId).catch(() => null) : null);
-
-  // 4. Check whitelisted roles (from unified members with type 'role')
+  // 5. Check whitelisted roles (from unified members with type 'role')
   if (member) {
-    // 4. Check whitelisted roles (from unified members with type 'role')
     if (members.some((m: any) => m && (m.status !== 'inactive' && m.status !== 'disabled') && m.type === 'role' && (m.roleId || m.id) && member.roles?.cache?.has(m.roleId || m.id) && isModuleBypassed(m.enabledModules, ruleId))) {
       return true;
     }
 
-    // Exception roles grant Anti-Spam immunity ONLY (everyone/here ping, role ping).
-    // They do NOT bypass Anti-Nuke rules (role grant/delete/create, channel delete, etc.)
-    // This prevents attackers from self-assigning an exception role below the rate-limit threshold
-    // and then gaining permanent anti-nuke bypass.
-    const antiSpamOnlyRules = ['anti_everyone_ping', 'anti_role_ping', 'anti_link', 'automod', 'anti_spam'];
+    // Exception roles grant Anti-Spam / AutoMod immunity ONLY (everyone/here ping, role ping, links).
+    const antiSpamOnlyRules = ['anti_everyone_ping', 'anti_role_ping', 'anti_link', 'automod', 'anti_spam', 'anti_attachment'];
     const isAntiSpamOnlyRule = ruleId ? antiSpamOnlyRules.includes(ruleId) : false;
 
     if (isAntiSpamOnlyRule) {
@@ -264,16 +338,6 @@ export async function checkWhitelistPermission(userId: string, guild: any, conte
       if (upmIgnoredRoles.length > 0 && member.roles?.cache?.some((r: any) => r && upmIgnoredRoles.includes(r.id))) return true;
     }
   }
-
-  // 5. Check whitelisted bots (from unified members with type 'bot')
-  const isBotWhitelisted = members.some((m: any) =>
-    m &&
-    (m.userId === userId || m.id === userId || m.targetId === userId) &&
-    (m.status !== 'inactive' && m.status !== 'disabled') &&
-    m.type === 'bot' &&
-    isModuleBypassed(m.enabledModules, ruleId)
-  );
-  if (isBotWhitelisted) return true;
 
   // 6. Check UPM Whitelisted Users (Anti-Nuke protection only)
   if (!ruleId || (ruleId !== 'anti_link' && ruleId !== 'automod')) {
@@ -475,12 +539,13 @@ export function migrateToUnifiedWhitelist(context: any) {
       }
     }
 
-    // 3. Populate from security exception roles
+    // 3. Populate from security exception roles (AutoMod/Anti-Spam only, NOT full Anti-Nuke bypass)
     const secRoles = secModule?.config?.exceptionRoleIds || secModule?.config?.whitelistRoles || [];
     for (const rId of secRoles) {
       if (rId) {
         registerEntry(rId, 'role', {
-          notes: 'Security Exception Role'
+          notes: 'Security Exception Role',
+          enabledModules: ['anti_everyone_ping', 'anti_everyone_here', 'anti_role_ping', 'anti_link']
         });
       }
     }
@@ -491,7 +556,8 @@ export function migrateToUnifiedWhitelist(context: any) {
       if (uId) {
         const type = getTargetType(uId, 'member');
         registerEntry(uId, type, {
-          notes: 'UPM Whitelist User'
+          notes: 'UPM Whitelist User',
+          enabledModules: ['anti_everyone_ping', 'anti_everyone_here', 'anti_role_ping', 'anti_link']
         });
       }
     }
@@ -501,7 +567,8 @@ export function migrateToUnifiedWhitelist(context: any) {
     for (const rId of upmRoles) {
       if (rId) {
         registerEntry(rId, 'role', {
-          notes: 'UPM Whitelist Role'
+          notes: 'UPM Whitelist Role',
+          enabledModules: ['anti_everyone_ping', 'anti_everyone_here', 'anti_role_ping', 'anti_link']
         });
       }
     }
@@ -512,7 +579,8 @@ export function migrateToUnifiedWhitelist(context: any) {
       if (uId) {
         const type = getTargetType(uId, 'member');
         registerEntry(uId, type, {
-          notes: 'Voice Whitelist User'
+          notes: 'Voice Whitelist User',
+          enabledModules: ['voice_protection']
         });
       }
     }
@@ -522,7 +590,8 @@ export function migrateToUnifiedWhitelist(context: any) {
     for (const rId of vpRoles) {
       if (rId) {
         registerEntry(rId, 'role', {
-          notes: 'Voice Whitelist Role'
+          notes: 'Voice Whitelist Role',
+          enabledModules: ['voice_protection']
         });
       }
     }

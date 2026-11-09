@@ -210,7 +210,7 @@ async function renderWhitelistConfigUI(
     context.updateModuleConfig('member_whitelist', { members: sanitized });
     context.logSyncEvent(`[Global Whitelist] Added ${type} ${tagOrName} via unified command.`, 'success');
 
-    if (type !== 'bot' && !isRole) {
+    if (!isRole) {
       const secModule = modules.find((m: any) => m && m.id === 'security');
       if (secModule) {
         const secWhitelist = [...(secModule.config?.whitelist || [])].filter(Boolean);
@@ -227,6 +227,27 @@ async function renderWhitelistConfigUI(
           });
           context.updateModuleConfig('security', { ...secModule.config, whitelist: secWhitelist });
         }
+      }
+
+      // Automatically register bot in prebot_whitelist with full standard bot permissions
+      if (type === 'bot' || userOrRole?.bot) {
+        import('../../core/Database.js').then(async ({ Database }) => {
+          try {
+            const db = Database.getDb();
+            if (db && guild?.id) {
+              const existing = await db.get<any>('SELECT botId FROM prebot_whitelist WHERE guildId = ? AND botId = ?', [guild.id, targetId]);
+              if (!existing) {
+                const defaultPerms = JSON.stringify(['ManageChannels', 'ManageRoles', 'SendMessages', 'ViewChannel', 'EmbedLinks', 'AttachFiles', 'Connect', 'Speak', 'ManageMessages', 'ModerateMembers', 'KickMembers', 'BanMembers']);
+                await db.run(
+                  'INSERT INTO prebot_whitelist (guildId, botId, botName, allowedPerms, createRole, addedBy, addedAt, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                  [guild.id, targetId, tagOrName, defaultPerms, 0, executor?.user?.id || executor?.id || 'system', Date.now(), 'Auto-synced from Member Whitelist']
+                );
+              }
+            }
+          } catch (err) {
+            console.error('[Whitelist Sync PreBot Error]:', err);
+          }
+        }).catch(() => { });
       }
     }
   } else if (notesInput && !record.notes) {
@@ -398,13 +419,20 @@ async function renderWhitelistConfigUI(
 
   if (!reply) return;
 
+  if ((reply as any)._activeWlCollector) {
+    try { (reply as any)._activeWlCollector.stop('replaced'); } catch {}
+  }
+
   const collector = reply.createMessageComponentCollector({
     time: 600000 // 10 minutes
   });
+  (reply as any)._activeWlCollector = collector;
 
   collector.on('collect', async (rawI: any) => {
     try {
+      (rawI as any)._wlCollectorHandled = true;
       const i = wrapInteraction(rawI);
+      (i as any)._wlCollectorHandled = true;
       if (i.user.id !== executor.id) {
         const embedErr = new EmbedBuilder()
           .setTitle('❌ Interactivity Denied')
@@ -605,7 +633,7 @@ export const MemberWhitelistManifest: ModuleManifest = {
         const hasPermission = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
         if (!hasPermission) {
           const embed = new EmbedBuilder()
-            .setTitle('🔒 Access Denied')
+            .setTitle(' Access Denied')
             .setColor(0xEF4444)
             .setDescription(`Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can manage Anti-Nuke Whitelist settings.`)
             .setTimestamp();
@@ -901,17 +929,21 @@ export const MemberWhitelistManifest: ModuleManifest = {
               found = true;
               members = members.filter((e: any) => e && !(targetId && e.type !== 'role' && (e.userId === targetId || e.id === targetId)));
 
-              if (userRecord.type !== 'bot' && !user?.bot) {
-                // Downward Sync: remove from security whitelist
-                const secModule = modules.find((m: any) => m && m.id === 'security');
-                if (secModule) {
-                  const secWhitelist = (secModule.config?.whitelist || []).filter(Boolean).filter((w: any) => {
-                    if (!w) return false;
-                    const id = typeof w === 'string' ? w : w.targetId;
-                    return id !== targetId;
-                  });
-                  context.updateModuleConfig('security', { ...secModule.config, whitelist: secWhitelist });
-                }
+              // Downward Sync: remove from security whitelist
+              const secModule = modules.find((m: any) => m && m.id === 'security');
+              if (secModule) {
+                const secWhitelist = (secModule.config?.whitelist || []).filter(Boolean).filter((w: any) => {
+                  if (!w) return false;
+                  const id = typeof w === 'string' ? w : w.targetId;
+                  return id !== targetId;
+                });
+                context.updateModuleConfig('security', { ...secModule.config, whitelist: secWhitelist });
+              }
+
+              if (userRecord.type === 'bot' || user?.bot) {
+                import('../prebot_whitelist/manifest.js').then(({ deletePrebotEntry }) => {
+                  deletePrebotEntry(interaction.guild?.id || '', targetId).catch(() => { });
+                }).catch(() => { });
               }
             }
           }
@@ -959,6 +991,7 @@ export const MemberWhitelistManifest: ModuleManifest = {
     {
       name: 'button_wl_generic',
       handler: async (client: any, interaction: any, context: any) => {
+        if ((interaction as any)._wlCollectorHandled) return;
         const customId = interaction.customId;
         const verifiedIcon = '<:ticks:1532620580266836148>';
         const wrongIcon = '<a:warning:1546155193303957504>';
@@ -1182,7 +1215,7 @@ export const MemberWhitelistManifest: ModuleManifest = {
 
         // Persistent fallback for configuration controls when active collector has expired
         if (customId.startsWith('wl_cat_') || customId.startsWith('wl_action_') || customId.startsWith('wl_config_select_')) {
-          if (interaction.replied || interaction.deferred) return;
+          if ((interaction as any)._wlCollectorHandled || interaction.replied || interaction.deferred) return;
           const parts = customId.split('_');
           const executorId = parts[parts.length - 1];
           const targetId = parts[parts.length - 2];
@@ -1438,14 +1471,25 @@ export function registerWhitelistCommands() {
       }
 
       if (sub === 'add') {
-        const isRole = Boolean(message.mentions.roles?.first());
         let target: any = message.mentions.members?.first() || message.mentions.roles?.first() || message.mentions.users?.first();
         if (!target && args[1]) {
           const rawId = args[1].replace(/[<@&!>]/g, '');
-          target = message.guild.members.cache.get(rawId) || message.guild.roles.cache.get(rawId) || null;
+          if (/^\d{15,25}$/.test(rawId)) {
+            target = message.guild.roles.cache.get(rawId) || await message.guild.roles.fetch(rawId).catch(() => null);
+            if (!target) target = message.guild.members.cache.get(rawId) || await message.guild.members.fetch(rawId).catch(() => null);
+            if (!target) target = await message.client.users.fetch(rawId).catch(() => null);
+            if (!target) {
+              target = {
+                id: rawId,
+                username: `ID-${rawId}`,
+                tag: `ID-${rawId}`,
+                toString: () => `<@${rawId}>`
+              };
+            }
+          }
         }
         if (!target) {
-          return message.reply({ content: `${WRONG_ICON} **Invalid Syntax**: \`r!wl add @User\` or \`r!wl add @Role\`` });
+          return message.reply({ content: `${WRONG_ICON} **Invalid Syntax**: \`r!wl add @User\`, \`r!wl add @Role\` or \`r!wl add <ID>\`` });
         }
         return renderWhitelistConfigUI(message, extra, target);
       }
@@ -1454,27 +1498,52 @@ export function registerWhitelistCommands() {
         let target: any = message.mentions.members?.first() || message.mentions.roles?.first() || message.mentions.users?.first();
         if (!target && args[1]) {
           const rawId = args[1].replace(/[<@&!>]/g, '');
-          target = message.guild.members.cache.get(rawId) || message.guild.roles.cache.get(rawId) || null;
+          if (/^\d{15,25}$/.test(rawId)) {
+            target = message.guild.roles.cache.get(rawId) || await message.guild.roles.fetch(rawId).catch(() => null);
+            if (!target) target = message.guild.members.cache.get(rawId) || await message.guild.members.fetch(rawId).catch(() => null);
+            if (!target) target = await message.client.users.fetch(rawId).catch(() => null);
+            if (!target) {
+              target = {
+                id: rawId,
+                username: `ID-${rawId}`,
+                tag: `ID-${rawId}`,
+                toString: () => `<@${rawId}>`
+              };
+            }
+          }
         }
         if (!target) {
-          return message.reply({ content: `${WRONG_ICON} **Invalid Syntax**: \`r!wl config @User\` or \`r!wl config @Role\`` });
+          return message.reply({ content: `${WRONG_ICON} **Invalid Syntax**: \`r!wl config @User\`, \`r!wl config @Role\` or \`r!wl config <ID>\`` });
         }
         return renderWhitelistConfigUI(message, extra, target);
       }
 
       if (sub === 'remove') {
         let target: any = message.mentions.members?.first() || message.mentions.roles?.first() || message.mentions.users?.first();
+        let forcedRole: boolean | null = null;
         if (!target && args[1]) {
           const rawId = args[1].replace(/[<@&!>]/g, '');
           target = message.guild.members.cache.get(rawId) || message.guild.roles.cache.get(rawId) || null;
+          if (!target && /^\d{15,25}$/.test(rawId)) {
+            // Raw ID fallback: the user may have left the server or not be cached, but can still be whitelisted.
+            const { userSet: uSet, roleSet: rSet } = getUnifiedWhitelistEntries(modules);
+            const asMember = await message.guild.members.fetch(rawId).catch(() => null);
+            const asRole = asMember ? null : (message.guild.roles.cache.get(rawId) || await message.guild.roles.fetch(rawId).catch(() => null));
+            if (asMember) target = asMember;
+            else if (asRole) target = asRole;
+            else if (uSet.has(rawId) || rSet.has(rawId)) {
+              forcedRole = rSet.has(rawId) && !uSet.has(rawId);
+              target = { id: rawId, toString: () => (forcedRole ? `<@&${rawId}>` : `<@${rawId}>`) };
+            }
+          }
         }
         if (!target) {
-          return message.reply({ content: `${WRONG_ICON} **Invalid Syntax**: \`r!wl remove @User\` or \`r!wl remove @Role\`` });
+          return message.reply({ content: `**Invalid Syntax**: \`r!wl remove @User\`, \`r!wl remove @Role\` or \`r!wl remove <ID>\` (ID not found in the whitelist)` });
         }
         const mwMod = modules.find((m: any) => m.id === 'member_whitelist');
         let currentMembers = mwMod?.config?.members || [];
         const targetId = target.id;
-        const isRole = Boolean(target.constructor?.name === 'Role' || ('guild' in target && !('user' in target)));
+        const isRole = forcedRole !== null ? forcedRole : Boolean(target.constructor?.name === 'Role' || ('guild' in target && !('user' in target)));
 
         let found = false;
         currentMembers = currentMembers.filter((m: any) => {
@@ -1483,18 +1552,28 @@ export function registerWhitelistCommands() {
           return !match;
         });
 
-        if (found) {
-          extra.updateModuleConfig?.('member_whitelist', { members: sanitizeWhitelistMembers(currentMembers) });
+        const secMod = modules.find((m: any) => m.id === 'security');
+        let secPatch: any = null;
+        if (secMod) {
           if (!isRole) {
-            const secMod = modules.find((m: any) => m.id === 'security');
-            if (secMod) {
-              const secWl = (secMod.config?.whitelist || []).filter((w: any) => (typeof w === 'string' ? w : w.targetId) !== targetId);
-              extra.updateModuleConfig?.('security', { ...secMod.config, whitelist: secWl });
+            const before = (secMod.config?.whitelist || []);
+            const secWl = before.filter((w: any) => (typeof w === 'string' ? w : (w.targetId || w.userId || w.id)) !== targetId);
+            if (secWl.length !== before.length) { found = true; secPatch = { ...secMod.config, whitelist: secWl }; }
+          } else {
+            const patch: any = { ...secMod.config };
+            for (const key of ['exceptionRoleIds', 'whitelistRoles']) {
+              const arr = secMod.config?.[key];
+              if (Array.isArray(arr) && arr.includes(targetId)) { patch[key] = arr.filter((r: string) => r !== targetId); found = true; secPatch = patch; }
             }
           }
-          return message.reply({ content: `${VERIFIED_ICON} Successfully removed ${target} from the global Anti-Nuke whitelist.` });
+        }
+
+        if (found) {
+          extra.updateModuleConfig?.('member_whitelist', { members: sanitizeWhitelistMembers(currentMembers) });
+          if (secPatch) extra.updateModuleConfig?.('security', secPatch);
+          return message.reply({ content: `**Whitelist Entry Removed**\nSuccessfully removed ${target} from the global Anti-Nuke whitelist.` });
         } else {
-          return message.reply({ content: `${WRONG_ICON} **${target.name || target.user?.username || target.id}** was not found in the global whitelist.` });
+          return message.reply({ content: `**Not Whitelisted**\n${target} was not found in the global whitelist.` });
         }
       }
 

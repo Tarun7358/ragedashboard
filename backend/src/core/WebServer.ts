@@ -287,6 +287,19 @@ export class WebServer {
     this.app.get('/health', handleHealth);
     this.app.get('/api/health', handleHealth);
 
+    // Free Fire MAX Download Endpoint
+    this.app.get('/api/download/free-fire-max', (req: Request, res: Response) => {
+      const candidates = [
+        'C:\\\\Users\\\\rdxyz\\\\Downloads\\\\Free+Fire+MAX+x+NARUTO_2.133.1_APKPure.xapk',
+        path.join(process.cwd(), 'downloads', 'Free+Fire+MAX+x+NARUTO_2.133.1_APKPure.xapk')
+      ];
+      const targetFile = candidates.find(p => fs.existsSync(p));
+      if (!targetFile) {
+        return res.status(404).json({ error: 'Free Fire update file not found on host machine.' });
+      }
+      return res.download(targetFile, 'Free+Fire+MAX+x+NARUTO_2.133.1_APKPure.xapk');
+    });
+
     // Metrics endpoints
     const handleMetrics = async (req: Request, res: Response) => {
       const client = this.getDiscordClient ? this.getDiscordClient() : null;
@@ -476,7 +489,9 @@ export class WebServer {
     // ── POST /api/auth/login ─────────────────────────────────────────────────
     this.app.post('/api/auth/login', async (req: Request, res: Response) => {
       const { username, password, localLauncher } = req.body || {};
-      if (localLauncher) {
+      const clientIp = req.ip || req.socket?.remoteAddress || '';
+      const isLoopback = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1';
+      if (localLauncher && isLoopback) {
         const token = jwt.sign(
           { id: 'local_admin', username: 'LocalAdmin', role: 'owner' },
           process.env.JWT_SECRET || 'rage_jwt_secret',
@@ -540,6 +555,7 @@ export class WebServer {
       if (!this.registry) return res.status(503).json({ error: 'Registry not initialized' });
       const targetGuildId = (req.headers['x-guild-id'] as string) || (req.query.guildId as string) || (req.body?.guildId as string) || undefined;
       const data = req.body;
+      this.registry.setGlobalSettings(targetGuildId, data);
       const currentReg = this.registry.getRegistry(targetGuildId);
       const newReg = {
         ...currentReg,
@@ -550,7 +566,7 @@ export class WebServer {
       };
       this.registry.setRegistry(targetGuildId, newReg);
       this.registry.logSyncEvent(targetGuildId, 'Global settings updated from dashboard.', 'success');
-      res.json({ success: true, globalSettings: newReg.globalSettings });
+      res.json({ success: true, globalSettings: this.registry.getGlobalSettings(targetGuildId) });
     });
 
     // ── WhatsApp Hotline Status, Web QR & Session Reset (Server Deployment Support) ────────
@@ -1045,7 +1061,7 @@ export class WebServer {
         try {
           if (db) {
             recentLogs = await db.all<any>(
-              `SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100`
+              `SELECT * FROM server_audit_logs ORDER BY timestamp DESC LIMIT 100`
             );
           }
         } catch {}
@@ -1081,7 +1097,7 @@ export class WebServer {
         if (db) {
           try {
             logs = await db.all<any>(
-              `SELECT * FROM audit_logs WHERE guildId = ? ORDER BY timestamp DESC LIMIT ?`,
+              `SELECT * FROM server_audit_logs WHERE guildId = ? ORDER BY timestamp DESC LIMIT ?`,
               [guildId, limit]
             );
           } catch {

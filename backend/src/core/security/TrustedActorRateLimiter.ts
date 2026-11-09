@@ -87,7 +87,7 @@ export class TrustedActorRateLimiter {
 
     return fresh.map(item => {
       const timeStr = new Date(item.timestamp).toISOString().substring(11, 19);
-      return `• \`${item.action}\` — **${item.targetName}** [${timeStr}]`;
+      return `**\`${item.action}\`** — **${item.targetName}** [${timeStr}]`;
     });
   }
 
@@ -101,6 +101,25 @@ export class TrustedActorRateLimiter {
   // CROSS-EVENT SERVER-WIDE AGGREGATE VELOCITY & CIRCUIT BREAKER
   // ───────────────────────────────────────────────────────────────────────────
 
+  // Active Restoration Registry: guildId -> boolean
+  private static activeRestorations = new Set<string>();
+
+  public static setRestoring(guildId: string, restoring: boolean): void {
+    if (!guildId) return;
+    if (restoring) {
+      this.activeRestorations.add(guildId);
+      this.clearAggregateThreat(guildId);
+    } else {
+      this.activeRestorations.delete(guildId);
+      this.clearAggregateThreat(guildId);
+    }
+  }
+
+  public static isRestoring(guildId: string): boolean {
+    if (!guildId) return false;
+    return this.activeRestorations.has(guildId);
+  }
+
   /**
    * Records a high-impact destructive event on a guild level.
    * Runs in RAM in <0.005ms without waiting for audit log or database.
@@ -112,6 +131,10 @@ export class TrustedActorRateLimiter {
     weight = 1.0,
     windowSeconds = 5
   ): { score: number; events: AggregateThreatEvent[] } {
+    if (this.isRestoring(guildId)) {
+      return { score: 0, events: [] };
+    }
+
     if (!this.aggregateThreats.has(guildId)) {
       this.aggregateThreats.set(guildId, []);
     }
@@ -133,6 +156,10 @@ export class TrustedActorRateLimiter {
    * Default threshold: 3.0 weight points within 5 seconds.
    */
   public static shouldTripCircuitBreaker(guildId: string, threshold = 3.0, windowSeconds = 5): boolean {
+    if (this.isRestoring(guildId)) {
+      return false;
+    }
+
     if (this.isCircuitBreakerTripped(guildId, 60)) {
       return false; // Already tripped and contained
     }

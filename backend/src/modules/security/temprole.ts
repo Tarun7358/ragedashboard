@@ -1,4 +1,4 @@
-import { Message, EmbedBuilder, Client } from 'discord.js';
+import { Message, EmbedBuilder, Client, PermissionFlagsBits } from 'discord.js';
 import { Database } from '../../core/Database.js';
 import { createLimeEmbed } from '../../core/UIFactory.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
@@ -58,14 +58,26 @@ export async function checkExpiredTempRoles(client: Client): Promise<void> {
     );
 
     for (const row of expiredRows) {
+      let shouldDeleteRow = false;
       try {
-        const guild = await client.guilds.fetch(row.guildId).catch(() => null);
-        if (guild) {
-          const member = await guild.members.fetch(row.userId).catch(() => null);
-          const role = await guild.roles.fetch(row.roleId).catch(() => null);
+        const guild = await client.guilds.fetch(row.guildId);
+        if (!guild) {
+          shouldDeleteRow = true;
+        } else {
+          const member = await guild.members.fetch(row.userId).catch((e: any) => {
+            if (e?.code === 10007) return null;
+            throw e;
+          });
+          const role = await guild.roles.fetch(row.roleId).catch((e: any) => {
+            if (e?.code === 10011) return null;
+            throw e;
+          });
 
-          if (member && role && member.roles.cache.has(role.id)) {
+          if (!member || !role || !member.roles.cache.has(row.roleId)) {
+            shouldDeleteRow = true;
+          } else {
             await member.roles.remove(role.id, 'Temporary role duration expired');
+            shouldDeleteRow = true;
 
             // Send DM to member
             try {
@@ -79,9 +91,14 @@ export async function checkExpiredTempRoles(client: Client): Promise<void> {
           }
         }
       } catch (err: any) {
-        console.error(`[TempRole Expiry Error] Row ID ${row.id}:`, err.message);
-      } finally {
-        await db.run('DELETE FROM temp_roles WHERE id = ?', [row.id]);
+        if (err?.code === 10004 || err?.code === 10007 || err?.code === 10011) {
+          shouldDeleteRow = true;
+        } else {
+          console.error(`[TempRole Expiry Error] Row ID ${row.id}:`, err.message);
+        }
+      }
+      if (shouldDeleteRow) {
+        await db.run('DELETE FROM temp_roles WHERE id = ?', [row.id]).catch(() => {});
       }
     }
   } catch (err: any) {
@@ -135,6 +152,40 @@ export function registerTempRoleCommands(): void {
               description: `${WRONG_EMOJI} **Syntax**: \`r!temprole add @user @role <duration> [reason]\`\nExample: \`r!temprole add @User @VIP 1d Temporary Perk\``
             })]
           });
+        }
+
+        const RESERVED_ROLES = ['. Secured', '. UnBypassable', '. RageUnBypassable'];
+        if (role.managed || RESERVED_ROLES.includes(role.name)) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Restricted Role',
+              description: `${WRONG_EMOJI} Cannot assign managed integration roles or reserved system backup roles.`
+            })]
+          });
+        }
+
+        const botMember = message.guild!.members.me;
+        if (botMember && role.position >= botMember.roles.highest.position) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Role Hierarchy Violation',
+              description: `${WRONG_EMOJI} I cannot assign **${role.name}** because its position is higher than or equal to my highest role.`
+            })]
+          });
+        }
+
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const isExecutorOwner = await isOwnerOrExtraOwner(message.author.id, message.guild);
+        if (!isExecutorOwner) {
+          const executorHighest = message.member?.roles?.highest?.position ?? 0;
+          if (role.position >= executorHighest || role.permissions.has(PermissionFlagsBits.Administrator)) {
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Privilege Escalation Blocked',
+                description: `${WRONG_EMOJI} You cannot assign a role equal to/above your highest role or granting Administrator permissions.`
+              })]
+            });
+          }
         }
 
         const durationMs = parseDurationToMs(durationStr);
@@ -214,6 +265,30 @@ export function registerTempRoleCommands(): void {
               description: `${WRONG_EMOJI} **Syntax**: \`r!temprole remove @user @role\``
             })]
           });
+        }
+
+        const RESERVED_ROLES = ['. Secured', '. UnBypassable', '. RageUnBypassable'];
+        if (role.managed || RESERVED_ROLES.includes(role.name)) {
+          return message.reply({
+            embeds: [createLimeEmbed({
+              title: 'Restricted Role',
+              description: `${WRONG_EMOJI} Cannot remove managed integration roles or reserved system backup roles.`
+            })]
+          });
+        }
+
+        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
+        const isExecutorOwner = await isOwnerOrExtraOwner(message.author.id, message.guild);
+        if (!isExecutorOwner) {
+          const executorHighest = message.member?.roles?.highest?.position ?? 0;
+          if (role.position >= executorHighest || role.permissions.has(PermissionFlagsBits.Administrator)) {
+            return message.reply({
+              embeds: [createLimeEmbed({
+                title: 'Privilege Escalation Blocked',
+                description: `${WRONG_EMOJI} You cannot remove a role equal to/above your highest role or with Administrator permissions.`
+              })]
+            });
+          }
         }
 
         try {

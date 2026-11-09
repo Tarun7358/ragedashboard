@@ -1,5 +1,5 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { EmbedBuilder, MessageFlags, ContainerBuilder, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder, SeparatorBuilder } from 'discord.js';
 import { Database } from '../../core/Database.js';
 import {
   Embeds, Colors, Components,
@@ -12,6 +12,8 @@ import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 function userTag(user: any): string {
   return user?.globalName ?? user?.username ?? user?.tag ?? user?.id ?? 'Unknown';
 }
+
+const xpCooldowns = new Map<string, number>();
 
 async function getUserXP(guildId: string, userId: string): Promise<number> {
   try {
@@ -38,7 +40,7 @@ async function saveUserXP(guildId: string, userId: string, xp: number): Promise<
   }
 }
 
-async function getTopXP(guildId: string, limit: number = 50): Promise<Array<{userId: string, xp: number}>> {
+async function getTopXP(guildId: string, limit: number = 50): Promise<Array<{ userId: string, xp: number }>> {
   try {
     const db = Database.getDb();
     if (!db) return [];
@@ -152,32 +154,43 @@ export const LevelingManifest: ModuleManifest = {
         const guildId = message.guildId;
         if (!guildId) return;
 
+        const cooldownKey = `${message.guild?.id || guildId}_${message.author.id}`;
+        const now = Date.now();
+        const lastXpTime = xpCooldowns.get(cooldownKey) || 0;
+        if (now - lastXpTime < 45_000) return;
+        xpCooldowns.set(cooldownKey, now);
+
         const currentXp = await getUserXP(guildId, message.author.id);
         const multiplier = parseFloat(lvlMod.config?.multiplier || '1.0');
         const xpGain = Math.floor((Math.floor(Math.random() * 10) + 15) * multiplier);
-        
+
         const oldLevel = Math.floor(0.1 * Math.sqrt(currentXp));
         const newXp = currentXp + xpGain;
         const newLevel = Math.floor(0.1 * Math.sqrt(newXp));
-        
+
         await saveUserXP(guildId, message.author.id, newXp);
 
         if (newLevel > oldLevel) {
           const channel = message.channel;
 
-          const levelEmbed = new EmbedBuilder()
-            .setColor('#2ecc71')
-            .setTitle('⭐ Level Up!')
-            .setDescription(`> <@${message.author.id}> has\nadvanced to Level **${newLevel}**!`)
-            .setThumbnail(message.author.displayAvatarURL({ size: 256 }))
-            .addFields(
-              { name: 'Member:', value: `<@${message.author.id}>\n(\`${message.author.username}\`)`, inline: false },
-              { name: 'New Level:', value: `\`${newLevel}\``, inline: false },
-              { name: 'Total XP:', value: `\`${newXp}\``, inline: false }
-            )
-            .setTimestamp();
+          const levelContainer = new ContainerBuilder();
+          const sec = new SectionBuilder()
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent('# **Level Up!**'))
+            .setThumbnailAccessory(new ThumbnailBuilder().setURL(message.author.displayAvatarURL({ size: 256 })));
+          levelContainer.addSectionComponents(sec);
+          levelContainer.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+          levelContainer.addTextDisplayComponents(new TextDisplayBuilder().setContent(
+            `> <@${message.author.id}> has advanced to Level **${newLevel}**!\n\n` +
+            `> **Member:** <@${message.author.id}> (\`${message.author.username}\`)\n` +
+            `> **New Level:** \`${newLevel}\`\n` +
+            `> **Total XP:** \`${newXp}\``
+          ));
+          levelContainer.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Optimiser - Leveling Engine'));
 
-          await channel.send({ embeds: [levelEmbed] }).catch(() => {});
+          await channel.send({
+            flags: MessageFlags.IsComponentsV2,
+            components: [levelContainer]
+          }).catch(() => { });
           context.logSyncEvent(`Leveling: ${userTag(message.author)} leveled up to Lvl ${newLevel}.`, 'info');
 
           // Role Reward assignment (unchanged backend logic)
@@ -209,20 +222,25 @@ export const LevelingManifest: ModuleManifest = {
         const nextLevelXp = Math.pow((level + 1) / 0.1, 2);
         const bar = progressBar(xp, nextLevelXp);
 
-        const rankEmbed = new EmbedBuilder()
-          .setColor('#2ecc71')
-          .setTitle(`⭐ Level & XP Status — ${target.username}`)
-          .setDescription(`> <@${target.id}>'s activity and ranking overview.`)
-          .setThumbnail(target.displayAvatarURL({ size: 256 }))
-          .addFields(
-            { name: 'Member:', value: `<@${target.id}>\n(\`${target.username}\`)`, inline: false },
-            { name: 'Current Level:', value: `\`${level}\``, inline: false },
-            { name: 'Total XP:', value: `\`${fmt(xp)} / ${fmt(Math.floor(nextLevelXp))}\``, inline: false },
-            { name: 'Progress:', value: bar, inline: false }
-          )
-          .setTimestamp();
+        const rankContainer = new ContainerBuilder();
+        const sec = new SectionBuilder()
+          .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# **Level & XP Status - ${target.username}**`))
+          .setThumbnailAccessory(new ThumbnailBuilder().setURL(target.displayAvatarURL({ size: 256 })));
+        rankContainer.addSectionComponents(sec);
+        rankContainer.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+        rankContainer.addTextDisplayComponents(new TextDisplayBuilder().setContent(
+          `> <@${target.id}>'s activity and ranking overview.\n\n` +
+          `> **Member:** <@${target.id}> (\`${target.username}\`)\n` +
+          `> **Current Level:** \`${level}\`\n` +
+          `> **Total XP:** \`${fmt(xp)} / ${fmt(Math.floor(nextLevelXp))}\`\n` +
+          `> **Progress:** ${bar}`
+        ));
+        rankContainer.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Optimiser - Leveling Engine'));
 
-        await interaction.reply({ embeds: [rankEmbed] });
+        await interaction.reply({
+          flags: MessageFlags.IsComponentsV2,
+          components: [rankContainer]
+        });
       }
     },
     {
@@ -232,7 +250,7 @@ export const LevelingManifest: ModuleManifest = {
         if (!guildId) return;
 
         const sorted = await getTopXP(guildId, 10);
-        
+
         if (sorted.length === 0) {
           const lbEmptyEmbed = new EmbedBuilder()
             .setColor('#2ecc71')
@@ -249,14 +267,23 @@ export const LevelingManifest: ModuleManifest = {
           return `${medal} <@${item.userId}> — Level **${level}** (\`${fmt(item.xp)} XP\`)`;
         });
 
-        const lbEmbed = new EmbedBuilder()
-          .setColor('#2ecc71')
-          .setTitle(`⭐ ${interaction.guild?.name ?? 'Server'} Leaderboard`)
-          .setDescription(`> Top ${sorted.length} active members by XP\n\n` + lines.join('\n'))
-          .setThumbnail(interaction.guild?.iconURL({ size: 256 }) ?? '')
-          .setTimestamp();
+        const lbContainer = new ContainerBuilder();
+        const sec = new SectionBuilder()
+          .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# **${interaction.guild?.name ?? 'Server'} Leaderboard**`));
+        if (interaction.guild?.iconURL({ size: 256 })) {
+          sec.setThumbnailAccessory(new ThumbnailBuilder().setURL(interaction.guild.iconURL({ size: 256 })));
+        }
+        lbContainer.addSectionComponents(sec);
+        lbContainer.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+        lbContainer.addTextDisplayComponents(new TextDisplayBuilder().setContent(
+          `> Top ${sorted.length} active members by XP\n\n` + lines.join('\n').replace(/•/g, '-').replace(/—/g, '-')
+        ));
+        lbContainer.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Rage Optimiser - Leveling Engine'));
 
-        await interaction.reply({ embeds: [lbEmbed] });
+        await interaction.reply({
+          flags: MessageFlags.IsComponentsV2,
+          components: [lbContainer]
+        });
       }
     },
     {
@@ -275,7 +302,7 @@ export const LevelingManifest: ModuleManifest = {
           fields: [
             { label: '<:stats:1532429110775779459> Balance', value: `**${fmt(eco.balance)}** coins` },
           ],
-          footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
+          footerNote: `Rage Optimiser Enterprise  -  Leveling & Economy`,
         });
 
         await interaction.reply({ embeds, components, flags });
@@ -292,7 +319,7 @@ export const LevelingManifest: ModuleManifest = {
         const last = eco.lastDaily || 0;
         const diff = now - last;
         const cooldown = 24 * 60 * 60 * 1000;
-        
+
         if (diff < cooldown) {
           const remaining = Math.ceil((cooldown - diff) / 3600000);
           const { embeds, components } = buildStatusCard({
@@ -303,22 +330,22 @@ export const LevelingManifest: ModuleManifest = {
           });
           return interaction.reply({ embeds, components });
         }
-        
+
         eco.balance += 500;
         eco.lastDaily = now;
         await saveUserEco(guildId, interaction.user.id, eco);
-        
+
         const { embeds, components } = buildRichCard({
           emoji: '<:booster:1532621228492460172>',
           title: 'Daily Reward Claimed!',
           accentColor: Colors.BRAND,
           thumbnailUrl: interaction.user.displayAvatarURL({ size: 256 }),
           fields: [
-            { label: '<:booster:1532621228492460172> Reward',     value: '**500 coins**' },
+            { label: '<:booster:1532621228492460172> Reward', value: '**500 coins**' },
             { label: '<:stats:1532429110775779459> New Balance', value: `**${fmt(eco.balance)}** coins` },
-            { label: '<a:loading:1546134304625528882> Next Daily',  value: ts(Math.floor((now + cooldown) / 1000)) },
+            { label: '<a:loading:1546134304625528882> Next Daily', value: ts(Math.floor((now + cooldown) / 1000)) },
           ],
-          footerNote: `Rage Optimiser • Unbypassable Security`,
+          footerNote: `Rage Optimiser - Unbypassable Security`,
         });
 
         await interaction.reply({ embeds, components });
@@ -334,7 +361,7 @@ export const LevelingManifest: ModuleManifest = {
         const now = Date.now();
         const last = eco.lastWork || 0;
         const cooldown = 60 * 60 * 1000; // 1 hour
-        
+
         if (now - last < cooldown) {
           const remaining = Math.ceil((cooldown - (now - last)) / 60000);
           const { embeds, components } = buildStatusCard({
@@ -345,22 +372,22 @@ export const LevelingManifest: ModuleManifest = {
           });
           return interaction.reply({ embeds, components });
         }
-        
+
         const earnings = Math.floor(Math.random() * 200) + 100; // 100 to 300
         eco.balance += earnings;
         eco.lastWork = now;
         await saveUserEco(guildId, interaction.user.id, eco);
-        
+
         const { embeds, components, flags } = buildRichCard({
           emoji: '<:config:1532425712844144701>',
           title: 'Work Shift Completed!',
           accentColor: Colors.SUCCESS,
           fields: [
-            { label: '<:stats:1532429110775779459> Earned',      value: `**${fmt(earnings)} coins**` },
+            { label: '<:stats:1532429110775779459> Earned', value: `**${fmt(earnings)} coins**` },
             { label: '<:stats:1532429110775779459> New Balance', value: `**${fmt(eco.balance)} coins**` },
-            { label: '<a:loading:1546134304625528882> Next Shift',  value: ts(Math.floor((now + cooldown) / 1000)) },
+            { label: '<a:loading:1546134304625528882> Next Shift', value: ts(Math.floor((now + cooldown) / 1000)) },
           ],
-          footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
+          footerNote: `Rage Optimiser Enterprise  -  Leveling & Economy`,
         });
 
         await interaction.reply({ embeds, components, flags });
@@ -373,33 +400,34 @@ export const LevelingManifest: ModuleManifest = {
         const amount = interaction.options.getInteger('amount');
         const guildId = interaction.guildId;
         if (!guildId) return;
-        
+
+        if (!target || target.bot) return interaction.reply({ content: '❌ Please specify a valid non-bot user to transfer coins to.', flags: 64 });
         if (target.id === interaction.user.id) return interaction.reply({ content: '❌ You cannot pay yourself.', flags: 64 });
-        if (amount <= 0) return interaction.reply({ content: '❌ Amount must be greater than 0.', flags: 64 });
-        
+        if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) return interaction.reply({ content: '❌ Amount must be a valid number greater than 0.', flags: 64 });
+
         const senderEco = await getUserEco(guildId, interaction.user.id);
-        
+
         if (senderEco.balance < amount) {
           return interaction.reply({ content: `❌ Insufficient funds. Your balance: **${fmt(senderEco.balance)}** coins.`, flags: 64 });
         }
-        
+
         const targetEco = await getUserEco(guildId, target.id);
         senderEco.balance -= amount;
         targetEco.balance += amount;
 
         await saveUserEco(guildId, interaction.user.id, senderEco);
         await saveUserEco(guildId, target.id, targetEco);
-        
+
         const { embeds, components, flags } = buildRichCard({
           emoji: '<:lightpurplearrow:1532621364115013693>',
           title: 'Transfer Successful',
           accentColor: Colors.SUCCESS,
           fields: [
-            { label: '<:member:1532621317487071426> Sent To',     value: `${target} (\`${target.username}\`)` },
-            { label: '<:stats:1532429110775779459> Amount',      value: `**${fmt(amount)} coins**` },
+            { label: '<:member:1532621317487071426> Sent To', value: `${target} (\`${target.username}\`)` },
+            { label: '<:stats:1532429110775779459> Amount', value: `**${fmt(amount)} coins**` },
             { label: '<:stats:1532429110775779459> Your Balance', value: `**${fmt(senderEco.balance)} coins**` },
           ],
-          footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
+          footerNote: `Rage Optimiser Enterprise  -  Leveling & Economy`,
         });
 
         await interaction.reply({ embeds, components, flags });
@@ -430,7 +458,7 @@ export const LevelingManifest: ModuleManifest = {
 
         const eco = await getUserEco(guildId, interaction.user.id);
         const inv = eco.inventory || [];
-        
+
         const entries = inv.length > 0
           ? inv.map((item, i) => `**${i + 1}.** ${item}`)
           : ['*Your inventory is empty. Visit the shop to get started!*'];
@@ -454,16 +482,17 @@ export const LevelingManifest: ModuleManifest = {
         const guildId = interaction.guildId;
         if (!guildId) return;
 
+        if (!target || target.bot) return interaction.reply({ content: '❌ Please specify a valid non-bot user to rob.', flags: 64 });
         if (target.id === interaction.user.id) return interaction.reply({ content: '❌ You cannot rob yourself.', flags: 64 });
-        
+
         const myEco = await getUserEco(guildId, interaction.user.id);
         const targetEco = await getUserEco(guildId, target.id);
-        
+
         if (myEco.balance < 500) return interaction.reply({ content: '❌ You need at least **500 coins** to attempt a robbery.', flags: 64 });
         if (targetEco.balance < 100) return interaction.reply({ content: `❌ **${target.username}** is too broke to rob.`, flags: 64 });
-        
+
         const success = Math.random() > 0.6; // 40% chance
-        
+
         if (success) {
           const stolen = Math.floor(targetEco.balance * 0.2);
           myEco.balance += stolen;
@@ -476,11 +505,11 @@ export const LevelingManifest: ModuleManifest = {
             title: 'Heist Successful!',
             accentColor: Colors.SUCCESS,
             fields: [
-              { label: '<:member:1532621317487071426> Target',      value: `${target} (\`${target.username}\`)` },
-              { label: '<:stats:1532429110775779459> Stolen',      value: `**${fmt(stolen)} coins**` },
+              { label: '<:member:1532621317487071426> Target', value: `${target} (\`${target.username}\`)` },
+              { label: '<:stats:1532429110775779459> Stolen', value: `**${fmt(stolen)} coins**` },
               { label: '<:stats:1532429110775779459> Your Balance', value: `**${fmt(myEco.balance)} coins**` },
             ],
-            footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
+            footerNote: `Rage Optimiser Enterprise  -  Leveling & Economy`,
           });
           await interaction.reply({ embeds, components, flags });
         } else {
@@ -494,10 +523,10 @@ export const LevelingManifest: ModuleManifest = {
             description: `You were caught attempting to rob **${target.username}** and fined by the authorities.`,
             accentColor: Colors.DANGER,
             fields: [
-              { label: '<:gavel:1532621057318584380> Fine Paid',   value: `**${fmt(fine)} coins**` },
+              { label: '<:gavel:1532621057318584380> Fine Paid', value: `**${fmt(fine)} coins**` },
               { label: '<:stats:1532429110775779459> New Balance', value: `**${fmt(myEco.balance)} coins**` },
             ],
-            footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
+            footerNote: `Rage Optimiser Enterprise  -  Leveling & Economy`,
           });
           await interaction.reply({ embeds, components, flags });
         }
@@ -510,19 +539,19 @@ export const LevelingManifest: ModuleManifest = {
         const guildId = interaction.guildId;
         if (!guildId) return;
 
-        if (bet <= 0) return interaction.reply({ content: '❌ Bet must be greater than 0.', flags: 64 });
-        
+        if (typeof bet !== 'number' || isNaN(bet) || bet <= 0) return interaction.reply({ content: '❌ Bet must be a valid number greater than 0.', flags: 64 });
+
         const eco = await getUserEco(guildId, interaction.user.id);
-        
+
         if (eco.balance < bet) return interaction.reply({ content: `❌ Insufficient funds. Balance: **${fmt(eco.balance)} coins**.`, flags: 64 });
-        
+
         eco.balance -= bet;
-        
+
         const symbols = ['🍒', '🍋', '🍇', '💎', '🔔', '7️⃣'];
         const s1 = symbols[Math.floor(Math.random() * symbols.length)];
         const s2 = symbols[Math.floor(Math.random() * symbols.length)];
         const s3 = symbols[Math.floor(Math.random() * symbols.length)];
-        
+
         let win = 0;
         let resultText = '';
         let accentColor: number = Colors.DANGER;
@@ -538,23 +567,23 @@ export const LevelingManifest: ModuleManifest = {
         } else {
           resultText = `😢 **No Match.** Better luck next time!`;
         }
-        
+
         eco.balance += win;
         await saveUserEco(guildId, interaction.user.id, eco);
-        
+
         const { embeds, components, flags } = buildRichCard({
           emoji: '<:stats:1532429110775779459>',
           title: 'Slot Machine',
           description: `## ${s1}  ${s2}  ${s3}\n\n${resultText}`,
           accentColor,
           fields: [
-            { label: '<:stats:1532429110775779459> Bet',        value: `**${fmt(bet)} coins**` },
-            { label: '<:stats:1532429110775779459> Net',        value: win > 0 ? `**+${fmt(win - bet)} coins**` : `**-${fmt(bet)} coins**` },
-            { label: '<:stats:1532429110775779459> Balance',    value: `**${fmt(eco.balance)} coins**` },
+            { label: '<:stats:1532429110775779459> Bet', value: `**${fmt(bet)} coins**` },
+            { label: '<:stats:1532429110775779459> Net', value: win > 0 ? `**+${fmt(win - bet)} coins**` : `**-${fmt(bet)} coins**` },
+            { label: '<:stats:1532429110775779459> Balance', value: `**${fmt(eco.balance)} coins**` },
           ],
-          footerNote: `Rage Optimiser Enterprise  •  Leveling & Economy`,
+          footerNote: `Rage Optimiser Enterprise  -  Leveling & Economy`,
         });
-          
+
         await interaction.reply({ embeds, components, flags });
       }
     }
@@ -584,7 +613,7 @@ export const LevelingManifest: ModuleManifest = {
                 username = user.username;
                 avatar = user.displayAvatarURL ? user.displayAvatarURL() : null;
               }
-            } catch {}
+            } catch { }
           }
 
           const level = Math.floor(0.1 * Math.sqrt(item.xp));

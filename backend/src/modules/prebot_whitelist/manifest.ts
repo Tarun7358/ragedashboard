@@ -149,6 +149,237 @@ export async function deletePrebotEntry(guildId: string, botId: string): Promise
   }
 }
 
+export interface PrebotBuilderState {
+  guildId: string;
+  botId: string;
+  botName: string;
+  selectedPerms: string[];
+  createRole: boolean;
+  roleName: string;
+  roleColor: string;
+  notes: string;
+  addedBy: string;
+  avatarUrl?: string | null;
+}
+
+export const activePrebotBuilders = new Map<string, PrebotBuilderState>();
+
+export function buildPrebotBuilderEmbed(guild: any, state: PrebotBuilderState) {
+  const permBadges = state.selectedPerms.length > 0
+    ? state.selectedPerms.map(p => {
+      const item = PREBOT_PERMISSIONS.find(item => item.key === p);
+      return `\`${item?.label || p}\``;
+    }).join(', ')
+    : '**No permissions selected (Least Privilege)**';
+
+  const desc = [
+    `__**PREBOT WHITELIST CONFIGURATION**__\n`,
+    `**RAGE OPTIMISER** • **${guild.name}**\n`,
+    `> Pre-register trusted bot **<@${state.botId}>** (\`${state.botName}\`) before it enters the server.`,
+    `> Defines exact permission profile applied automatically upon bot arrival.\n`,
+    `**Bot Target**: <@${state.botId}> (\`${state.botId}\`)`,
+    `**Dedicated Role**: ${state.createRole ? `${VERIFIED_ICON} Enabled (\`${state.roleName}\`)` : `${WRONG_ICON} Disabled`}`,
+    `**Notes**: ${state.notes ? state.notes : '**None provided**'}\n`,
+    `**Approved Permission Profile (${state.selectedPerms.length}/${PREBOT_PERMISSIONS.length})**:`,
+    `> ${permBadges}`
+  ].join('\n');
+
+  return new EmbedBuilder()
+    .setColor(Colors.BRAND)
+    .setTitle(`${BOT_ICON} PreBot Security Builder — ${state.botName}`)
+    .setDescription(desc)
+    .setThumbnail(state.avatarUrl || null)
+    .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
+    .setTimestamp();
+}
+
+export function buildPrebotBuilderComponents(state: PrebotBuilderState) {
+  const mid = Math.ceil(PREBOT_PERMISSIONS.length / 2);
+  const part1 = PREBOT_PERMISSIONS.slice(0, mid);
+  const part2 = PREBOT_PERMISSIONS.slice(mid);
+
+  const select1 = new StringSelectMenuBuilder()
+    .setCustomId(`prebot_perm_sel1_${state.botId}_${state.addedBy}`)
+    .setPlaceholder('⚙️ Select General & Messaging Permissions…')
+    .setMinValues(0)
+    .setMaxValues(part1.length)
+    .addOptions(
+      part1.map(p =>
+        new StringSelectMenuOptionBuilder()
+          .setLabel(p.label)
+          .setValue(p.key)
+          .setDescription(p.desc)
+          .setDefault(state.selectedPerms.includes(p.key))
+      )
+    );
+
+  const select2 = new StringSelectMenuBuilder()
+    .setCustomId(`prebot_perm_sel2_${state.botId}_${state.addedBy}`)
+    .setPlaceholder('⚙️ Select Moderation & Admin Permissions…')
+    .setMinValues(0)
+    .setMaxValues(part2.length)
+    .addOptions(
+      part2.map(p =>
+        new StringSelectMenuOptionBuilder()
+          .setLabel(p.label)
+          .setValue(p.key)
+          .setDescription(p.desc)
+          .setDefault(state.selectedPerms.includes(p.key))
+      )
+    );
+
+  const rowSelect1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select1);
+  const rowSelect2 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select2);
+
+  const btnRoleToggle = new ButtonBuilder()
+    .setCustomId(`prebot_btn_role_${state.botId}_${state.addedBy}`)
+    .setLabel(state.createRole ? 'Dedicated Role: ON' : 'Dedicated Role: OFF')
+    .setStyle(state.createRole ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+  const btnSave = new ButtonBuilder()
+    .setCustomId(`prebot_btn_save_${state.botId}_${state.addedBy}`)
+    .setLabel('Save PreBot Whitelist')
+    .setStyle(ButtonStyle.Primary);
+
+  const btnCancel = new ButtonBuilder()
+    .setCustomId(`prebot_btn_cancel_${state.botId}_${state.addedBy}`)
+    .setLabel('Cancel')
+    .setStyle(ButtonStyle.Danger);
+
+  const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(btnRoleToggle, btnSave, btnCancel);
+
+  return [rowSelect1, rowSelect2, rowButtons];
+}
+
+async function safelyRespondPrebot(interaction: any, payload: any) {
+  if (interaction.replied || interaction.deferred) {
+    return interaction.editReply(payload).catch((err: any) => {
+      console.warn('[prebot_whitelist] editReply error:', err?.message || err);
+    });
+  }
+  if (typeof interaction.update === 'function') {
+    return interaction.update(payload).catch(async () => {
+      return interaction.editReply(payload).catch(() => {});
+    });
+  }
+  return interaction.editReply(payload).catch(() => {});
+}
+
+export async function handlePrebotComponentInteraction(interaction: any, context?: any) {
+  const guild = interaction.guild;
+  if (!guild) return;
+
+  const isAuthorized = await isOwnerOrExtraOwner(interaction.user.id, guild);
+  if (!isAuthorized) {
+    const errEmbed = new EmbedBuilder()
+      .setTitle('🔒 Access Denied')
+      .setColor(Colors.DANGER)
+      .setDescription('PreBot Whitelist management is strictly restricted to the **Server Owner** and **Extra Owners**.')
+      .setTimestamp();
+    if (interaction.replied || interaction.deferred) {
+      return interaction.followUp({ embeds: [errEmbed], flags: 64 }).catch(() => {});
+    }
+    return interaction.reply({ embeds: [errEmbed], flags: 64 }).catch(() => {});
+  }
+
+  const customId = interaction.customId || '';
+  const parts = customId.split('_');
+  const botId = parts[3];
+  if (!botId) return;
+
+  // 1. CANCEL BUTTON
+  if (customId.startsWith('prebot_btn_cancel_')) {
+    activePrebotBuilders.delete(`${guild.id}_${botId}`);
+    const cancelEmbed = new EmbedBuilder()
+      .setTitle('❌ Setup Cancelled')
+      .setColor(Colors.DANGER)
+      .setDescription(`PreBot Whitelist setup for **<@${botId}>** was cancelled.`)
+      .setTimestamp();
+    return safelyRespondPrebot(interaction, { embeds: [cancelEmbed], components: [] });
+  }
+
+  // Retrieve or reconstruct builder state
+  let state = activePrebotBuilders.get(`${guild.id}_${botId}`);
+  if (!state) {
+    const existing = await getPrebotEntry(guild.id, botId);
+    const botUser = interaction.client.users.cache.get(botId) || await interaction.client.users.fetch(botId).catch(() => null);
+    const botName = botUser?.username || existing?.botName || `Bot-${botId}`;
+    state = {
+      guildId: guild.id,
+      botId,
+      botName,
+      selectedPerms: existing ? [...existing.allowedPerms] : ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+      createRole: existing ? existing.createRole : true,
+      roleName: existing?.roleName || `[Trusted] ${botName}`,
+      roleColor: existing?.roleColor || '#99CC00',
+      notes: existing?.notes || '',
+      addedBy: parts[4] || interaction.user.id,
+      avatarUrl: botUser?.displayAvatarURL?.({ size: 256 }) || null
+    };
+    activePrebotBuilders.set(`${guild.id}_${botId}`, state);
+  }
+
+  // 2. ROLE TOGGLE BUTTON
+  if (customId.startsWith('prebot_btn_role_')) {
+    state.createRole = !state.createRole;
+    activePrebotBuilders.set(`${guild.id}_${botId}`, state);
+    const embed = buildPrebotBuilderEmbed(guild, state);
+    const components = buildPrebotBuilderComponents(state);
+    return safelyRespondPrebot(interaction, { embeds: [embed], components });
+  }
+
+  // 3. SAVE PREBOT BUTTON
+  if (customId.startsWith('prebot_btn_save_')) {
+    activePrebotBuilders.delete(`${guild.id}_${botId}`);
+    const newEntry: PreBotEntry = {
+      guildId: guild.id,
+      botId: state.botId,
+      botName: state.botName,
+      allowedPerms: state.selectedPerms,
+      createRole: state.createRole,
+      roleName: state.createRole ? state.roleName : undefined,
+      roleColor: state.createRole ? state.roleColor : undefined,
+      addedBy: interaction.user.id,
+      addedAt: Date.now(),
+      notes: state.notes
+    };
+
+    await savePrebotEntry(newEntry);
+    context?.logSyncEvent?.(guild.id, `✅ [PreBot Whitelist]: Pre-approved bot ${state.botName} (${state.botId}) with ${state.selectedPerms.length} allowed permissions.`, 'success');
+
+    const successEmbed = new EmbedBuilder()
+      .setColor(Colors.SUCCESS)
+      .setTitle(`${BOT_ICON} PreBot Whitelist — Saved`)
+      .setDescription([
+        `${VERIFIED_ICON} **Bot <@${state.botId}>** (\`${state.botName}\`) has been successfully registered in the **PreBot Whitelist**.`,
+        `When this bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser will instantly verify it, strip unauthorized roles, and enforce this custom profile.`,
+        `${ARROW_ICON} **Allowed Permissions**: ${state.selectedPerms.length > 0 ? state.selectedPerms.map(p => '`' + p + '`').join(', ') : 'None'}`,
+        `${ARROW_ICON} **Dedicated Trusted Role**: ${state.createRole ? '`' + state.roleName + '`' : 'Disabled'}`
+      ].join('\n'))
+      .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
+      .setTimestamp();
+
+    return safelyRespondPrebot(interaction, { embeds: [successEmbed], components: [] });
+  }
+
+  // 4. SELECT PERMISSIONS MENUS
+  if (interaction.isStringSelectMenu && interaction.isStringSelectMenu()) {
+    const values = interaction.values || [];
+    if (customId.startsWith('prebot_perm_sel1_')) {
+      const part1Keys = PREBOT_PERMISSIONS.slice(0, Math.ceil(PREBOT_PERMISSIONS.length / 2)).map(p => p.key);
+      state.selectedPerms = [...state.selectedPerms.filter(p => !part1Keys.includes(p)), ...values];
+    } else if (customId.startsWith('prebot_perm_sel2_')) {
+      const part2Keys = PREBOT_PERMISSIONS.slice(Math.ceil(PREBOT_PERMISSIONS.length / 2)).map(p => p.key);
+      state.selectedPerms = [...state.selectedPerms.filter(p => !part2Keys.includes(p)), ...values];
+    }
+
+    activePrebotBuilders.set(`${guild.id}_${botId}`, state);
+    const embed = buildPrebotBuilderEmbed(guild, state);
+    const components = buildPrebotBuilderComponents(state);
+    return safelyRespondPrebot(interaction, { embeds: [embed], components });
+  }
+}
+
 // Build interactive builder UI for adding/editing PreBot whitelist entry
 async function launchPrebotBuilder(
   interaction: any,
@@ -160,99 +391,23 @@ async function launchPrebotBuilder(
   const botId = botUser.id;
   const botName = botUser.username || botUser.tag || `Bot-${botId}`;
 
-  let selectedPerms: string[] = existingEntry ? [...existingEntry.allowedPerms] : ['ViewChannel', 'SendMessages', 'ReadMessageHistory'];
-  let createRole = existingEntry ? existingEntry.createRole : true;
-  let roleName = existingEntry?.roleName || `[Trusted] ${botName}`;
-  let roleColor = existingEntry?.roleColor || '#99CC00';
-  let notes = existingEntry?.notes || '';
-
-  const buildEmbed = () => {
-    const permBadges = selectedPerms.length > 0
-      ? selectedPerms.map(p => {
-        const item = PREBOT_PERMISSIONS.find(item => item.key === p);
-        return `\`${item?.label || p}\``;
-      }).join(', ')
-      : '**No permissions selected (Least Privilege)**';
-
-    const desc = [
-      `__**PREBOT WHITELIST CONFIGURATION**__\n`,
-      `**RAGE OPTIMISER** • **${guild.name}**\n`,
-      `> Pre-register trusted bot **<@${botId}>** (\`${botName}\`) before it enters the server.`,
-      `> Defines exact permission profile applied automatically upon bot arrival.\n`,
-      `**Bot Target**: <@${botId}> (\`${botId}\`)`,
-      `**Dedicated Role**: ${createRole ? `${VERIFIED_ICON} Enabled (\`${roleName}\`)` : `${WRONG_ICON} Disabled`}`,
-      `**Notes**: ${notes ? notes : '**None provided**'}\n`,
-      `**Approved Permission Profile (${selectedPerms.length}/${PREBOT_PERMISSIONS.length})**:`,
-      `> ${permBadges}`
-    ].join('\n');
-
-    return new EmbedBuilder()
-      .setColor(Colors.BRAND)
-      .setTitle(`${BOT_ICON} PreBot Security Builder — ${botName}`)
-      .setDescription(desc)
-      .setThumbnail(botUser.displayAvatarURL({ size: 256 }) || null)
-      .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
-      .setTimestamp();
+  const state: PrebotBuilderState = {
+    guildId: guild.id,
+    botId,
+    botName,
+    selectedPerms: existingEntry ? [...existingEntry.allowedPerms] : ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+    createRole: existingEntry ? existingEntry.createRole : true,
+    roleName: existingEntry?.roleName || `[Trusted] ${botName}`,
+    roleColor: existingEntry?.roleColor || '#99CC00',
+    notes: existingEntry?.notes || '',
+    addedBy: interaction.user.id,
+    avatarUrl: botUser.displayAvatarURL({ size: 256 }) || null
   };
 
-  const buildComponents = () => {
-    // Split permissions into 2 select menus due to 25 option limit per menu
-    const mid = Math.ceil(PREBOT_PERMISSIONS.length / 2);
-    const part1 = PREBOT_PERMISSIONS.slice(0, mid);
-    const part2 = PREBOT_PERMISSIONS.slice(mid);
+  activePrebotBuilders.set(`${guild.id}_${botId}`, state);
 
-    const select1 = new StringSelectMenuBuilder()
-      .setCustomId(`prebot_perm_sel1_${botId}_${interaction.user.id}`)
-      .setPlaceholder('⚙️ Select General & Messaging Permissions…')
-      .setMinValues(0)
-      .setMaxValues(part1.length)
-      .addOptions(
-        part1.map(p =>
-          new StringSelectMenuOptionBuilder()
-            .setLabel(p.label)
-            .setValue(p.key)
-            .setDescription(p.desc)
-            .setDefault(selectedPerms.includes(p.key))
-        )
-      );
-
-    const select2 = new StringSelectMenuBuilder()
-      .setCustomId(`prebot_perm_sel2_${botId}_${interaction.user.id}`)
-      .setPlaceholder('⚙️ Select Moderation & Admin Permissions…')
-      .setMinValues(0)
-      .setMaxValues(part2.length)
-      .addOptions(
-        part2.map(p =>
-          new StringSelectMenuOptionBuilder()
-            .setLabel(p.label)
-            .setValue(p.key)
-            .setDescription(p.desc)
-            .setDefault(selectedPerms.includes(p.key))
-        )
-      );
-
-    const rowSelect1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select1);
-    const rowSelect2 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select2);
-
-    const btnRoleToggle = new ButtonBuilder()
-      .setCustomId(`prebot_btn_role_${botId}_${interaction.user.id}`)
-      .setLabel(createRole ? 'Dedicated Role: ON' : 'Dedicated Role: OFF')
-      .setStyle(createRole ? ButtonStyle.Success : ButtonStyle.Secondary);
-
-    const btnSave = new ButtonBuilder()
-      .setCustomId(`prebot_btn_save_${botId}_${interaction.user.id}`)
-      .setLabel('Save PreBot Whitelist')
-      .setStyle(ButtonStyle.Primary);
-
-    const btnCancel = new ButtonBuilder()
-      .setCustomId(`prebot_btn_cancel_${botId}_${interaction.user.id}`)
-      .setLabel('Cancel')
-      .setStyle(ButtonStyle.Danger);
-
-    const rowButtons = new ActionRowBuilder<ButtonBuilder>().addComponents(btnRoleToggle, btnSave, btnCancel);
-
-    return [rowSelect1, rowSelect2, rowButtons];
-  };
+  const buildEmbed = () => buildPrebotBuilderEmbed(guild, state);
+  const buildComponents = () => buildPrebotBuilderComponents(state);
 
   let responseMsg = await interaction.editReply({
     embeds: [buildEmbed()],
@@ -270,97 +425,6 @@ async function launchPrebotBuilder(
     console.error('[launchPrebotBuilder] Failed to dispatch builder message to channel.');
     return;
   }
-
-  const collector = responseMsg.createMessageComponentCollector({
-    time: 600000 // 10 minutes
-  });
-
-  collector.on('collect', async (rawI: any) => {
-    try {
-      const i = wrapInteraction(rawI);
-      const isAuthorized = await isOwnerOrExtraOwner(i.user.id, guild);
-      if (!isAuthorized) {
-        const errEmbed = new EmbedBuilder()
-          .setTitle('🔒 Access Denied')
-          .setColor(Colors.DANGER)
-          .setDescription('PreBot Whitelist management is strictly restricted to the **Server Owner** and **Extra Owners**.')
-          .setTimestamp();
-        return i.reply({ embeds: [errEmbed], flags: 64 }).catch(() => {});
-      }
-
-      if (i.isStringSelectMenu()) {
-        const menuId = i.customId;
-        const values = i.values || [];
-
-        if (menuId.startsWith('prebot_perm_sel1_')) {
-          const part1Keys = PREBOT_PERMISSIONS.slice(0, Math.ceil(PREBOT_PERMISSIONS.length / 2)).map(p => p.key);
-          // Retain selections from part 2, replace part 1
-          selectedPerms = [...selectedPerms.filter(p => !part1Keys.includes(p)), ...values];
-        } else if (menuId.startsWith('prebot_perm_sel2_')) {
-          const part2Keys = PREBOT_PERMISSIONS.slice(Math.ceil(PREBOT_PERMISSIONS.length / 2)).map(p => p.key);
-          // Retain selections from part 1, replace part 2
-          selectedPerms = [...selectedPerms.filter(p => !part2Keys.includes(p)), ...values];
-        }
-
-        await i.update({
-          embeds: [buildEmbed()],
-          components: buildComponents()
-        }).catch(() => {});
-      } else if (i.isButton()) {
-        const btnId = i.customId;
-
-        if (btnId.startsWith('prebot_btn_role_')) {
-          createRole = !createRole;
-          await i.update({
-            embeds: [buildEmbed()],
-            components: buildComponents()
-          }).catch(() => {});
-        } else if (btnId.startsWith('prebot_btn_cancel_')) {
-          collector.stop('cancelled');
-          const cancelEmbed = new EmbedBuilder()
-            .setTitle('❌ Setup Cancelled')
-            .setColor(Colors.DANGER)
-            .setDescription(`PreBot Whitelist setup for **<@${botId}>** was cancelled.`)
-            .setTimestamp();
-          await i.update({ embeds: [cancelEmbed], components: [] }).catch(() => {});
-        } else if (btnId.startsWith('prebot_btn_save_')) {
-          collector.stop('saved');
-
-          const newEntry: PreBotEntry = {
-            guildId: guild.id,
-            botId,
-            botName,
-            allowedPerms: selectedPerms,
-            createRole,
-            roleName: createRole ? roleName : undefined,
-            roleColor: createRole ? roleColor : undefined,
-            addedBy: interaction.user.id,
-            addedAt: Date.now(),
-            notes
-          };
-
-          await savePrebotEntry(newEntry);
-          context.logSyncEvent(guild.id, `✅ [PreBot Whitelist]: Pre-approved bot ${botName} (${botId}) with ${selectedPerms.length} allowed permissions.`, 'success');
-
-          const successEmbed = new EmbedBuilder()
-            .setColor(Colors.SUCCESS)
-            .setTitle(`${BOT_ICON} PreBot Whitelist — Saved`)
-            .setDescription([
-              `${VERIFIED_ICON} **Bot <@${botId}>** (\`${botName}\`) has been successfully registered in the **PreBot Whitelist**.`,
-              `When this bot enters **${guild.name}**, ${SHIELD_ICON} Rage Optimiser will instantly verify it, strip unauthorized roles, and enforce this custom profile.`,
-              `\n${ARROW_ICON} **Allowed Permissions**: ${selectedPerms.length > 0 ? selectedPerms.map(p => `\`${p}\``).join(', ') : '`None`'}`,
-              `${ARROW_ICON} **Dedicated Trusted Role**: ${createRole ? `\`${roleName}\`` : '`Disabled`'}`
-            ].join('\n'))
-            .setFooter({ text: 'Rage Optimiser • Zero-Trust Security Architecture' })
-            .setTimestamp();
-
-          await i.update({ embeds: [successEmbed], components: [] }).catch(() => {});
-        }
-      }
-    } catch (err: any) {
-      console.warn('[prebot_whitelist] Collector error:', err?.message || err);
-    }
-  });
 }
 
 export function registerPrebotCommands(): void {
@@ -610,7 +674,7 @@ export function registerPrebotCommands(): void {
           return safeReply(`${WRONG_ICON} Target user **<@${targetUser.id}>** is not a Discord bot application.`);
         }
 
-        const defaultPerms = ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'EmbedLinks', 'AttachFiles'];
+        const defaultPerms = ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'EmbedLinks', 'AttachFiles', 'ManageChannels', 'ManageRoles', 'Connect', 'Speak', 'ManageMessages'];
         const newEntry: PreBotEntry = {
           guildId: guild.id,
           botId: targetUser.id,
@@ -804,7 +868,7 @@ export const PrebotWhitelistManifest: ModuleManifest = {
           const isEnabled = sub === 'on' || sub === 'enable' || (sub === 'toggle' && secConfig.prebotEnabled === false);
 
           if (context.updateModuleConfig) {
-            context.updateModuleConfig(guild.id, 'security', { ...secConfig, prebotEnabled: isEnabled });
+            context.updateModuleConfig('security', { ...secConfig, prebotEnabled: isEnabled });
           }
 
           const embed = new EmbedBuilder()
@@ -1060,7 +1124,7 @@ export const PrebotWhitelistManifest: ModuleManifest = {
             return interaction.editReply({ embeds: [errEmbed] }).catch(() => { });
           }
 
-          const defaultPerms = ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'EmbedLinks', 'AttachFiles'];
+          const defaultPerms = ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'EmbedLinks', 'AttachFiles', 'ManageChannels', 'ManageRoles', 'Connect', 'Speak', 'ManageMessages'];
           const newEntry: PreBotEntry = {
             guildId: guild.id,
             botId: botUser.id,
@@ -1194,6 +1258,18 @@ export const PrebotWhitelistManifest: ModuleManifest = {
 
           return interaction.editReply({ embeds: [infoEmbed] }).catch(() => { });
         }
+      }
+    },
+    {
+      name: 'button_prebot_generic',
+      handler: async (client: any, interaction: any, context: any) => {
+        return handlePrebotComponentInteraction(interaction, context);
+      }
+    },
+    {
+      name: 'select_prebot_generic',
+      handler: async (client: any, interaction: any, context: any) => {
+        return handlePrebotComponentInteraction(interaction, context);
       }
     }
   ]

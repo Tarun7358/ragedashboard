@@ -66,7 +66,7 @@ export function getBrandBannerPath(): string | null {
   let baseDir = '';
   try {
     baseDir = path.dirname(fileURLToPath(import.meta.url));
-  } catch {}
+  } catch { }
 
   const candidates = [
     path.resolve(cwd, 'gemini_generated_video_0c54a55f-ezgif.com-cut.png'),
@@ -85,7 +85,7 @@ export function getBrandBannerPath(): string | null {
   for (const c of candidates) {
     try {
       if (fs.existsSync(c)) return c;
-    } catch {}
+    } catch { }
   }
   return null;
 }
@@ -165,7 +165,57 @@ export const Colors = {
   BOOST: 0xF47FFF,    // Nitro Pink (#F47FFF)
 } as const;
 
-export const BRAND_FOOTER = 'Rage Optimiser Enterprise • Unbypassable Security';
+export const BRAND_FOOTER = 'Rage Optimiser Enterprise - Unbypassable Security';
+
+// ─────────────────────────────────────────────
+// DISCORD COMPONENTS V2 BOX UI BUILDERS
+// ─────────────────────────────────────────────
+export interface BoxUIOptions {
+  title: string;
+  thumbnailUrl?: string | null;
+  body: string;
+  fields?: Array<{ label: string; value: string }>;
+  components?: ActionRowBuilder<any>[];
+  footerText?: string;
+}
+
+export function buildBoxUIContainer(opts: BoxUIOptions): ContainerBuilder {
+  const container = new ContainerBuilder();
+  const sec = new SectionBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`# **${opts.title}**`)
+  );
+  const thumbUrl = opts.thumbnailUrl || 'https://cdn.discordapp.com/embed/avatars/0.png';
+  sec.setThumbnailAccessory(new ThumbnailBuilder().setURL(thumbUrl));
+  container.addSectionComponents(sec);
+  container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+
+  let fullBody = opts.body || '';
+  if (opts.fields && opts.fields.length > 0) {
+    const formattedFields = opts.fields.map(f => `> **${f.label}:** ${f.value}`).join('\n');
+    fullBody = fullBody ? `${fullBody}\n\n${formattedFields}` : formattedFields;
+  }
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(fullBody));
+
+  if (opts.components && opts.components.length > 0) {
+    for (const r of opts.components) {
+      container.addActionRowComponents(r);
+    }
+  }
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(opts.footerText || '-# Rage Optimiser Enterprise - High-Availability Infrastructure')
+  );
+
+  return container;
+}
+
+export function buildBoxUIPayload(opts: BoxUIOptions): any {
+  const container = buildBoxUIContainer(opts);
+  return {
+    flags: MessageFlags.IsComponentsV2,
+    components: [container]
+  };
+}
 
 // ─────────────────────────────────────────────
 // MODULE IDENTITIES
@@ -226,7 +276,7 @@ export function createLimeEmbed(options: {
     : (options.color || Colors.BRAND);
 
   const embed = new EmbedBuilder()
-    .setAuthor({ name: options.author || 'Rage Optimiser Enterprise • Security Engine' })
+    .setAuthor({ name: options.author || 'Rage Optimiser Enterprise - Security Engine' })
     .setTitle(options.title)
     .setColor(colorVal as any)
     .setFooter({
@@ -283,7 +333,7 @@ function buildBaseEmbed(
     embed.setAuthor({ name: title, iconURL: opts.authorIcon });
     embed.setTitle('');
   } else {
-    embed.setAuthor({ name: 'Rage Optimiser Enterprise • Core Security Engine' });
+    embed.setAuthor({ name: 'Rage Optimiser Enterprise - Core Security Engine' });
   }
 
   return embed;
@@ -299,7 +349,11 @@ export const Embeds = {
   },
 
   warn(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
-    return buildBaseEmbed(Colors.WARN, `${WARNING_ICON} ${title}`, description, opts);
+    const cleanTitle = title.replace(/<a?:[a-zA-Z0-9_]+:\d+>|[\u{1F300}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{1F1E6}-\u{1F1FF}\u{1F191}-\u{1F251}\u{1F004}\u{1F0CF}\u{1F170}-\u{1F171}\u{1F17E}-\u{1F17F}\u{1F18E}\u{3030}\u{2B50}\u{2B55}\u{2934}-\u{2935}\u{2B05}-\u{2B07}\u{2B1B}-\u{2B1C}\u{3297}\u{3299}\u{FE00}-\u{FE0F}]/gu, '').replace(/[ \t]{2,}/g, ' ').trim();
+    return buildBaseEmbed(Colors.WARN, cleanTitle, description, {
+      ...opts,
+      thumbnail: opts.thumbnail || 'https://cdn.discordapp.com/emojis/1546155193303957504.webp?size=32&animated=true'
+    });
   },
 
   error(title: string, description: string, opts: EmbedOptions = {}): EmbedBuilder {
@@ -378,9 +432,7 @@ export function buildLimeActionCard(opts: {
   if (opts.fields && opts.fields.length > 0) {
     embed.addFields(opts.fields);
   }
-  if (opts.thumbnailUrl) {
-    embed.setThumbnail(opts.thumbnailUrl);
-  }
+  embed.setThumbnail(opts.thumbnailUrl || 'https://cdn.discordapp.com/emojis/1546155193303957504.webp?size=32&animated=true');
   return embed;
 }
 
@@ -409,9 +461,9 @@ export function buildLimeWarnCard(opts: {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(`${WARNING_ICON} AutoMod Violation Warning • ${opts.category}`)
+    .setTitle(`AutoMod Violation Warning - ${opts.category}`)
     .setDescription(desc)
-    .setFooter({ text: 'Rage Optimiser • AutoMod & Anti-Nuke Protection' })
+    .setFooter({ text: 'Rage Optimiser - AutoMod & Anti-Nuke Protection' })
     .setTimestamp();
 
   if (opts.thumbnailUrl) {
@@ -441,7 +493,7 @@ export function buildLimeOverviewCard(opts: {
     .setTimestamp();
 
   const titleText = opts.title.trim();
-  const subText = opts.subtitle ? opts.subtitle : 'Rage Optimiser Enterprise • Active Protection';
+  const subText = opts.subtitle ? opts.subtitle : 'Rage Optimiser Enterprise - Active Protection';
 
   let desc = `## ${titleText}\n**${subText}**\n\n`;
 
@@ -449,11 +501,12 @@ export function buildLimeOverviewCard(opts: {
     if (sec.title) {
       desc += `### **${sec.title}**\n`;
     }
-    desc += `>>> `;
     const formattedItems = sec.items.map(item => {
       const trimmed = item.trim();
-      if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('>')) return trimmed;
-      return `${trimmed}`;
+      if (trimmed.startsWith('>') || trimmed.startsWith('-') || trimmed.startsWith('•')) {
+        return trimmed.startsWith('>') ? trimmed : `> ${trimmed}`;
+      }
+      return `> ${trimmed}`;
     }).join('\n');
 
     desc += formattedItems + `\n\n`;
@@ -492,11 +545,11 @@ export function buildCommandCard(opts: {
     .setTimestamp();
 
   if (opts.aliases && opts.aliases.length > 0) {
-    embed.addFields({ name: 'Aliases', value: opts.aliases.map(a => `\`r!${a}\``).join(' • '), inline: false });
+    embed.addFields({ name: 'Aliases', value: opts.aliases.map(a => `\`r!${a}\``).join(' - '), inline: false });
   }
 
   if (opts.examples && opts.examples.length > 0) {
-    embed.addFields({ name: 'Practical Examples', value: opts.examples.map(ex => `• \`${ex}\``).join('\n'), inline: false });
+    embed.addFields({ name: 'Practical Examples', value: opts.examples.map(ex => `- \`${ex}\``).join('\n'), inline: false });
   }
 
   return embed;
@@ -511,7 +564,7 @@ export function buildTicketPanelEmbed(opts: {
 }): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setColor(Colors.LIME)
-    .setTitle(`${CROWN_ANIMATED_ICON} ${opts.serverName.toUpperCase()} • OFFICIAL SUPPORT DESK`)
+    .setTitle(`${CROWN_ANIMATED_ICON} ${opts.serverName.toUpperCase()} - OFFICIAL SUPPORT DESK`)
     .setThumbnail(opts.thumbnailUrl || DEFAULT_BRAND_IMAGE_URL)
     .setImage(opts.bannerUrl || DEFAULT_BRAND_IMAGE_URL)
     .setFooter({ text: BRAND_FOOTER })
@@ -554,13 +607,13 @@ export function buildStatusCard(opts: {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(`${opts.emoji} ${opts.title}`.trim())
+    .setTitle(opts.title.trim())
     .setDescription(`> ${opts.body}`)
     .setFooter({ text: BRAND_FOOTER })
     .setTimestamp();
 
   if (opts.thumbnailUrl) {
-    try { embed.setThumbnail(opts.thumbnailUrl); } catch {}
+    try { embed.setThumbnail(opts.thumbnailUrl); } catch { }
   }
 
   if (opts.fields && opts.fields.length > 0) {
@@ -594,10 +647,11 @@ export function buildSuccessCard(text: string, title = 'Operation Successful'): 
 
 export function buildWarnCard(text: string, title = 'Security Notice'): { embeds: EmbedBuilder[]; components: any[]; flags: number } {
   return buildStatusCard({
-    emoji: TIMER_ICON,
+    emoji: '',
     title,
     body: text,
     accentColor: Colors.WARN,
+    thumbnailUrl: 'https://cdn.discordapp.com/emojis/1546155193303957504.webp?size=32&animated=true',
   });
 }
 
@@ -623,13 +677,13 @@ export function buildListCard(opts: {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(`${opts.emoji} ${opts.title}`.trim())
+    .setTitle(opts.title.trim())
     .setDescription((opts.subtitle ? `*${opts.subtitle}*\n\n` : '') + `>>> ${listText}`)
     .setFooter({ text: BRAND_FOOTER })
     .setTimestamp();
 
   if (opts.thumbnailUrl) {
-    try { embed.setThumbnail(opts.thumbnailUrl); } catch {}
+    try { embed.setThumbnail(opts.thumbnailUrl); } catch { }
   }
 
   return {
@@ -653,7 +707,7 @@ export function buildRichCard(opts: {
 
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setTitle(`${opts.emoji} ${opts.title}`.trim())
+    .setTitle(opts.title.trim())
     .setFooter({ text: opts.footerNote || BRAND_FOOTER })
     .setTimestamp();
 
@@ -662,7 +716,7 @@ export function buildRichCard(opts: {
   }
 
   if (opts.thumbnailUrl) {
-    try { embed.setThumbnail(opts.thumbnailUrl); } catch {}
+    try { embed.setThumbnail(opts.thumbnailUrl); } catch { }
   }
 
   if (opts.fields && opts.fields.length > 0) {

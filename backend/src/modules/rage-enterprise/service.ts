@@ -17,15 +17,29 @@ export class RageEnterpriseService {
     const modules = context.getModulesState ? context.getModulesState(guildId) : [];
     const secMod = modules.find((m: any) => m.id === 'security') || {};
     const config = secMod.config || {};
+    const amMod = modules.find((m: any) => m.id === 'automod') || {};
+    const amConfig = amMod.config || {};
 
     const isAntiNukeActive = config.antiNukeEnabled !== false;
     const antiNukeStatus = isAntiNukeActive ? '<:ticks:1532620580266836148> `Active (Protected)`' : '<a:warning:1546155193303957504> `Inactive (Disabled)`';
-    const raidModeStatus = config.raidModeEnabled ? '<a:success_check:1546134620087783526> `RAID MODE ENABLED`' : '<a:success_check:1546134620087783526> `Normal Protection`';
+    const raidModeStatus = config.raidModeEnabled ? '<a:success_check:1546134620087783526> `RAID MODE ACTIVE`' : '<a:success_check:1546134620087783526> `Normal Operations`';
     const { userSet, roleSet } = getUnifiedWhitelistEntries(modules);
     const whitelistCount = userSet.size + roleSet.size;
     const quarantineCount = (config.quarantinedUsers || []).length;
-    const antiSpamStatus = config.antiSpamEnabled ? '<:ticks:1532620580266836148> `Enabled`' : '<a:warning:1546155193303957504> `Disabled`';
-    const antiLinkStatus = config.antiLinkEnabled ? '<:ticks:1532620580266836148> `Enabled`' : '<a:warning:1546155193303957504> `Disabled`';
+
+    // Real-time Anti-Link status directly from active AutoMod configuration
+    const isAntiLinkActive = (amConfig.blockLinks !== false && amConfig.antiLinkEnabled !== false) && config.antiLinkEnabled !== false;
+    const antiLinkLimit = amConfig.antiLinkLimit || amConfig.limit || 5;
+    const antiLinkAction = (amConfig.punishment || 'warn').toUpperCase();
+    const antiLinkStatus = isAntiLinkActive
+      ? `<:ticks:1532620580266836148> \`Active\` (Limit: \`${antiLinkLimit}\` • Action: \`${antiLinkAction}\`)`
+      : '<a:warning:1546155193303957504> `Disabled`';
+
+    // Real-time Anti-Spam status directly from active AutoMod configuration
+    const isAntiSpamActive = Boolean(amConfig.antiSpamEnabled || config.antiSpamEnabled);
+    const antiSpamStatus = isAntiSpamActive
+      ? `<:ticks:1532620580266836148> \`Active\` (Burst: \`${amConfig.maxSpamMessages || 5} msgs / ${amConfig.spamWindowSeconds || 5}s\`)`
+      : '<a:warning:1546155193303957504> `Disabled`';
 
     const embed = buildLimeOverviewCard({
       title: 'SECURITY & ANTI-NUKE OVERVIEW',
@@ -33,21 +47,19 @@ export class RageEnterpriseService {
       thumbnail: guild.iconURL({ size: 256 }) ?? undefined,
       sections: [
         {
-          title: '<a:success_check:1546134620087783526> PROTECTION ENGINE STATUS',
+          title: '<a:success_check:1546134620087783526> ANTI-NUKE THREAT MATRIX',
           items: [
-            `Anti-Nuke Protection: ${antiNukeStatus}`,
-            `Raid Mode Status: ${raidModeStatus}`,
-            `Unified Whitelist Entries: \`${whitelistCount}\` members/roles`,
-            `Quarantined Users: \`${quarantineCount}\` active quarantines`
+            `Anti-Nuke Master Defense: ${antiNukeStatus}`,
+            `Raid Mode Sentinel: ${raidModeStatus}`,
+            `Unified Whitelist: \`${whitelistCount}\` bypass entities`,
+            `Quarantine Isolation: \`${quarantineCount}\` restricted members`
           ]
         },
         {
-          title: '<:gavel:1532621057318584380> AUTOMOD FILTERS',
+          title: '<:gavel:1532621057318584380> AUTOMOD & CONTENT DEFENSE',
           items: [
-            `Anti-Spam Filter: ${antiSpamStatus}`,
-            `Anti-Link Filter: ${antiLinkStatus}`,
-            `Join-Role Assignment Guard: <:ticks:1532620580266836148> \`Active\``,
-            `Voice Guard Protection: <:ticks:1532620580266836148> \`Active\``
+            `Anti-Link Interceptor: ${antiLinkStatus}`,
+            `Anti-Spam Rate Limiter: ${antiSpamStatus}`
           ]
         }
       ],
@@ -55,16 +67,37 @@ export class RageEnterpriseService {
     });
 
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('sec_toggle_antinuke').setLabel('Toggle Anti-Nuke').setStyle(isAntiNukeActive ? ButtonStyle.Danger : ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('sec_toggle_raidmode').setLabel('Toggle Raid Mode').setStyle(config.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('sec_view_whitelist').setLabel('View Whitelist').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('sec_view_quarantine').setLabel('Quarantine Queue').setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder()
+        .setCustomId('sec_toggle_antinuke')
+        .setLabel(isAntiNukeActive ? 'Anti-Nuke: Active' : 'Anti-Nuke: Disabled')
+        .setStyle(isAntiNukeActive ? ButtonStyle.Success : ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId('sec_toggle_raidmode')
+        .setLabel(config.raidModeEnabled ? 'Raid Mode: Active' : 'Raid Mode: Off')
+        .setStyle(config.raidModeEnabled ? ButtonStyle.Danger : ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId('sec_view_whitelist')
+        .setLabel(`Whitelist (${whitelistCount})`)
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId('sec_view_quarantine')
+        .setLabel(`Quarantine (${quarantineCount})`)
+        .setStyle(ButtonStyle.Secondary)
     );
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId('sec_toggle_antispam').setLabel('Toggle Anti-Spam').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('sec_toggle_antilink').setLabel('Toggle Anti-Link').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('sec_trigger_lockdown').setLabel('Emergency Lockdown').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder()
+        .setCustomId('sec_toggle_antilink')
+        .setLabel(isAntiLinkActive ? 'Anti-Link: Active' : 'Anti-Link: Disabled')
+        .setStyle(isAntiLinkActive ? ButtonStyle.Success : ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId('sec_toggle_antispam')
+        .setLabel(isAntiSpamActive ? 'Anti-Spam: Active' : 'Anti-Spam: Disabled')
+        .setStyle(isAntiSpamActive ? ButtonStyle.Success : ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId('sec_trigger_lockdown')
+        .setLabel('Emergency Lockdown')
+        .setStyle(ButtonStyle.Danger)
     );
 
     return { embeds: [embed], components: [row1, row2] };

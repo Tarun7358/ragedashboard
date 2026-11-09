@@ -1,5 +1,6 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 
 export const AuditManifest: any = {
   id: 'audit',
@@ -49,13 +50,32 @@ export const AuditManifest: any = {
     {
       name: 'command_audit',
       handler: async (client: any, interaction: any, context: any) => {
+        const guild = interaction.guild;
+        if (!guild) return;
+        const userId = interaction.user?.id || interaction.author?.id;
+        const isOwner = await isOwnerOrExtraOwner(userId, guild);
         const sub = interaction.options.getSubcommand(false) || 'timeline';
+
+        if (sub === 'clear' || sub === 'export') {
+          if (!isOwner) {
+            return interaction.reply({ content: '🔒 **Access Denied**: Only the **Server Owner** and **Extra Owners** can export or clear the audit timeline.', flags: 64 });
+          }
+        } else {
+          const hasViewAudit = isOwner ||
+            Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.Administrator)) ||
+            Boolean(interaction.memberPermissions?.has?.(PermissionFlagsBits.ViewAuditLog)) ||
+            Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)) ||
+            Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.ViewAuditLog));
+          if (!hasViewAudit) {
+            return interaction.reply({ content: '🔒 **Access Denied**: You require **View Audit Log** or **Administrator** permission to view the audit timeline.', flags: 64 });
+          }
+        }
 
         if (sub === 'timeline') {
           const embed = new EmbedBuilder()
             .setTitle('<a:lovemail:1527647157371535420> Unified Audit Timeline Logs')
             .setColor('#7C5CFC')
-            .setDescription('• **[10 mins ago]**: Whitelist change: added tarun7358 to bypass list.\n• **[12 mins ago]**: Voice effect sent: soundboard "applause" in Voice #1.\n• **[15 mins ago]**: Config update: welcome channel set to #general.\n• **[20 mins ago]**: Backup created snapshot BP-142.')
+            .setDescription('**[10 mins ago]:** Whitelist change: added tarun7358 to bypass list.\n**[12 mins ago]:** Voice effect sent: soundboard "applause" in Voice #1.\n**[15 mins ago]:** Config update: welcome channel set to #general.\n**[20 mins ago]:** Backup created snapshot BP-142.')
             .setTimestamp();
           return interaction.reply({ embeds: [embed] });
         }

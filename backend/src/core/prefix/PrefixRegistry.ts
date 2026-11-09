@@ -68,6 +68,9 @@ export class PrefixRegistry {
     // AutoMod & Filters
     'am': 'automod',
     'al': 'antilink',
+    'whitelist-domain': 'antilink',
+    'whitelistdomain': 'antilink',
+    'allowdomain': 'antilink',
     'as': 'antispam',
     'ae': 'antieveryone',
     'bl': 'blacklist',
@@ -339,22 +342,28 @@ export class PrefixRegistry {
   // ─────────────────────────────────────────────
 
   private static resolveCategory(moduleId: string, moduleName: string): string {
+    const normalized = (moduleId || '').toLowerCase().replace(/[-_]/g, '_');
     const map: Record<string, string> = {
       'security': 'Security',
       'moderation': 'Security',
       'verification': 'System',
       'community': 'Community',
+      'welcome_v2': 'Community',
       'welcome-v2': 'Community',
       'logging': 'Logging',
       'backups': 'Backups',
       'automation': 'Automations',
       'voice': 'Voice',
+      'voice_protection': 'Voice',
       'voice-protection': 'Voice',
       'member_whitelist': 'Security',
       'prebot_whitelist': 'Security',
       'botstats': 'Diagnostics',
       'config': 'Configuration',
+      'reaction_roles': 'Reaction Roles',
       'reaction-roles': 'Reaction Roles',
+      'self_roles': 'Reaction Roles',
+      'self-roles': 'Reaction Roles',
       'leveling': 'Leveling & Economy',
       'automod': 'AutoMod',
       'music': 'Voice',
@@ -362,6 +371,8 @@ export class PrefixRegistry {
       'giveaway': 'Giveaways',
       'reminders': 'Reminders',
       'announcements': 'Announcements',
+      'jointocreate': 'Voice',
+      'join_to_create': 'Voice',
       'joinToCreate': 'Voice',
       'voice_manager': 'Voice',
       'bulk_ops': 'Bulk Operations',
@@ -373,10 +384,18 @@ export class PrefixRegistry {
       'analytics': 'Analytics',
       'audit': 'Audit',
       'rage-enterprise': 'Enterprise',
-      'rage_enterprise': 'Enterprise'
+      'rage_enterprise': 'Enterprise',
+      'tickets': 'Community',
+      'embed_builder': 'Community',
+      'stats_counter': 'Analytics',
+      'stats-counter': 'Analytics',
+      'promotion': 'Community',
+      'discord_dashboard': 'Configuration',
+      'discord-dashboard': 'Configuration',
+      'brain': 'Diagnostics'
     };
 
-    return map[moduleId] || 'System';
+    return map[normalized] || map[moduleId] || 'System';
   }
 
   private static formatUsage(cmd: any): string {
@@ -498,7 +517,68 @@ export class PrefixRegistry {
           );
           return message.reply({ embeds: [pingEmbed] });
         }
-      }
+      },
+      {
+        name: 'unblock-alerts',
+        description: 'Unblock mention notification DMs from a server',
+        category: 'System',
+        usage: 'r!unblock-alerts [serverId]',
+        aliases: ['unblockserver', 'unblock-server', 'unblock'],
+        cooldownSeconds: 2,
+        examples: ['r!unblock-alerts', 'r!unblock-alerts 1234567890'],
+        moduleOwnerId: 'core',
+        dangerLevel: 'Low',
+        execute: async (message: any, args: string[]) => {
+          const { BlockedDMSettings } = await import('../Gateway.js');
+          await BlockedDMSettings.init();
+          const targetGuildId = args[0] || message.guild?.id;
+
+          if (targetGuildId) {
+            await BlockedDMSettings.unblock(message.author.id, targetGuildId);
+            return message.reply({
+              content: `Mention alerts for server \`${targetGuildId}\` have been re-enabled. You will receive mention notifications again.`
+            });
+          }
+
+          // If in DMs and no server ID specified, find and unblock all blocked servers for this user
+          const blockedList = BlockedDMSettings.getBlockedGuildsForUser(message.author.id);
+          if (blockedList.length === 0) {
+            return message.reply({
+              content: 'You do not have any servers blocked from sending mention alerts.'
+            });
+          }
+
+          for (const gId of blockedList) {
+            await BlockedDMSettings.unblock(message.author.id, gId);
+          }
+
+          return message.reply({
+            content: `Mention alerts have been re-enabled for all servers (${blockedList.length} server${blockedList.length > 1 ? 's' : ''} unblocked).`
+          });
+        }
+      },
+      {
+        name: 'block-alerts',
+        description: 'Block mention notification DMs from a server',
+        category: 'System',
+        usage: 'r!block-alerts [serverId]',
+        aliases: ['blockserver', 'block-server'],
+        cooldownSeconds: 2,
+        examples: ['r!block-alerts', 'r!block-alerts 1234567890'],
+        moduleOwnerId: 'core',
+        dangerLevel: 'Low',
+        execute: async (message: any, args: string[]) => {
+          const { BlockedDMSettings } = await import('../Gateway.js');
+          const targetGuildId = args[0] || message.guild?.id;
+          if (!targetGuildId) {
+            return message.reply({ content: 'Please provide a server ID: `r!block-alerts <serverId>`' });
+          }
+          await BlockedDMSettings.block(message.author.id, targetGuildId);
+          return message.reply({
+            content: `Mention alerts for server \`${targetGuildId}\` have been blocked. You will no longer receive mention notifications from this server.`
+          });
+        }
+      },
     ];
 
     for (const b of builtins) {

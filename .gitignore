@@ -37,15 +37,21 @@ guilds_data/
 **/guilds_data/
 
 # Binaries and large media
-yt-dlp.exe
-**/yt-dlp.exe
+*.mp4
+*.exe
 *.exe.old
 *.old
 *.gif
 !backend/assets/*.gif
 !gemini_generated_video_0c54a55f-ezgif.com-crop (1).gif
+gemini_generated_video_*.png
+backend/gemini_generated_video_*.png
 ffmpeg
 ffprobe
+
+# Backup export files
+backup_*.json
+backup_*.sql
 
 # Temporary/experimental artifacts
 *-player-script.js

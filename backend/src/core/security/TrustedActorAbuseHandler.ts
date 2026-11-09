@@ -1,6 +1,6 @@
 import { Guild, GuildMember, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { Database } from '../Database.js';
-import { removeExtraOwnerFromCache, getExtraOwnerFromCache, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
+import { removeExtraOwnerFromCache, getExtraOwnerFromCache, isOwnerOrExtraOwner, checkBypassImmunity } from '../../utils/whitelistCheck.js';
 import { TrustedActorStateSnapshot, SnapshotRecord } from './TrustedActorStateSnapshot.js';
 import { TrustedActorRateLimiter, AggregateThreatEvent } from './TrustedActorRateLimiter.js';
 import { RestoreEngine, RestoreReport } from './RestoreEngine.js';
@@ -20,6 +20,11 @@ export class TrustedActorAbuseHandler {
     client?: any
   ): Promise<string> {
     if (!guild) return '';
+    if (TrustedActorRateLimiter.isRestoring(guild.id)) return '';
+    try {
+      const { isServerRestoring } = await import('../../modules/security/manifest.js');
+      if (isServerRestoring(guild.id)) return '';
+    } catch {}
     TrustedActorRateLimiter.markCircuitBreakerTripped(guild.id);
 
     const incidentId = `cb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -56,16 +61,16 @@ export class TrustedActorAbuseHandler {
     if (db) {
       await db.run(
         `INSERT INTO security_incidents 
-        (incidentId, guildId, threatScore, triggerReason, containmentPolicy, eventTimelineJson, executorAttributionStatus, createdAt) 
+        (id, guildId, status, threatScore, executorId, executorTag, timeline, createdAt) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           incidentId,
           guild.id,
+          'CONTAINED_PENDING_ATTRIBUTION',
           score,
+          null,
           triggerReason,
-          'scoped_containment_quarantine',
           eventTimelineJson,
-          'pending_attribution',
           Date.now()
         ]
       ).catch(() => {});
@@ -99,7 +104,7 @@ export class TrustedActorAbuseHandler {
                 `**Threat Score**: \`${score.toFixed(1)}\` (Threshold $\\ge$ 3.0 in 5s)`,
                 `**Status**: Scoped Containment Active • Attribution Verifying`,
                 `\n**Common Event Timeline**:`,
-                ...recentEvents.map(e => `• \`${e.eventType}\` — **${e.targetName}** (+${e.weight}) [${new Date(e.timestamp).toISOString().substring(11, 19)}]`),
+                ...recentEvents.map(e => `**\`${e.eventType}\`** — **${e.targetName}** (+${e.weight}) [${new Date(e.timestamp).toISOString().substring(11, 19)}]`),
                 `\n<a:loading:1546134304625528882> *Audit log executor analysis running in background. Server state restoration initiated via live snapshot.*`
               ].join('\n'))
               .setFooter({ text: 'Rage Optimiser • Zero-Trust Circuit Breaker' })
@@ -131,10 +136,11 @@ export class TrustedActorAbuseHandler {
       if (db) {
         await db.run(
           `UPDATE security_incidents 
-           SET executorAttributionStatus = 'attributed', 
-               triggerReason = triggerReason || ' | Attributed to ' || ? || ' (' || ? || ')' 
-           WHERE incidentId = ?`,
-          [executorName, executorId, incidentId]
+           SET status = 'ATTRIBUTED',
+               executorId = ?,
+               executorTag = ?
+           WHERE id = ?`,
+          [executorId, executorName, incidentId]
         );
       }
     } catch {}
@@ -160,6 +166,9 @@ export class TrustedActorAbuseHandler {
     if (!member) return false;
 
     // 0a. Check active backup restoration bypass
+    if (TrustedActorRateLimiter.isRestoring(guild.id)) {
+      return false;
+    }
     try {
       const { activeBackupRestorations } = await import('../../modules/backups/manifest.js');
       if (activeBackupRestorations && activeBackupRestorations.has(guild.id)) {
@@ -177,6 +186,19 @@ export class TrustedActorAbuseHandler {
     // Extra Owners have full unlimited immunity (no rate limits or warnings)
     const isExtraOwner = await isOwnerOrExtraOwner(executorId, guild);
     if (isExtraOwner) return false;
+
+    // 0c. Whitelisted Bots have Full Immunity from TrustedActorAbuseHandler
+    // Bots like Koya, VoiceMaster, Ticket Tool, and Auto-Role bots intentionally create/delete channels and assign roles.
+    if (member.user?.bot) {
+      const isBypassed = await checkBypassImmunity(executorId, guild, {}, `anti_${assetType}_${action}`).catch(() => false);
+      if (isBypassed) return false;
+
+      try {
+        const { isPrebotAuthorizedForRule } = await import('../../modules/security/manifest.js');
+        const isPrebot = await isPrebotAuthorizedForRule(guild.id, executorId, `anti_${assetType}_${action}`).catch(() => false);
+        if (isPrebot) return false;
+      } catch {}
+    }
 
     const trustType: 'whitelist' = 'whitelist';
 
@@ -311,25 +333,39 @@ export class TrustedActorAbuseHandler {
       if (db) {
         await db.run('DELETE FROM extra_owners WHERE guildId = ? AND userId = ?', [guild.id, member.id]).catch(() => {});
         try {
-          const row = await db.get<any>('SELECT configJson FROM guild_module_configs WHERE guildId = ? AND moduleId = ?', [guild.id, 'security']);
-          if (row?.configJson) {
-            const secCfg = JSON.parse(row.configJson);
-            if (secCfg.whitelist) {
-              secCfg.whitelist = secCfg.whitelist.filter((w: any) => (typeof w === 'string' ? w !== member.id : w.targetId !== member.id));
+          const { ModuleRegistry } = await import('../ModuleRegistry.js');
+          const registry = ModuleRegistry.getInstance();
+          if (registry) {
+            const modules = registry.getModulesState(guild.id);
+            const secMod = modules.find((m: any) => m.id === 'security');
+            if (secMod?.config) {
+              const secCfg = { ...secMod.config };
+              if (Array.isArray(secCfg.whitelist)) {
+                secCfg.whitelist = secCfg.whitelist.filter((w: any) => (typeof w === 'string' ? w !== member.id : w.targetId !== member.id));
+              }
+              if (Array.isArray(secCfg.whitelistedUsers)) {
+                secCfg.whitelistedUsers = secCfg.whitelistedUsers.filter((u: string) => u !== member.id);
+              }
+              if (secCfg.upm?.whitelistUsers) {
+                secCfg.upm = {
+                  ...secCfg.upm,
+                  whitelistUsers: secCfg.upm.whitelistUsers.filter((u: string) => u !== member.id)
+                };
+              }
+              registry.updateModuleConfig(guild.id, 'security', secCfg);
             }
-            if (secCfg.upm?.whitelistUsers) {
-              secCfg.upm.whitelistUsers = secCfg.upm.whitelistUsers.filter((u: string) => u !== member.id);
-            }
-            await db.run('UPDATE guild_module_configs SET configJson = ? WHERE guildId = ? AND moduleId = ?', [JSON.stringify(secCfg), guild.id, 'security']).catch(() => {});
-          }
 
-          const mwRow = await db.get<any>('SELECT configJson FROM guild_module_configs WHERE guildId = ? AND moduleId = ?', [guild.id, 'member_whitelist']);
-          if (mwRow?.configJson) {
-            const mwCfg = JSON.parse(mwRow.configJson);
-            if (mwCfg.members) {
-              mwCfg.members = mwCfg.members.filter((m: any) => (m.userId !== member.id && m.id !== member.id));
+            const mwMod = modules.find((m: any) => m.id === 'member_whitelist');
+            if (mwMod?.config) {
+              const mwCfg = { ...mwMod.config };
+              if (Array.isArray(mwCfg.members)) {
+                mwCfg.members = mwCfg.members.filter((m: any) => (m.userId !== member.id && m.id !== member.id));
+              }
+              if (Array.isArray(mwCfg.entries)) {
+                mwCfg.entries = mwCfg.entries.filter((e: any) => (e.targetId !== member.id && e.userId !== member.id && e.id !== member.id));
+              }
+              registry.updateModuleConfig(guild.id, 'member_whitelist', mwCfg);
             }
-            await db.run('UPDATE guild_module_configs SET configJson = ? WHERE guildId = ? AND moduleId = ?', [JSON.stringify(mwCfg), guild.id, 'member_whitelist']).catch(() => {});
           }
         } catch (e) {}
       }
@@ -444,27 +480,24 @@ export class TrustedActorAbuseHandler {
     }
 
     try {
-      const db = Database.getDb();
-      if (db) {
-        // 1. Check logging module config for 'security' or 'antiNuke' category
-        const logRow = await db.get<any>('SELECT configJson FROM guild_module_configs WHERE guildId = ? AND moduleId = ?', [guild.id, 'logging']).catch(() => null);
-        if (logRow?.configJson) {
-          const logCfg = JSON.parse(logRow.configJson);
-          if (logCfg.security?.enabled !== false && logCfg.security?.channelId) {
-            if (guild.channels.cache.has(logCfg.security.channelId)) return logCfg.security.channelId;
-          }
-          if (logCfg.antiNuke?.enabled !== false && logCfg.antiNuke?.channelId) {
-            if (guild.channels.cache.has(logCfg.antiNuke.channelId)) return logCfg.antiNuke.channelId;
-          }
+      const { ModuleRegistry } = await import('../ModuleRegistry.js');
+      const registry = ModuleRegistry.getInstance();
+      const modules = registry ? registry.getModulesState(guild.id) : [];
+      const logMod = modules.find((m: any) => m.id === 'logging');
+      if (logMod?.config) {
+        const logCfg = logMod.config;
+        if (logCfg.security?.enabled !== false && logCfg.security?.channelId && guild.channels.cache.has(logCfg.security.channelId)) {
+          return logCfg.security.channelId;
         }
-
-        // 2. Check security module config for logChannelId
-        const secRow = await db.get<any>('SELECT configJson FROM guild_module_configs WHERE guildId = ? AND moduleId = ?', [guild.id, 'security']).catch(() => null);
-        if (secRow?.configJson) {
-          const secCfg = JSON.parse(secRow.configJson);
-          if (secCfg.logChannelId && guild.channels.cache.has(secCfg.logChannelId)) return secCfg.logChannelId;
-          if (secCfg.securityLogChannelId && guild.channels.cache.has(secCfg.securityLogChannelId)) return secCfg.securityLogChannelId;
+        if (logCfg.antiNuke?.enabled !== false && logCfg.antiNuke?.channelId && guild.channels.cache.has(logCfg.antiNuke.channelId)) {
+          return logCfg.antiNuke.channelId;
         }
+      }
+      const secMod = modules.find((m: any) => m.id === 'security');
+      if (secMod?.config) {
+        const secCfg = secMod.config;
+        if (secCfg.logChannelId && guild.channels.cache.has(secCfg.logChannelId)) return secCfg.logChannelId;
+        if (secCfg.securityLogChannelId && guild.channels.cache.has(secCfg.securityLogChannelId)) return secCfg.securityLogChannelId;
       }
     } catch (e) {}
 

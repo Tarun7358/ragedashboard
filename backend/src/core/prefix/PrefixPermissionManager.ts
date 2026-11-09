@@ -1,5 +1,6 @@
 import { Message, PermissionFlagsBits } from 'discord.js';
 import { PrefixCommandMeta } from './PrefixRegistry.js';
+import { resolvePermissionFlag } from '../security/CommandGuard.js';
 
 export interface PermissionCheckResult {
   allowed: boolean;
@@ -26,7 +27,15 @@ export class PrefixPermissionManager {
     }
 
     // 3. Check Required User Permissions
-    if (commandMeta.userPermissions && commandMeta.userPermissions.length > 0 && message.member) {
+    if (commandMeta.userPermissions && commandMeta.userPermissions.length > 0) {
+      // Fail closed: if the executor's member object cannot be resolved, deny.
+      if (!message.member) {
+        return {
+          allowed: false,
+          reason: 'Could not verify your server permissions. Please try again.',
+          missingUserPermissions: [...commandMeta.userPermissions]
+        };
+      }
       if (message.member.permissions.has(PermissionFlagsBits.Administrator)) {
         return { allowed: true };
       }
@@ -34,7 +43,8 @@ export class PrefixPermissionManager {
       const missing: string[] = [];
       for (const permName of commandMeta.userPermissions) {
         const flagKey = this.permissionNameToFlag(permName);
-        if (flagKey && !message.member.permissions.has(flagKey)) {
+        // Fail closed: an unknown permission name counts as missing instead of being skipped.
+        if (!flagKey || !message.member.permissions.has(flagKey)) {
           missing.push(permName);
         }
       }
@@ -82,18 +92,7 @@ export class PrefixPermissionManager {
   }
 
   private static permissionNameToFlag(name: string): bigint | null {
-    const map: Record<string, bigint> = {
-      'Administrator': PermissionFlagsBits.Administrator,
-      'Ban Members': PermissionFlagsBits.BanMembers,
-      'Kick Members': PermissionFlagsBits.KickMembers,
-      'Moderate Members': PermissionFlagsBits.ModerateMembers,
-      'Manage Messages': PermissionFlagsBits.ManageMessages,
-      'Manage Channels': PermissionFlagsBits.ManageChannels,
-      'Manage Roles': PermissionFlagsBits.ManageRoles,
-      'SendMessages': PermissionFlagsBits.SendMessages,
-      'EmbedLinks': PermissionFlagsBits.EmbedLinks,
-      'ManageGuild': PermissionFlagsBits.ManageGuild
-    };
-    return map[name] || null;
+    // Accepts every spelling ("BanMembers", "Ban Members", "ban_members") for all Discord permissions.
+    return resolvePermissionFlag(name);
   }
 }

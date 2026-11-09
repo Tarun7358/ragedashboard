@@ -1,6 +1,8 @@
 import { EmbedBuilder, ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
+import { TrustedActorRateLimiter } from '../../core/security/TrustedActorRateLimiter.js';
+import { isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 
 const pendingBackupLoads = new Map<string, string>(); // Format: "guildId:userId" -> backupId
 
@@ -29,7 +31,7 @@ async function getGuildBackups(guildId?: string): Promise<any[]> {
   }
 }
 
-async function getBackupById(backupId: string): Promise<any | null> {
+export async function getBackupById(backupId: string): Promise<any | null> {
   const db = Database.getDb();
   if (!db) return null;
   const row = await db.get<any>('SELECT * FROM guild_backups WHERE id = ?', [backupId]);
@@ -40,7 +42,7 @@ async function getBackupById(backupId: string): Promise<any | null> {
   };
 }
 
-async function saveBackup(snapshot: any): Promise<void> {
+export async function saveBackup(snapshot: any): Promise<void> {
   const db = Database.getDb();
   if (!db) return;
 
@@ -132,15 +134,19 @@ export async function ensureRageRoleAtTop(guild: any): Promise<any> {
   }
 }
 
-async function createBackupData(guild: any, creatorTag: string): Promise<any> {
+export async function createBackupData(guild: any, creatorTag: string): Promise<any> {
   // Ensure 'Created by Rage' role exists at top of hierarchy and is assigned to the bot
   await ensureRageRoleAtTop(guild);
 
-  const roles = await guild.roles.fetch();
-  const channels = await guild.channels.fetch();
-  const emojis = await guild.emojis.fetch().catch(() => new Map());
+  const rolesCollection = await guild.roles.fetch();
+  const channelsCollection = await guild.channels.fetch();
+  const emojisCollection = await guild.emojis.fetch().catch(() => new Map());
 
-  const backupRoles = roles.filter((r: any) => r.name !== '@everyone' && !r.managed).map((r: any) => ({
+  const rolesList: any[] = Array.from(rolesCollection?.values ? rolesCollection.values() : (Array.isArray(rolesCollection) ? rolesCollection : []));
+  const channelsList: any[] = Array.from(channelsCollection?.values ? channelsCollection.values() : (Array.isArray(channelsCollection) ? channelsCollection : []));
+  const emojisList: any[] = Array.from(emojisCollection?.values ? emojisCollection.values() : (Array.isArray(emojisCollection) ? emojisCollection : []));
+
+  const backupRoles = rolesList.filter((r: any) => r && r.name !== '@everyone' && !r.managed).map((r: any) => ({
     name: r.name,
     color: r.color,
     hoist: r.hoist,
@@ -149,7 +155,14 @@ async function createBackupData(guild: any, creatorTag: string): Promise<any> {
     mentionable: r.mentionable
   }));
 
-  const backupChannels = channels.filter((c: any) => c).map((c: any) => {
+  const everyoneRole = guild.roles?.everyone || rolesCollection?.get?.(guild.id) || rolesList.find((r: any) => r && (r.name === '@everyone' || r.id === guild.id));
+  const everyonePermissions = everyoneRole?.permissions?.bitfield?.toString() || null;
+
+  const backupChannels = channelsList.filter((c: any) => c).map((c: any) => {
+    const rawOverwrites = c.permissionOverwrites?.cache
+      ? Array.from(c.permissionOverwrites.cache.values())
+      : (Array.isArray(c.permissionOverwrites) ? c.permissionOverwrites : (c.permissionOverwrites?.values ? Array.from(c.permissionOverwrites.values()) : []));
+
     return {
       name: c.name,
       type: c.type,
@@ -159,27 +172,34 @@ async function createBackupData(guild: any, creatorTag: string): Promise<any> {
       rateLimitPerUser: c.rateLimitPerUser || 0,
       parentName: c.parent ? c.parent.name : null,
       position: c.position,
-      permissionOverwrites: c.permissionOverwrites?.cache?.map((o: any) => {
+      rawPosition: c.rawPosition ?? c.position,
+      permissionOverwrites: rawOverwrites.map((o: any) => {
         let name = '';
         let targetType = o.type; // 0 for role, 1 for member
-        if (o.type === 0) {
-          const role = roles.get(o.id);
+        if (o.id === guild.id) {
+          name = '@everyone';
+          targetType = 0;
+        } else if (o.type === 0 || o.type === '0' || o.type === 'role') {
+          const role = rolesCollection?.get?.(o.id) || guild.roles?.cache?.get?.(o.id) || rolesList.find((r: any) => r && r.id === o.id);
           name = role ? role.name : '';
+          targetType = 0;
         } else {
-          const member = guild.members.cache.get(o.id);
-          name = member ? userTag(member.user) : '';
+          const member = guild.members?.cache?.get?.(o.id);
+          name = member ? (member.user?.username || userTag(member.user)) : o.id;
+          targetType = 1;
         }
         return {
+          id: o.id,
           name,
           type: targetType,
-          allow: o.allow?.bitfield?.toString() || (Array.isArray(o.allow) ? o.allow : '0'),
-          deny: o.deny?.bitfield?.toString() || (Array.isArray(o.deny) ? o.deny : '0')
+          allow: o.allow?.bitfield?.toString() || (typeof o.allow === 'bigint' ? o.allow.toString() : (Array.isArray(o.allow) ? o.allow : '0')),
+          deny: o.deny?.bitfield?.toString() || (typeof o.deny === 'bigint' ? o.deny.toString() : (Array.isArray(o.deny) ? o.deny : '0'))
         };
-      }).filter((o: any) => o.name !== '') || []
+      }).filter((o: any) => o.name !== '' || Boolean(o.id)) || []
     };
   });
 
-  const backupEmojis = emojis.map((e: any) => ({
+  const backupEmojis = emojisList.map((e: any) => ({
     name: e.name,
     url: e.url
   }));
@@ -204,7 +224,8 @@ async function createBackupData(guild: any, creatorTag: string): Promise<any> {
       channels: backupChannels,
       roles: backupRoles,
       emojis: backupEmojis,
-      settings: backupSettings
+      settings: backupSettings,
+      everyonePermissions
     }
   };
 
@@ -213,7 +234,7 @@ async function createBackupData(guild: any, creatorTag: string): Promise<any> {
 
 export const activeBackupRestorations = new Set<string>();
 
-async function executeRestoration(guild: any, snapshot: any, scope: any, context: any) {
+export async function executeRestoration(guild: any, snapshot: any, scope: any, context: any) {
   if (activeBackupRestorations.has(guild.id)) {
     context.logSyncEvent?.(guild.id, 'Backup Restore: Restoration already active for this server.', 'warn');
     return;
@@ -226,14 +247,34 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
 
   log(`Initiating fast parallel restoration of snapshot "${snapshot.id}" (${snapshot.guildName})...`, 'warn');
   activeBackupRestorations.add(guild.id);
+  TrustedActorRateLimiter.setRestoring(guild.id, true);
   try {
     const { activeRestorationGuilds } = await import('../security/manifest.js');
     activeRestorationGuilds?.add(guild.id);
   } catch { }
 
   try {
-    const rolesScope = scope?.roles !== false;
-    const channelsScope = scope?.channels !== false;
+    if (!snapshot) {
+      log('Refusing backup restoration: snapshot is missing.', 'warn');
+      return;
+    }
+
+    if (!snapshot.data || snapshot.data.type === 'config_only' || Array.isArray(snapshot.data)) {
+      log('Config-only snapshot detected. Restoring module configurations without wiping channels or roles...', 'info');
+      const modulesToRestore = Array.isArray(snapshot.data) ? snapshot.data : (Array.isArray(snapshot.data?.modules) ? snapshot.data.modules : []);
+      if (context?.updateModuleConfig && Array.isArray(modulesToRestore)) {
+        for (const mod of modulesToRestore) {
+          if (mod?.id && mod?.config) {
+            context.updateModuleConfig(mod.id, mod.config);
+          }
+        }
+      }
+      log(`✅ Config-only restoration of snapshot "${snapshot.id}" completed safely (no channels/roles deleted).`, 'success');
+      return;
+    }
+
+    const rolesScope = scope?.roles !== false && Array.isArray(snapshot.data?.roles) && snapshot.data.roles.length > 0;
+    const channelsScope = scope?.channels !== false && Array.isArray(snapshot.data?.channels) && snapshot.data.channels.length > 0;
     const settingsScope = scope?.settings !== false;
     const emojisScope = scope?.expressions !== false;
 
@@ -241,7 +282,7 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
     log('⚡ Purging existing channels & roles...', 'info');
 
     let tempChannel: any = null;
-    if (channelsScope) {
+    if (channelsScope && Array.isArray(snapshot.data?.channels) && snapshot.data.channels.length > 0) {
       const existingChannels = await guild.channels.fetch().catch(() => new Map());
       try {
         tempChannel = await guild.channels.create({
@@ -257,7 +298,7 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
       await Promise.allSettled(channelsToDelete.map((c: any) => c.delete('Backup restoration - clean rewrite').catch(() => null)));
     }
 
-    if (rolesScope) {
+    if (rolesScope && Array.isArray(snapshot.data?.roles) && snapshot.data.roles.length > 0) {
       const existingRoles = await guild.roles.fetch().catch(() => new Map());
       const me = guild.members.me;
       const highestRolePos = me?.roles?.highest?.position ?? 999;
@@ -274,63 +315,75 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
 
     // ── STEP 2: FAST BATCHED ROLE RECREATION ──
     const newRolesMap = new Map<string, any>();
-    if (rolesScope && snapshot.data.roles && snapshot.data.roles.length > 0) {
-      log('⚡ Rebuilding role hierarchy...', 'info');
-      const sortedRoles = [...snapshot.data.roles].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+    if (rolesScope) {
+      if (snapshot.data.everyonePermissions && guild.roles.everyone) {
+        try {
+          await guild.roles.everyone.setPermissions(BigInt(snapshot.data.everyonePermissions)).catch(() => null);
+        } catch { }
+      }
 
-      const BATCH = 5;
-      for (let i = 0; i < sortedRoles.length; i += BATCH) {
-        const chunk = sortedRoles.slice(i, i + BATCH);
-        await Promise.allSettled(chunk.map(async (roleData: any) => {
-          try {
-            let perms: any = 0n;
-            if (typeof roleData.permissions === 'string' && roleData.permissions !== '0') {
-              try { perms = BigInt(roleData.permissions); } catch { }
-            } else if (Array.isArray(roleData.permissions)) {
-              perms = roleData.permissions;
-            }
+      if (snapshot.data.roles && snapshot.data.roles.length > 0) {
+        log('⚡ Rebuilding role hierarchy...', 'info');
+        const sortedRoles = [...snapshot.data.roles].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
 
-            let createdRole: any = null;
+        const BATCH = 5;
+        for (let i = 0; i < sortedRoles.length; i += BATCH) {
+          const chunk = sortedRoles.slice(i, i + BATCH);
+          await Promise.allSettled(chunk.map(async (roleData: any) => {
             try {
-              createdRole = await guild.roles.create({
-                name: roleData.name,
-                color: roleData.color || 0,
-                hoist: Boolean(roleData.hoist),
-                mentionable: Boolean(roleData.mentionable),
-                permissions: perms
-              });
-            } catch (err: any) {
-              if (err?.status === 429 || err?.code === 429) {
-                await new Promise(r => setTimeout(r, 400));
+              let perms: any = 0n;
+              if (typeof roleData.permissions === 'string' && roleData.permissions !== '0') {
+                try { perms = BigInt(roleData.permissions); } catch { }
+              } else if (Array.isArray(roleData.permissions)) {
+                perms = roleData.permissions;
+              }
+
+              let createdRole: any = null;
+              try {
                 createdRole = await guild.roles.create({
                   name: roleData.name,
                   color: roleData.color || 0,
                   hoist: Boolean(roleData.hoist),
                   mentionable: Boolean(roleData.mentionable),
                   permissions: perms
-                }).catch(() => null);
+                });
+              } catch (err: any) {
+                if (err?.status === 429 || err?.code === 429) {
+                  await new Promise(r => setTimeout(r, 400));
+                  createdRole = await guild.roles.create({
+                    name: roleData.name,
+                    color: roleData.color || 0,
+                    hoist: Boolean(roleData.hoist),
+                    mentionable: Boolean(roleData.mentionable),
+                    permissions: perms
+                  }).catch(() => null);
+                }
               }
-            }
 
-            if (createdRole) {
-              newRolesMap.set(roleData.name, createdRole);
-            }
-          } catch (e: any) { }
-        }));
-        await new Promise(r => setTimeout(r, 50));
+              if (createdRole) {
+                newRolesMap.set(roleData.name, createdRole);
+              }
+            } catch (e: any) { }
+          }));
+          await new Promise(r => setTimeout(r, 50));
+        }
+        log(`Recreated ${newRolesMap.size} of ${sortedRoles.length} roles.`, 'info');
+        // Elevate 'Created by Rage' role to top of hierarchy and assign to bot
+        await ensureRageRoleAtTop(guild);
       }
-      log(`Recreated ${newRolesMap.size} of ${sortedRoles.length} roles.`, 'info');
-      // Elevate 'Created by Rage' role to top of hierarchy and assign to bot
-      await ensureRageRoleAtTop(guild);
     }
 
-    // ── STEP 3: FAST BATCHED CATEGORY & CHANNEL RECREATION ──
+    // ── STEP 3: EXACT-ORDER CATEGORY & CHANNEL RECREATION ──
     if (channelsScope && snapshot.data.channels && snapshot.data.channels.length > 0) {
-      log('⚡ Rebuilding categories & channels...', 'info');
+      log('⚡ Rebuilding categories & channels with exact order & permissions...', 'info');
 
-      // 3A: Categories (Batch)
+      const createdChannelsList: { created: any; backup: any }[] = [];
+
+      // 3A: Categories (Sorted by Position)
       const newCategoriesMap = new Map<string, any>();
-      const categories = snapshot.data.channels.filter((c: any) => c.type === ChannelType.GuildCategory || c.type === 4);
+      const categories = snapshot.data.channels
+        .filter((c: any) => c.type === ChannelType.GuildCategory || c.type === 4)
+        .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
 
       for (let i = 0; i < categories.length; i += 5) {
         const chunk = categories.slice(i, i + 5);
@@ -340,28 +393,33 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
             try {
               createdCat = await guild.channels.create({
                 name: catData.name,
-                type: ChannelType.GuildCategory
+                type: ChannelType.GuildCategory,
+                position: catData.position
               });
             } catch (err: any) {
               if (err?.status === 429 || err?.code === 429) {
                 await new Promise(r => setTimeout(r, 400));
                 createdCat = await guild.channels.create({
                   name: catData.name,
-                  type: ChannelType.GuildCategory
+                  type: ChannelType.GuildCategory,
+                  position: catData.position
                 }).catch(() => null);
               }
             }
             if (createdCat) {
               newCategoriesMap.set(catData.name, createdCat);
+              // CRUCIAL: Include categories in createdChannelsList so permission overrides are restored
+              createdChannelsList.push({ created: createdCat, backup: catData });
             }
           } catch (e: any) { }
         }));
         await new Promise(r => setTimeout(r, 50));
       }
 
-      // 3B: Text & Voice Channels (Batch)
-      const nonCategories = snapshot.data.channels.filter((c: any) => c.type !== ChannelType.GuildCategory && c.type !== 4);
-      const createdChannelsList: { created: any; backup: any }[] = [];
+      // 3B: Text, Voice, Forum & Announcement Channels (Sorted by Position)
+      const nonCategories = snapshot.data.channels
+        .filter((c: any) => c.type !== ChannelType.GuildCategory && c.type !== 4)
+        .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
 
       for (let i = 0; i < nonCategories.length; i += 5) {
         const chunk = nonCategories.slice(i, i + 5);
@@ -371,19 +429,24 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
             const isVoice = chanData.type === 2 || chanData.type === ChannelType.GuildVoice;
             const isStage = chanData.type === 13 || chanData.type === ChannelType.GuildStageVoice;
             const isAnnouncement = chanData.type === 5 || chanData.type === ChannelType.GuildAnnouncement;
+            const isForum = chanData.type === 15 || chanData.type === ChannelType.GuildForum;
+
             const type = isVoice
               ? ChannelType.GuildVoice
               : isStage
                 ? ChannelType.GuildStageVoice
                 : isAnnouncement
                   ? ChannelType.GuildAnnouncement
-                  : ChannelType.GuildText;
+                  : isForum
+                    ? ChannelType.GuildForum
+                    : ChannelType.GuildText;
 
             const chanOptions: any = {
               name: chanData.name,
               type,
               parent: parent ? parent.id : undefined,
-              nsfw: Boolean(chanData.nsfw)
+              nsfw: Boolean(chanData.nsfw),
+              position: chanData.position
             };
 
             if (!isVoice && !isStage && chanData.topic) {
@@ -403,6 +466,10 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
               if (err?.status === 429 || err?.code === 429) {
                 await new Promise(r => setTimeout(r, 400));
                 createdChan = await guild.channels.create(chanOptions).catch(() => null);
+              } else if (type === ChannelType.GuildAnnouncement || type === ChannelType.GuildForum) {
+                // If destination server lacks Community feature for announcements/forums, fallback cleanly to text
+                chanOptions.type = ChannelType.GuildText;
+                createdChan = await guild.channels.create(chanOptions).catch(() => null);
               }
             }
 
@@ -414,10 +481,13 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
         await new Promise(r => setTimeout(r, 50));
       }
 
-      log(`Recreated ${createdChannelsList.length} of ${nonCategories.length} channels.`, 'info');
+      log(`Recreated ${createdChannelsList.length} categories & channels.`, 'info');
 
-      // 3C: Synchronize Permission Overwrites (Fast Parallel Batch)
-      log('⚡ Synchronizing channel permission overrides...', 'info');
+      // 3C: Synchronize Permission Overwrites (Categories + Channels)
+      log('⚡ Synchronizing categories & channels permission overrides...', 'info');
+      await guild.roles.fetch().catch(() => null);
+      await guild.members.fetch().catch(() => null);
+
       for (let i = 0; i < createdChannelsList.length; i += 5) {
         const chunk = createdChannelsList.slice(i, i + 5);
         await Promise.allSettled(chunk.map(async (item) => {
@@ -426,41 +496,90 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
 
           for (const ov of backup.permissionOverwrites || []) {
             let targetId = '';
-            if (ov.type === 0) {
-              if (ov.name === '@everyone') {
+            const isRole = ov.type === 0 || ov.type === '0' || ov.type === 'role';
+
+            if (isRole) {
+              if (ov.name === '@everyone' || ov.name === guild.id || ov.id === guild.id) {
                 targetId = guild.roles.everyone.id;
               } else {
-                const roleObj = newRolesMap.get(ov.name);
+                // Look in newly created roles map or existing roles in destination guild
+                const roleObj = newRolesMap.get(ov.name) ||
+                  (ov.id ? guild.roles.cache.get(ov.id) : null) ||
+                  (ov.name ? guild.roles.cache.find((r: any) => r.name.toLowerCase().trim() === ov.name.toLowerCase().trim()) : null);
                 if (roleObj) targetId = roleObj.id;
               }
             } else {
-              const memberObj = guild.members.cache.find((m: any) => userTag(m.user) === ov.name);
-              if (memberObj) targetId = memberObj.id;
+              if (ov.id && (guild.members.cache.has(ov.id) || /^\d{17,20}$/.test(String(ov.id)))) {
+                targetId = ov.id;
+              } else if (ov.name && /^\d{17,20}$/.test(String(ov.name))) {
+                targetId = ov.name;
+              } else if (ov.name) {
+                const memberObj = guild.members.cache.find((m: any) =>
+                  (userTag(m.user) || m.user?.tag || m.user?.username) === ov.name ||
+                  m.user?.username === ov.name
+                );
+                if (memberObj) targetId = memberObj.id;
+              }
             }
 
             if (targetId) {
-              let allowPerms: any = ov.allow;
-              let denyPerms: any = ov.deny;
-              if (typeof ov.allow === 'string' && ov.allow !== '0') {
-                try { allowPerms = BigInt(ov.allow); } catch { }
-              }
-              if (typeof ov.deny === 'string' && ov.deny !== '0') {
-                try { denyPerms = BigInt(ov.deny); } catch { }
-              }
+              let allowPerms: bigint = 0n;
+              let denyPerms: bigint = 0n;
+              try {
+                if (ov.allow && ov.allow !== '0') allowPerms = BigInt(ov.allow);
+              } catch { }
+              try {
+                if (ov.deny && ov.deny !== '0') denyPerms = BigInt(ov.deny);
+              } catch { }
 
               overwrites.push({
                 id: targetId,
-                type: ov.type,
+                type: isRole ? 0 : 1,
                 allow: allowPerms,
                 deny: denyPerms
               });
             }
           }
 
-          if (overwrites.length > 0) {
-            await created.permissionOverwrites.set(overwrites).catch(() => null);
+          if (overwrites.length > 0 && created.permissionOverwrites?.set) {
+            await created.permissionOverwrites.set(overwrites).catch((err: any) => {
+              console.warn(`[Backup Restore] Overwrite notice for ${created.name}:`, err?.message || err);
+            });
           }
         }));
+      }
+
+      // 3D: Bulk Ordering Enforcement via guild.channels.setPositions
+      log('⚡ Enforcing exact channel & category ordering...', 'info');
+      try {
+        const channelPositions: any[] = [];
+        // Categories
+        for (const catData of categories) {
+          const cat = newCategoriesMap.get(catData.name);
+          if (cat) {
+            channelPositions.push({
+              channel: cat.id,
+              position: catData.position ?? 0
+            });
+          }
+        }
+        // Channels under their parents
+        for (const item of createdChannelsList) {
+          if (item.backup.type !== ChannelType.GuildCategory && item.backup.type !== 4) {
+            channelPositions.push({
+              channel: item.created.id,
+              position: item.backup.position ?? 0,
+              parent: item.created.parentId || null
+            });
+          }
+        }
+        if (channelPositions.length > 0 && typeof guild.channels.setPositions === 'function') {
+          await guild.channels.setPositions(channelPositions).catch((err: any) => {
+            console.warn('[Backup Restore] setPositions bulk notice:', err?.message || err);
+          });
+        }
+      } catch (err: any) {
+        console.warn('[Backup Restore] Failed to apply bulk setPositions:', err?.message || err);
       }
 
       if (tempChannel && createdChannelsList.length > 0) {
@@ -498,13 +617,15 @@ async function executeRestoration(guild: any, snapshot: any, scope: any, context
   } catch (err: any) {
     log(`❌ Restoration failed: ${err.message}`, 'warn');
   } finally {
-    setTimeout(async () => {
+    const timer = setTimeout(async () => {
       activeBackupRestorations.delete(guild.id);
+      TrustedActorRateLimiter.setRestoring(guild.id, false);
       try {
         const { activeRestorationGuilds } = await import('../security/manifest.js');
         activeRestorationGuilds?.delete(guild.id);
       } catch { }
     }, 5000);
+    timer.unref?.();
   }
 }
 
@@ -642,21 +763,7 @@ export const BackupsManifest: ModuleManifest = {
 
         const interaction = interactionOrMessage;
         const isMessage = Boolean(interactionOrMessage.author);
-        const args: string[] = interactionOrMessage.args || interactionOrMessage.parsed?.args || [];
-        const sub = (
-          interactionOrMessage.options?.getSubcommand?.(false) ||
-          args[0]?.toLowerCase() ||
-          (isMessage ? 'create' : 'list')
-        );
-
-        if (!sub) {
-          const msg = '❌ Please specify a subcommand: `create`, `list`, `info`, `load`, or `delete`.';
-          return isMessage ? interactionOrMessage.reply(msg) : interactionOrMessage.reply({ content: msg, flags: 64 });
-        }
-
-        const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
-                        Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)) ||
-                        guild.ownerId === (interaction.user?.id || interaction.author?.id);
+        const executorId = interaction.user?.id || interaction.author?.id;
 
         const reply = async (payload: any) => {
           if (isMessage) {
@@ -667,6 +774,29 @@ export const BackupsManifest: ModuleManifest = {
           }
           return interactionOrMessage.reply({ ...payload, flags: 64 });
         };
+
+        // STRICT SERVER OWNER / EXTRA OWNER GATE (all /backup and r!backup subcommands)
+        const isOwner = await isOwnerOrExtraOwner(executorId, guild);
+        if (!isOwner) {
+          return reply({
+            content: '🔒 **Access Denied**: Backup commands and all subcommands (`create`, `list`, `info`, `load`, `delete`, `compare`, `preview`, `verify`, `schedule`, `permissions`, `channels`, `roles`, `emojis`) are strictly restricted to the **Server Owner** and **Extra Owners**.'
+          });
+        }
+
+        const args: string[] = interactionOrMessage.args || interactionOrMessage.parsed?.args || [];
+        const sub = (
+          interactionOrMessage.options?.getSubcommand?.(false) ||
+          args[0]?.toLowerCase() ||
+          (isMessage ? 'create' : 'list')
+        );
+
+        const validSubs = ['create', 'save', 'now', 'list', 'info', 'delete', 'load', 'compare', 'preview', 'verify', 'schedule', 'permissions', 'channels', 'roles', 'emojis'];
+        if (!sub || !validSubs.includes(sub)) {
+          const msg = '❌ Please specify a valid subcommand: `create`, `list`, `info`, `load`, `delete`, `compare`, `preview`, `verify`, `schedule`, `permissions`, `channels`, `roles`, or `emojis`.';
+          return reply({ content: msg });
+        }
+
+        const isAdmin = isOwner;
 
         const getBackupIdArg = () => {
           return (
@@ -746,8 +876,8 @@ export const BackupsManifest: ModuleManifest = {
           }
           const snapshot = await getBackupById(backupId);
 
-          if (!snapshot) {
-            return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` was not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) {
+            return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` was not found for this server.` });
           }
 
           const embed = new EmbedBuilder()
@@ -782,8 +912,8 @@ export const BackupsManifest: ModuleManifest = {
           }
           const snapshot = await getBackupById(backupId);
 
-          if (!snapshot) {
-            return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` was not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) {
+            return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` was not found for this server.` });
           }
 
           await deleteBackup(backupId);
@@ -803,8 +933,8 @@ export const BackupsManifest: ModuleManifest = {
           }
           const snapshot = await getBackupById(backupId);
 
-          if (!snapshot) {
-            return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` was not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) {
+            return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` was not found for this server.` });
           }
 
           // Save load intent mapping
@@ -841,14 +971,14 @@ export const BackupsManifest: ModuleManifest = {
           const backupId = getBackupIdArg();
           if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID to compare.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found for this server.` });
           return reply({ content: `<a:lovemail:1527647157371535420> **Backup Comparison (vs Current Guild)** for \`${backupId}\`:\n• **Roles**: ${snapshot.rolesCount} backup roles vs ${guild.roles.cache.size} current roles.\n• **Channels**: ${snapshot.channelsCount} backup channels vs ${guild.channels.cache.size} current channels.\nNo configuration drift identified.` });
         }
         else if (sub === 'preview') {
           const backupId = getBackupIdArg();
           if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID to preview.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found for this server.` });
           const embed = new EmbedBuilder()
             .setAuthor({ name: 'Rage Optimiser' })
             .setTitle(`<a:lovemail:1527647157371535420> Backup Snapshot Preview: ${snapshot.id}`)
@@ -862,7 +992,7 @@ export const BackupsManifest: ModuleManifest = {
           const backupId = getBackupIdArg();
           if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID to verify.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found for this server.` });
           return reply({ content: `<:ticks:1532620580266836148> **Backup Snapshot Verification Result** for \`${backupId}\`:\nFile checksum verified. Snapshot structure is intact and ready for deployment.` });
         }
         else if (sub === 'schedule') {
@@ -875,7 +1005,7 @@ export const BackupsManifest: ModuleManifest = {
           const backupId = getBackupIdArg();
           if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found for this server.` });
           await reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring permissions settings only from snapshot \`${backupId}\`...` });
           executeRestoration(guild, snapshot, { roles: false, channels: false, settings: true, expressions: false }, context).catch(console.error);
         }
@@ -884,7 +1014,7 @@ export const BackupsManifest: ModuleManifest = {
           const backupId = getBackupIdArg();
           if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found for this server.` });
           await reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring channels layout structure only from snapshot \`${backupId}\`...` });
           executeRestoration(guild, snapshot, { roles: false, channels: true, settings: false, expressions: false }, context).catch(console.error);
         }
@@ -893,7 +1023,7 @@ export const BackupsManifest: ModuleManifest = {
           const backupId = getBackupIdArg();
           if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found for this server.` });
           await reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring roles hierarchy only from snapshot \`${backupId}\`...` });
           executeRestoration(guild, snapshot, { roles: true, channels: false, settings: false, expressions: false }, context).catch(console.error);
         }
@@ -902,7 +1032,7 @@ export const BackupsManifest: ModuleManifest = {
           const backupId = getBackupIdArg();
           if (!backupId) return reply({ content: '<a:warning:1546155193303957504> Please specify a backup ID.' });
           const snapshot = await getBackupById(backupId);
-          if (!snapshot) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found.` });
+          if (!snapshot || snapshot.guildId !== guild.id) return reply({ content: `<a:warning:1546155193303957504> Backup with ID \`${backupId}\` not found for this server.` });
           await reply({ content: `<a:success_check:1546134620087783526> **Restoration Commencing**\nRestoring custom emojis only from snapshot \`${backupId}\`...` });
           executeRestoration(guild, snapshot, { roles: false, channels: false, settings: false, expressions: true }, context).catch(console.error);
         }
@@ -919,17 +1049,14 @@ export const BackupsManifest: ModuleManifest = {
           await interaction.deferUpdate().catch(() => {});
         }
 
-        // Re-verify admin permission on the button click — prevents bypass if the
-        // original slash command's permission check is somehow circumvented.
-        const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
-                        Boolean(interaction.member?.permissions?.has?.(PermissionFlagsBits.Administrator)) ||
-                        guild.ownerId === (interaction.user?.id || interaction.author?.id);
+        // Re-verify Server Owner / Extra Owner permission on the button click
+        const userId = interaction.user?.id || interaction.author?.id;
+        const isOwner = await isOwnerOrExtraOwner(userId, guild);
 
-        if (!isAdmin) {
-          return interaction.followUp({ content: '<a:warning:1546155193303957504> Administrator permissions required to confirm server restoration.', flags: 64 }).catch(() => {});
+        if (!isOwner) {
+          return interaction.followUp({ content: '🔒 **Access Denied**: Only the **Server Owner** and **Extra Owners** can confirm server restoration.', flags: 64 }).catch(() => {});
         }
 
-        const userId = interaction.user?.id || interaction.author?.id;
         const key = `${guild.id}:${userId}`;
         let backupId = pendingBackupLoads.get(key);
 
@@ -944,8 +1071,8 @@ export const BackupsManifest: ModuleManifest = {
         pendingBackupLoads.delete(key);
 
         const snapshot = await getBackupById(backupId);
-        if (!snapshot) {
-          return interaction.followUp({ content: `<a:warning:1546155193303957504> Backup snapshot data for \`${backupId}\` was not found in the database.`, flags: 64 }).catch(() => {});
+        if (!snapshot || snapshot.guildId !== guild.id) {
+          return interaction.followUp({ content: `<a:warning:1546155193303957504> Backup snapshot data for \`${backupId}\` was not found for this server.`, flags: 64 }).catch(() => {});
         }
 
         try {
@@ -973,6 +1100,10 @@ export const BackupsManifest: ModuleManifest = {
         }
 
         const userId = interaction.user?.id || interaction.author?.id;
+        const isOwner = await isOwnerOrExtraOwner(userId, guild);
+        if (!isOwner) {
+          return interaction.followUp({ content: '🔒 **Access Denied**: Only the **Server Owner** and **Extra Owners** can cancel server restoration.', flags: 64 }).catch(() => {});
+        }
         pendingBackupLoads.delete(`${guild.id}:${userId}`);
 
         await interaction.editReply({
@@ -997,7 +1128,9 @@ export const BackupsManifest: ModuleManifest = {
       method: 'get',
       handler: async (req: any, res: any, context: any) => {
         const backup = await getBackupById(req.params.id);
-        if (!backup) return res.status(404).json({ error: 'Backup not found' });
+        if (!backup || (context?.guildId && backup.guildId !== context.guildId)) {
+          return res.status(404).json({ error: 'Backup not found for this server' });
+        }
         res.json(backup);
       }
     },
@@ -1024,7 +1157,9 @@ export const BackupsManifest: ModuleManifest = {
       handler: async (req: any, res: any, context: any) => {
         const { backupId, scope } = req.body;
         const snapshot = await getBackupById(backupId);
-        if (!snapshot) return res.status(404).json({ error: 'Backup snapshot not found' });
+        if (!snapshot || (context?.guildId && snapshot.guildId !== context.guildId)) {
+          return res.status(404).json({ error: 'Backup snapshot not found for this server' });
+        }
 
         const guild = context.client?.guilds.cache.get(context.guildId);
         if (!guild) return res.status(400).json({ error: 'Discord guild not connected or available' });
@@ -1037,6 +1172,10 @@ export const BackupsManifest: ModuleManifest = {
       path: '/delete/:id',
       method: 'post',
       handler: async (req: any, res: any, context: any) => {
+        const backup = await getBackupById(req.params.id);
+        if (!backup || (context?.guildId && backup.guildId !== context.guildId)) {
+          return res.status(404).json({ error: 'Backup not found for this server' });
+        }
         await deleteBackup(req.params.id);
         res.json({ success: true });
       }

@@ -1,4 +1,6 @@
 export async function runMuteCheck(client: any, guildId: string, config: any, context: any) {
+  if (config.autoUnmute === false) return;
+
   const activeMutes = config.activeMutes || [];
   if (activeMutes.length === 0) return;
 
@@ -22,8 +24,14 @@ export async function runMuteCheck(client: any, guildId: string, config: any, co
       try {
         const member = await guild.members.fetch(mute.userId).catch(() => null);
         if (member) {
+          if (!member.voice.channel) {
+            if (now - mute.unmuteAt <= 86400000) {
+              remainingMutes.push(mute);
+            }
+            continue;
+          }
           // Unmute if they are currently connected and server muted
-          if (member.voice.channel && member.voice.serverMute) {
+          if (member.voice.serverMute) {
             await member.voice.setMute(false, 'Voice Protection: Temporary mute expired').catch(() => {});
           }
           if (context.logSyncEvent) {

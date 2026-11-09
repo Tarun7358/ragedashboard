@@ -188,7 +188,11 @@ async function quarantineMember(guild: Guild, executorId: string, reason: string
     r.id !== guild.id && !r.managed &&
     DANGEROUS_PERMS.some(p => r.permissions.has(p))
   );
-  for (const [, r] of dangerousRoles) await member.roles.remove(r).catch(() => {});
+  const removedRoleIds: string[] = [];
+  for (const [rId, r] of dangerousRoles) {
+    removedRoleIds.push(rId);
+    await member.roles.remove(r).catch(() => {});
+  }
 
   // Add quarantine role if configured
   if (config.quarantineRoleId) {
@@ -197,6 +201,35 @@ async function quarantineMember(guild: Guild, executorId: string, reason: string
 
   // Apply maximum timeout (28 days)
   await member.timeout(28 * 24 * 60 * 60 * 1000, reason).catch(() => {});
+
+  // Persist removed roles in security.config.quarantinedUsers so unquarantine restores them
+  try {
+    const { ModuleRegistry } = await import('../core/ModuleRegistry.js');
+    const registry = ModuleRegistry.getInstance();
+    if (registry) {
+      const secMod = registry.getModulesState(guild.id)?.find((m: any) => m.id === 'security');
+      if (secMod) {
+        const currentQueue = Array.isArray(secMod.config?.quarantinedUsers) ? [...secMod.config.quarantinedUsers] : [];
+        const existingIdx = currentQueue.findIndex((u: any) => u.userId === executorId);
+        const entry = {
+          id: `q-${Date.now()}-${executorId}`,
+          tag: member.user.username,
+          userId: executorId,
+          reason,
+          time: new Date().toISOString(),
+          timestamp: Date.now(),
+          status: 'Quarantined',
+          risk: 'danger',
+          originalRoles: removedRoleIds,
+          roles: removedRoleIds,
+          roleIds: removedRoleIds
+        };
+        if (existingIdx >= 0) currentQueue[existingIdx] = { ...currentQueue[existingIdx], ...entry };
+        else currentQueue.push(entry);
+        registry.updateModuleConfig(guild.id, 'security', { ...secMod.config, quarantinedUsers: currentQueue });
+      }
+    }
+  } catch {}
 
   // BUG-11 FIX: Register in activeQuarantines so manifest guildMemberUpdate won't double-process
   const qKey = `${guild.id}_${executorId}`;
@@ -353,10 +386,13 @@ export async function setOwnerRaidLockdown(
     await guild.edit({ verificationLevel: GuildVerificationLevel.VeryHigh }).catch(() => {});
 
     for (const [, channel] of guild.channels.cache) {
-      if (channel.type !== 0 && channel.type !== 2 && channel.type !== 5) continue;
+      if (!(channel as any).permissionOverwrites || (channel as any).isThread?.()) continue;
+      const isVoice = (channel as any).isVoiceBased?.() || channel.type === 2 || channel.type === 13;
       await (channel as any).permissionOverwrites?.edit?.(
         guild.roles.everyone,
-        { CreateInstantInvite: false },
+        isVoice
+          ? { CreateInstantInvite: false, Connect: false, SendMessages: false }
+          : { CreateInstantInvite: false, SendMessages: false, AddReactions: false, CreatePublicThreads: false, CreatePrivateThreads: false },
         { reason: `Owner Raid Lockdown enabled by ${operatorId}` }
       ).catch(() => {});
     }
@@ -386,10 +422,18 @@ export async function setOwnerRaidLockdown(
     await guild.edit({ verificationLevel: GuildVerificationLevel.Medium }).catch(() => {});
 
     for (const [, channel] of guild.channels.cache) {
-      if (channel.type !== 0 && channel.type !== 2 && channel.type !== 5) continue;
+      if (!(channel as any).permissionOverwrites || (channel as any).isThread?.()) continue;
       await (channel as any).permissionOverwrites?.edit?.(
         guild.roles.everyone,
-        { CreateInstantInvite: null },
+        {
+          CreateInstantInvite: null,
+          SendMessages: null,
+          SendMessagesInThreads: null,
+          AddReactions: null,
+          CreatePublicThreads: null,
+          CreatePrivateThreads: null,
+          Connect: null
+        },
         { reason: `Owner Raid Lockdown lifted by ${operatorId}` }
       ).catch(() => {});
     }

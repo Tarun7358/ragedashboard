@@ -141,8 +141,8 @@ export class DashboardSyncService {
 
       if (isComponentsV2Msg && !hasV2) {
         // Message was created with MessageFlags.IsComponentsV2, cannot be edited with legacy embeds. Delete and redeploy fresh.
-        await message.delete().catch(() => {});
-        await deploySecurityDashboardToChannel(guild).catch(() => {});
+        await message.delete().catch(() => { });
+        await deploySecurityDashboardToChannel(guild).catch(() => { });
         return true;
       }
 
@@ -152,15 +152,15 @@ export class DashboardSyncService {
 
       await message.edit(sendPayload).catch(async (editErr: any) => {
         console.warn(`[DashboardSync] Edit failed for guild ${guildId}, redeploying fresh:`, editErr?.message || editErr);
-        await message.delete().catch(() => {});
-        await deploySecurityDashboardToChannel(guild).catch(() => {});
+        await message.delete().catch(() => { });
+        await deploySecurityDashboardToChannel(guild).catch(() => { });
       });
 
       return true;
     } catch (err: any) {
       if (err?.code === 10008 || err?.code === 10003) {
         this.inMemoryCache.delete(guildId);
-        await Database.removeDashboard(guildId).catch(() => {});
+        await Database.removeDashboard(guildId).catch(() => { });
       }
       return false;
     }

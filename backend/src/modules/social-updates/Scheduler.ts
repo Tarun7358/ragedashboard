@@ -103,6 +103,27 @@ export class Scheduler {
   }
 
   /**
+   * Force check a specific guild (or all guilds) immediately.
+   */
+  async forceCheckGuild(guildId?: string): Promise<void> {
+    this.lastFetchTimes.clear();
+    if (guildId) {
+      const subs = await SocialSubscriptionRepository.findAll(guildId).catch(() => []);
+      const enabledSubs = subs.filter(s => s.enabled);
+      if (enabledSubs.length > 0) {
+        const groups = this.groupSubscriptions(enabledSubs);
+        for (const group of groups) {
+          await this.pollAccountGroup(group).catch(err =>
+            this.log(`Error force-checking ${group.provider}:${group.sourceId}: ${err.message}`, 'warn')
+          );
+        }
+        return;
+      }
+    }
+    await this.tick().catch(err => this.log(`Immediate check error: ${err.message}`, 'warn'));
+  }
+
+  /**
    * Core scheduler tick. Runs once every 30 seconds.
    */
   private async tick(): Promise<void> {
@@ -201,6 +222,7 @@ export class Scheduler {
 
       // Sort oldest to newest (ComparisonEngine already does this, but confirm)
       const newestItem = newItems[newItems.length - 1];
+      const matchedItemKeys = new Set<string>();
 
       // Fan out notifications to all subscribing guilds
       for (const sub of group.subscriptions) {
@@ -214,13 +236,14 @@ export class Scheduler {
         const filtered = provider.filterByContentType(newItems, contentFilter);
 
         for (const item of filtered) {
+          const type = item.extra?.contentType || (item.isShort ? 'short' : 'video');
+          const itemCacheKey = `${item.id}:${type}`;
+          matchedItemKeys.add(itemCacheKey);
+
           const publishedTime = new Date(item.publishedAt).getTime();
           const oneHourAgo = Date.now() - 60 * 60 * 1000;
           
           if (!isNaN(publishedTime) && publishedTime < oneHourAgo) {
-            const type = item.extra?.contentType || (item.isShort ? 'short' : 'video');
-            const itemCacheKey = `${item.id}:${type}`;
-            
             await SocialSubscriptionRepository.insertCache({
               id: itemCacheKey,
               provider: sub.provider,
@@ -244,6 +267,24 @@ export class Scheduler {
           validationStatus: 'valid',
           validationError: undefined
         });
+      }
+
+      // Clean up any items filtered out by all subscriptions in the group so PendingQueueCache never leaks
+      for (const item of newItems) {
+        const type = item.extra?.contentType || (item.isShort ? 'short' : 'video');
+        const itemCacheKey = `${item.id}:${type}`;
+        if (!matchedItemKeys.has(itemCacheKey)) {
+          await SocialSubscriptionRepository.insertCache({
+            id: itemCacheKey,
+            provider: group.provider,
+            sourceId: group.sourceId,
+            contentType: type,
+            publishedAt: item.publishedAt,
+            createdAt: new Date().toISOString()
+          }).catch(() => {});
+          PendingQueueCache.delete(group.provider, group.sourceId, itemCacheKey);
+          PendingQueueCache.delete(group.provider, group.sourceId, item.id);
+        }
       }
     } catch (err: any) {
       // Mark validation failures / network errors on all subscriptions in the group

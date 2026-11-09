@@ -678,9 +678,14 @@ export async function buildAutoModDashboardComponents(guild: any, secConfig: any
   if (!amConfig || Object.keys(amConfig).length === 0) {
     const db = Database.getDb();
     if (db && guildId) {
-      const row = await db.get<any>('SELECT configJson FROM guild_module_configs WHERE guildId = ? AND moduleId = ?', [guildId, 'automod']).catch(() => null);
-      if (row?.configJson) {
-        try { amConfig = JSON.parse(row.configJson); } catch { }
+      const row = await db.get<any>('SELECT modules FROM guild_configs WHERE guildId = ?', [guildId]).catch(() => null);
+      if (row?.modules) {
+        try {
+          const parsedModules = JSON.parse(row.modules);
+          const amMod = Array.isArray(parsedModules) ? parsedModules.find((m: any) => m.id === 'automod') : null;
+          if (amMod?.config) amConfig = amMod.config;
+          if (amMod?.status) amModStatus = amMod.status;
+        } catch { }
       }
     }
   }
@@ -948,9 +953,15 @@ export async function buildWhitelistManagerGUI(guild: any, secConfig: any, extra
   }
   if (modules.length === 0 && db && guildId) {
     try {
-      const mwRow = await db.get<any>('SELECT configJson FROM guild_module_configs WHERE guildId = ? AND moduleId = ?', [guildId, 'member_whitelist']).catch(() => null);
-      if (mwRow?.configJson) {
-        modules.push({ id: 'member_whitelist', config: JSON.parse(mwRow.configJson) });
+      const cfgRow = await db.get<any>('SELECT modules FROM guild_configs WHERE guildId = ?', [guildId]).catch(() => null);
+      if (cfgRow?.modules) {
+        const parsedModules = JSON.parse(cfgRow.modules);
+        if (Array.isArray(parsedModules)) {
+          const mwMod = parsedModules.find((m: any) => m.id === 'member_whitelist');
+          if (mwMod) modules.push(mwMod);
+          const secMod = parsedModules.find((m: any) => m.id === 'security');
+          if (secMod) modules.push(secMod);
+        }
       }
     } catch { }
   }
@@ -1366,9 +1377,9 @@ export function registerConfigCommands(): void {
               if (name === 'type') return args[1]?.toLowerCase();
               return args[1]?.toLowerCase();
             },
-            getChannel: () => message.mentions.channels.first(),
-            getRole: () => message.mentions.roles.first(),
-            getUser: () => message.mentions.users.first(),
+            getChannel: () => message.mentions?.channels?.first?.(),
+            getRole: () => message.mentions?.roles?.first?.(),
+            getUser: () => message.mentions?.users?.first?.(),
             getBoolean: () => null,
             getInteger: () => null
           },
@@ -1420,10 +1431,10 @@ export function registerConfigCommands(): void {
               if (val === 'false' || val === 'off' || val === 'disable' || val === 'no') return false;
               return null;
             },
-            getChannel: () => message.mentions.channels.first(),
-            getRole: () => message.mentions.roles.first(),
-            getUser: () => message.mentions.users.first(),
-            getMember: () => message.mentions.members?.first?.()
+            getChannel: () => message.mentions?.channels?.first?.(),
+            getRole: () => message.mentions?.roles?.first?.(),
+            getUser: () => message.mentions?.users?.first?.(),
+            getMember: () => message.mentions?.members?.first?.()
           },
           reply: async (data: any) => {
             if (typeof data === 'string') return message.reply({ content: data });
@@ -1464,9 +1475,9 @@ export function registerConfigCommands(): void {
               if (name === 'domain') return effectiveArgs[2] || effectiveArgs[1];
               return effectiveArgs[1]?.toLowerCase();
             },
-            getChannel: () => message.mentions.channels.first(),
-            getRole: () => message.mentions.roles.first(),
-            getUser: () => message.mentions.users.first()
+            getChannel: () => message.mentions?.channels?.first?.(),
+            getRole: () => message.mentions?.roles?.first?.(),
+            getUser: () => message.mentions?.users?.first?.()
           },
           reply: async (data: any) => {
             if (typeof data === 'string') return message.reply({ content: data });
@@ -1935,7 +1946,7 @@ export function registerConfigCommands(): void {
       }
       // Alias argument normalizer (e.g. r!antinuke threshold anti_role_grant 11)
       let effectiveArgs = [...args];
-      const rawCmd = message.content.trim().split(/\s+/)[0]?.toLowerCase() || '';
+      const rawCmd = (message.content || '').trim().split(/\s+/)[0]?.toLowerCase() || '';
       const cleanCmd = rawCmd.replace(/^(r!|!|\/)/, '');
 
       if (['antinuke', 'an'].includes(cleanCmd)) {
@@ -1996,9 +2007,9 @@ export function registerConfigCommands(): void {
                 if (val === 'false' || val === 'off' || val === 'disable' || val === 'no') return false;
                 return null;
               },
-              getChannel: () => message.mentions.channels.first(),
-              getRole: () => message.mentions.roles.first(),
-              getUser: () => message.mentions.users.first()
+              getChannel: () => message.mentions?.channels?.first?.(),
+              getRole: () => message.mentions?.roles?.first?.(),
+              getUser: () => message.mentions?.users?.first?.()
             },
             reply: async (data: any) => {
               if (typeof data === 'string') return message.reply({ content: data });
@@ -2045,14 +2056,19 @@ export function registerConfigCommands(): void {
         const now = new Date().toISOString();
 
         const configRow = await db.get<any>('SELECT * FROM guild_configs WHERE guildId = ?', [guildId]);
+        const backupPayload = JSON.stringify({
+          type: 'config_only',
+          modules: configRow ? JSON.parse(configRow.modules || '[]') : [],
+          globalSettings: configRow ? JSON.parse(configRow.globalSettings || '{}') : {}
+        });
 
         await db.run(
           `INSERT INTO guild_backups (id, timestamp, guildId, guildName, createdByName, channelsCount, rolesCount, emojisCount, data)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            backupId, now, guildId, message.guild!.name, message.author.tag,
+            backupId, now, guildId, message.guild!.name, message.author?.tag || (message as any).user?.username || 'Admin',
             message.guild!.channels.cache.size, message.guild!.roles.cache.size, message.guild!.emojis.cache.size,
-            configRow ? configRow.modules : '[]'
+            backupPayload
           ]
         );
 
@@ -2506,8 +2522,9 @@ export function registerConfigCommands(): void {
             }
           }
 
-          const targetRole = message.mentions.roles.first() ||
-            message.guild?.roles.cache.get(roleArg) ||
+          const cleanRoleId = roleArg.replace(/[<@&>]/g, '');
+          const targetRole = message.mentions?.roles?.first?.() ||
+            message.guild?.roles.cache.get(cleanRoleId) ||
             message.guild?.roles.cache.find(r => r.name.toLowerCase() === roleArg.toLowerCase());
 
           if (!targetRole) {
@@ -2562,7 +2579,8 @@ export function registerConfigCommands(): void {
       // PreBot Whitelist Guard Master Toggle (`r!config prebot ...`)
       if (['prebot', 'prebotwhitelist', 'botwhitelist', 'bwl'].includes(moduleName)) {
         const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
-        const isAuthorized = await isOwnerOrExtraOwner(message.author.id, message.guild!);
+        const execId = message.author?.id || (message as any).user?.id;
+        const isAuthorized = await isOwnerOrExtraOwner(execId, message.guild!);
         if (!isAuthorized) {
           return message.reply({
             embeds: [createLimeEmbed({
@@ -2571,7 +2589,7 @@ export function registerConfigCommands(): void {
             })]
           });
         }
-        const action = effectiveArgs[1]?.toLowerCase() || 'status';
+        const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const secModule = modules.find((m: any) => m.id === 'security');
         const secConfig = secModule?.config || {};
@@ -2587,6 +2605,13 @@ export function registerConfigCommands(): void {
               description: `${APPROVED_ICON} PreBot Whitelist Guard is now **\`${isEnabled ? 'ENABLED (ACTIVE)' : 'DISABLED (INACTIVE)'}\`**.\n\n${isEnabled ? 'Unapproved bots will be automatically kicked on join.' : 'Bot join enforcement is paused. Bots can join freely without pre-registration.'}`
             })]
           });
+        }
+
+        if (action && action !== 'status') {
+          const prebotCmd = PrefixRegistry.getCommand('prebot');
+          if (prebotCmd && prebotCmd.execute) {
+            return prebotCmd.execute(message, effectiveArgs.slice(1), extra);
+          }
         }
 
         const isEnabled = secConfig.prebotEnabled !== false;
@@ -2828,7 +2853,7 @@ export function registerConfigCommands(): void {
         }
 
         if (['clearwarns', 'clearwarn', 'resetwarns', 'resetwarn'].includes(cleanAction)) {
-          const targetUser = message.mentions.users.first();
+          const targetUser = message.mentions?.users?.first?.();
           if (!targetUser) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -2850,7 +2875,7 @@ export function registerConfigCommands(): void {
         }
 
         if (['warnings', 'warns', 'warning', 'warn'].includes(cleanAction)) {
-          const targetUser = message.mentions.users.first() || message.author;
+          const targetUser = message.mentions?.users?.first?.() || message.author || (message as any).user;
           const maxLimit = typeof amConfig.antiLinkLimit === 'number' && amConfig.antiLinkLimit > 0
             ? amConfig.antiLinkLimit
             : (typeof amConfig.limit === 'number' && amConfig.limit > 0 ? amConfig.limit : 5);
@@ -3009,9 +3034,9 @@ export function registerConfigCommands(): void {
                   if (name === 'domain') return passArgs[2] || passArgs[1];
                   return passArgs[1]?.toLowerCase();
                 },
-                getChannel: () => message.mentions.channels.first(),
-                getRole: () => message.mentions.roles.first(),
-                getUser: () => message.mentions.users.first()
+                getChannel: () => message.mentions?.channels?.first?.(),
+                getRole: () => message.mentions?.roles?.first?.(),
+                getUser: () => message.mentions?.users?.first?.()
               },
               reply: async (data: any) => {
                 if (typeof data === 'string') return message.reply({ content: data });
@@ -3066,8 +3091,8 @@ export function registerConfigCommands(): void {
         }
       }
 
-      // Voice Protection Sub-Configuration (`r!config voiceprotection ...`)
-      if (moduleName === 'voiceprotection' || moduleName === 'vp') {
+      // Voice Protection Sub-Configuration (`r!config voiceprotection ...` / `r!config voice ...`)
+      if (moduleName === 'voiceprotection' || moduleName === 'vp' || (moduleName === 'voice' && !['jtc', 'jointocreate', 'hub', 'setup'].includes(effectiveArgs[1]?.toLowerCase() || ''))) {
         const action = effectiveArgs[1]?.toLowerCase();
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const vpModule = modules.find((m: any) => m.id === 'voice-protection');
@@ -3161,8 +3186,10 @@ export function registerConfigCommands(): void {
       }
 
       // Join-To-Create Voice Manager Sub-Configuration (`r!config jtc ...`)
-      if (moduleName === 'jtc' || moduleName === 'jointocreate') {
-        const action = effectiveArgs[1]?.toLowerCase();
+      if (moduleName === 'jtc' || moduleName === 'jointocreate' || (moduleName === 'voice' && ['jtc', 'jointocreate', 'hub', 'setup'].includes(effectiveArgs[1]?.toLowerCase() || ''))) {
+        const isVoiceJtc = moduleName === 'voice' && ['jtc', 'jointocreate'].includes(effectiveArgs[1]?.toLowerCase() || '');
+        const action = isVoiceJtc ? (effectiveArgs[2] ? 'setup' : 'status') : effectiveArgs[1]?.toLowerCase();
+        const jtcSliceStart = isVoiceJtc ? 2 : 2;
         const modules = extra?.getModulesState ? extra.getModulesState() : [];
         const jtcModule = modules.find((m: any) => m.id === 'join_to_create' || m.id === 'joinToCreate' || m.id === 'voice_manager');
         const jtcConfig = jtcModule?.config || {};
@@ -3205,8 +3232,8 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'hub' || action === 'setup') {
-          const query = effectiveArgs.slice(2).join(' ').trim();
-          let channel: any = message.mentions.channels.first();
+          const query = effectiveArgs.slice(jtcSliceStart).join(' ').trim();
+          let channel: any = message.mentions?.channels?.first?.();
 
           if (!channel && query && message.guild) {
             const raw = query.replace(/[<#>]/g, '').trim();
@@ -3331,7 +3358,7 @@ export function registerConfigCommands(): void {
           });
         }
 
-        if (action === 'xp') {
+        if (action === 'xp' || action === 'rate') {
           const xpVal = parseInt(effectiveArgs[2], 10);
           if (isNaN(xpVal) || xpVal < 1 || xpVal > 1000) {
             return message.reply({
@@ -3352,7 +3379,11 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'channel') {
-          const channel = message.mentions.channels.first();
+          let channel = message.mentions?.channels?.first?.();
+          if (!channel && effectiveArgs[2] && message.guild) {
+            const cleanId = effectiveArgs[2].replace(/[<#>]/g, '');
+            channel = message.guild.channels.cache.get(cleanId);
+          }
           if (effectiveArgs[2]?.toLowerCase() === 'current' || effectiveArgs[2]?.toLowerCase() === 'none') {
             updateLvlConfig({ levelUpChannelId: null });
             return message.reply({
@@ -3427,7 +3458,11 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'channel') {
-          const channel = message.mentions.channels.first();
+          let channel = message.mentions?.channels?.first?.();
+          if (!channel && effectiveArgs[2] && message.guild) {
+            const cleanId = effectiveArgs[2].replace(/[<#>]/g, '');
+            channel = message.guild.channels.cache.get(cleanId);
+          }
           if (!channel) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -3447,7 +3482,11 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'role' || action === 'verifiedrole') {
-          const role = message.mentions.roles.first();
+          let role = message.mentions?.roles?.first?.();
+          if (!role && effectiveArgs[2] && message.guild) {
+            const cleanId = effectiveArgs[2].replace(/[<@&>]/g, '');
+            role = message.guild.roles.cache.get(cleanId);
+          }
           if (!role) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -3467,7 +3506,11 @@ export function registerConfigCommands(): void {
         }
 
         if (action === 'unverifiedrole' || action === 'unverified') {
-          const role = message.mentions.roles.first();
+          let role = message.mentions?.roles?.first?.();
+          if (!role && effectiveArgs[2] && message.guild) {
+            const cleanId = effectiveArgs[2].replace(/[<@&>]/g, '');
+            role = message.guild.roles.cache.get(cleanId);
+          }
           if (!role) {
             return message.reply({
               embeds: [createLimeEmbed({
@@ -3610,7 +3653,7 @@ export function registerConfigCommands(): void {
           const provider = effectiveArgs[2]?.toLowerCase();
           const sourceId = effectiveArgs[3];
           const channelArg = effectiveArgs[4];
-          let channel: any = message.mentions.channels.first();
+          let channel: any = message.mentions?.channels?.first?.();
           if (!channel && channelArg && message.guild) {
             const cleanId = channelArg.replace(/[<#>]/g, '');
             channel = message.guild.channels.cache.get(cleanId);
@@ -3751,14 +3794,17 @@ export function registerConfigCommands(): void {
       const getMod = (id: string) => modules.find((m: any) => m.id === id);
       const isModEnabled = (id: string) => {
         const m = getMod(id);
-        return m ? (m.enabled !== false && m.status !== 'Disabled' && m.status !== 'Inactive') : true;
+        if (!m) return true;
+        if (m.enabled === false) return false;
+        const s = String(m.status || '').toLowerCase();
+        return s === 'enabled' || s === 'active';
       };
 
       const hubDb = Database.getDb();
       const extraOwnerRows = hubDb ? await hubDb.all<any>('SELECT * FROM extra_owners WHERE guildId = ?', [message.guild!.id]).catch(() => []) : [];
       const socialSubs = await SocialSubscriptionRepository.findAll(message.guild!.id).catch(() => []);
 
-      const antinukeStatus = isModEnabled('anti-nuke') ? `${APPROVED_ICON} Enabled — **Protections Active**` : `${WRONG_EMOJI} Disabled — **Protections Offline**`;
+      const antinukeStatus = isModEnabled('security') ? `${APPROVED_ICON} Enabled — **Protections Active**` : `${WRONG_EMOJI} Disabled — **Protections Offline**`;
       const automodStatus = isModEnabled('automod') ? `${APPROVED_ICON} Enabled — **Anti-Link & Anti-Spam Active**` : `${WRONG_EMOJI} Disabled — **Filters Offline**`;
       const ticketStatus = isModEnabled('tickets') ? `${APPROVED_ICON} Enabled — **Support Panels Active**` : `${WRONG_EMOJI} Disabled — **Panels Closed**`;
       const voiceStatus = isModEnabled('voice-protection') ? `${APPROVED_ICON} Enabled — **Voice Security Active**` : `${WRONG_EMOJI} Disabled — **Security Inactive**`;
@@ -3986,7 +4032,7 @@ export function registerConfigCommands(): void {
         limit = parseInt(args[argOffset + 1] || '50', 10);
       } else if (mode === 'user' || mode === 'member') {
         filterType = 'user';
-        const userMention = message.mentions.users.first();
+        const userMention = message.mentions?.users?.first?.();
         targetUserId = userMention?.id || args[argOffset + 1];
         limit = parseInt(args[argOffset + 2] || '50', 10);
       } else if (mode === 'links' || mode === 'link' || mode === 'url') {
@@ -4185,18 +4231,38 @@ export const ConfigManifest: ModuleManifest = {
           args = interaction.parsed.args;
         } else {
           const subcommand = interaction.options?.getSubcommand?.() || 'overview';
-          const action = interaction.options?.getString?.('action') || interaction.options?.getString?.('filter') || interaction.options?.getString?.('category') || '';
-          const param = interaction.options?.getString?.('parameter') || interaction.options?.getString?.('platform') || '';
-          const val = interaction.options?.getString?.('value') || interaction.options?.getString?.('source') || '';
-          const target = interaction.options?.getUser?.('target') || interaction.options?.getMember?.('target');
-          const channel = interaction.options?.getChannel?.('channel');
+          if (subcommand === 'logging') {
+            const cat = interaction.options?.getString?.('category') || 'all';
+            const ch = interaction.options?.getChannel?.('channel');
+            args = ch ? ['logging', 'channel', cat, `<#${ch.id}>`] : ['logging', 'status'];
+          } else {
+            const action = interaction.options?.getString?.('action') || interaction.options?.getString?.('filter') || interaction.options?.getString?.('category') || '';
+            const param = interaction.options?.getString?.('parameter') || interaction.options?.getString?.('platform') || '';
+            const val = interaction.options?.getString?.('value') || interaction.options?.getString?.('source') || '';
+            const target = interaction.options?.getUser?.('target') || interaction.options?.getMember?.('target');
+            const channel = interaction.options?.getChannel?.('channel');
 
-          if (subcommand && subcommand !== 'overview') args.push(subcommand);
-          if (action) args.push(action);
-          if (param) args.push(param);
-          if (val) args.push(val);
-          if (target) args.push(`<@${target.id}>`);
-          if (channel) args.push(`<#${channel.id}>`);
+            if (subcommand && subcommand !== 'overview') args.push(subcommand);
+            if (action) args.push(action);
+            if (param) args.push(param);
+            if (val) args.push(val);
+            if (target) args.push(`<@${target.id}>`);
+            if (channel) args.push(`<#${channel.id}>`);
+          }
+        }
+
+        if (!interaction.content) interaction.content = `r!config ${args.join(' ')}`.trim();
+        if (!interaction.author && interaction.user) interaction.author = interaction.user;
+        if (!interaction.mentions) {
+          const optChannel = interaction.options?.getChannel?.('channel');
+          const optUser = interaction.options?.getUser?.('target');
+          const optRole = interaction.options?.getRole?.('role');
+          interaction.mentions = {
+            channels: { first: () => optChannel || null },
+            roles: { first: () => optRole || null },
+            users: { first: () => optUser || null },
+            members: { first: () => interaction.options?.getMember?.('target') || null }
+          };
         }
 
         const cmdMeta = PrefixRegistry.get('config');
@@ -4208,6 +4274,16 @@ export const ConfigManifest: ModuleManifest = {
     {
       name: 'command_setup',
       handler: async (client: any, interaction: any) => {
+        if (!interaction.content) interaction.content = 'r!setup';
+        if (!interaction.author && interaction.user) interaction.author = interaction.user;
+        if (!interaction.mentions) {
+          interaction.mentions = {
+            channels: { first: () => null },
+            roles: { first: () => null },
+            users: { first: () => null },
+            members: { first: () => null }
+          };
+        }
         const cmdMeta = PrefixRegistry.get('setup');
         if (cmdMeta && cmdMeta.execute) {
           await cmdMeta.execute(interaction, [], {});
@@ -4378,9 +4454,9 @@ export const ConfigManifest: ModuleManifest = {
     },
     {
       name: 'button_an_emergency_lock',
-      handler: async (client: any, interaction: any, extra: any) => {
+      handler: async (client: any, interaction: any, context: any) => {
         const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
-        const allowed = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+        const allowed = interaction.guild ? await isOwnerOrExtraOwner(interaction.user.id, interaction.guild) : false;
         if (!allowed) {
           const errPayload = {
             content: `<a:warning:1546155193303957504> **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) and designated **Extra Owners** can configure or toggle Anti-Nuke settings.`,
@@ -4389,6 +4465,8 @@ export const ConfigManifest: ModuleManifest = {
           if (interaction.replied || interaction.deferred) return interaction.followUp(errPayload).catch(() => { });
           return interaction.reply(errPayload).catch(() => { });
         }
+
+        await context?.triggerEmergencyLock?.(interaction.guildId);
 
         const embed = createLimeEmbed({
           title: '<a:success_check:1546134620087783526> Emergency Lockdown Executed',
@@ -4442,8 +4520,17 @@ export const ConfigManifest: ModuleManifest = {
         const replyHelper = {
           guild: interaction.guild,
           author: interaction.user,
+          user: interaction.user,
           member: interaction.member,
-          mentions: { channels: { first: () => null }, users: { first: () => null } },
+          channel: interaction.channel,
+          client: interaction.client || client,
+          content: `r!config ${selectedModule}`,
+          mentions: {
+            channels: { first: () => null },
+            roles: { first: () => null },
+            users: { first: () => null },
+            members: { first: () => null }
+          },
           reply: async (payload: any) => {
             if (interaction.replied || interaction.deferred) {
               return interaction.editReply(payload).catch(() => { });

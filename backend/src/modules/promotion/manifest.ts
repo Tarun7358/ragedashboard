@@ -37,9 +37,9 @@ function getDefaultConfig(): IPromotionConfig {
   };
 }
 
-async function syncAntiLinkIgnoredChannel(context: any, guildId: string, channelId: string) {
+async function syncAntiLinkIgnoredChannel(guildId: string, channelId: string, context: any) {
   try {
-    const modules = context.getModulesState ? context.getModulesState(guildId) : [];
+    const modules = context?.getModulesState ? context.getModulesState(guildId) : [];
     const amMod = modules.find((m: any) => m.id === 'automod');
     if (amMod) {
       const config = amMod.config || {};
@@ -193,6 +193,7 @@ export const PromotionManifest: ModuleManifest = {
             config.channelId = newChannel.id;
             config.enabled = true;
             saveConfig(config);
+            await syncAntiLinkIgnoredChannel(guild.id, newChannel.id, context);
 
             // Send pinned guidelines embed in the created channel
             const infoCard = buildLimeOverviewCard({
@@ -250,6 +251,7 @@ export const PromotionManifest: ModuleManifest = {
           config.channelId = targetChannel.id;
           config.enabled = true;
           saveConfig(config);
+          await syncAntiLinkIgnoredChannel(guild.id, targetChannel.id, context);
 
           context.logSyncEvent(`[Promotion] Set promotion channel to #${targetChannel.name}.`, 'success');
 
@@ -350,33 +352,37 @@ export const PromotionManifest: ModuleManifest = {
             return interaction.reply({ content: `${WRONG_ICON} Configured promotion channel was not found.`, flags: 64 });
           }
 
-          let deletedCount = 0;
-          const activeMsgs = config.activeMessages || [];
-
-          // 1. Delete all tracked promo messages
-          for (const msgMeta of activeMsgs) {
-            try {
-              const msg = await targetChannel.messages.fetch(msgMeta.messageId).catch(() => null);
-              if (msg && !msg.pinned) {
-                await msg.delete().catch(() => null);
-                deletedCount++;
-              }
-            } catch (e) {}
+          if (!interaction.deferred && !interaction.replied && typeof interaction.deferReply === 'function') {
+            await interaction.deferReply({ flags: 64 }).catch(() => null);
           }
 
-          // 2. Fetch recent messages in channel and delete non-pinned messages
+          let deletedCount = 0;
+
+          // Fetch recent messages in channel and bulkDelete (<14d) / individual delete (>=14d) non-pinned messages
           try {
-            const recentMsgs = await targetChannel.messages.fetch({ limit: 100 }).catch(() => null);
+            const recentMsgs = await (targetChannel as any).messages.fetch({ limit: 100 }).catch(() => null);
             if (recentMsgs && recentMsgs.size > 0) {
               const toDelete = recentMsgs.filter((m: any) => !m.pinned);
-              for (const [_, msg] of toDelete) {
-                await msg.delete().catch(() => null);
-                deletedCount++;
+              const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+              const bulkEligible = toDelete.filter((m: any) => m.createdTimestamp > fourteenDaysAgo);
+              const olderMsgs = toDelete.filter((m: any) => m.createdTimestamp <= fourteenDaysAgo);
+
+              if (bulkEligible.size > 0 && typeof (targetChannel as any).bulkDelete === 'function') {
+                const deleted = await (targetChannel as any).bulkDelete(bulkEligible, true).catch(() => null);
+                deletedCount += deleted ? deleted.size : 0;
+              } else {
+                for (const [_, msg] of bulkEligible) {
+                  await msg.delete().then(() => deletedCount++).catch(() => null);
+                }
+              }
+
+              for (const [_, msg] of olderMsgs) {
+                await msg.delete().then(() => deletedCount++).catch(() => null);
               }
             }
           } catch (e) {}
 
-          // 3. Reset activeMessages array COMPLETELY so all user cooldowns are cleared!
+          // Reset activeMessages array COMPLETELY so all user cooldowns are cleared!
           config.activeMessages = [];
           saveConfig(config);
 
@@ -398,9 +404,13 @@ export const PromotionManifest: ModuleManifest = {
             footerText: 'Rage Optimiser Enterprise • Promotion Channel Engine'
           });
 
-          await targetChannel.send({ embeds: [noticeCard] }).catch(() => null);
+          await (targetChannel as any).send({ embeds: [noticeCard] }).catch(() => null);
 
-          return interaction.reply({ content: `${VERIFIED_ICON} Purged promotional messages from ${targetChannel} and reset all user cooldowns.`, flags: 64 });
+          const replyPayload = { content: `${VERIFIED_ICON} Purged promotional messages from ${targetChannel} and reset all user cooldowns.`, flags: 64 };
+          if (interaction.deferred || interaction.replied) {
+            return interaction.editReply(replyPayload);
+          }
+          return interaction.reply(replyPayload);
         }
 
         // ─── STATUS (DEFAULT OVERVIEW) ────────────────────────────────
