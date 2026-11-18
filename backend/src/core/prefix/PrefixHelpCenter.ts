@@ -211,7 +211,17 @@ export class PrefixHelpCenter {
     const executorId = updateInteraction?.user?.id || message.author?.id || '';
     const execSuffix = executorId ? `:${executorId}` : '';
 
-    const totalCommands = allCommands.length > 0 ? allCommands.length : 366;
+    const guildCount = message.client.guilds.cache.size;
+    let totalMembers = 0;
+    message.client.guilds.cache.forEach(g => {
+      totalMembers += (g.memberCount || 0);
+    });
+
+    let totalCommandsWithSubs = 0;
+    allCommands.forEach(c => {
+      totalCommandsWithSubs += 1 + (c.subcommands?.length || 0);
+    });
+
     const bannerBuffer = await HelpBannerGenerator.generate('Help', null).catch(() => null);
     const files: AttachmentBuilder[] = [];
     if (bannerBuffer) {
@@ -222,10 +232,9 @@ export class PrefixHelpCenter {
 
     const descLines = [
       `\`R A G E   O P T I M I S E R\`\n`,
-      `**${totalCommands} commands · ${categories.length} modules · Maintained by @RageTeam**\n`,
-      `Welcome to **@${botUser?.username || 'Rage Optimiser'}**, an enterprise security and community management bot trusted by **25+ servers** and **121,500+ users**, with **10,000+ commands** used so far. Hosted on **High-Speed Infrastructure**, with guides and updates on the **Rage Official Support** channel.\n`,
+      `**${totalCommandsWithSubs} commands · ${categories.length} modules · Maintained by @RageTeam**\n`,
+      `Welcome to **@${botUser?.username || 'Rage Optimiser'}**, an enterprise security and community management bot trusted by **${guildCount} servers** and **${totalMembers.toLocaleString()} users**, with **${totalCommandsWithSubs} commands** configured. Hosted on **High-Speed Infrastructure**, with guides and updates on the **Rage Official Support** channel.\n`,
       `${previewPills}\n`,
-      `<@${executorId || 'User'}> help with a module? Tag <@${botUser?.id}> and ask \`how to enable <module name>\`. our self-teaching guide walks you through it.\n`,
       `Use **Select Category** below or \`${prefix}help <command>\`.\n`
     ];
 
@@ -320,7 +329,13 @@ export class PrefixHelpCenter {
     const visibleCmds = allCategoryCmds.filter(c => !c.hidden);
     const meta = this.getCategoryMeta(category);
 
-    const bannerBuffer = await HelpBannerGenerator.generate(`Help > ${category}`, `${visibleCmds.length} commands`).catch(() => null);
+    let totalCategoryCmdCount = 0;
+    visibleCmds.forEach(c => {
+      const allNames = [c.name, ...(c.aliases || []), ...(c.subcommands?.map(s => s.name.split(' ')[0]) || [])];
+      totalCategoryCmdCount += [...new Set(allNames)].length;
+    });
+
+    const bannerBuffer = await HelpBannerGenerator.generate(`Help > ${category}`, `${totalCategoryCmdCount} commands`).catch(() => null);
     const files: AttachmentBuilder[] = [];
     if (bannerBuffer) {
       files.push(new AttachmentBuilder(bannerBuffer, { name: 'help-box-category.png' }));

@@ -625,7 +625,8 @@ function App() {
   }
 
   // Owner-Only Security Barrier: Verify that active guild is owned by this user
-  const activeGuild = (managedGuilds || []).find(g => g.id === activeGuildId);
+  const safeManagedGuilds = Array.isArray(managedGuilds) ? managedGuilds : [];
+  const activeGuild = safeManagedGuilds.find(g => g && g.id === activeGuildId);
   if (user?.role === 'guild_manager' && activeGuild && !activeGuild.owner) {
     return (
       <div style={{

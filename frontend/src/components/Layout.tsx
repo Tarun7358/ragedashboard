@@ -44,9 +44,10 @@ export function Layout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [navSearch, setNavSearch] = useState('');
-  const { user, activeGuildId, managedGuilds, setActiveGuildId, guildApprovals } = useAuth();
+  const { user, activeGuildId, managedGuilds = [], setActiveGuildId, guildApprovals } = useAuth();
 
-  const activeGuild = (managedGuilds || []).find(g => g.id === activeGuildId);
+  const safeManagedGuilds = Array.isArray(managedGuilds) ? managedGuilds : [];
+  const activeGuild = safeManagedGuilds.find(g => g && g.id === activeGuildId);
   const isGuildManager = user?.role === 'guild_manager';
   const isOwner = Boolean(activeGuild?.owner) || user?.role === 'owner';
   const avatarUrl = isGuildManager && user?.discordId && user?.avatar

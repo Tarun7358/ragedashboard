@@ -9,13 +9,24 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import type { ManagedGuild, ApprovalInfo } from '../hooks/useAuth';
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ReactNode; isRegistered: boolean }> = {
+function renderStatusIcon(status: string) {
+  switch (status) {
+    case 'Approved': return <ShieldCheck size={14} />;
+    case 'Pending':
+    case 'Under Review': return <Shield size={14} />;
+    case 'Rejected': return <XCircle size={14} />;
+    case 'Suspended': return <ShieldAlert size={14} />;
+    case 'Blacklisted': return <ShieldX size={14} />;
+    default: return <Bot size={14} />;
+  }
+}
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; isRegistered: boolean }> = {
   'Approved': {
     label: 'Ready & Approved',
     color: '#059669',
     bg: '#ECFDF5',
     border: '#A7F3D0',
-    icon: <ShieldCheck size={14} />,
     isRegistered: true
   },
   'Pending': {
@@ -23,7 +34,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
     color: '#D97706',
     bg: '#FFFBEB',
     border: '#FDE68A',
-    icon: <Shield size={14} />,
     isRegistered: true
   },
   'Under Review': {
@@ -31,7 +41,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
     color: '#2563EB',
     bg: '#EFF6FF',
     border: '#BFDBFE',
-    icon: <Shield size={14} />,
     isRegistered: true
   },
   'Rejected': {
@@ -39,7 +48,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
     color: '#DC2626',
     bg: '#FEF2F2',
     border: '#FECACA',
-    icon: <XCircle size={14} />,
     isRegistered: true
   },
   'Suspended': {
@@ -47,7 +55,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
     color: '#DC2626',
     bg: '#FEF2F2',
     border: '#FECACA',
-    icon: <ShieldAlert size={14} />,
     isRegistered: true
   },
   'Blacklisted': {
@@ -55,7 +62,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
     color: '#991B1B',
     bg: '#FEF2F2',
     border: '#FECACA',
-    icon: <ShieldX size={14} />,
     isRegistered: true
   },
   'Not Registered': {
@@ -63,7 +69,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
     color: '#71717A',
     bg: '#F4F4F5',
     border: '#E4E4E7',
-    icon: <Bot size={14} />,
     isRegistered: false
   }
 };
@@ -179,7 +184,7 @@ function GuildCard({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ color: '#71717A' }}>Bot Engine Status:</span>
           <span style={{ color: cfg.color, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
-            {cfg.icon} {cfg.label}
+            {renderStatusIcon(status)} {cfg.label}
           </span>
         </div>
         <div style={{ color: isOwner ? '#52525B' : '#DC2626', fontSize: 11.5, marginTop: 4 }}>
@@ -248,7 +253,7 @@ function GuildCard({
 }
 
 export function ServerSelection({ onSelectGuild }: { onSelectGuild: (guildId: string) => void }) {
-  const { user, managedGuilds, guildApprovals, logout, setActiveGuildId, updateDiscordGuilds, token } = useAuth();
+  const { user, managedGuilds = [], guildApprovals = {}, logout, setActiveGuildId, updateDiscordGuilds, token } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -267,7 +272,7 @@ export function ServerSelection({ onSelectGuild }: { onSelectGuild: (guildId: st
       });
       if (res.ok) {
         const data = await res.json();
-        updateDiscordGuilds(data.managedGuilds, data.approvals);
+        updateDiscordGuilds(data.managedGuilds || [], data.approvals || {});
       } else {
         const authRes = await fetch(`${API_BASE}/api/auth/discord`);
         const { url } = await authRes.json();
@@ -286,8 +291,9 @@ export function ServerSelection({ onSelectGuild }: { onSelectGuild: (guildId: st
     }
   };
 
-  const ownedGuilds = managedGuilds.filter(g => g.owner);
-  const otherGuilds = managedGuilds.filter(g => !g.owner);
+  const safeGuilds = Array.isArray(managedGuilds) ? managedGuilds : [];
+  const ownedGuilds = safeGuilds.filter(g => g && g.owner);
+  const otherGuilds = safeGuilds.filter(g => g && !g.owner);
 
   const filteredOwned = ownedGuilds.filter(g => g.name.toLowerCase().includes(search.toLowerCase()) || g.id.includes(search));
   const filteredOther = otherGuilds.filter(g => g.name.toLowerCase().includes(search.toLowerCase()) || g.id.includes(search));
