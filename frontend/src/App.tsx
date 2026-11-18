@@ -91,6 +91,15 @@ function App() {
   const [restoreWizardOpen, setRestoreWizardOpen] = useState(false);
   const [selectedBackupId, setSelectedBackupId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const triggerToast = (message: string, type: ToastItem['type'] = 'success') => {
+    const id = `toast-${Date.now()}`;
+    setToasts(prev => [...prev, { id, message, type }]);
+
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3000);
+  };
   // For guild_manager: track if they've selected a guild yet
   const [guildSelected, setGuildSelected] = useState(!!activeGuildId);
 
@@ -140,14 +149,6 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const triggerToast = (message: string, type: ToastItem['type'] = 'success') => {
-    const id = `toast-${Date.now()}`;
-    setToasts(prev => [...prev, { id, message, type }]);
-
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000);
-  };
 
   const handleNavigate = (page: string, tab?: string) => {
     setActivePage(page);

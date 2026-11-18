@@ -46,9 +46,9 @@ export function Layout({
   const [navSearch, setNavSearch] = useState('');
   const { user, activeGuildId, managedGuilds, setActiveGuildId, guildApprovals } = useAuth();
 
+  const activeGuild = (managedGuilds || []).find(g => g.id === activeGuildId);
   const isGuildManager = user?.role === 'guild_manager';
   const isOwner = Boolean(activeGuild?.owner) || user?.role === 'owner';
-  const activeGuild = managedGuilds.find(g => g.id === activeGuildId);
   const avatarUrl = isGuildManager && user?.discordId && user?.avatar
     ? `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png`
     : null;
