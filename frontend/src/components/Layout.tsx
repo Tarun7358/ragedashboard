@@ -47,7 +47,7 @@ export function Layout({
   const { user, activeGuildId, managedGuilds, setActiveGuildId, guildApprovals } = useAuth();
 
   const isGuildManager = user?.role === 'guild_manager';
-  const isOwner = user?.discordId === '830993126301630485' || user?.role === 'owner';
+  const isOwner = Boolean(activeGuild?.owner) || user?.role === 'owner';
   const activeGuild = managedGuilds.find(g => g.id === activeGuildId);
   const avatarUrl = isGuildManager && user?.discordId && user?.avatar
     ? `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png`
@@ -70,7 +70,7 @@ export function Layout({
       title: 'Security & Defense',
       items: [
         { id: 'security', label: 'Security SOC', icon: <Shield size={16} /> },
-        { id: 'anti-nuke', label: 'Anti-Nuke Rules', icon: <ShieldCheck size={16} /> },
+        { id: 'anti-nuke', label: 'Anti-Nuke (27 Rules)', icon: <ShieldCheck size={16} /> },
         { id: 'upm', label: 'Disaster Recovery', icon: <Zap size={16} /> },
         { id: 'whitelist-overview', label: 'Smart Whitelist', icon: <ShieldCheck size={16} /> },
         { id: 'vulnerability-scan', label: 'Vulnerability Scan', icon: <Activity size={16} /> },
@@ -81,7 +81,7 @@ export function Layout({
       id: 'management',
       title: 'Server Management',
       items: [
-        { id: 'automod', label: 'AI AutoMod', icon: <Bot size={16} /> },
+        { id: 'automod', label: 'AutoMod & Anti-Ping', icon: <Bot size={16} /> },
         { id: 'backups', label: 'Server Snapshots', icon: <Database size={16} /> },
         { id: 'roles', label: 'Role Manager', icon: <Layers size={16} /> },
         { id: 'bulk_ops', label: 'Bulk Operations', icon: <Zap size={16} /> },

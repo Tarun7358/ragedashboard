@@ -14,10 +14,9 @@ const isHttps = typeof window !== 'undefined' && window.location.protocol === 'h
 const isNetlify = typeof window !== 'undefined' && window.location.hostname.includes('netlify.app');
 const PROD_HOST = 'apirageoptimisercom.altvr.in';
 
-// When running on Netlify, use same-origin relative proxy ('') so Netlify edge handles requests
-// This prevents direct browser navigation to flagged domains and avoids Google Safe Browsing warnings.
-const defaultApiBase = isLocal ? 'http://localhost:5000' : (isNetlify ? '' : `https://${PROD_HOST}`);
-const defaultWsBase = isLocal ? 'ws://localhost:5000' : `wss://${PROD_HOST}`;
+// When running on Netlify or Vite dev, use same-origin relative proxy ('')
+const defaultApiBase = (isNetlify || isLocal) ? '' : `https://${PROD_HOST}`;
+const defaultWsBase = `wss://${PROD_HOST}`;
 
 let envApiUrl = (import.meta.env.VITE_API_URL as string) || '';
 let resolvedApiBase = envApiUrl ? (isNetlify && envApiUrl.includes('altvr.in') ? '' : envApiUrl) : defaultApiBase;

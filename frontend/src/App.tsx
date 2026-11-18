@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, DISCORD_CLIENT_ID } from './config';
 import { Layout } from './components/Layout';
 import { SearchOverlay } from './components/SearchOverlay';
 import { RestoreWizard } from './components/RestoreWizard';
@@ -583,7 +584,31 @@ function App() {
         </>
       );
     }
-    return <Landing onGetStarted={() => { window.history.pushState({}, '', '/login'); window.location.reload(); }} />;
+    const handleDirectOAuth = async () => {
+      const returnUrl = encodeURIComponent(window.location.origin);
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/discord/login?returnUrl=${returnUrl}&format=json`, {
+          headers: { Accept: 'application/json' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.url) {
+            window.location.href = data.url;
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('[App] Direct OAuth URL fetch failed, falling back to authorize URL:', err);
+      }
+
+      const clientId = DISCORD_CLIENT_ID || '1519626369594818560';
+      const redirectUri = encodeURIComponent('https://apirageoptimisercom.altvr.in/api/auth/discord/callback');
+      const stateObj = { returnUrl: window.location.origin, timestamp: Date.now() };
+      const state = encodeURIComponent(btoa(JSON.stringify(stateObj)));
+      window.location.href = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=identify%20guilds%20guilds.join&state=${state}`;
+    };
+
+    return <Landing onGetStarted={handleDirectOAuth} onOpenDashboard={handleDirectOAuth} />;
   }
 
   // Guild manager who hasn't selected a guild yet → server selection
@@ -595,6 +620,58 @@ function App() {
           setGuildSelected(true);
         }}
       />
+    );
+  }
+
+  // Owner-Only Security Barrier: Verify that active guild is owned by this user
+  const activeGuild = managedGuilds.find(g => g.id === activeGuildId);
+  if (user?.role === 'guild_manager' && activeGuild && !activeGuild.owner) {
+    return (
+      <div style={{
+        minHeight: '100vh', width: '100vw',
+        backgroundColor: '#0B0F19',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24, fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif"
+      }}>
+        <div style={{
+          maxWidth: 480, width: '100%',
+          background: '#161E2E', border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: 16, padding: 32, textAlign: 'center',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+        }}>
+          <div style={{
+            width: 60, height: 60, borderRadius: '50%',
+            background: 'rgba(239, 68, 68, 0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 18px', color: '#EF4444'
+          }}>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#F8FAFC', margin: '0 0 8px' }}>
+            Owner Clearance Required
+          </h2>
+          <p style={{ fontSize: 13.5, color: '#94A3B8', lineHeight: 1.6, margin: '0 0 24px' }}>
+            Access to <strong>{activeGuild.name}</strong> is restricted to the <strong>Discord Server Owner ID</strong> only. You do not own this server.
+          </p>
+          <button
+            onClick={() => {
+              setActiveGuildId(null);
+              setGuildSelected(false);
+            }}
+            style={{
+              width: '100%', padding: '12px 20px', borderRadius: 10,
+              background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+              border: 'none', color: '#FFFFFF', fontSize: 14, fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            Switch to an Owned Server
+          </button>
+        </div>
+      </div>
     );
   }
 

@@ -342,13 +342,17 @@ export class WebServer {
       const client = this.getDiscordClient ? this.getDiscordClient() : null;
       const modules = this.registry ? this.registry.getModulesState() : [];
       const activeModulesCount = modules.filter(m => m.status === 'ready' || m.status === 'enabled').length;
+      const totalMembers = client ? client.guilds?.cache?.reduce((acc: number, g: any) => acc + (g.memberCount || 0), 0) : 0;
 
       res.json({
         activeModules: activeModulesCount,
         protectedServers: client ? client.guilds?.cache?.size || 0 : 0,
+        totalMembers,
         bot: { status: client && client.ws.status === 0 ? 'Online' : 'Offline', latency: metrics.latency, uptime: metrics.uptime },
         database: { status: 'Connected' },
-        api: { status: 'Healthy' }
+        api: { status: 'Healthy' },
+        latency: metrics.latency,
+        uptime: metrics.uptime
       });
     });
 

@@ -14,6 +14,13 @@ export default defineConfig({
   server: {
     port: 4680,
     host: 'localhost',
+    proxy: {
+      '/api': {
+        target: 'https://apirageoptimisercom.altvr.in',
+        changeOrigin: true,
+        secure: false
+      }
+    },
     watch: {
       ignored: ['**/backend/**']
     }

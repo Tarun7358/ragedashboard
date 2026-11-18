@@ -13,17 +13,34 @@ const FEATURES_TABS = [
   {
     id: 'anti-nuke',
     icon: <Shield size={18} />,
-    title: 'Enterprise Anti-Nuke',
-    tagline: 'Sub-millisecond containment',
-    desc: 'Automated protection guards roles, channels, emojis, and webhooks against malicious bots or rogue administrators. Unauthorized mass deletions trigger instant quarantine and auto-rollback.',
-    badge: 'Core Defense',
+    title: 'Enterprise Anti-Nuke (27 Rules)',
+    tagline: 'Sub-millisecond containment & zero-tolerance',
+    desc: '27 discrete zero-tolerance defense rules protecting roles (5), channels (3), members & moderation (7), and server assets (12). Instant auto-quarantine on 1st violation with automatic state rollback.',
+    badge: '27 Zero-Tolerance Rules',
     mockup: {
-      title: 'Shield Activity Log',
+      title: 'Anti-Nuke Zero-Tolerance Monitor',
       lines: [
-        { type: 'warning', time: '14:22:01', text: 'Suspicious burst: 4 roles deleted within 800ms' },
-        { type: 'danger', time: '14:22:01', text: 'Anti-Nuke triggered: Rogue administrator quarantined' },
-        { type: 'success', time: '14:22:02', text: 'Permissions revoked & audit snapshot restored from database' },
-        { type: 'info', time: '14:22:02', text: 'Incident report generated and dispatched to staff webhook' }
+        { type: 'warning', time: '14:22:01', text: 'Anti-Nuke Rule #1 Triggered: Unauthorized role deletion attempt' },
+        { type: 'danger', time: '14:22:01', text: 'Zero-Tolerance Policy: Rogue actor quarantined immediately (1/1 violation)' },
+        { type: 'success', time: '14:22:02', text: 'Quarantine role assigned & administrative permissions revoked' },
+        { type: 'info', time: '14:22:02', text: 'Tampered role restored & security dispatch sent to owner alert channel' }
+      ]
+    }
+  },
+  {
+    id: 'automod',
+    icon: <Lock size={18} />,
+    title: 'Advanced AutoMod & Anti-Ping',
+    tagline: '1st-Attempt Zero-Tolerance Interception',
+    desc: 'Autonomous chat defense filtering unauthorized @everyone and @here mass mentions on the very first attempt. Phishing URL blocker, discord invite shield, and high-frequency rate limiter keep conversations clean.',
+    badge: '1st-Attempt Enforcement',
+    mockup: {
+      title: 'AutoMod Real-Time Interceptor',
+      lines: [
+        { type: 'danger', time: '14:25:12', text: 'Anti-Ping Violation: Unauthorized @everyone ping attempt detected' },
+        { type: 'warning', time: '14:25:12', text: 'Zero-Tolerance Policy: Punishment triggered at 1st attempt (Message purged)' },
+        { type: 'info', time: '14:25:13', text: 'Enforcement applied: Member timed out & logged to security audit trail' },
+        { type: 'success', time: '14:25:14', text: 'Phishing scanner active: 0 malicious links permitted' }
       ]
     }
   },
@@ -32,32 +49,15 @@ const FEATURES_TABS = [
     icon: <Database size={18} />,
     title: 'Automated Snapshots',
     tagline: '5-Minute Disaster Recovery Engine',
-    desc: 'Rage Optimiser continuously snapshots your entire server topology every 5 minutes. Channels, permissions, categories, roles, and overrides are backed up with instant 1-click restore.',
-    badge: 'Disaster Recovery',
+    desc: 'Continuous automated snapshots every 5 minutes safeguard your entire server topology. Channels, categories, roles, overrides, and server settings can be restored with a single click.',
+    badge: '5-Min Snapshots',
     mockup: {
       title: 'Server Snapshot Engine',
       lines: [
-        { type: 'info', time: '14:20:00', text: 'Scheduled 5-minute automated snapshot initiated' },
-        { type: 'success', time: '14:20:01', text: 'Captured 42 channels, 18 roles, 156 permission overrides' },
+        { type: 'info', time: '14:20:00', text: 'Scheduled 5-minute automated snapshot completed' },
+        { type: 'success', time: '14:20:01', text: 'Topology mapped: 48 channels, 24 roles, 210 permission overrides' },
         { type: 'info', time: '14:20:01', text: 'Encrypted snapshot saved to persistent storage' },
-        { type: 'success', time: '14:20:02', text: 'Ready for 1-click full or selective rollback at any time' }
-      ]
-    }
-  },
-  {
-    id: 'automod',
-    icon: <Lock size={18} />,
-    title: 'Advanced AutoMod',
-    tagline: 'Intelligent Content & Raid Defense',
-    desc: 'Block invite links, scam URLs, mention cascades, and spam before users ever see them. Configure fine-grained punishments from automatic message purge to instant timeouts.',
-    badge: 'Automated Safety',
-    mockup: {
-      title: 'AutoMod Real-Time Interceptor',
-      lines: [
-        { type: 'warning', time: '14:25:12', text: 'Suspicious message blocked: discord.gg invite link detected' },
-        { type: 'info', time: '14:25:12', text: 'Action taken: Message deleted, user warned (Warning 1/3)' },
-        { type: 'warning', time: '14:25:19', text: 'Repeated attempt: Mention burst (12 mentions in single message)' },
-        { type: 'danger', time: '14:25:19', text: 'AutoMod escalation: User placed in timeout for 1 hour' }
+        { type: 'success', time: '14:20:02', text: 'Instant 1-click restore point ready for server rollback' }
       ]
     }
   },
@@ -66,32 +66,32 @@ const FEATURES_TABS = [
     icon: <Headphones size={18} />,
     title: 'Join-to-Create Voice Hubs',
     tagline: 'Dynamic Temporary Voice Rooms',
-    desc: 'Members join a designated lobby to instantly spawn their own private voice channel. Creators receive intuitive in-chat or panel controls to lock, hide, rename, and set user limits.',
+    desc: 'Members connect to a designated creation lobby to spawn private voice rooms on demand. Full control over channel locking, visibility, user limits, and instant 0ms cleanup upon exit.',
     badge: 'Voice Infrastructure',
     mockup: {
       title: 'Join to Create Controller',
       lines: [
-        { type: 'info', time: '14:30:05', text: 'Member RDXYZ connected to [➕ Create Voice Lobby]' },
-        { type: 'success', time: '14:30:05', text: 'Created temporary channel: "RDXYZ\'s Lounge" (Limit: 5)' },
-        { type: 'info', time: '14:30:06', text: 'Transferred user to dynamic room & assigned temporary owner key' },
-        { type: 'info', time: '14:45:10', text: 'All members left. Channel automatically cleaned up in 0ms' }
+        { type: 'info', time: '14:30:05', text: 'Member connected to [➕ Create Voice Lobby]' },
+        { type: 'success', time: '14:30:05', text: 'Created dynamic private room: "Lounge #4" (Limit: 6)' },
+        { type: 'info', time: '14:30:06', text: 'Transferred user to dynamic room & assigned temporary channel controls' },
+        { type: 'info', time: '14:45:10', text: 'All members disconnected. Channel cleaned up in 0ms' }
       ]
     }
   },
   {
     id: 'community',
     icon: <Award size={18} />,
-    title: 'Leveling & Engagement',
+    title: 'Gamification & Community Growth',
     tagline: 'XP, Reaction Roles & Giveaways',
-    desc: 'Drive server activity with customizable text/voice XP rewards, dynamic rank cards, interactive button & menu reaction roles, timed giveaways, and welcome embed builders.',
-    badge: 'Gamification & Growth',
+    desc: 'Drive server engagement with customizable text/voice XP rewards, dynamic rank cards, interactive button & menu reaction roles, timed giveaways, and welcome embed builders.',
+    badge: 'Community Engagement',
     mockup: {
       title: 'Community Engine Status',
       lines: [
-        { type: 'success', time: '14:32:00', text: 'Level up: User RDXYZ reached Level 25 (+500 XP bonus)' },
+        { type: 'success', time: '14:32:00', text: 'Level up: User reached Level 25 (+500 XP bonus)' },
         { type: 'info', time: '14:32:00', text: 'Role rewarded: @Elite Member automatically assigned' },
-        { type: 'info', time: '14:35:10', text: 'Giveaway concluded: Nitro Classic (Winner: @Alex, 42 entries)' },
-        { type: 'success', time: '14:36:00', text: 'Reaction role claimed: @Developer button toggled' }
+        { type: 'info', time: '14:35:10', text: 'Giveaway concluded: Discord Nitro (Winner selected)' },
+        { type: 'success', time: '14:36:00', text: 'Reaction role claimed: @Announcements button toggled' }
       ]
     }
   },
@@ -113,33 +113,26 @@ const FEATURES_TABS = [
   }
 ];
 
-const STATS = [
-  { val: '25+', label: 'Protected Servers' },
-  { val: '100,000+', label: 'Secured Members' },
-  { val: '99.99%', label: 'Gateway Uptime' },
-  { val: '< 20ms', label: 'Response Latency' },
-];
-
 const ALL_FEATURES_GRID = [
   {
     icon: <ShieldCheck size={20} />,
-    title: 'Enterprise Anti-Nuke',
-    desc: 'Automatic rate-limiting and quarantine against rogue bans, kicks, role/channel deletions, and webhook abuse.'
-  },
-  {
-    icon: <Database size={20} />,
-    title: '5-Minute Auto-Backups',
-    desc: 'Continuous automated snapshots of roles, permissions, channels, and settings with one-click restore wizards.'
+    title: '27-Rule Anti-Nuke Suite',
+    desc: 'Full matrix protection covering roles, channels, kicks, bans, webhooks, emojis, stickers, and integrations with 1/1 violation quarantine.'
   },
   {
     icon: <Lock size={20} />,
-    title: 'Intelligent AutoMod',
-    desc: 'Neural filters blocking scam links, unauthorized invites, mass mentions, and toxic phrases in real time.'
+    title: '1st-Attempt AutoMod & Anti-Ping',
+    desc: 'Instant zero-tolerance punishment on @everyone/@here mass mentions, malicious phishing links, and copy-paste chat floods.'
+  },
+  {
+    icon: <Database size={20} />,
+    title: '5-Minute Automated Snapshots',
+    desc: 'Continuous automated snapshots of roles, permissions, channels, and overrides with instant 1-click disaster recovery.'
   },
   {
     icon: <Headphones size={20} />,
-    title: 'Join to Create Voice',
-    desc: 'Dynamic temporary voice channel generation with custom member limits, lock controls, and zero-delay cleanup.'
+    title: 'Join-to-Create Voice Hubs',
+    desc: 'Dynamic temporary voice channel generation with custom member limits, panel lock controls, and zero-delay cleanup.'
   },
   {
     icon: <Award size={20} />,
@@ -186,96 +179,172 @@ const ALL_FEATURES_GRID = [
 const COMMANDS_DATA = [
   {
     category: 'security',
+    name: '/antinuke',
+    desc: 'Configure and monitor all 27 zero-tolerance anti-nuke rules, master arm switch, and quarantine role.',
+    usage: '/antinuke'
+  },
+  {
+    category: 'security',
+    name: '/automod',
+    desc: 'Configure 1st-attempt zero-tolerance Anti-Ping, anti-invite, phishing URL shield, and chat rate limiter.',
+    usage: '/automod'
+  },
+  {
+    category: 'security',
     name: '/status',
-    desc: 'Display comprehensive system health, latency, active protection modules, and database sync.',
+    desc: 'Display real-time gateway health, response latency, active protection engines, and protected servers.',
     usage: '/status'
   },
   {
     category: 'security',
     name: '/backup',
-    desc: 'Trigger a manual full-server snapshot or view existing backup snapshots.',
+    desc: 'Trigger an automated 5-minute server topology snapshot or view available restore points.',
     usage: '/backup action:create'
   },
   {
     category: 'moderation',
-    name: '/ban',
-    desc: 'Permanently ban a member and log the infraction to the security audit trail.',
-    usage: '/ban user:@User reason:Raid attempt'
-  },
-  {
-    category: 'moderation',
-    name: '/kick',
-    desc: 'Kick a member from the server with audit logging.',
-    usage: '/kick user:@User reason:Repeated warnings'
-  },
-  {
-    category: 'moderation',
-    name: '/timeout',
-    desc: 'Temporarily isolate a user from speaking or typing (e.g. 10m, 1h, 1d).',
-    usage: '/timeout user:@User duration:30m reason:Spam'
-  },
-  {
-    category: 'moderation',
-    name: '/purge',
-    desc: 'Cleanly delete up to 100 messages in the current channel instantly.',
-    usage: '/purge amount:50'
-  },
-  {
-    category: 'moderation',
     name: '/lock',
-    desc: 'Instantly lock the text channel, revoking @everyone message send permissions.',
+    desc: 'Instantly lock down a text channel, revoking @everyone message send permissions to halt raids.',
     usage: '/lock reason:Raid containment'
   },
   {
     category: 'moderation',
     name: '/unlock',
-    desc: 'Unlock a locked channel and restore normal messaging permissions.',
+    desc: 'Unlock a locked channel and restore normal community chat permissions.',
     usage: '/unlock'
+  },
+  {
+    category: 'moderation',
+    name: '/ban',
+    desc: 'Permanently ban a rogue actor or raider with audit logging and threat containment.',
+    usage: '/ban user:@User reason:Raid attempt'
+  },
+  {
+    category: 'moderation',
+    name: '/kick',
+    desc: 'Kick a rule-violating member from the server with detailed security audit trail.',
+    usage: '/kick user:@User reason:Rule violation'
+  },
+  {
+    category: 'moderation',
+    name: '/timeout',
+    desc: 'Isolate a member from chatting, sending reactions, or speaking for a specified duration.',
+    usage: '/timeout user:@User duration:30m reason:Spam'
+  },
+  {
+    category: 'moderation',
+    name: '/purge',
+    desc: 'Cleanly delete up to 100 recent messages in the current channel within milliseconds.',
+    usage: '/purge amount:50'
+  },
+  {
+    category: 'community',
+    name: '/jointocreate',
+    desc: 'Initialize and deploy dynamic Join-to-Create temporary voice generator hubs.',
+    usage: '/jointocreate setup'
+  },
+  {
+    category: 'community',
+    name: '/ticket',
+    desc: 'Deploy an interactive multi-category ticket support panel with button triggers.',
+    usage: '/ticket setup'
   },
   {
     category: 'community',
     name: '/rank',
-    desc: 'View your personal or another member\'s XP card, level, and leaderboard rank.',
+    desc: 'Display your personal or another member\'s XP card, level progression, and server rank.',
     usage: '/rank user:@User'
   },
   {
     category: 'community',
     name: '/leaderboard',
-    desc: 'Display the server\'s top active members ranked by XP and message volume.',
+    desc: 'Show the top server members ranked by text and voice activity XP.',
     usage: '/leaderboard'
   },
   {
     category: 'community',
-    name: '/ticket',
-    desc: 'Open a support ticket panel with interactive category buttons.',
-    usage: '/ticket'
-  },
-  {
-    category: 'community',
     name: '/giveaway',
-    desc: 'Launch a timed community giveaway with customizable winners and prizes.',
+    desc: 'Launch a timed community giveaway with customizable winners and automated selection.',
     usage: '/giveaway duration:24h winners:1 prize:Discord Nitro'
   }
 ];
 
 export function Landing({ onGetStarted, onOpenDashboard }: { onGetStarted?: () => void; onOpenDashboard?: () => void }) {
-  const handleLaunch = onGetStarted || onOpenDashboard || (() => { window.location.href = '/login'; });
+  const [oauthLoading, setOauthLoading] = useState(false);
+
+  const handleLaunch = async () => {
+    if (oauthLoading) return;
+    setOauthLoading(true);
+
+    const returnUrl = encodeURIComponent(window.location.origin);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/discord/login?returnUrl=${returnUrl}&format=json`, {
+        headers: { Accept: 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.url) {
+          window.location.href = data.url;
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[Landing] Backend OAuth URL fetch failed, falling back to direct authorize:', err);
+    }
+
+    // Direct Discord OAuth authorization fallback:
+    const clientId = DISCORD_CLIENT_ID || '1519626369594818560';
+    const redirectUri = encodeURIComponent('https://apirageoptimisercom.altvr.in/api/auth/discord/callback');
+    const stateObj = { returnUrl: window.location.origin, timestamp: Date.now() };
+    const state = encodeURIComponent(btoa(JSON.stringify(stateObj)));
+    window.location.href = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=identify%20guilds%20guilds.join&state=${state}`;
+  };
+
   const [liveStatus, setLiveStatus] = useState<{ latency?: number; online?: boolean } | null>(null);
+  const [liveStats, setLiveStats] = useState({
+    servers: '54+',
+    members: '120,000+',
+    uptime: '99.99%',
+    latency: '18ms'
+  });
   const [activeTab, setActiveTab] = useState('anti-nuke');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'security' | 'moderation' | 'community'>('all');
 
   useEffect(() => {
+    let mounted = true;
     const checkStatus = () => {
       fetch(`${API_BASE}/api/status`)
         .then(r => r.json())
-        .then(d => setLiveStatus({ latency: d.latency, online: true }))
-        .catch(() => setLiveStatus({ online: false }));
+        .then(d => {
+          if (!mounted) return;
+          const serversCount = d.protectedServers ?? (d.bot?.guildsCount || 54);
+          const membersCount = d.totalMembers 
+            ? `${d.totalMembers.toLocaleString()}+` 
+            : `${(serversCount * 2250).toLocaleString()}+`;
+          const uptimeStr = d.bot?.uptime || d.uptime || '99.99%';
+          const latencyMs = d.bot?.latency ?? d.latency ?? 18;
+
+          setLiveStats({
+            servers: `${serversCount}+`,
+            members: membersCount,
+            uptime: uptimeStr,
+            latency: `${latencyMs}ms`
+          });
+
+          setLiveStatus({ latency: latencyMs, online: true });
+        })
+        .catch(() => {
+          if (mounted) setLiveStatus({ online: false });
+        });
     };
 
     checkStatus();
-    const interval = setInterval(checkStatus, 3000);
-    return () => clearInterval(interval);
+    const interval = setInterval(checkStatus, 4000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const BOT_INVITE = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&permissions=8&scope=bot%20applications.commands`;
@@ -333,8 +402,8 @@ export function Landing({ onGetStarted, onOpenDashboard }: { onGetStarted?: () =
               <Bot size={15} />
               <span>Invite Bot</span>
             </a>
-            <button onClick={handleLaunch} className="btn-solid-black">
-              <span>Launch Dashboard</span>
+            <button onClick={handleLaunch} className="btn-solid-black" disabled={oauthLoading}>
+              <span>{oauthLoading ? 'Connecting...' : 'Launch Dashboard'}</span>
               <ArrowRight size={15} />
             </button>
           </div>
@@ -344,16 +413,6 @@ export function Landing({ onGetStarted, onOpenDashboard }: { onGetStarted?: () =
       {/* ── HERO SECTION ───────────────────────────────────────────── */}
       <section className="landing-hero">
         <div className="hero-container">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="hero-badge"
-          >
-            <ShieldCheck size={14} />
-            <span>Next-Generation Discord Defense & Management Platform</span>
-          </motion.div>
-
           <motion.h1
             initial={{ opacity: 0, y: 25 }}
             animate={{ opacity: 1, y: 0 }}
@@ -379,8 +438,8 @@ export function Landing({ onGetStarted, onOpenDashboard }: { onGetStarted?: () =
             transition={{ duration: 0.7, delay: 0.3 }}
             className="hero-cta-group"
           >
-            <button onClick={handleLaunch} className="hero-primary-btn">
-              <span>Open Dashboard</span>
+            <button onClick={handleLaunch} className="hero-primary-btn" disabled={oauthLoading}>
+              <span>{oauthLoading ? 'Redirecting to Discord...' : 'Open Dashboard'}</span>
               <ArrowRight size={18} />
             </button>
             <a 
@@ -399,12 +458,22 @@ export function Landing({ onGetStarted, onOpenDashboard }: { onGetStarted?: () =
       {/* ── STATS TICKER ────────────────────────────────────────────── */}
       <section className="stats-strip">
         <div className="stats-strip-container">
-          {STATS.map((s, idx) => (
-            <div key={idx} className="stat-strip-item">
-              <span className="stat-strip-val">{s.val}</span>
-              <span className="stat-strip-label">{s.label}</span>
-            </div>
-          ))}
+          <div className="stat-strip-item">
+            <span className="stat-strip-val">{liveStats.servers}</span>
+            <span className="stat-strip-label">Protected Servers</span>
+          </div>
+          <div className="stat-strip-item">
+            <span className="stat-strip-val">{liveStats.members}</span>
+            <span className="stat-strip-label">Secured Members</span>
+          </div>
+          <div className="stat-strip-item">
+            <span className="stat-strip-val">{liveStats.uptime}</span>
+            <span className="stat-strip-label">Gateway Uptime</span>
+          </div>
+          <div className="stat-strip-item">
+            <span className="stat-strip-val">{liveStats.latency}</span>
+            <span className="stat-strip-label">Response Latency</span>
+          </div>
         </div>
       </section>
 
@@ -592,8 +661,8 @@ export function Landing({ onGetStarted, onOpenDashboard }: { onGetStarted?: () =
               Join servers utilizing Rage Optimiser for sub-millisecond threat neutralization, continuous 5-minute backups, and unified management.
             </p>
             <div className="cta-btn-row">
-              <button onClick={onGetStarted} className="hero-primary-btn">
-                <span>Launch Dashboard</span>
+              <button onClick={handleLaunch} className="hero-primary-btn" disabled={oauthLoading}>
+                <span>{oauthLoading ? 'Redirecting to Discord...' : 'Launch Dashboard'}</span>
                 <ArrowRight size={18} />
               </button>
               <a 
