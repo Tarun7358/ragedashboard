@@ -465,6 +465,10 @@ export class PrefixHelpCenter {
     const hasPermission = message.member ? PrefixPermissionManager.checkPermissions(message, cmd).allowed : true;
     const executorId = updateInteraction?.user?.id || message.author?.id || '';
 
+    const reqUser = updateInteraction?.user || message.author;
+    const reqUsername = reqUser?.displayName || reqUser?.username || 'User';
+    const reqAvatar = reqUser?.displayAvatarURL() || undefined;
+
     const displayUsage = this.formatUsage(cmd.usage, cmd.name, prefix);
 
     const embed = new EmbedBuilder()
@@ -485,7 +489,7 @@ export class PrefixHelpCenter {
         { name: 'Bot Permission', value: cmd.botPermissions && cmd.botPermissions.length > 0 ? cmd.botPermissions.map(p => `\`${p}\``).join(', ') : '`SendMessages`', inline: true }
       )
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
-      .setFooter({ text: `Rage Optimiser - Tip: Use ${prefix}help ${cmd.name} <subcommand> for targeted manual` })
+      .setFooter({ text: `Requested by ${reqUsername} · Tip: Use ${prefix}help ${cmd.name} <subcommand> for targeted manual`, iconURL: reqAvatar })
       .setTimestamp();
 
     if (cmd.subcommands && cmd.subcommands.length > 0) {
@@ -547,6 +551,10 @@ export class PrefixHelpCenter {
     const hasPermission = message.member ? PrefixPermissionManager.checkPermissions(message, mainCmd).allowed : true;
     const executorId = updateInteraction?.user?.id || message.author?.id || '';
 
+    const reqUser = updateInteraction?.user || message.author;
+    const reqUsername = reqUser?.displayName || reqUser?.username || 'User';
+    const reqAvatar = reqUser?.displayAvatarURL() || undefined;
+
     const displayUsage = this.formatUsage(subCmd.name, mainCmd.name, prefix);
 
     const embed = new EmbedBuilder()
@@ -567,7 +575,7 @@ export class PrefixHelpCenter {
         { name: 'Bot Permission', value: mainCmd.botPermissions && mainCmd.botPermissions.length > 0 ? mainCmd.botPermissions.map(p => `\`${p}\``).join(', ') : '`SendMessages`', inline: true }
       )
       .setThumbnail(message.client.user?.displayAvatarURL({ size: 256 }) ?? null)
-      .setFooter({ text: `Rage Optimiser - Back to parent manual: ${prefix}help ${mainCmd.name}` })
+      .setFooter({ text: `Requested by ${reqUsername} · Back to parent manual: ${prefix}help ${mainCmd.name}`, iconURL: reqAvatar })
       .setTimestamp();
 
     if (subCmd.examples && subCmd.examples.length > 0) {
@@ -592,6 +600,9 @@ export class PrefixHelpCenter {
 
     const subPayload = PayloadFormatter.normalize({ embeds: [embed], components }, message.client.user);
     if (updateInteraction) {
+      if (updateInteraction.deferred || updateInteraction.replied) {
+        return updateInteraction.editReply(subPayload).catch(() => {});
+      }
       return updateInteraction.update(subPayload).catch(() => {});
     }
     return message.reply(subPayload).catch(() => {});
@@ -601,16 +612,15 @@ export class PrefixHelpCenter {
     const categories = PrefixRegistry.getCategories();
     const execSuffix = executorId ? `:${executorId}` : '';
 
-    // Select Menu for categories
+    // Select Menu for categories (no emojis)
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`help_category_select${execSuffix}`)
-      .setPlaceholder('Click to select module...')
+      .setPlaceholder('Select Category')
       .addOptions(
         {
           label: 'Home Center',
           value: 'help_cat_home',
           description: 'View command matrix and live system telemetry',
-          emoji: '🏠',
           default: currentCategory === 'home'
         },
         ...categories.slice(0, 24).map(cat => {
@@ -619,8 +629,7 @@ export class PrefixHelpCenter {
           return {
             label: cat,
             value: `help_cat_${cat.toLowerCase().replace(/\s+/g, '_')}`,
-            description: `${count} commands — ${meta.description.slice(0, 45)}`,
-            emoji: meta.icon,
+            description: `${count} commands - ${meta.description.slice(0, 45)}`,
             default: cat.toLowerCase() === currentCategory.toLowerCase()
           };
         })
@@ -628,41 +637,48 @@ export class PrefixHelpCenter {
 
     const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
-    // Buttons Row
+    // Buttons Row (no emojis)
     const btnHome = new ButtonBuilder()
       .setCustomId(`help_btn_home${execSuffix}`)
-      .setLabel('Home')
-      .setStyle(ButtonStyle.Success);
-
-    const btnPrev = new ButtonBuilder()
-      .setCustomId(`help_btn_prev_${currentCategory.replace(/\s+/g, '_')}_${currentPage}${execSuffix}`)
-      .setLabel('Previous')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(currentPage <= 1 || currentCategory === 'home');
-
-    const btnNext = new ButtonBuilder()
-      .setCustomId(`help_btn_next_${currentCategory.replace(/\s+/g, '_')}_${currentPage}${execSuffix}`)
-      .setLabel('Next')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(currentPage >= totalPages || currentCategory === 'home');
-
-    const btnRefresh = new ButtonBuilder()
-      .setCustomId(`help_btn_refresh_${currentCategory.replace(/\s+/g, '_')}_${currentPage}${execSuffix}`)
-      .setLabel('Refresh')
+      .setLabel('|<')
       .setStyle(ButtonStyle.Secondary);
+
+    const btnDash = new ButtonBuilder()
+      .setLabel('Dashboard')
+      .setStyle(ButtonStyle.Link)
+      .setURL('https://ragesecuredashboard.netlify.app/');
+
+    const btnSupport = new ButtonBuilder()
+      .setLabel('Support Server')
+      .setStyle(ButtonStyle.Link)
+      .setURL('https://discord.gg/mK8HVJGzYt');
 
     const btnClose = new ButtonBuilder()
       .setCustomId(`help_btn_close${execSuffix}`)
       .setLabel('Close')
       .setStyle(ButtonStyle.Secondary);
 
-    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      btnHome,
-      btnPrev,
-      btnNext,
-      btnRefresh,
-      btnClose
-    );
+    const btnComponents: ButtonBuilder[] = [btnHome];
+
+    if (totalPages > 1) {
+      const btnPrev = new ButtonBuilder()
+        .setCustomId(`help_btn_prev_${currentCategory.replace(/\s+/g, '_')}_${currentPage}${execSuffix}`)
+        .setLabel('Previous')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage <= 1 || currentCategory === 'home');
+
+      const btnNext = new ButtonBuilder()
+        .setCustomId(`help_btn_next_${currentCategory.replace(/\s+/g, '_')}_${currentPage}${execSuffix}`)
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage >= totalPages || currentCategory === 'home');
+
+      btnComponents.push(btnPrev, btnNext);
+    }
+
+    btnComponents.push(btnDash, btnSupport, btnClose);
+
+    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnComponents);
 
     return [row1, row2];
   }
