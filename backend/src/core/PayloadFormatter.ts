@@ -332,7 +332,8 @@ export class PayloadFormatter {
       return {
         ...(mentionsOnly ? { content: mentionsOnly } : {}),
         flags: outFlags,
-        components: [container]
+        components: [container],
+        ...(Array.isArray(copy.files) && copy.files.length > 0 ? { files: copy.files } : {})
       };
     } catch {
       return copy;
