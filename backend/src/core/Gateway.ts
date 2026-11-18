@@ -26,6 +26,7 @@ import { ensureAntiNukeBackupRoles } from '../modules/security/enable.js';
 import { DashboardSyncService } from '../services/DashboardSyncService.js';
 import { CentralLogger } from './security/CentralLogger.js';
 import { UptimeBroadcaster } from '../services/UptimeBroadcaster.js';
+import { handlePingMessage } from './RealtimePing.js';
 import {
   AdvancedSecurityService,
   handleThreadCreate,
@@ -1335,18 +1336,9 @@ export class Gateway {
         }
       }
 
-      // Handle built-in prefix command: r!ping
-      if (parsed.commandName === 'ping') {
-        const wsPing = Math.max(1, Math.round(this.client.ws.ping));
-        const pingColor = wsPing < 150 ? Colors.LIME : wsPing < 300 ? Colors.WARN : Colors.DANGER;
-
-        const embed = new EmbedBuilder()
-          .setTitle('WebSocket Latency')
-          .setColor(pingColor)
-          .setDescription(`> **WebSocket Latency:** \`${wsPing}ms\``)
-          .setFooter({ text: 'Rage Optimiser - Speed Test' });
-
-        return message.reply({ embeds: [embed] }).catch(() => { });
+      // Handle built-in prefix command: r!ping / r!latency
+      if (parsed.commandName === 'ping' || parsed.commandName === 'latency') {
+        return handlePingMessage(message);
       }
 
       // Handle built-in prefix command: r!help

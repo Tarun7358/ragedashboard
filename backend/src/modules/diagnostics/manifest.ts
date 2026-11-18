@@ -3,42 +3,50 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, EmbedB
 import fs from 'fs';
 import { Colors, Embeds, buildLimeOverviewCard, fmt, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, MEMBER_ICON, BOT_ICON, INFO_ICON } from '../../core/UIFactory.js';
 import { UptimeBroadcaster } from '../../services/UptimeBroadcaster.js';
+import { buildPingEmbed, formatGns } from '../../core/RealtimePing.js';
+import { Database } from '../../core/Database.js';
 
-function getPingStatus(ms: number) {
-  if (ms < 100) return `${VERIFIED_ICON} Ultra Fast`;
-  if (ms < 250) return `${INFO_ICON} Normal`;
-  if (ms < 500) return `${TIMER_ICON} Moderate Lag`;
-  return `${WRONG_ICON} High Latency`;
-}
+async function createRealtimePingEmbed(client: any, interaction: any, startHr: bigint, startTs: number) {
+  const createdTs = interaction.createdTimestamp || startTs;
+  const etaMs = Math.max(1, startTs - createdTs);
+  const etaNs = BigInt(etaMs) * 1_000_000n;
 
-function createPingEmbed(client: any, roundTripMs: number, wsPingMs: number) {
-  const ws = Math.max(1, Math.round(wsPingMs));
+  const tDb0 = process.hrtime.bigint();
+  await Database.get('SELECT 1').catch(() => null);
+  const tDb1 = process.hrtime.bigint();
+  const redisMs = Math.max(1, Math.round(Number(tDb1 - tDb0) / 1_000_000));
 
-  return new EmbedBuilder()
-    .setTitle('WebSocket Latency')
-    .setColor(ws < 150 ? Colors.BRAND : ws < 300 ? Colors.WARN : Colors.DANGER)
-    .setDescription(`> **WebSocket Latency:** \`${ws}ms\``)
-    .setFooter({ text: 'Rage Optimiser - Speed Test' });
+  const wsPing = Math.max(1, Math.round(client?.ws?.ping > 0 ? client.ws.ping : 15));
+
+  const hrCompute = process.hrtime.bigint();
+  const computeMs = Math.max(1, Number(hrCompute - startHr) / 1_000_000);
+  const ectNs = BigInt(etaMs + computeMs) * 1_000_000n;
+
+  const tNow = Date.now();
+  const realTatMs = Math.max(etaMs + 1, tNow - createdTs);
+  const realTatNs = BigInt(realTatMs) * 1_000_000n;
+
+  return buildPingEmbed(wsPing, redisMs, etaNs, ectNs, realTatNs);
 }
 
 function createPingComponents(userId: string) {
   const button = new ButtonBuilder()
     .setCustomId(`ping_refresh_${userId}`)
     .setLabel('Refresh Latency')
-    .setStyle(ButtonStyle.Success);
+    .setStyle(ButtonStyle.Secondary);
   return [new ActionRowBuilder<ButtonBuilder>().addComponents(button)];
 }
 
 async function renderPingUI(client: any, interaction: any) {
-  const start = Date.now();
+  const startTs = Date.now();
+  const startHr = process.hrtime.bigint();
   if (!interaction.deferred && !interaction.replied) {
     await interaction.deferReply().catch(() => {});
   }
-  const roundTrip = Date.now() - start;
-  const wsPing = Math.max(1, client.ws.ping);
 
+  const embed = await createRealtimePingEmbed(client, interaction, startHr, startTs);
   const reply = await interaction.editReply({
-    embeds: [createPingEmbed(client, roundTrip, wsPing)],
+    embeds: [embed],
     components: createPingComponents(interaction.user.id)
   }).catch(() => null);
 
@@ -55,13 +63,13 @@ async function renderPingUI(client: any, interaction: any) {
       }).catch(() => {});
     }
 
-    const refStart = Date.now();
+    const refTs = Date.now();
+    const refHr = process.hrtime.bigint();
     await i.deferUpdate().catch(() => {});
-    const refRt = Date.now() - refStart;
-    const refWs = Math.max(1, client.ws.ping);
 
+    const refEmbed = await createRealtimePingEmbed(client, i, refHr, refTs);
     await i.editReply({
-      embeds: [createPingEmbed(client, refRt, refWs)],
+      embeds: [refEmbed],
       components: createPingComponents(interaction.user.id)
     }).catch(() => {});
   });

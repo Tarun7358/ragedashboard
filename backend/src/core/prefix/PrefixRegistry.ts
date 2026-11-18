@@ -1,4 +1,5 @@
 import { ModuleManifest } from '../types.js';
+import { handlePingMessage } from '../RealtimePing.js';
 
 export interface PrefixCommandSubMeta {
   name: string;
@@ -518,17 +519,7 @@ export class PrefixRegistry {
         moduleOwnerId: 'core',
         dangerLevel: 'Low',
         execute: async (message: any) => {
-          const wsPing = Math.max(1, Math.round(message.client.ws.ping));
-          const uptimeSec = process.uptime();
-          const startTime = Math.floor((Date.now() - uptimeSec * 1000) / 1000);
-          const heapMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
-          const { Embeds, BOT_ICON } = await import('../UIFactory.js');
-          const pingEmbed = Embeds.info(
-            `${BOT_ICON} Bot Latency & Status`,
-            `WebSocket Ping: **\`${wsPing}ms\`**\nUptime: <t:${startTime}:R>\nMemory Heap: **\`${heapMb} MB\`**`,
-            { module: 'system' }
-          );
-          return message.reply({ embeds: [pingEmbed] });
+          return handlePingMessage(message);
         }
       },
       {
