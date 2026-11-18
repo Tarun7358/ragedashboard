@@ -38,14 +38,13 @@ export function SecurityLogs({ syncLogs = [] }: SecurityLogsProps) {
             width: '56px',
             height: '56px',
             borderRadius: '16px',
-            background: 'radial-gradient(circle, rgba(168,85,247,0.3) 0%, rgba(168,85,247,0.1) 100%)',
-            border: '2px solid #a855f7',
+            background: 'rgba(220, 38, 38, 0.12)', border: '1px solid rgba(220, 38, 38, 0.25)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 24px rgba(168,85,247,0.5)'
+            boxShadow: 'none'
           }}>
-            <FileText size={30} color="#a855f7" />
+            <FileText size={30} color="#EF4444" />
           </div>
           <div>
             <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: 0 }}>
@@ -58,7 +57,7 @@ export function SecurityLogs({ syncLogs = [] }: SecurityLogsProps) {
         </div>
 
         {/* Filter Pills */}
-        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', background: '#18181B', padding: '4px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
           {[
             { id: 'all', label: 'All Events' },
             { id: 'warn', label: 'Threat Alerts' },
@@ -71,7 +70,7 @@ export function SecurityLogs({ syncLogs = [] }: SecurityLogsProps) {
                 padding: '6px 14px',
                 borderRadius: '6px',
                 border: 'none',
-                background: filterType === f.id ? '#a855f7' : 'transparent',
+                background: filterType === f.id ? '#DC2626' : 'transparent',
                 color: filterType === f.id ? '#ffffff' : 'var(--text-muted)',
                 fontSize: '11px',
                 fontWeight: 700,
@@ -86,8 +85,8 @@ export function SecurityLogs({ syncLogs = [] }: SecurityLogsProps) {
       </div>
 
       {/* Code-Terminal Audit Stream Panel */}
-      <div className="section-panel" style={{ padding: '24px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px', fontWeight: 800, fontSize: '15px', color: '#fff' }}>
+      <div className="section-panel" style={{ padding: '24px', background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px', fontWeight: 800, fontSize: '15px', color: '#09090B' }}>
           <Radio size={18} color="var(--accent-primary)" />
           <span>Live Gateway Audit Log</span>
         </div>
@@ -106,9 +105,9 @@ export function SecurityLogs({ syncLogs = [] }: SecurityLogsProps) {
                   alignItems: 'center',
                   gap: '14px',
                   padding: '12px 18px',
-                  backgroundColor: 'rgba(0,0,0,0.3)',
+                  backgroundColor: '#FAFAFC',
                   borderRadius: '10px',
-                  border: '1px solid rgba(255,255,255,0.04)'
+                  border: '1px solid #E4E4E8'
                 }}
               >
                 <Clock size={14} color="var(--text-muted)" />

@@ -143,7 +143,7 @@ export function DiscordDashboard({
 
       {/* Tabs Container */}
       <div className="section-panel" style={{
-        background: 'rgba(15, 23, 42, 0.25)',
+        background: '#FAFAFC', border: '1px solid #E4E4E8',
         backdropFilter: 'blur(12px)',
         border: '1px solid rgba(255, 255, 255, 0.05)',
         borderRadius: '16px',
@@ -201,7 +201,7 @@ export function DiscordDashboard({
                     Zero-Noise Single Message Architecture
                   </h3>
                   <p style={{ fontSize: '13px', color: '#94A3B8', lineHeight: '1.6', margin: 0 }}>
-                    Traditional bots flood your server with recurring messages and notifications, cluttering channels. Clutch Nation operates on a <strong>single-message engine</strong>. The dashboard acts as a persistent mini-app pinned inside your target channel. Members click native Discord navigation buttons to toggle views instantly.
+                    Traditional bots flood your server with recurring messages and notifications, cluttering channels. Rage Optimiser operates on a <strong>single-message engine</strong>. The dashboard acts as a persistent mini-app pinned inside your target channel. Members click native Discord navigation buttons to toggle views instantly.
                   </p>
                 </div>
               )}
@@ -243,7 +243,7 @@ export function DiscordDashboard({
                   }}>
                     <CheckCircle size={36} color="#10B981" />
                   </div>
-                  <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', margin: 0 }}>System Ready for Deployment</h3>
+                  <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#09090B', margin: 0 }}>System Ready for Deployment</h3>
                   <p style={{ fontSize: '13px', color: '#94A3B8', margin: 0, maxWidth: '400px', lineHeight: 1.5 }}>
                     All parameters validated successfully. Activate the module above, then configure page modules and refresh rates to suit your guild's throughput.
                   </p>
@@ -256,14 +256,14 @@ export function DiscordDashboard({
           {activeTab === 'pages' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#FFF', margin: 0 }}>Dashboard Sub-Page Navigations</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0 }}>Dashboard Sub-Page Navigations</h3>
                 <p style={{ fontSize: '13px', color: '#94A3B8', margin: '4px 0 0 0' }}>Enable or disable specific sections on your active panel viewport.</p>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
                 {Object.entries(enabledPages).map(([key, value]) => (
                   <div key={key} style={{
-                    background: 'rgba(15, 23, 42, 0.3)',
+                    background: '#FAFAFC', border: '1px solid #E4E4E8',
                     border: '1px solid rgba(255, 255, 255, 0.04)',
                     padding: '16px 20px',
                     borderRadius: '12px',
@@ -276,7 +276,7 @@ export function DiscordDashboard({
                   onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.04)'}
                   >
                     <div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#FFF', textTransform: 'capitalize' }}>{key} Page</div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#09090B', textTransform: 'capitalize' }}>{key} Page</div>
                       <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: 2 }}>Interactive "{key}" navigation option.</div>
                     </div>
                     <label className="switch">
@@ -308,7 +308,7 @@ export function DiscordDashboard({
           {activeTab === 'appearance' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#FFF', margin: 0 }}>Sync Rates & Optimization</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0 }}>Sync Rates & Optimization</h3>
                 <p style={{ fontSize: '13px', color: '#94A3B8', margin: '4px 0 0 0' }}>Configure persistence schedules for automatic state updating.</p>
               </div>
 

@@ -566,7 +566,7 @@ export function Security({
       {showLockdownModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(6px)' }}>
           <div className="section-panel" style={{ width: '440px', padding: '28px', background: 'var(--bg-card)', border: `1px solid ${lockdownAction === 'enable' ? 'rgba(239,68,68,0.5)' : 'rgba(16,185,129,0.5)'}`, boxShadow: '0 10px 30px rgba(0,0,0,0.6)', borderRadius: '16px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#09090B', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               {lockdownAction === 'enable' ? '🔒' : '🔓'}
               {lockdownAction === 'enable' ? 'Enable Emergency Lockdown?' : 'Exit Emergency Lockdown?'}
             </h3>

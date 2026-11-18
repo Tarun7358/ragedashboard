@@ -332,7 +332,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
       {/* Header bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#09090B', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Layers color="#d4af37" size={22} /> Ticket System vNext
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
@@ -355,9 +355,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
               gap: '8px',
               cursor: 'pointer',
               transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-              backgroundColor: activeTab === 'panels' ? 'rgba(212, 175, 55, 0.12)' : 'rgba(255, 255, 255, 0.02)',
-              border: activeTab === 'panels' ? '1px solid rgba(212, 175, 55, 0.3)' : '1px solid rgba(255, 255, 255, 0.05)',
-              color: activeTab === 'panels' ? '#ffffff' : '#9ca3af',
+              backgroundColor: activeTab === 'panels' ? '#09090B' : '#FFFFFF', border: activeTab === 'panels' ? '1px solid #09090B' : '1px solid #E4E4E7', color: activeTab === 'panels' ? '#FFFFFF' : '#71717A',
               boxShadow: activeTab === 'panels' ? '0 0 12px rgba(212, 175, 55, 0.1)' : 'none'
             }}
           >
@@ -376,9 +374,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
               gap: '8px',
               cursor: 'pointer',
               transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-              backgroundColor: activeTab === 'transcripts' ? 'rgba(212, 175, 55, 0.12)' : 'rgba(255, 255, 255, 0.02)',
-              border: activeTab === 'transcripts' ? '1px solid rgba(212, 175, 55, 0.3)' : '1px solid rgba(255, 255, 255, 0.05)',
-              color: activeTab === 'transcripts' ? '#ffffff' : '#9ca3af',
+              backgroundColor: activeTab === 'transcripts' ? '#09090B' : '#FFFFFF', border: activeTab === 'transcripts' ? '1px solid #09090B' : '1px solid #E4E4E7', color: activeTab === 'transcripts' ? '#FFFFFF' : '#71717A',
               boxShadow: activeTab === 'transcripts' ? '0 0 12px rgba(212, 175, 55, 0.1)' : 'none'
             }}
           >
@@ -399,7 +395,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
             {/* Panel Column 1: Config & General Info */}
             <div className="tickets-col-1">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>Configure Panel Settings</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#09090B' }}>Configure Panel Settings</h3>
                 <button
                   type="button"
                   onClick={() => setEditingPanel(null)}
@@ -484,7 +480,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
             {/* Panel Column 2: Interactive Categories & Modals Wizard */}
             <div className="tickets-col-2">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>Support Categories & Modals</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#09090B' }}>Support Categories & Modals</h3>
                 <button
                   type="button"
                   onClick={addOption}
@@ -614,7 +610,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
                   <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                       <div>
-                        <h4 style={{ fontSize: '12px', fontWeight: 800, color: '#fff' }}>Guided Modal Questionnaire</h4>
+                        <h4 style={{ fontSize: '12px', fontWeight: 800, color: '#09090B' }}>Guided Modal Questionnaire</h4>
                         <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
                           Create inputs users must answer to submit this ticket.
                         </span>
@@ -642,7 +638,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
                               padding: '10px',
                               border: '1px solid var(--border-color)',
                               borderRadius: '6px',
-                              backgroundColor: 'rgba(255,255,255,0.01)',
+                              backgroundColor: '#FAFAFC',
                               display: 'flex',
                               flexDirection: 'column',
                               gap: '8px',
@@ -695,7 +691,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
                                 <select
                                   value={form.style}
                                   onChange={(e) => updateFormFieldVal(activeOptionIndex, fIdx, 'style', e.target.value)}
-                                  style={{ height: '20px', fontSize: '9px', padding: '2px', backgroundColor: '#16161f', color: '#fff', border: '1px solid var(--border-color)', borderRadius: '3px' }}
+                                  style={{ height: '20px', fontSize: '9px', padding: '2px', backgroundColor: '#FAFAFC', border: '1px solid #E4E4E8', color: '#09090B', border: '1px solid #E4E4E8', borderRadius: '3px' }}
                                 >
                                   <option value="short">Short text reply</option>
                                   <option value="paragraph">Paragraph reply</option>
@@ -714,7 +710,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
 
             {/* Panel Column 3: Embed Panel Preview */}
             <div className="tickets-col-3">
-              <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#09090B', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Eye size={16} /> Board Embed Designer
               </h3>
 
@@ -760,7 +756,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
             {activeTab === 'panels' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>Interactive Ticket Board Panels</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#09090B' }}>Interactive Ticket Board Panels</h3>
                   <button
                     onClick={handleCreatePanel}
                     className="btn btn-primary"
@@ -779,7 +775,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
                     color: 'var(--text-muted)'
                   }}>
                     <HelpCircle size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                    <h4 style={{ color: '#fff', fontSize: '15px', fontWeight: 700 }}>No Support Boards configured</h4>
+                    <h4 style={{ color: '#09090B', fontSize: '15px', fontWeight: 700 }}>No Support Boards configured</h4>
                     <p style={{ fontSize: '13px', marginTop: '6px' }}>
                       Click the button above to design your first Ticket V2 Panel and guided modal questions.
                     </p>
@@ -794,14 +790,14 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
                           border: '1px solid var(--border-color)',
                           borderRadius: '10px',
                           padding: '16px',
-                          backgroundColor: 'rgba(22, 22, 31, 0.95)',
+                          backgroundColor: '#FFFFFF', border: '1px solid #E4E4E7',
                           display: 'flex',
                           flexDirection: 'column',
                           gap: '12px'
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#09090B' }}>
                             {p.name}
                           </span>
                           <span style={{
@@ -820,22 +816,22 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                             <span>Layout Mode:</span>
-                            <span style={{ color: '#fff', fontWeight: 600 }}>{p.config.layoutType}</span>
+                            <span style={{ color: '#09090B', fontWeight: 600 }}>{p.config.layoutType}</span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                             <span>Categories:</span>
-                            <span style={{ color: '#fff', fontWeight: 600 }}>{p.config.options?.length || 0} configured</span>
+                            <span style={{ color: '#09090B', fontWeight: 600 }}>{p.config.options?.length || 0} configured</span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span>Version:</span>
-                            <span style={{ color: '#fff', fontWeight: 600 }}>v{p.version}</span>
+                            <span style={{ color: '#09090B', fontWeight: 600 }}>v{p.version}</span>
                           </div>
                         </div>
 
                         {/* Setup Command helper banner */}
                         <div style={{
                           padding: '8px',
-                          backgroundColor: '#16161f',
+                          backgroundColor: '#FAFAFC', border: '1px solid #E4E4E8',
                           borderRadius: '6px',
                           fontSize: '11px',
                           fontFamily: 'monospace',
@@ -872,7 +868,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
             {activeTab === 'transcripts' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff' }}>Ticket SQL Transcripts Logs</h3>
+                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#09090B' }}>Ticket SQL Transcripts Logs</h3>
                   <button
                     onClick={fetchTickets}
                     className="btn btn-secondary"
@@ -891,16 +887,16 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
                     color: 'var(--text-muted)'
                   }}>
                     <FileText size={40} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                    <h4 style={{ color: '#fff', fontSize: '15px', fontWeight: 700 }}>No Support Tickets found</h4>
+                    <h4 style={{ color: '#09090B', fontSize: '15px', fontWeight: 700 }}>No Support Tickets found</h4>
                     <p style={{ fontSize: '13px', marginTop: '6px' }}>
                       Spawned ticket records, staff assignments, and messages transcripts will register here.
                     </p>
                   </div>
                 ) : (
-                  <div className="table-responsive" style={{ border: '1px solid var(--border-color)', borderRadius: '10px', backgroundColor: 'rgba(22, 22, 31, 0.95)' }}>
+                  <div className="table-responsive" style={{ border: '1px solid var(--border-color)', borderRadius: '10px', backgroundColor: '#FFFFFF', border: '1px solid #E4E4E7' }}>
                     <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                       <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left', backgroundColor: 'rgba(255,255,255,0.01)' }}>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)', textAlign: 'left', backgroundColor: '#FAFAFC' }}>
                           <th style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>Ticket ID</th>
                           <th style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>Creator Member</th>
                           <th style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>Status</th>
@@ -914,7 +910,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
                         {tickets.map(t => (
                           <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                             <td style={{ padding: '12px 16px', fontWeight: 700, color: '#d4af37' }}>{t.ticketId}</td>
-                            <td style={{ padding: '12px 16px', color: '#fff' }}>{t.creatorName}</td>
+                            <td style={{ padding: '12px 16px', color: '#09090B' }}>{t.creatorName}</td>
                             <td style={{ padding: '12px 16px' }}>
                               <span style={{
                                 backgroundColor: t.status === 'open' ? 'rgba(87,242,135,0.1)' : t.status === 'claimed' ? 'rgba(212,175,55,0.1)' : 'rgba(255,77,77,0.1)',
@@ -996,7 +992,7 @@ export function Tickets({ onSaveConfig, modules = [], registry, onUpdateConfig }
                 backgroundColor: '#2b2d31'
               }}>
                 <div>
-                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#09090B', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     Transcript: {selectedTicket.ticketId}
                   </h3>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>

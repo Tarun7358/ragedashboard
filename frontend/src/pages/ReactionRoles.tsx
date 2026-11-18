@@ -130,7 +130,7 @@ export function ReactionRoles({
               transition: 'all 0.2s',
               background: rrModule?.status === 'enabled' ? 'linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)' : 'linear-gradient(135deg, #7C5CFC 0%, #5B21B6 100%)',
               border: 'none',
-              color: '#FFF',
+              color: '#09090B',
               boxShadow: rrModule?.status === 'enabled' ? '0 4px 14px rgba(239, 68, 68, 0.25)' : '0 4px 14px rgba(124, 92, 252, 0.3)'
             }}
             onClick={handleToggleEnable}
@@ -148,7 +148,7 @@ export function ReactionRoles({
               transition: 'all 0.2s',
               background: 'linear-gradient(135deg, #10B981 0%, #047857 100%)',
               border: 'none',
-              color: '#FFF',
+              color: '#09090B',
               boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)',
               display: 'flex',
               alignItems: 'center',
@@ -171,21 +171,21 @@ export function ReactionRoles({
           
           {/* Add Mapping Panel */}
           <div className="section-panel" style={{
-            background: 'rgba(30, 41, 59, 0.3)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
+            background: '#FFFFFF',
+            border: '1px solid #E4E4E7',
             borderRadius: '16px',
             padding: '24px',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
             backdropFilter: 'blur(10px)'
           }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', marginTop: 0, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#09090B', marginTop: 0, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Settings2 size={18} color="#7C5CFC" /> Map New Reaction Role
             </h3>
 
             <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               
               <div className="form-group" style={{ flex: '1 1 120px' }}>
-                <label className="form-label" style={{ fontWeight: 600, color: '#E2E8F0', marginBottom: '8px' }}>Emoji Reaction</label>
+                <label className="form-label" style={{ fontWeight: 600, color: '#09090B', marginBottom: '8px' }}>Emoji Reaction</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <select
                     className="form-select"
@@ -210,7 +210,7 @@ export function ReactionRoles({
               </div>
 
               <div className="form-group" style={{ flex: '2 1 200px' }}>
-                <label className="form-label" style={{ fontWeight: 600, color: '#E2E8F0', marginBottom: '8px' }}>Target Assign Role</label>
+                <label className="form-label" style={{ fontWeight: 600, color: '#09090B', marginBottom: '8px' }}>Target Assign Role</label>
                 <select
                   className="form-select"
                   value={newRoleId}
@@ -277,20 +277,20 @@ export function ReactionRoles({
 
           {/* Active Mappings Panel */}
           <div className="section-panel" style={{
-            background: 'rgba(30, 41, 59, 0.3)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
+            background: '#FFFFFF',
+            border: '1px solid #E4E4E7',
             borderRadius: '16px',
             padding: '24px',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
             backdropFilter: 'blur(10px)'
           }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', marginTop: 0, marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#09090B', marginTop: 0, marginBottom: '16px' }}>
               Active Configuration Mappings
             </h3>
 
             {Object.keys(roleMap).length === 0 ? (
               <div style={{
-                textAlign: 'center', padding: '32px', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '12px', color: '#94A3B8'
+                textAlign: 'center', padding: '32px', border: '1px dashed #E4E4E8', borderRadius: '12px', color: '#94A3B8'
               }}>
                 <Info size={32} style={{ marginBottom: '12px', color: '#7C5CFC' }} />
                 <p style={{ margin: 0 }}>No active emoji to role mappings configured yet.</p>
@@ -303,7 +303,7 @@ export function ReactionRoles({
                   return (
                     <div key={emoji} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '12px 20px', background: 'rgba(15, 23, 42, 0.3)',
+                      padding: '12px 20px', background: '#FAFAFC',
                       border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -311,7 +311,7 @@ export function ReactionRoles({
                           {emoji}
                         </span>
                         <div>
-                          <div style={{ fontWeight: 600, color: '#F1F5F9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ fontWeight: 600, color: '#09090B', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             {role?.name || `Unknown Role (${roleId})`}
                             {role?.color && (
                               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: role.color }} />
@@ -373,11 +373,10 @@ export function ReactionRoles({
                 flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 700, fontSize: '12px', color: '#fff', boxShadow: '0 4px 12px rgba(124, 92, 252, 0.3)'
               }}>
-                CN
-              </div>
+                RO</div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: '15px', fontWeight: 600, color: '#fff' }}>Clutch Nation System</span>
+                  <span style={{ fontSize: '15px', fontWeight: 600, color: '#fff' }}>Rage Optimiser System</span>
                   <span style={{ background: '#5865F2', fontSize: '9px', fontWeight: 700, color: '#fff', padding: '2px 4px', borderRadius: '3px', textTransform: 'uppercase' }}>BOT</span>
                   <span style={{ fontSize: '12px', color: '#72767d' }}>Today at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>

@@ -215,7 +215,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
           animate={{ opacity: 1, y: 0 }}
           style={{ 
             background: 'linear-gradient(135deg, rgba(124, 92, 252, 0.15), rgba(15, 17, 21, 0.8))', 
-            border: '1px solid rgba(124, 92, 252, 0.3)', 
+            border: '1px solid #27272A', 
             borderRadius: '16px', 
             padding: '24px', 
             display: 'flex', 
@@ -242,7 +242,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
               <Radio size={24} className="pulse" />
             </div>
             <div>
-              <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#FFF', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#09090B', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 Active Target: <span style={{ color: 'var(--accent-primary)' }}>🎤 {voiceChannels.find(c => c.id === config.currentVoiceChannelId)?.name || 'Unknown Channel'}</span>
               </h3>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
@@ -263,7 +263,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
             {config.connectedSince && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Connected Since</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFF' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>
                   {new Date(config.connectedSince).toLocaleTimeString()}
                 </span>
               </div>
@@ -272,7 +272,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
             {config.lastSwitched && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Last Switched</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFF' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>
                   {new Date(config.lastSwitched).toLocaleDateString()} at {new Date(config.lastSwitched).toLocaleTimeString()}
                 </span>
               </div>
@@ -281,7 +281,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
             {config.switchedBy && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Switched By</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFF' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>
                   @{config.switchedBy}
                 </span>
               </div>
@@ -293,39 +293,39 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
       {/* Metrics Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
         
-        <div className="stat-card" style={{ background: 'rgba(23, 26, 33, 0.55)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '14px', padding: '20px' }}>
+        <div className="stat-card" style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '14px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, marginBottom: '12px' }}>
             <span>Acoustic Deviations</span>
             <AlertOctagon size={16} color="var(--accent-primary)" />
           </div>
-          <span style={{ fontSize: '28px', fontWeight: 800, color: '#FFF' }}>{stats.totalDetections || 0}</span>
+          <span style={{ fontSize: '28px', fontWeight: 800, color: '#09090B' }}>{stats.totalDetections || 0}</span>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>Total amplitude violations logged</div>
         </div>
 
-        <div className="stat-card" style={{ background: 'rgba(23, 26, 33, 0.55)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '14px', padding: '20px' }}>
+        <div className="stat-card" style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '14px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, marginBottom: '12px' }}>
             <span>Mutes Dispatched</span>
             <VolumeX size={16} color="#EF4444" />
           </div>
-          <span style={{ fontSize: '28px', fontWeight: 800, color: '#FFF' }}>{stats.totalMutes || 0}</span>
+          <span style={{ fontSize: '28px', fontWeight: 800, color: '#09090B' }}>{stats.totalMutes || 0}</span>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>Automated server mutes enforced</div>
         </div>
 
-        <div className="stat-card" style={{ background: 'rgba(23, 26, 33, 0.55)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '14px', padding: '20px' }}>
+        <div className="stat-card" style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '14px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, marginBottom: '12px' }}>
             <span>Peak Amplitude</span>
             <Radio size={16} color="#F59E0B" />
           </div>
-          <span style={{ fontSize: '28px', fontWeight: 800, color: '#FFF' }}>{stats.peakLoudness || 0}%</span>
+          <span style={{ fontSize: '28px', fontWeight: 800, color: '#09090B' }}>{stats.peakLoudness || 0}%</span>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>Highest recorded audio surge</div>
         </div>
 
-        <div className="stat-card" style={{ background: 'rgba(23, 26, 33, 0.55)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '14px', padding: '20px' }}>
+        <div className="stat-card" style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '14px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, marginBottom: '12px' }}>
             <span>Average RMS Level</span>
             <Volume2 size={16} color="#10B981" />
           </div>
-          <span style={{ fontSize: '28px', fontWeight: 800, color: '#FFF' }}>{stats.avgLoudness || 0}%</span>
+          <span style={{ fontSize: '28px', fontWeight: 800, color: '#09090B' }}>{stats.avgLoudness || 0}%</span>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>Mean operational signal volume</div>
         </div>
 
@@ -333,8 +333,8 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
 
       {/* Main Panel Wrapper */}
       <div className="section-panel" style={{
-        background: 'rgba(23, 26, 33, 0.65)',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
+        background: '#FFFFFF',
+        border: '1px solid #E4E4E7',
         borderRadius: '18px',
         boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
         backdropFilter: 'blur(12px)',
@@ -399,7 +399,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
                   <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#09090B', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Layers size={18} color="var(--accent-primary)" /> Shield Thresholds
                     </h3>
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
@@ -516,7 +516,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
                       <select
                         value={punishment}
                         onChange={e => setPunishment(e.target.value)}
-                        style={{ width: '100%', background: 'rgba(15, 17, 21, 0.8)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '14px 16px', color: '#FFF' }}
+                        style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E4E4E8', borderRadius: '12px', padding: '14px 16px', color: '#09090B' }}
                       >
                         <option value="warn">Warn Only (Direct Message Warning)</option>
                         <option value="servermute">Server Mute (Requires Administrative Override)</option>
@@ -532,7 +532,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
                           type="number"
                           value={muteDuration}
                           onChange={e => setMuteDuration(parseInt(e.target.value) || 0)}
-                          style={{ width: '100%', background: 'rgba(15, 17, 21, 0.8)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '14px 16px', color: '#FFF' }}
+                          style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E4E4E8', borderRadius: '12px', padding: '14px 16px', color: '#09090B' }}
                         />
                       </div>
                     )}
@@ -544,7 +544,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
                         type="number"
                         value={cooldown}
                         onChange={e => setCooldown(parseInt(e.target.value) || 0)}
-                        style={{ width: '100%', background: 'rgba(15, 17, 21, 0.8)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px', padding: '14px 16px', color: '#FFF' }}
+                        style={{ width: '100%', background: '#FFFFFF', border: '1px solid #E4E4E8', borderRadius: '12px', padding: '14px 16px', color: '#09090B' }}
                       />
                     </div>
 
@@ -612,7 +612,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
                   flexDirection: 'column',
                   gap: '20px'
                 }}>
-                  <h4 style={{ fontSize: '13px', fontWeight: 800, color: '#FFF', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 800, color: '#09090B', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <HelpCircle size={15} color="var(--accent-primary)" /> Shield Architecture
                   </h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
@@ -704,7 +704,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#09090B', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Radio size={18} color="var(--accent-primary)" className="pulse" /> Live Telemetry Streams
                     </h3>
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
@@ -738,7 +738,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
                   }}>
                     <Volume2 size={48} color="var(--text-muted)" style={{ opacity: 0.5 }} />
                     <div>
-                      <h4 style={{ color: '#FFF', fontSize: '15px', fontWeight: 600 }}>No Telemetry Connections Active</h4>
+                      <h4 style={{ color: '#09090B', fontSize: '15px', fontWeight: 600 }}>No Telemetry Connections Active</h4>
                       <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px', maxWidth: '380px' }}>
                         The bot dynamically binds and logs decibel readings as soon as non-mute members join target voice channels.
                       </p>
@@ -749,7 +749,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
                     {liveMonitored.map((user: any) => (
                       <motion.div
                         key={user.userId}
-                        whileHover={{ y: -3, border: '1px solid rgba(124, 92, 252, 0.3)' }}
+                        whileHover={{ y: -3, border: '1px solid #27272A' }}
                         style={{
                           background: 'rgba(15, 17, 21, 0.7)',
                           border: '1px solid rgba(255,255,255,0.06)',
@@ -774,7 +774,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
                             </div>
                           )}
                           <div>
-                            <h4 style={{ color: '#FFF', fontSize: '14px', fontWeight: 700 }}>{user.username}</h4>
+                            <h4 style={{ color: '#09090B', fontSize: '14px', fontWeight: 700 }}>{user.username}</h4>
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>@{user.tag}</span>
                           </div>
                         </div>
@@ -783,7 +783,7 @@ export function VoiceProtection({ onSaveConfig, modules, onUpdateConfig, registr
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
                           <span style={{ color: 'var(--text-secondary)' }}>Auditing Channel:</span>
-                          <span style={{ color: '#FFF', fontWeight: 600 }}>🔊 {user.channelName}</span>
+                          <span style={{ color: '#09090B', fontWeight: 600 }}>🔊 {user.channelName}</span>
                         </div>
                       </motion.div>
                     ))}

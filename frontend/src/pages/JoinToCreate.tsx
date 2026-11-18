@@ -115,9 +115,9 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
   // ─── Form panel — defined as a named function so React keeps it stable ──────
   const TriggerForm = (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-      style={{ background: 'rgba(20,23,30,0.95)', border: '1px solid rgba(124,92,252,0.35)', borderRadius: 16, padding: 28, marginBottom: 24 }}>
+      style={{ background: '#FAFAFC', border: '1px solid #E4E4E8', borderRadius: 16, padding: 28, marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h3 style={{ color: '#FFF', fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h3 style={{ color: '#09090B', fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Plus size={16} color="var(--accent-primary)" />{editingId ? 'Edit Trigger' : 'New Trigger'}
         </h3>
         <button onClick={handleCancel} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={18} /></button>
@@ -136,13 +136,13 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
         <div>
           <label style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>Label</label>
           <input value={draft.label} onChange={e => setD({ label: e.target.value })} placeholder="e.g. Gaming Lounge"
-            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(15,17,21,0.8)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '11px 14px', color: '#FFF', fontSize: 13 }} />
+            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid #E4E4E8', borderRadius: 10, padding: '11px 14px', color: '#09090B', fontSize: 13 }} />
         </div>
         {/* Trigger Channel */}
         <div>
           <label style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>Trigger Channel *</label>
           <select value={draft.triggerChannelId} onChange={e => { setD({ triggerChannelId: e.target.value }); setFormError(null); }}
-            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(15,17,21,0.8)', border: `1px solid ${formError && !draft.triggerChannelId ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, padding: '11px 14px', color: '#FFF', fontSize: 13 }}>
+            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: `1px solid ${formError && !draft.triggerChannelId ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, padding: '11px 14px', color: '#09090B', fontSize: 13 }}>
             <option value="">Select voice channel…</option>
             {voiceChannels.map(c => <option key={c.id} value={c.id}>🔊 {c.name} {c.category ? `[${c.category}]` : ''}</option>)}
           </select>
@@ -151,7 +151,7 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
         <div>
           <label style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>Spawn Category</label>
           <select value={draft.categoryId || ''} onChange={e => setD({ categoryId: e.target.value || null })}
-            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(15,17,21,0.8)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '11px 14px', color: '#FFF', fontSize: 13 }}>
+            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid #E4E4E8', borderRadius: 10, padding: '11px 14px', color: '#09090B', fontSize: 13 }}>
             <option value="">Same as trigger (auto)</option>
             {categories.map(c => <option key={c.id} value={c.id}>📁 {c.name}</option>)}
           </select>
@@ -160,12 +160,12 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
         <div>
           <label style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>Name Template</label>
           <input value={draft.defaultName} onChange={e => setD({ defaultName: e.target.value })} placeholder="{username}'s Channel"
-            style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(15,17,21,0.8)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '11px 14px', color: '#FFF', fontSize: 13 }} />
+            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid #E4E4E8', borderRadius: 10, padding: '11px 14px', color: '#09090B', fontSize: 13 }} />
         </div>
         {/* User Limit */}
         <div>
           <label style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>
-            User Limit: <strong style={{ color: '#FFF' }}>{draft.defaultLimit === 0 ? '∞ Unlimited' : `${draft.defaultLimit} max`}</strong>
+            User Limit: <strong style={{ color: '#09090B' }}>{draft.defaultLimit === 0 ? '∞ Unlimited' : `${draft.defaultLimit} max`}</strong>
           </label>
           {/* BUG FIX: parseInt can return NaN on empty string — use fallback 0 */}
           <input type="range" min={0} max={99} value={draft.defaultLimit} onChange={e => setD({ defaultLimit: parseInt(e.target.value) || 0 })}
@@ -195,7 +195,7 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
       </div>
 
       <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-        <button onClick={handleCancel} style={{ padding: '10px 20px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+        <button onClick={handleCancel} style={{ padding: '10px 20px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid #E4E4E8', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
         <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleSaveDraft}
           style={{ padding: '10px 24px', borderRadius: 10, background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-purple))', border: 'none', color: '#FFF', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
           {saving ? <RefreshCw size={14} className="spin" /> : <Check size={14} />}
@@ -214,11 +214,11 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
     const activeCount = activeChannels.filter(a => a.triggerId === t.id).length;
     return (
       <motion.div whileHover={{ y: -3, boxShadow: '0 12px 28px rgba(0,0,0,0.35)' }} transition={{ duration: 0.2 }}
-        style={{ background: 'rgba(18,21,28,0.8)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        style={{ background: '#FAFAFC', border: '1px solid #E4E4E8', borderRadius: 14, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#FFF', marginBottom: 2 }}>{t.label || ch?.name || 'Unnamed'}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#09090B', marginBottom: 2 }}>{t.label || ch?.name || 'Unnamed'}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>🔊 {ch?.name || t.triggerChannelId}</div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -238,7 +238,7 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
           ].map(s => (
             <div key={s.label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '8px 10px' }}>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
-              <div style={{ fontSize: 12, color: '#FFF', fontWeight: 600 }}>{s.value}</div>
+              <div style={{ fontSize: 12, color: '#09090B', fontWeight: 600 }}>{s.value}</div>
             </div>
           ))}
         </div>
@@ -291,8 +291,8 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
       </div>
 
       {/* Tabs */}
-      <div style={{ background: 'rgba(23,26,33,0.65)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
-        <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '0 28px', background: 'rgba(0,0,0,0.15)' }}>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: 18, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+        <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid #E4E4E7', padding: '0 28px', background: '#FAFAFC' }}>
           {[{ id: 'triggers', label: `Trigger Blueprints (${triggers.length})`, icon: Settings }, { id: 'active', label: `Live Rooms (${activeChannels.length})`, icon: Radio }].map(t => (
             <button key={t.id} onClick={() => setTab(t.id as any)}
               style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '17px 0', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', borderBottom: tab === t.id ? '2px solid var(--accent-primary)' : '2px solid transparent', color: tab === t.id ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }}>
@@ -320,7 +320,7 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
                 {triggers.length === 0 && !formOpen ? (
                   <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                     <Volume2 size={40} style={{ opacity: 0.3 }} />
-                    <div style={{ color: '#FFF', fontSize: 15, fontWeight: 600 }}>No Trigger Channels Yet</div>
+                    <div style={{ color: '#09090B', fontSize: 15, fontWeight: 600 }}>No Trigger Channels Yet</div>
                     <p style={{ fontSize: 13, maxWidth: 340, lineHeight: 1.5 }}>Click "Add New Trigger Channel" above to configure your first Join-to-Create trigger. You can add as many as you need!</p>
                   </div>
                 ) : (
@@ -333,14 +333,14 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
 
             {tab === 'active' && (
               <motion.div key="active" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.25 }}>
-                <h3 style={{ fontSize: 17, fontWeight: 700, color: '#FFF', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: '#09090B', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Radio size={17} color="var(--accent-primary)" /> Live Temporary Rooms
                 </h3>
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24 }}>Dynamically managed voice rooms currently active on the server.</p>
                 {activeChannels.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '60px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, background: 'rgba(15,17,21,0.3)', border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 14 }}>
                     <Volume2 size={40} style={{ opacity: 0.3 }} />
-                    <div style={{ color: '#FFF', fontSize: 14, fontWeight: 600 }}>No Active Channels</div>
+                    <div style={{ color: '#09090B', fontSize: 14, fontWeight: 600 }}>No Active Channels</div>
                     <p style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 340 }}>No members are using any JTC trigger right now. Details appear here in real time.</p>
                   </div>
                 ) : (
@@ -355,7 +355,7 @@ export function JoinToCreate({ onSaveConfig, modules, onUpdateConfig, registry }
                             {src && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>via {src.label}</span>}
                           </div>
                           <div>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: '#FFF', display: 'flex', alignItems: 'center', gap: 6 }}><Volume2 size={14} color="var(--accent-primary)" />{room.name}</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: '#09090B', display: 'flex', alignItems: 'center', gap: 6 }}><Volume2 size={14} color="var(--accent-primary)" />{room.name}</div>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>Owner: <strong>@{room.ownerTag}</strong></div>
                           </div>
                           <div style={{ height: 1, background: 'rgba(255,255,255,0.05)' }} />

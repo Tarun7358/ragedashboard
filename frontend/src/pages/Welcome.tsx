@@ -296,7 +296,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
   const [activeTab, setActiveTab] = useState<'welcome' | 'goodbye' | 'dm' | 'autorole' | 'boost' | 'milestone' | 'birthdays'>('welcome');
 
   // Preview Simulator variables state
-  const [simUsername, setSimUsername] = useState('ClutchMember');
+  const [simUsername, setSimUsername] = useState('RageMember');
   const [simMemberCount, setSimMemberCount] = useState(4291);
   const [simBoosts, setSimBoosts] = useState(28);
 
@@ -351,7 +351,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
       .replace(/{userTag}/g, `${simUsername}#0001`)
       .replace(/{user\.tag}/g, `${simUsername}#0001`)
       .replace(/{userId}/g, '7358129381293812')
-      .replace(/{server}/g, 'Clutch Nation')
+      .replace(/{server}/g, 'Rage Optimiser')
       .replace(/{memberCount}/g, simMemberCount.toString())
       .replace(/{date}/g, new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }))
       .replace(/{boosts}/g, simBoosts.toString())
@@ -367,7 +367,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
       .replace(/{userTag}/g, `${simUsername}#0001`)
       .replace(/{user\.tag}/g, `${simUsername}#0001`)
       .replace(/{userId}/g, '7358129381293812')
-      .replace(/{server}/g, 'Clutch Nation')
+      .replace(/{server}/g, 'Rage Optimiser')
       .replace(/{memberCount}/g, simMemberCount.toString())
       .replace(/{date}/g, new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }))
       .replace(/{boosts}/g, simBoosts.toString())
@@ -382,13 +382,13 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
         flexDirection: 'column',
         border: '1px solid var(--border-color)',
         borderRadius: '12px',
-        backgroundColor: 'rgba(22, 22, 31, 0.95)',
+        backgroundColor: '#FFFFFF', border: '1px solid #E4E4E7',
         padding: '20px',
         gap: '16px',
         overflowY: 'auto'
       }}>
         <div>
-          <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#09090B', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Settings2 size={18} color="#d4af37" /> Welcome Suite V2
           </h2>
           <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
@@ -506,7 +506,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
         flexDirection: 'column',
         border: '1px solid var(--border-color)',
         borderRadius: '12px',
-        backgroundColor: 'rgba(15, 15, 20, 0.98)',
+        backgroundColor: '#FFFFFF', border: '1px solid #E4E4E7',
         padding: '24px',
         gap: '20px',
         overflowY: 'auto'
@@ -514,7 +514,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
         {activeTab === 'welcome' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Welcome Event Settings</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>Welcome Event Settings</h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
                 <input
                   type="checkbox"
@@ -713,7 +713,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
 
             <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>Welcome Custom Embed</h4>
+                <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>Welcome Custom Embed</h4>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '11px' }}>
                   <input
                     type="checkbox"
@@ -742,7 +742,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
         {activeTab === 'goodbye' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Goodbye (Leave) Log Settings</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>Goodbye (Leave) Log Settings</h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
                 <input
                   type="checkbox"
@@ -772,7 +772,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
 
             <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>Goodbye Message Embed</h4>
+                <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>Goodbye Message Embed</h4>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '11px' }}>
                   <input
                     type="checkbox"
@@ -801,7 +801,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
         {activeTab === 'dm' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Welcome Direct Message (DM) Settings</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>Welcome Direct Message (DM) Settings</h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
                 <input
                   type="checkbox"
@@ -823,7 +823,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
 
             <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>DM Custom Embed</h4>
+                <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>DM Custom Embed</h4>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '11px' }}>
                   <input
                     type="checkbox"
@@ -852,7 +852,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
         {activeTab === 'autorole' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Auto-assigned Member Roles</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>Auto-assigned Member Roles</h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
                 <input
                   type="checkbox"
@@ -891,7 +891,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
         {activeTab === 'boost' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Server Boosting Event Logs</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>Server Boosting Event Logs</h3>
               <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
                 Send logs and announcement cards when users boost or unboost your server.
               </p>
@@ -1010,7 +1010,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
         {activeTab === 'milestone' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Milestone Member Trackers</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>Milestone Member Trackers</h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
                 <input
                   type="checkbox"
@@ -1076,7 +1076,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
         {activeTab === 'birthdays' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>Daily Birthday Celebrations</h3>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>Daily Birthday Celebrations</h3>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px' }}>
                 <input
                   type="checkbox"
@@ -1207,7 +1207,7 @@ export function Welcome({ onSaveConfig, onManualTrigger, modules = [], registry,
               <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>Rage Optimiser</span>
               <span style={{
                 backgroundColor: '#5865f2',
-                color: '#fff',
+                color: '#09090B',
                 fontSize: '9px',
                 fontWeight: 700,
                 padding: '1px 4px',

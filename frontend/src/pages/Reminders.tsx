@@ -221,14 +221,14 @@ export function Reminders({
         
         {/* Form Left */}
         <div className="section-panel" style={{
-          background: 'rgba(30, 41, 59, 0.3)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
+          background: '#FFFFFF',
+          border: '1px solid #E4E4E7',
           borderRadius: '16px',
           padding: '24px',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
           backdropFilter: 'blur(10px)'
         }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', marginTop: 0, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#09090B', marginTop: 0, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plus size={18} color="#3B82F6" /> Schedule New Alarm
           </h3>
 
@@ -321,15 +321,15 @@ export function Reminders({
 
         {/* List Right */}
         <div className="section-panel" style={{
-          background: 'rgba(30, 41, 59, 0.3)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
+          background: '#FFFFFF',
+          border: '1px solid #E4E4E7',
           borderRadius: '16px',
           padding: '24px',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
           backdropFilter: 'blur(10px)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#09090B', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={18} color="#3B82F6" /> Scheduled Active Reminders
             </h3>
             <button
@@ -376,7 +376,7 @@ export function Reminders({
                 return (
                   <div key={rem.id} style={{
                     background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    border: '1px solid #E4E4E7',
                     padding: '16px', borderRadius: '12px',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                   }}>
@@ -397,7 +397,7 @@ export function Reminders({
                           </span>
                         </div>
                         
-                        <div style={{ fontSize: '14px', color: '#FFF', fontWeight: 500, wordBreak: 'break-word', lineHeight: 1.4 }}>
+                        <div style={{ fontSize: '14px', color: '#09090B', fontWeight: 500, wordBreak: 'break-word', lineHeight: 1.4 }}>
                           {rem.message}
                         </div>
 
