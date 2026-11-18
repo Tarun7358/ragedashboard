@@ -338,7 +338,8 @@ export class PayloadFormatter {
         ...(mentionsOnly ? { content: mentionsOnly } : {}),
         flags: outFlags,
         components: [container],
-        ...(Array.isArray(copy.files) && copy.files.length > 0 ? { files: copy.files } : {})
+        ...(Array.isArray(copy.files) && copy.files.length > 0 ? { files: copy.files } : {}),
+        ...(Array.isArray(copy.attachments) ? { attachments: copy.attachments } : {})
       };
     } catch {
       return copy;

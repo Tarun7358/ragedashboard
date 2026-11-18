@@ -222,10 +222,11 @@ export class PrefixHelpCenter {
       totalCommandsWithSubs += 1 + (c.subcommands?.length || 0);
     });
 
+    const bannerFilename = 'help-box-home.png';
     const bannerBuffer = await HelpBannerGenerator.generate('Help', null).catch(() => null);
     const files: AttachmentBuilder[] = [];
     if (bannerBuffer) {
-      files.push(new AttachmentBuilder(bannerBuffer, { name: 'help-box-home.png' }));
+      files.push(new AttachmentBuilder(bannerBuffer, { name: bannerFilename }));
     }
 
     const previewPills = categories.slice(0, 8).map(c => `\`${c}\``).join(' ') + (categories.length > 8 ? ` \`+${categories.length - 8} more\`` : '');
@@ -249,7 +250,7 @@ export class PrefixHelpCenter {
       .setTimestamp();
 
     if (bannerBuffer) {
-      embed.setImage('attachment://help-box-home.png');
+      embed.setImage(`attachment://${bannerFilename}`);
     }
 
     const selectMenu = new StringSelectMenuBuilder()
@@ -285,14 +286,18 @@ export class PrefixHelpCenter {
 
     const helpPayload = PayloadFormatter.normalize({ embeds: [embed], components: [row1, row2], files }, botUser);
     if (updateInteraction) {
-      if (updateInteraction.deferred || updateInteraction.replied) {
-        return updateInteraction.editReply(helpPayload).catch((err: any) => {
-          console.error('[PrefixHelpCenter] Failed to editReply root help:', err?.message || err);
+      try {
+        if (updateInteraction.deferred || updateInteraction.replied) {
+          return await updateInteraction.editReply(helpPayload);
+        } else {
+          return await updateInteraction.update(helpPayload);
+        }
+      } catch (err: any) {
+        console.warn('[PrefixHelpCenter] Root help interaction update failed, attempting direct message.edit:', err?.message || err);
+        return await message.edit(helpPayload).catch((msgErr: any) => {
+          console.error('[PrefixHelpCenter] Root help direct message.edit also failed:', msgErr?.message || msgErr);
         });
       }
-      return updateInteraction.update(helpPayload).catch((err: any) => {
-        console.error('[PrefixHelpCenter] Failed to update root help:', err?.message || err);
-      });
     }
     try {
       return await message.reply(helpPayload);
@@ -344,10 +349,12 @@ export class PrefixHelpCenter {
       totalCategoryCmdCount += [...new Set(allNames)].length;
     });
 
+    const catSlug = category.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const bannerFilename = `help-box-${catSlug}.png`;
     const bannerBuffer = await HelpBannerGenerator.generate(`Help > ${category}`, `${totalCategoryCmdCount} commands`).catch(() => null);
     const files: AttachmentBuilder[] = [];
     if (bannerBuffer) {
-      files.push(new AttachmentBuilder(bannerBuffer, { name: 'help-box-category.png' }));
+      files.push(new AttachmentBuilder(bannerBuffer, { name: bannerFilename }));
     }
 
     const pageSize = 8;
@@ -380,7 +387,7 @@ export class PrefixHelpCenter {
       .setTimestamp();
 
     if (bannerBuffer) {
-      embed.setImage('attachment://help-box-category.png');
+      embed.setImage(`attachment://${bannerFilename}`);
     }
 
     const categories = PrefixRegistry.getCategories();
@@ -441,22 +448,27 @@ export class PrefixHelpCenter {
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(currentPage >= totalPages);
 
-      btnComponents.push(btnPrev, btnNext);
+      btnComponents.push(btnPrev, btnNext, btnDash, btnClose);
+    } else {
+      btnComponents.push(btnDash, btnSupport, btnClose);
     }
-    btnComponents.push(btnDash, btnSupport, btnClose);
 
     rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(btnComponents));
 
     const modPayload = PayloadFormatter.normalize({ embeds: [embed], components: rows, files }, message.client.user);
     if (updateInteraction) {
-      if (updateInteraction.deferred || updateInteraction.replied) {
-        return updateInteraction.editReply(modPayload).catch((err: any) => {
-          console.error('[PrefixHelpCenter] Failed to editReply module help:', err?.message || err);
+      try {
+        if (updateInteraction.deferred || updateInteraction.replied) {
+          return await updateInteraction.editReply(modPayload);
+        } else {
+          return await updateInteraction.update(modPayload);
+        }
+      } catch (err: any) {
+        console.warn('[PrefixHelpCenter] Module help interaction update failed, attempting direct message.edit:', err?.message || err);
+        return await message.edit(modPayload).catch((msgErr: any) => {
+          console.error('[PrefixHelpCenter] Module help direct message.edit also failed:', msgErr?.message || msgErr);
         });
       }
-      return updateInteraction.update(modPayload).catch((err: any) => {
-        console.error('[PrefixHelpCenter] Failed to update module help:', err?.message || err);
-      });
     }
     return message.reply(modPayload).catch(() => {});
   }
@@ -537,12 +549,18 @@ export class PrefixHelpCenter {
 
     const cmdPayload = PayloadFormatter.normalize({ embeds: [embed], components }, message.client.user);
     if (updateInteraction) {
-      if (updateInteraction.deferred || updateInteraction.replied) {
-        return updateInteraction.editReply(cmdPayload).catch((err: any) => {
-          console.error('[PrefixHelpCenter] Failed to editReply command help:', err?.message || err);
+      try {
+        if (updateInteraction.deferred || updateInteraction.replied) {
+          return await updateInteraction.editReply(cmdPayload);
+        } else {
+          return await updateInteraction.update(cmdPayload);
+        }
+      } catch (err: any) {
+        console.warn('[PrefixHelpCenter] Command help interaction update failed, attempting direct message.edit:', err?.message || err);
+        return await message.edit(cmdPayload).catch((msgErr: any) => {
+          console.error('[PrefixHelpCenter] Command help direct message.edit also failed:', msgErr?.message || msgErr);
         });
       }
-      return updateInteraction.update(cmdPayload).catch(() => {});
     }
     return message.reply(cmdPayload).catch(() => {});
   }
@@ -600,10 +618,18 @@ export class PrefixHelpCenter {
 
     const subPayload = PayloadFormatter.normalize({ embeds: [embed], components }, message.client.user);
     if (updateInteraction) {
-      if (updateInteraction.deferred || updateInteraction.replied) {
-        return updateInteraction.editReply(subPayload).catch(() => {});
+      try {
+        if (updateInteraction.deferred || updateInteraction.replied) {
+          return await updateInteraction.editReply(subPayload);
+        } else {
+          return await updateInteraction.update(subPayload);
+        }
+      } catch (err: any) {
+        console.warn('[PrefixHelpCenter] Subcommand help interaction update failed, attempting direct message.edit:', err?.message || err);
+        return await message.edit(subPayload).catch((msgErr: any) => {
+          console.error('[PrefixHelpCenter] Subcommand help direct message.edit also failed:', msgErr?.message || msgErr);
+        });
       }
-      return updateInteraction.update(subPayload).catch(() => {});
     }
     return message.reply(subPayload).catch(() => {});
   }
@@ -673,10 +699,10 @@ export class PrefixHelpCenter {
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(currentPage >= totalPages || currentCategory === 'home');
 
-      btnComponents.push(btnPrev, btnNext);
+      btnComponents.push(btnPrev, btnNext, btnDash, btnClose);
+    } else {
+      btnComponents.push(btnDash, btnSupport, btnClose);
     }
-
-    btnComponents.push(btnDash, btnSupport, btnClose);
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnComponents);
 
@@ -694,7 +720,8 @@ export class PrefixHelpCenter {
     const prefix = PrefixResolver.getPrefix(interaction.guildId || undefined);
 
     if (interaction.customId.startsWith('help_command_select')) {
-      const val = interaction.values[0];
+      const val = interaction.values?.[0];
+      if (!val) return;
       const cmdName = val.replace('help_cmd_', '');
       const cmd = PrefixRegistry.getCommand(cmdName);
       if (cmd) {
@@ -705,7 +732,8 @@ export class PrefixHelpCenter {
 
     if (!interaction.customId.startsWith('help_category_select')) return;
 
-    const val = interaction.values[0];
+    const val = interaction.values?.[0];
+    if (!val) return;
 
     if (val === 'help_cat_home') {
       return this.sendRootHelp(interaction.message, prefix, interaction.client.ws.ping, interaction);
