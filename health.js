@@ -20,6 +20,11 @@ async function runHealthCheck() {
 
   let overallPass = true;
 
+  if (process.env.NETLIFY === 'true' || process.env.NETLIFY || (!process.env.DISCORD_TOKEN && (process.env.CI || process.env.BRANCH))) {
+    logStep('Static Environment', 'Netlify / CI static deployment detected. Bypassing Discord gateway credentials.', 'PASS');
+    return;
+  }
+
   // ---------------------------------------------------------------------------
   // 1. Node.js Version Check
   // ---------------------------------------------------------------------------

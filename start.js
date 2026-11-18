@@ -38,6 +38,21 @@ function startSubprocess(name, cmd, args, cwd) {
 
 async function bootSystem() {
   console.log('======================================================');
+
+  // Check if running in Netlify or frontend CI build environment
+  if (process.env.NETLIFY === 'true' || process.env.NETLIFY || (!process.env.DISCORD_TOKEN && (process.env.CI || process.env.BRANCH))) {
+    console.log('[Orchestrator] Netlify build environment detected! Building dashboard frontend...');
+    const { execSync } = await import('child_process');
+    try {
+      execSync('node build-netlify.js', { stdio: 'inherit' });
+      process.exit(0);
+    } catch (err) {
+      console.error('[Orchestrator] Netlify build failed:', err);
+      process.exit(1);
+    }
+    return;
+  }
+
   // 0. Container file sync (disabled to preserve local workspace customizations and features)
   // try {
   //   const { execSync } = await import('child_process');
