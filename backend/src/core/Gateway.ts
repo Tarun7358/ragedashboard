@@ -583,20 +583,44 @@ export class Gateway {
       await this.client.application?.fetch().catch(() => null);
       this.syncRegistry();
 
-      // Set Rich Activity Status
+      // Set Rich Activity Status — frequently rotating dynamic telemetry
+      let activityIndex = 0;
       const updateActivity = () => {
         if (!this.client.user) return;
         const totalGuilds = this.client.guilds.cache.size;
         const totalUsers = this.client.guilds.cache.reduce((acc, g) => acc + (g.memberCount || 0), 0);
 
         const activities = [
-          { name: `Fu4king Nukers | r!help`, type: ActivityType.Custom },
-          { name: `Securing ${totalGuilds} Servers | r!config`, type: ActivityType.Watching },
-          { name: `Protecting ${totalUsers.toLocaleString()} Members`, type: ActivityType.Competing },
-          { name: `r!help | /config`, type: ActivityType.Listening }
+          {
+            name: 'Initalizing Rage Optimiser',
+            state: 'Initalizing Rage Optimiser',
+            type: ActivityType.Custom
+          },
+          {
+            name: `Total Members Protected: ${totalUsers.toLocaleString()} | Total Servers: ${totalGuilds}`,
+            state: `Total Members Protected: ${totalUsers.toLocaleString()} | Total Servers: ${totalGuilds}`,
+            type: ActivityType.Custom
+          },
+          {
+            name: `Total Members Protected: ${totalUsers.toLocaleString()}`,
+            state: `Total Members Protected: ${totalUsers.toLocaleString()}`,
+            type: ActivityType.Custom
+          },
+          {
+            name: `Total Servers: ${totalGuilds}`,
+            state: `Total Servers: ${totalGuilds}`,
+            type: ActivityType.Custom
+          },
+          {
+            name: 'Initalizing Rage Optimiser | r!help',
+            state: 'Initalizing Rage Optimiser | r!help',
+            type: ActivityType.Custom
+          }
         ];
 
-        const selected = activities[Math.floor(Math.random() * activities.length)];
+        const selected = activities[activityIndex % activities.length];
+        activityIndex++;
+
         this.client.user.setPresence({
           activities: [selected],
           status: 'online'
@@ -604,7 +628,7 @@ export class Gateway {
       };
 
       updateActivity();
-      setInterval(updateActivity, 30000);
+      setInterval(updateActivity, 15000);
 
       // Deploy commands globally across all servers on startup.
       await this.forceDeployCommands().catch((err) => {
