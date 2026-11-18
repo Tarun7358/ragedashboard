@@ -17,6 +17,7 @@
     "health": "node health.js"
   },
   "dependencies": {
+    "ioredis": "^5.6.1",
     "sqlite3": "^5.1.7"
   }
 }

@@ -353,13 +353,13 @@ export class Database {
         SELECT id FROM server_audit_logs WHERE guildId = ? ORDER BY id DESC LIMIT 5000
       )`,
       [entry.guildId, entry.guildId]
-    ).catch(() => {});
+    ).catch(() => { });
 
     // Automatically trigger live dashboard real-time sync across the bot
     if (entry.guildId) {
       import('../services/DashboardSyncService.js')
         .then((m) => m.DashboardSyncService.triggerSync(entry.guildId, 800))
-        .catch(() => {});
+        .catch(() => { });
     }
 
     return result;
