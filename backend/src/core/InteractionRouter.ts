@@ -589,8 +589,8 @@ export class InteractionRouter {
       }
     }
 
-    // Help center select menu — handled directly
-    if (interaction.customId.startsWith('help_category_select')) {
+    // Help center select menus (category & command selection) — handled directly
+    if (interaction.customId.startsWith('help_category_select') || interaction.customId.startsWith('help_command_select')) {
       await PrefixHelpCenter.handleSelectMenuInteraction(interaction).catch(console.error);
       return;
     }

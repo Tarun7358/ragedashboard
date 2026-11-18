@@ -1,7 +1,17 @@
 import sharp from 'sharp';
 
 export class HelpBannerGenerator {
+  private static bannerCache = new Map<string, Buffer>();
+
   public static async generate(title: string, badgeText?: string | null): Promise<Buffer> {
+    const cleanTitle = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const cacheKey = `${cleanTitle}::${badgeText || ''}`;
+    
+    const cached = this.bannerCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const width = 760;
     const height = 86;
 
@@ -20,8 +30,6 @@ export class HelpBannerGenerator {
       `;
     }
 
-    const cleanTitle = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
     const svg = `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <rect x="2" y="2" width="${width - 4}" height="${height - 4}" rx="16" ry="16" fill="#15161A" stroke="#25272F" stroke-width="2"/>
@@ -30,7 +38,9 @@ export class HelpBannerGenerator {
     </svg>
     `;
 
-    return await sharp(Buffer.from(svg)).png().toBuffer();
+    const buf = await sharp(Buffer.from(svg)).png().toBuffer();
+    this.bannerCache.set(cacheKey, buf);
+    return buf;
   }
 }
 

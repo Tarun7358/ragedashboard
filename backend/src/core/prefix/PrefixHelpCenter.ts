@@ -238,10 +238,14 @@ export class PrefixHelpCenter {
       `Use **Select Category** below or \`${prefix}help <command>\`.\n`
     ];
 
+    const reqUser = updateInteraction?.user || message.author;
+    const reqUsername = reqUser?.displayName || reqUser?.username || 'User';
+    const reqAvatar = reqUser?.displayAvatarURL() || undefined;
+
     const embed = new EmbedBuilder()
       .setColor(0x18181B)
       .setDescription(descLines.join('\n'))
-      .setFooter({ text: `Requested by ${message.author?.username || 'User'}`, iconURL: message.author?.displayAvatarURL() || undefined })
+      .setFooter({ text: `Requested by ${reqUsername}`, iconURL: reqAvatar })
       .setTimestamp();
 
     if (bannerBuffer) {
@@ -281,6 +285,11 @@ export class PrefixHelpCenter {
 
     const helpPayload = PayloadFormatter.normalize({ embeds: [embed], components: [row1, row2], files }, botUser);
     if (updateInteraction) {
+      if (updateInteraction.deferred || updateInteraction.replied) {
+        return updateInteraction.editReply(helpPayload).catch((err: any) => {
+          console.error('[PrefixHelpCenter] Failed to editReply root help:', err?.message || err);
+        });
+      }
       return updateInteraction.update(helpPayload).catch((err: any) => {
         console.error('[PrefixHelpCenter] Failed to update root help:', err?.message || err);
       });
@@ -360,10 +369,14 @@ export class PrefixHelpCenter {
       `\n*open a module from the sub module menu below, then pick a command to see its full explanation, or use \`${prefix}help <cmd name>\`*`
     ].join('\n\n');
 
+    const reqUser = updateInteraction?.user || message.author;
+    const reqUsername = reqUser?.displayName || reqUser?.username || 'User';
+    const reqAvatar = reqUser?.displayAvatarURL() || undefined;
+
     const embed = new EmbedBuilder()
       .setColor(0x18181B)
       .setDescription(embedDesc)
-      .setFooter({ text: `Requested by ${message.author?.username || 'User'}`, iconURL: message.author?.displayAvatarURL() || undefined })
+      .setFooter({ text: `Requested by ${reqUsername}`, iconURL: reqAvatar })
       .setTimestamp();
 
     if (bannerBuffer) {
@@ -436,7 +449,14 @@ export class PrefixHelpCenter {
 
     const modPayload = PayloadFormatter.normalize({ embeds: [embed], components: rows, files }, message.client.user);
     if (updateInteraction) {
-      return updateInteraction.update(modPayload).catch(() => {});
+      if (updateInteraction.deferred || updateInteraction.replied) {
+        return updateInteraction.editReply(modPayload).catch((err: any) => {
+          console.error('[PrefixHelpCenter] Failed to editReply module help:', err?.message || err);
+        });
+      }
+      return updateInteraction.update(modPayload).catch((err: any) => {
+        console.error('[PrefixHelpCenter] Failed to update module help:', err?.message || err);
+      });
     }
     return message.reply(modPayload).catch(() => {});
   }
@@ -513,6 +533,11 @@ export class PrefixHelpCenter {
 
     const cmdPayload = PayloadFormatter.normalize({ embeds: [embed], components }, message.client.user);
     if (updateInteraction) {
+      if (updateInteraction.deferred || updateInteraction.replied) {
+        return updateInteraction.editReply(cmdPayload).catch((err: any) => {
+          console.error('[PrefixHelpCenter] Failed to editReply command help:', err?.message || err);
+        });
+      }
       return updateInteraction.update(cmdPayload).catch(() => {});
     }
     return message.reply(cmdPayload).catch(() => {});
@@ -645,6 +670,11 @@ export class PrefixHelpCenter {
   public static async handleSelectMenuInteraction(interaction: any): Promise<any> {
     if (!interaction.isStringSelectMenu()) return;
 
+    // Immediately acknowledge interaction to prevent Discord's 3-second timeout ("The application didn't respond in time")
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferUpdate().catch(() => {});
+    }
+
     const prefix = PrefixResolver.getPrefix(interaction.guildId || undefined);
 
     if (interaction.customId.startsWith('help_command_select')) {
@@ -654,7 +684,7 @@ export class PrefixHelpCenter {
       if (cmd) {
         return this.sendCommandHelp(interaction.message, cmd, prefix, interaction);
       }
-      return interaction.reply({ content: `${WRONG_EMOJI} Command not found.`, flags: 64 });
+      return interaction.followUp({ content: `${WRONG_EMOJI} Command not found.`, flags: 64 }).catch(() => {});
     }
 
     if (!interaction.customId.startsWith('help_category_select')) return;
@@ -670,7 +700,7 @@ export class PrefixHelpCenter {
     const matchedCategory = categories.find(c => c.toLowerCase() === catNameLower);
 
     if (!matchedCategory) {
-      return interaction.reply({ content: `${WRONG_EMOJI} Selected module not found.`, flags: 64 });
+      return interaction.followUp({ content: `${WRONG_EMOJI} Selected module not found.`, flags: 64 }).catch(() => {});
     }
 
     return this.sendModuleHelp(interaction.message, matchedCategory, prefix, 1, interaction);
@@ -684,6 +714,11 @@ export class PrefixHelpCenter {
 
     if (rawId === 'help_btn_close') {
       return interaction.message.delete().catch(() => {});
+    }
+
+    // Immediately acknowledge interaction to prevent Discord's 3-second timeout
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferUpdate().catch(() => {});
     }
 
     const prefix = PrefixResolver.getPrefix(interaction.guildId || undefined);
