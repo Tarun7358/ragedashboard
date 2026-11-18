@@ -6,13 +6,11 @@ import { UptimeBroadcaster } from '../../services/UptimeBroadcaster.js';
 import { buildBoxPingPayload } from '../../core/RealtimePing.js';
 
 async function renderPingUI(client: any, interaction: any) {
-  const startTs = Date.now();
   if (!interaction.deferred && !interaction.replied) {
     await interaction.deferReply().catch(() => {});
   }
 
-  const roundTripMs = Math.max(1, Date.now() - (interaction.createdTimestamp || startTs));
-  const payload = await buildBoxPingPayload(client, roundTripMs, interaction.user, true);
+  const payload = await buildBoxPingPayload(client, interaction.user, true);
 
   const reply = await interaction.editReply(payload).catch(() => null);
   if (!reply) return;
@@ -28,11 +26,8 @@ async function renderPingUI(client: any, interaction: any) {
       }).catch(() => {});
     }
 
-    const refTs = Date.now();
     await i.deferUpdate().catch(() => {});
-
-    const refRt = Math.max(1, Date.now() - refTs);
-    const refPayload = await buildBoxPingPayload(client, refRt, interaction.user, true);
+    const refPayload = await buildBoxPingPayload(client, interaction.user, true);
     await i.editReply(refPayload).catch(() => {});
   });
 }
