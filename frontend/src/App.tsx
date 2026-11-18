@@ -83,7 +83,7 @@ function App() {
   const isDownloadRoute = window.location.pathname === '/download' || window.location.pathname === '/downloads';
   const isTermsRoute = window.location.pathname === '/terms' || window.location.pathname === '/tos';
   const isPrivacyRoute = window.location.pathname === '/privacy' || window.location.pathname === '/privacy-policy';
-  const { isAuthenticated, user, logout, activeGuildId, setActiveGuildId } = useAuth();
+  const { isAuthenticated, user, logout, activeGuildId, setActiveGuildId, managedGuilds = [] } = useAuth();
 
   const [activePage, setActivePage] = useState('dashboard');
   const [activeTab, setActiveTab] = useState('overview');
@@ -624,7 +624,7 @@ function App() {
   }
 
   // Owner-Only Security Barrier: Verify that active guild is owned by this user
-  const activeGuild = managedGuilds.find(g => g.id === activeGuildId);
+  const activeGuild = (managedGuilds || []).find(g => g.id === activeGuildId);
   if (user?.role === 'guild_manager' && activeGuild && !activeGuild.owner) {
     return (
       <div style={{
