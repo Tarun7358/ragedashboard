@@ -1,6 +1,6 @@
 import { Client, TextChannel, MessageFlags } from 'discord.js';
 import { Database } from '../core/Database.js';
-import { buildSecurityDashboardCard, deploySecurityDashboardToChannel } from '../modules/security/enable.js';
+import { buildSecurityDashboardCard } from '../modules/security/enable.js';
 
 export class DashboardSyncService {
   private static client: Client | null = null;
@@ -108,17 +108,19 @@ export class DashboardSyncService {
         }
       }
 
-      // If still not found, deploy fresh dashboard
+      // If no dashboard is registered and none exists in the guild, DO NOT auto-deploy.
+      // Dashboard creation is strictly gated to `r!enable all` or manual dashboard deploy commands.
       if (!channelId || !messageId) {
-        const deployed = await deploySecurityDashboardToChannel(guild);
-        return Boolean(deployed);
+        return false;
       }
 
       // 3. Fetch channel and message
       const channel = guild.channels.cache.get(channelId) as TextChannel || await guild.channels.fetch(channelId).catch(() => null) as TextChannel;
       if (!channel || !channel.isTextBased()) {
-        const deployed = await deploySecurityDashboardToChannel(guild);
-        return Boolean(deployed);
+        // Channel was deleted — clear cache and DB record, do not auto-recreate channel without `enable all`
+        this.inMemoryCache.delete(guildId);
+        await Database.removeDashboard(guildId).catch(() => { });
+        return false;
       }
 
       let message = await channel.messages.fetch(messageId).catch(() => null);
@@ -129,8 +131,20 @@ export class DashboardSyncService {
         if (message) {
           await this.registerDashboard(guildId, channel.id, message.id);
         } else {
-          const deployed = await deploySecurityDashboardToChannel(guild);
-          return Boolean(deployed);
+          // Channel already exists, but message was deleted. Re-send fresh message into existing channel.
+          try {
+            const dashboard = await buildSecurityDashboardCard(guild);
+            const hasV2 = Array.isArray(dashboard.components) && dashboard.components.some((c: any) => c?.type === 17 || c?.constructor?.name === 'ContainerBuilder');
+            const sendPayload: any = hasV2
+              ? { flags: MessageFlags.IsComponentsV2, components: dashboard.components }
+              : { content: dashboard.content || undefined, embeds: dashboard.embeds, components: dashboard.components };
+            const freshMsg = await channel.send(sendPayload).catch(() => null);
+            if (freshMsg) {
+              await this.registerDashboard(guildId, channel.id, freshMsg.id);
+              return true;
+            }
+          } catch { }
+          return false;
         }
       }
 
@@ -140,9 +154,10 @@ export class DashboardSyncService {
       const isComponentsV2Msg = message.flags?.has(MessageFlags.IsComponentsV2);
 
       if (isComponentsV2Msg && !hasV2) {
-        // Message was created with MessageFlags.IsComponentsV2, cannot be edited with legacy embeds. Delete and redeploy fresh.
+        // Message was created with MessageFlags.IsComponentsV2, cannot be edited with legacy embeds. Delete and re-send.
         await message.delete().catch(() => { });
-        await deploySecurityDashboardToChannel(guild).catch(() => { });
+        const freshMsg = await channel.send({ content: dashboard.content || undefined, embeds: dashboard.embeds, components: dashboard.components }).catch(() => null);
+        if (freshMsg) await this.registerDashboard(guildId, channel.id, freshMsg.id);
         return true;
       }
 
@@ -150,10 +165,8 @@ export class DashboardSyncService {
         ? { flags: MessageFlags.IsComponentsV2, components: dashboard.components }
         : { content: dashboard.content || undefined, embeds: dashboard.embeds, components: dashboard.components };
 
-      await message.edit(sendPayload).catch(async (editErr: any) => {
-        console.warn(`[DashboardSync] Edit failed for guild ${guildId}, redeploying fresh:`, editErr?.message || editErr);
-        await message.delete().catch(() => { });
-        await deploySecurityDashboardToChannel(guild).catch(() => { });
+      await message.edit(sendPayload).catch((editErr: any) => {
+        console.warn(`[DashboardSync] Edit failed for guild ${guildId}:`, editErr?.message || editErr);
       });
 
       return true;

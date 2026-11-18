@@ -40,7 +40,7 @@ export const AnalyticsManifest: any = {
 
         // ─── OVERVIEW ────────────────────────────────────────────
         if (!sub) {
-          const voiceCount = interaction.guild?.voiceStates?.cache?.filter((vs: any) => vs.channelId && !vs.member?.user?.bot).size || 0;
+          const voiceCount = client.voiceStates?.cache?.size || 0;
           const userCount = client.users?.cache?.size || interaction.guild?.memberCount || 1;
 
           const { embeds, components } = buildRichCard({
@@ -81,7 +81,7 @@ export const AnalyticsManifest: any = {
 
         // ─── VOICE ───────────────────────────────────────────────
         if (sub === 'voice') {
-          const voiceCount = interaction.guild?.voiceStates?.cache?.filter((vs: any) => vs.channelId && !vs.member?.user?.bot).size || 0;
+          const voiceCount = client.voiceStates?.cache?.size || 0;
           const { embeds, components } = buildRichCard({
             emoji: TIMER_ICON,
             title: 'Voice Channel Analytics',
@@ -160,7 +160,7 @@ export const AnalyticsManifest: any = {
 
         // ─── LIVE ────────────────────────────────────────────────
         if (sub === 'live') {
-          const voiceCount = interaction.guild?.voiceStates?.cache?.filter((vs: any) => vs.channelId && !vs.member?.user?.bot).size || 0;
+          const voiceCount = client.voiceStates?.cache?.size || 0;
           const onlineCount = client.users?.cache?.size || 1;
           const { embeds, components } = buildStatusCard({
             emoji: INFO_ICON,
@@ -185,7 +185,7 @@ export function registerAnalyticsCommands() {
     description: 'Enterprise Real-Time Server Telemetry, Voice & Growth Metrics Tracker',
     category: 'Management',
     usage: 'r!analytics [guild | voice | commands | retention | live | reports | export]',
-    aliases: ['anl', 'telemetry', 'metrics', 'growth'],
+    aliases: ['stats', 'telemetry', 'metrics', 'growth'],
     userPermissions: [],
     cooldownSeconds: 3,
     examples: [

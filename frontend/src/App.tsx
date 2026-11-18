@@ -630,31 +630,31 @@ function App() {
     return (
       <div style={{
         minHeight: '100vh', width: '100vw',
-        backgroundColor: '#0B0F19',
+        backgroundColor: '#FAFAFA',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 24, fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif"
       }}>
         <div style={{
           maxWidth: 480, width: '100%',
-          background: '#161E2E', border: '1px solid rgba(239, 68, 68, 0.3)',
+          background: '#FFFFFF', border: '1px solid #FECACA',
           borderRadius: 16, padding: 32, textAlign: 'center',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.6)'
+          boxShadow: '0 4px 24px rgba(0,0,0,0.06)'
         }}>
           <div style={{
             width: 60, height: 60, borderRadius: '50%',
-            background: 'rgba(239, 68, 68, 0.15)',
+            background: '#FEF2F2', border: '1px solid #FECACA',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 18px', color: '#EF4444'
+            margin: '0 auto 18px', color: '#DC2626'
           }}>
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
               <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#F8FAFC', margin: '0 0 8px' }}>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: '#09090B', margin: '0 0 8px' }}>
             Owner Clearance Required
           </h2>
-          <p style={{ fontSize: 13.5, color: '#94A3B8', lineHeight: 1.6, margin: '0 0 24px' }}>
+          <p style={{ fontSize: 13.5, color: '#71717A', lineHeight: 1.6, margin: '0 0 24px' }}>
             Access to <strong>{activeGuild.name}</strong> is restricted to the <strong>Discord Server Owner ID</strong> only. You do not own this server.
           </p>
           <button
@@ -663,13 +663,12 @@ function App() {
               setGuildSelected(false);
             }}
             style={{
-              width: '100%', padding: '12px 20px', borderRadius: 10,
-              background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-              border: 'none', color: '#FFFFFF', fontSize: 14, fontWeight: 700,
-              cursor: 'pointer'
+              padding: '10px 24px', borderRadius: 8,
+              background: '#09090B', border: 'none', color: '#FFFFFF',
+              fontSize: 13, fontWeight: 700, cursor: 'pointer'
             }}
           >
-            Switch to an Owned Server
+            Switch Server
           </button>
         </div>
       </div>

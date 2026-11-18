@@ -303,9 +303,9 @@ export function Landing({ onGetStarted, onOpenDashboard }: { onGetStarted?: () =
   const [liveStatus, setLiveStatus] = useState<{ latency?: number; online?: boolean } | null>(null);
   const [liveStats, setLiveStats] = useState({
     servers: '54+',
-    members: '120,000+',
+    members: '121,500+',
     uptime: '99.99%',
-    latency: '18ms'
+    latency: '< 18ms'
   });
   const [activeTab, setActiveTab] = useState('anti-nuke');
   const [searchQuery, setSearchQuery] = useState('');

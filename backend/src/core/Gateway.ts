@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags, Options, ActivityType, AuditLogEvent, TextChannel, DMChannel, NewsChannel, ThreadChannel, MessagePayload } from 'discord.js';
+import { Client, GatewayIntentBits, Partials, REST, Routes, PermissionFlagsBits, ChannelType, Events, MessageFlags, Options, ActivityType, AuditLogEvent, TextChannel, DMChannel, NewsChannel, ThreadChannel, VoiceChannel, StageChannel, MessagePayload } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } from '@discordjs/voice';
 import { DiscordResourceRegistry, ModuleManifest, ModuleState } from './types.js';
 import { Database } from './Database.js';
@@ -71,6 +71,8 @@ try {
   patchChannelSend(DMChannel.prototype);
   patchChannelSend(NewsChannel.prototype);
   patchChannelSend(ThreadChannel.prototype);
+  patchChannelSend(VoiceChannel.prototype);
+  patchChannelSend(StageChannel.prototype);
 } catch (hookErr) {
   console.warn('[Gateway] Universal channel send hook initialization notice:', hookErr);
 }
@@ -477,8 +479,20 @@ export class Gateway {
         Partials.Message,
         Partials.Reaction
       ],
+      makeCache: Options.cacheWithLimits({
+        MessageManager: 25,
+        ThreadManager: 10,
+        ThreadMemberManager: 0,
+        ReactionManager: 0,
+        GuildScheduledEventManager: 0,
+        AutoModerationRuleManager: 0
+      }),
       sweepers: {
         ...Options.DefaultSweeperSettings,
+        messages: {
+          interval: 300,
+          lifetime: 1800
+        },
         guildMembers: {
           interval: 900, // Sweep inactive offline members every 15 minutes (900 seconds)
           filter: () => (member) => {
@@ -618,14 +632,14 @@ export class Gateway {
       CentralLogger.initClient(this.client);
       UptimeBroadcaster.init(this.client);
 
-      setInterval(() => this.syncRegistry(), 30000);
-      setInterval(() => this.checkVoicePresence(), 10000);
+      setInterval(() => this.syncRegistry(), 120000); // Optimized: 2 mins (live events already sync incrementally)
+      setInterval(() => this.checkVoicePresence(), 15000);
       setInterval(() => {
         const cachedGuildIds = Array.from(this.client.guilds.cache.keys());
         for (const gId of cachedGuildIds) {
           this.dispatchEventForGuild('tick', gId);
         }
-      }, 10000);
+      }, 30000); // Optimized: 30s instead of 10s
       setTimeout(() => this.checkVoicePresence(), 2000);
       setInterval(() => {
         const metrics = this.getMetrics();
@@ -634,7 +648,7 @@ export class Gateway {
           latency: metrics.latency,
           uptime: metrics.uptime
         });
-      }, 5000);
+      }, 15000); // Optimized: 15s instead of 5s
 
       this.publicFeed?.addEvent('Server', 'Bot connected to Discord Gateway successfully');
       this.syncRegistry();
@@ -866,7 +880,9 @@ export class Gateway {
       const guildId = (newChannel as any).guild?.id;
       if (!guildId) return;
       if ((oldChannel as any).name !== (newChannel as any).name) {
-        this.logSyncEvent(guildId, `Discord Event: Channel renamed from #${(oldChannel as any).name} to #${(newChannel as any).name}.`, 'info');
+        if ((oldChannel as any).name !== '___hidden___' && (newChannel as any).name !== '___hidden___') {
+          this.logSyncEvent(guildId, `Discord Event: Channel renamed from #${(oldChannel as any).name} to #${(newChannel as any).name}.`, 'info');
+        }
         this.syncRegistry(guildId);
       }
       DashboardSyncService.triggerSync(guildId);
@@ -1031,104 +1047,106 @@ export class Gateway {
       if (message.guildId) {
         AnalyticsService.incrementMetric(message.guildId, 'messages').catch(() => { });
 
-        // DM notify users who were tagged/mentioned directly
-        if (message.mentions.users.size > 0 && message.guild) {
-          message.mentions.users.forEach(async (user) => {
-            if (user.id === message.author.id || user.bot) return;
-            try {
-              if (BlockedDMSettings.isBlocked(user.id, message.guild!.id)) return;
-
-              // DM Rate Limit: 1 DM per user per 30 seconds to prevent Discord DM quarantine
-              const dmKey = `${user.id}:${message.guild!.id}`;
-              const lastDm = Gateway.dmNotificationCooldowns.get(dmKey) || 0;
-              if (Date.now() - lastDm < 30000) return;
-              Gateway.dmNotificationCooldowns.set(dmKey, Date.now());
-
-              const guildIcon = message.guild?.iconURL({ size: 256 }) ?? message.author.displayAvatarURL({ size: 256 }) ?? 'https://cdn.discordapp.com/embed/avatars/0.png';
-              const msgContext = message.content
-                ? (message.content.length > 500 ? message.content.substring(0, 500) + '…' : message.content)
-                : '*(No text content)*';
-
-              // Clean any emojis from category for a clean text UI
-              const parentName = (message.channel as any)?.parent?.name;
-              const cleanParent = parentName
-                ? parentName.replace(/<a?:[a-zA-Z0-9_]+:\d+>|[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim()
-                : '';
-
-              // Clickable Discord channel mention pill: <#channelId>
-              const channelMention = `<#${message.channelId}>`;
-              const channelDisplay = cleanParent
-                ? `${cleanParent} › ${channelMention}`
-                : channelMention;
-
-              const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder()
-                  .setLabel('Go to channel')
-                  .setURL(message.url)
-                  .setStyle(ButtonStyle.Link),
-                new ButtonBuilder()
-                  .setCustomId(`dm_reply:${message.channelId}:${message.id}`)
-                  .setLabel('Reply')
-                  .setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder()
-                  .setCustomId(`dm_block_server:${message.guild!.id}`)
-                  .setLabel('Block Server Messages')
-                  .setStyle(ButtonStyle.Secondary)
-              );
-
-              // Send via Discord Components V2 Container (buttons inside the card, above footer)
+        // DM notify users who were tagged/mentioned directly (non-blocking setImmediate, max 3 mentions to protect rate limits)
+        if (message.mentions.users.size > 0 && message.mentions.users.size <= 3 && message.guild) {
+          setImmediate(() => {
+            message.mentions.users.forEach(async (user) => {
+              if (user.id === message.author.id || user.bot) return;
               try {
-                const sec = new SectionBuilder()
-                  .addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(`# **Rage Notification : ${message.guild?.name}**`)
-                  )
-                  .setThumbnailAccessory(
-                    new ThumbnailBuilder().setURL(guildIcon)
-                  );
+                if (BlockedDMSettings.isBlocked(user.id, message.guild!.id)) return;
 
-                const sep = new SeparatorBuilder().setDivider(true);
+                // DM Rate Limit: 1 DM per user per 30 seconds to prevent Discord DM quarantine
+                const dmKey = `${user.id}:${message.guild!.id}`;
+                const lastDm = Gateway.dmNotificationCooldowns.get(dmKey) || 0;
+                if (Date.now() - lastDm < 30000) return;
+                Gateway.dmNotificationCooldowns.set(dmKey, Date.now());
 
-                const body = new TextDisplayBuilder().setContent(
-                  `# **Tagged By:** ${message.author}\n**Channel: ${channelDisplay}**\n**Message: ${msgContext}**`
+                const guildIcon = message.guild?.iconURL({ size: 256 }) ?? message.author.displayAvatarURL({ size: 256 }) ?? 'https://cdn.discordapp.com/embed/avatars/0.png';
+                const msgContext = message.content
+                  ? (message.content.length > 500 ? message.content.substring(0, 500) + '…' : message.content)
+                  : '*(No text content)*';
+
+                // Clean any emojis from category for a clean text UI
+                const parentName = (message.channel as any)?.parent?.name;
+                const cleanParent = parentName
+                  ? parentName.replace(/<a?:[a-zA-Z0-9_]+:\d+>|[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim()
+                  : '';
+
+                // Clickable Discord channel mention pill: <#channelId>
+                const channelMention = `<#${message.channelId}>`;
+                const channelDisplay = cleanParent
+                  ? `${cleanParent} › ${channelMention}`
+                  : channelMention;
+
+                const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+                  new ButtonBuilder()
+                    .setLabel('Go to channel')
+                    .setURL(message.url)
+                    .setStyle(ButtonStyle.Link),
+                  new ButtonBuilder()
+                    .setCustomId(`dm_reply:${message.channelId}:${message.id}`)
+                    .setLabel('Reply')
+                    .setStyle(ButtonStyle.Secondary),
+                  new ButtonBuilder()
+                    .setCustomId(`dm_block_server:${message.guild!.id}`)
+                    .setLabel('Block Server Messages')
+                    .setStyle(ButtonStyle.Secondary)
                 );
 
-                const footer = new TextDisplayBuilder().setContent('-# Rage Secure Dm');
+                // Send via Discord Components V2 Container (buttons inside the card, above footer)
+                try {
+                  const sec = new SectionBuilder()
+                    .addTextDisplayComponents(
+                      new TextDisplayBuilder().setContent(`# **Rage Notification : ${message.guild?.name}**`)
+                    )
+                    .setThumbnailAccessory(
+                      new ThumbnailBuilder().setURL(guildIcon)
+                    );
 
-                const container = new ContainerBuilder()
-                  .addSectionComponents(sec)
-                  .addSeparatorComponents(sep)
-                  .addTextDisplayComponents(body)
-                  .addActionRowComponents(actionRow)
-                  .addTextDisplayComponents(footer);
+                  const sep = new SeparatorBuilder().setDivider(true);
 
-                await user.send({
-                  flags: MessageFlags.IsComponentsV2,
-                  components: [container]
-                });
-              } catch (v2Err) {
-                console.warn('[Gateway] Components V2 send fallback:', (v2Err as any)?.message);
-                const divider = '──────────────────────────────────────────';
-                const dmEmbed = new EmbedBuilder()
-                  .setColor(0x0a0a0c)
-                  .setThumbnail(guildIcon)
-                  .setDescription([
-                    `# **Rage Notification : ${message.guild?.name}**`,
-                    `\u200B`,
-                    `\u200B`,
-                    `${divider}`,
-                    `# **Tagged By:** ${message.author}`,
-                    `**Channel: ${channelDisplay}**`,
-                    `**Message: ${msgContext}**`
-                  ].join('\n'))
-                  .setFooter({ text: 'Rage Secure Dm' });
+                  const body = new TextDisplayBuilder().setContent(
+                    `# **Tagged By:** ${message.author}\n**Channel: ${channelDisplay}**\n**Message: ${msgContext}**`
+                  );
 
-                await user.send({ embeds: [dmEmbed], components: [actionRow] }).catch(() => { });
+                  const footer = new TextDisplayBuilder().setContent('-# Rage Secure Dm');
+
+                  const container = new ContainerBuilder()
+                    .addSectionComponents(sec)
+                    .addSeparatorComponents(sep)
+                    .addTextDisplayComponents(body)
+                    .addActionRowComponents(actionRow)
+                    .addTextDisplayComponents(footer);
+
+                  await user.send({
+                    flags: MessageFlags.IsComponentsV2,
+                    components: [container]
+                  });
+                } catch (v2Err) {
+                  console.warn('[Gateway] Components V2 send fallback:', (v2Err as any)?.message);
+                  const divider = '──────────────────────────────────────────';
+                  const dmEmbed = new EmbedBuilder()
+                    .setColor(0x0a0a0c)
+                    .setThumbnail(guildIcon)
+                    .setDescription([
+                      `# **Rage Notification : ${message.guild?.name}**`,
+                      `\u200B`,
+                      `\u200B`,
+                      `${divider}`,
+                      `# **Tagged By:** ${message.author}`,
+                      `**Channel: ${channelDisplay}**`,
+                      `**Message: ${msgContext}**`
+                    ].join('\n'))
+                    .setFooter({ text: 'Rage Secure Dm' });
+
+                  await user.send({ embeds: [dmEmbed], components: [actionRow] }).catch(() => { });
+                }
+              } catch (err: any) {
+                if (err?.code === 50007) {
+                  BlockedDMSettings.block(user.id, message.guild!.id);
+                }
               }
-            } catch (err: any) {
-              if (err?.code === 50007) {
-                BlockedDMSettings.block(user.id, message.guild!.id);
-              }
-            }
+            });
           });
         }
       }
@@ -1681,7 +1699,7 @@ export class Gateway {
         position: r.position
       }));
 
-      reg.channels = channels.filter((c: any) => c && (c.type === ChannelType.GuildText || c.type === ChannelType.GuildCategory || c.type === ChannelType.GuildVoice))
+      reg.channels = channels.filter((c: any) => c && c.name !== '___hidden___' && (c.type === ChannelType.GuildText || c.type === ChannelType.GuildCategory || c.type === ChannelType.GuildVoice))
         .map((c: any) => ({
           id: c!.id,
           name: c!.name,

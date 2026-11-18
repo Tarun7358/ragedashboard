@@ -3,26 +3,6 @@ import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 import { buildLimeOverviewCard, createLimeEmbed, Colors, VERIFIED_ICON, WRONG_ICON, CONFIG_ICON, MEMBER_ICON, SHIELD_ICON } from '../../core/UIFactory.js';
 
-function isLogIgnored(catConfig: any, opts: { channelId?: string | null; userId?: string | null; member?: any }): boolean {
-  if (!catConfig) return false;
-  if (opts.channelId && Array.isArray(catConfig.ignoreChannels) && catConfig.ignoreChannels.includes(opts.channelId)) {
-    return true;
-  }
-  const uid = opts.userId || opts.member?.id || opts.member?.user?.id;
-  if (uid && Array.isArray(catConfig.ignoreUsers) && catConfig.ignoreUsers.includes(uid)) {
-    return true;
-  }
-  if (opts.member && Array.isArray(catConfig.ignoreRoles) && catConfig.ignoreRoles.length > 0) {
-    const memberRoles = opts.member.roles?.cache;
-    if (memberRoles && typeof memberRoles.some === 'function') {
-      if (memberRoles.some((r: any) => catConfig.ignoreRoles.includes(r.id))) return true;
-    } else if (Array.isArray(opts.member._roles)) {
-      if (opts.member._roles.some((rId: string) => catConfig.ignoreRoles.includes(rId))) return true;
-    }
-  }
-  return false;
-}
-
 export const LoggingManifest: ModuleManifest = {
   id: 'logging',
   name: 'Advanced Logging Center',
@@ -377,8 +357,7 @@ export const LoggingManifest: ModuleManifest = {
               .setTimestamp();
             await interaction.reply({ embeds: [embed], flags: 64 });
           } else if (subcommand === 'test') {
-            const targetCats = isAllCategory ? validCategories.filter(c => config[c]?.channelId) : [actualCategory];
-            const catConfig = isAllCategory ? (targetCats.length > 0 ? config[targetCats[0]] : null) : config[actualCategory];
+            const catConfig = config[actualCategory];
             if (!catConfig || !catConfig.channelId) {
               return interaction.reply({ content: `<a:warning:1546155193303957504> **${actualCategory}** does not have a configured channel.`, flags: 64 });
             }
@@ -401,7 +380,6 @@ export const LoggingManifest: ModuleManifest = {
                   .setFooter({ text: 'Rage Optimiser • Audit System Test', iconURL: client.user?.displayAvatarURL() })
                   .setTimestamp();
                 await channel.send({ embeds: [embed], flags: MessageFlags.SuppressNotifications });
-                await interaction.reply({ embeds: [createLimeEmbed({ title: 'Telemetry Test Dispatched', description: `Successfully dispatched test telemetry event to <#${catConfig.channelId}>.`, color: (Colors as any).LIME ?? Colors.BRAND })], flags: 64 });
               } else {
                 await interaction.reply({ content: `<a:warning:1546155193303957504> Could not find or access channel ID ${catConfig.channelId}.`, flags: 64 });
               }
@@ -424,7 +402,6 @@ export const LoggingManifest: ModuleManifest = {
         if (!auditConfig || !auditConfig.enabled || !auditConfig.channelId) return;
 
         if (message.author?.bot) return;
-        if (isLogIgnored(auditConfig, { channelId: message.channel?.id || message.channelId, userId: message.author?.id, member: message.member })) return;
 
         try {
           let channel = message.guild?.channels.cache.get(auditConfig.channelId);
@@ -464,15 +441,13 @@ export const LoggingManifest: ModuleManifest = {
         const auditConfig = config['audit'];
         if (!auditConfig || !auditConfig.enabled || !auditConfig.channelId) return;
 
-        if (oldMessage.partial || oldMessage.content === null || oldMessage.content === undefined) return;
         try {
+          if (oldMessage.partial) oldMessage = await oldMessage.fetch().catch(() => oldMessage);
           if (newMessage.partial) newMessage = await newMessage.fetch().catch(() => newMessage);
         } catch {}
 
-        if (newMessage.partial || newMessage.content === null || newMessage.content === undefined) return;
         if (newMessage.author?.bot) return;
         if (oldMessage.content === newMessage.content) return; 
-        if (isLogIgnored(auditConfig, { channelId: newMessage.channel?.id || newMessage.channelId, userId: newMessage.author?.id, member: newMessage.member })) return;
 
         try {
           let channel = newMessage.guild?.channels.cache.get(auditConfig.channelId);
@@ -513,8 +488,7 @@ export const LoggingManifest: ModuleManifest = {
         if (!voiceConfig || !voiceConfig.enabled || !voiceConfig.channelId) return;
 
         const member = newState.member || oldState.member;
-        if (!member || !member.user || member.user.bot) return;
-        if (isLogIgnored(voiceConfig, { channelId: newState.channelId || oldState.channelId, userId: member.id, member })) return;
+        if (!member || member.user.bot) return;
 
         const events = voiceConfig.events || {};
         const logJoinLeaveSwitch = events.join_leave_switch ?? true;
@@ -690,7 +664,6 @@ export const LoggingManifest: ModuleManifest = {
         if (user && user.bot) return;
 
         const member = effect.member || (user ? await guild.members.fetch(user.id).catch(() => null) : null);
-        if (isLogIgnored(voiceConfig, { channelId: effect.channelId || effect.channel?.id, userId: user?.id || member?.id, member })) return;
         const username = member?.user?.username || user?.username || 'Member';
         const userText = member ? `${member.user} (\`${member.user.id}\`)` : (user ? `${user} (\`${user.id}\`)` : '`Member`');
 
@@ -725,7 +698,6 @@ export const LoggingManifest: ModuleManifest = {
         if (!logModule || logModule.status !== 'enabled') return;
         const config = logModule.config['system'];
         if (!config || !config.enabled || !config.channelId) return;
-        if (isLogIgnored(config, { userId: member?.id, member })) return;
 
         try {
           let channel = member.guild?.channels.cache.get(config.channelId);
@@ -754,7 +726,6 @@ export const LoggingManifest: ModuleManifest = {
         if (!logModule || logModule.status !== 'enabled') return;
         const config = logModule.config['system'];
         if (!config || !config.enabled || !config.channelId) return;
-        if (isLogIgnored(config, { userId: member?.id, member })) return;
 
         try {
           let channel = member.guild?.channels.cache.get(config.channelId);
@@ -783,7 +754,6 @@ export const LoggingManifest: ModuleManifest = {
         if (!logModule || logModule.status !== 'enabled') return;
         const config = logModule.config['moderation'];
         if (!config || !config.enabled || !config.channelId) return;
-        if (isLogIgnored(config, { userId: ban.user?.id })) return;
 
         try {
           let channel = ban.guild?.channels.cache.get(config.channelId);
@@ -812,7 +782,6 @@ export const LoggingManifest: ModuleManifest = {
         if (!logModule || logModule.status !== 'enabled') return;
         const config = logModule.config['moderation'];
         if (!config || !config.enabled || !config.channelId) return;
-        if (isLogIgnored(config, { userId: ban.user?.id })) return;
 
         try {
           let channel = ban.guild?.channels.cache.get(config.channelId);
@@ -894,7 +863,6 @@ export const LoggingManifest: ModuleManifest = {
         if (!logModule || logModule.status !== 'enabled') return;
         const config = logModule.config['security'];
         if (!config || !config.enabled || !config.channelId) return;
-        if (isLogIgnored(config, { channelId: ch?.id })) return;
 
         try {
           let channel = ch.guild?.channels.cache.get(config.channelId);
@@ -922,7 +890,6 @@ export const LoggingManifest: ModuleManifest = {
         if (!logModule || logModule.status !== 'enabled') return;
         const config = logModule.config['security'];
         if (!config || !config.enabled || !config.channelId) return;
-        if (isLogIgnored(config, { channelId: ch?.id })) return;
 
         try {
           let channel = ch.guild?.channels.cache.get(config.channelId);
@@ -1093,28 +1060,21 @@ export function registerLoggingCommands(): void {
         });
       }
 
-      // 2. Ignore Roles (`r!logs ignore-role <category|all|everything> <add|remove|list> [@role]`)
+      // 2. Ignore Roles (`r!logs ignore-role <category|all|everything> <add|remove> <@role>`)
       if (sub === 'ignore-role' || sub === 'ignorerole' || sub === 'ignore') {
         const catArg = args[1]?.toLowerCase();
         const action = args[2]?.toLowerCase();
-        const rawRoleArg = args[3];
-        let role = message.mentions?.roles?.first?.();
-        if (!role && rawRoleArg && message.guild) {
-          const cleanRoleId = rawRoleArg.replace(/[<@&>]/g, '');
-          role = message.guild.roles.cache.get(cleanRoleId) ||
-                 message.guild.roles.cache.find((r: any) => r.name.toLowerCase() === rawRoleArg.toLowerCase());
-        }
+        const role = message.mentions?.roles?.first();
 
         if (!catArg || !['add', 'remove', 'list'].includes(action)) {
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'Ignore-Role Configuration Syntax',
               description: [
-                `${WRONG_ICON} **Syntax**: \`r!logs ignore-role <category|all|everything> <add|remove|list> [@role]\`\n`,
+                `${WRONG_ICON} **Syntax**: \`r!logs ignore-role <category|all|everything> <add|remove> <@role>\`\n`,
                 `• **Ignore role across ALL logs**: \`r!logs ignore-role all add @AdminRole\``,
                 `• **Ignore role in security logs**: \`r!logs ignore-role security add @BotRole\``,
-                `• **Remove ignored role**: \`r!logs ignore-role all remove @AdminRole\``,
-                `• **List ignored roles**: \`r!logs ignore-role all list\``
+                `• **Remove ignored role**: \`r!logs ignore-role all remove @AdminRole\``
               ].join('\n')
             })]
           });
@@ -1123,49 +1083,7 @@ export function registerLoggingCommands(): void {
         const isAll = catArg === 'all' || catArg === 'everything' || catArg === '*';
         const updatedConfig = { ...config };
 
-        if (action === 'list') {
-          if (isAll) {
-            const lines = LOG_CATEGORIES.map(cat => {
-              const roles: string[] = config[cat]?.ignoreRoles || [];
-              return `• **${cat.toUpperCase()}**: ${roles.length > 0 ? roles.map(r => `<@&${r}>`).join(', ') : '`None`'}`;
-            });
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Ignored Roles — ALL Categories',
-                description: lines.join('\n')
-              })]
-            });
-          }
-
-          const matchedCat = LOG_CATEGORIES.find(c => c.toLowerCase() === catArg);
-          if (!matchedCat) {
-            return message.reply({
-              embeds: [createLimeEmbed({
-                title: 'Invalid Category',
-                description: `${WRONG_ICON} Invalid category \`${catArg}\`. Valid: \`${LOG_CATEGORIES.join('`, `')}\`, \`all\``
-              })]
-            });
-          }
-
-          const roles: string[] = config[matchedCat]?.ignoreRoles || [];
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: `Ignored Roles — ${matchedCat.toUpperCase()}`,
-              description: roles.length > 0 ? roles.map(r => `<@&${r}>`).join(', ') : '*No ignored roles configured for this category.*'
-            })]
-          });
-        }
-
-        if (!role) {
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Invalid Role Specified',
-              description: `${WRONG_ICON} Please mention a valid role or provide a role ID.\nExample: \`r!logs ignore-role ${catArg} ${action} @Role\``
-            })]
-          });
-        }
-
-        if (action === 'add') {
+        if (action === 'add' && role) {
           if (isAll) {
             LOG_CATEGORIES.forEach(cat => {
               const currentCat = updatedConfig[cat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
@@ -1210,7 +1128,7 @@ export function registerLoggingCommands(): void {
           });
         }
 
-        if (action === 'remove') {
+        if (action === 'remove' && role) {
           if (isAll) {
             LOG_CATEGORIES.forEach(cat => {
               const currentCat = updatedConfig[cat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
@@ -1230,29 +1148,22 @@ export function registerLoggingCommands(): void {
           }
 
           const matchedCat = LOG_CATEGORIES.find(c => c.toLowerCase() === catArg);
-          if (!matchedCat) {
+          if (matchedCat) {
+            const currentCat = updatedConfig[matchedCat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+            const currentRoles: string[] = currentCat.ignoreRoles || [];
+            updatedConfig[matchedCat] = {
+              ...currentCat,
+              ignoreRoles: currentRoles.filter(r => r !== role.id)
+            };
+            updateConfig(updatedConfig);
+
             return message.reply({
               embeds: [createLimeEmbed({
-                title: 'Invalid Category',
-                description: `${WRONG_ICON} Invalid category \`${catArg}\`. Valid: \`${LOG_CATEGORIES.join('`, `')}\`, \`all\``
+                title: `Ignored Role Removed — ${matchedCat.toUpperCase()}`,
+                description: `${VERIFIED_ICON} Removed **<@&${role.id}>** from ignored roles for category **${matchedCat.toUpperCase()}**.`
               })]
             });
           }
-
-          const currentCat = updatedConfig[matchedCat] || { enabled: true, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
-          const currentRoles: string[] = currentCat.ignoreRoles || [];
-          updatedConfig[matchedCat] = {
-            ...currentCat,
-            ignoreRoles: currentRoles.filter(r => r !== role.id)
-          };
-          updateConfig(updatedConfig);
-
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: `Ignored Role Removed — ${matchedCat.toUpperCase()}`,
-              description: `${VERIFIED_ICON} Removed **<@&${role.id}>** from ignored roles for category **${matchedCat.toUpperCase()}**.`
-            })]
-          });
         }
       }
 
@@ -1383,35 +1294,18 @@ export function registerLoggingCommands(): void {
       // 6. Reset (`r!logs reset <category|all>`)
       if (sub === 'reset') {
         const catArg = args[1]?.toLowerCase() || 'all';
-        const isAll = catArg === 'all' || catArg === 'everything' || catArg === '*';
-        const actualCat = LOG_CATEGORIES.find(c => c.toLowerCase() === catArg);
+        const isAll = catArg === 'all' || catArg === 'everything';
         const updatedConfig = { ...config };
 
         if (isAll) {
           LOG_CATEGORIES.forEach(cat => {
-            updatedConfig[cat] = { enabled: true, channelId: null, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
+            updatedConfig[cat] = { enabled: true, channelId: null, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
           });
           updateConfig(updatedConfig);
           return message.reply({
             embeds: [createLimeEmbed({
               title: 'All Logging Channels Reset',
               description: `${VERIFIED_ICON} Reset all 8 logging categories back to unconfigured state.`
-            })]
-          });
-        } else if (actualCat) {
-          updatedConfig[actualCat] = { enabled: true, channelId: null, events: {}, ignoreRoles: [], ignoreUsers: [], ignoreChannels: [] };
-          updateConfig(updatedConfig);
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: `Logging Category Reset — ${actualCat.toUpperCase()}`,
-              description: `${VERIFIED_ICON} Reset **${actualCat.toUpperCase()}** logging category back to unconfigured state.`
-            })]
-          });
-        } else {
-          return message.reply({
-            embeds: [createLimeEmbed({
-              title: 'Invalid Category',
-              description: `${WRONG_ICON} Invalid category \`${catArg}\`. Valid: \`${LOG_CATEGORIES.join('`, `')}\`, \`all\``
             })]
           });
         }

@@ -2,19 +2,6 @@ import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { IBlacklistEntry, BlacklistType } from '../../models/index.js';
 import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
-import { getGuildAndCheckPermission, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
-
-function isSafeRegex(pattern: string): boolean {
-  if (!pattern || typeof pattern !== 'string' || pattern.length > 200) return false;
-  // Reject nested quantifiers that can cause catastrophic backtracking (ReDoS)
-  if (/(\+|\*|\{[0-9,]+\})\s*\)\s*(\+|\*|\?|\{[0-9,]+\})/.test(pattern)) return false;
-  try {
-    new RegExp(pattern, 'i');
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 let blacklistCache: Map<string, IBlacklistEntry[]> = new Map();
 
@@ -206,32 +193,10 @@ export const BlacklistManifest: ModuleManifest = {
           else if (subGroup === 'emoji') { value = interaction.options.getString('emoji'); label = value; type = 'emoji'; }
           else if (subGroup === 'sticker') { value = interaction.options.getString('sticker'); label = value; type = 'sticker'; }
 
-          if (type === 'user' || type === 'bot') {
-            if (
-              value === interaction.guild.ownerId ||
-              value === client.user?.id ||
-              value === interaction.user.id ||
-              (await isOwnerOrExtraOwner(value, interaction.guild))
-            ) {
-              return interaction.reply({
-                content: `<a:warning:1546155193303957504> Cannot blacklist the Server Owner, Extra Owners, yourself, or the system bot.`,
-                flags: 64
-              });
-            }
-          }
-
-          if (type === 'regex' && !isSafeRegex(value)) {
-            return interaction.reply({
-              content: `<a:warning:1546155193303957504> Invalid or unsafe regular expression pattern (max 200 chars, no nested quantifiers).`,
-              flags: 64
-            });
-          }
-
           if (isBlacklisted(entries, type, value)) {
             return interaction.reply({ content: `<a:warning:1546155193303957504> \`${label}\` is already blacklisted as type **${type}**.`, flags: 64 });
           }
 
-          const defaultAction = type === 'user' ? 'ban' : 'delete';
           const entry: IBlacklistEntry = {
             id: `bl_${Date.now()}`,
             guildId: interaction.guildId,
@@ -239,7 +204,7 @@ export const BlacklistManifest: ModuleManifest = {
             value,
             label,
             reason: interaction.options.getString('reason') || undefined,
-            action: (interaction.options.getString('action') as any) || defaultAction,
+            action: (interaction.options.getString('action') as any) || 'delete',
             addedBy: interaction.user.id,
             addedByTag: interaction.user.username,
             createdAt: new Date()
@@ -256,7 +221,7 @@ export const BlacklistManifest: ModuleManifest = {
                   await member.kick('Blacklisted bot').catch(() => {});
                   context.logSyncEvent(`[Blacklist] Kicked blacklisted bot ${member.user.username} immediately.`, 'warn');
                 } else {
-                  const act = (!entry.action || entry.action === 'delete') ? 'ban' : entry.action;
+                  const act = entry.action || 'ban';
                   if (act === 'ban') {
                     await member.ban({ reason: entry.reason || 'Blacklisted user' }).catch(() => {});
                     context.logSyncEvent(`[Blacklist] Banned blacklisted user ${member.user.username} immediately.`, 'warn');
@@ -359,11 +324,9 @@ export const BlacklistManifest: ModuleManifest = {
 
         // Regex check
         if (!matched) {
-          const safeContent = message.content.slice(0, 2000);
           for (const e of entries.filter(e => e.type === 'regex')) {
-            if (!isSafeRegex(e.value)) continue;
             try {
-              if (new RegExp(e.value, 'i').test(safeContent)) { matched = e; break; }
+              if (new RegExp(e.value, 'i').test(message.content)) { matched = e; break; }
             } catch {}
           }
         }
@@ -374,8 +337,7 @@ export const BlacklistManifest: ModuleManifest = {
           for (const url of urlMatches) {
             const hostname = url.replace(/https?:\/\//, '').split('/')[0];
             for (const e of entries.filter(e => e.type === 'domain')) {
-              const targetDom = e.value.toLowerCase();
-              if (hostname === targetDom || hostname.endsWith('.' + targetDom)) { matched = e; break; }
+              if (hostname.includes(e.value.toLowerCase())) { matched = e; break; }
             }
             if (matched) break;
           }
@@ -383,20 +345,10 @@ export const BlacklistManifest: ModuleManifest = {
 
         // Discord invite check
         if (!matched) {
-          const inviteRegex = /(?:discord\.gg|discord(?:app)?\.com\/invite)\/([a-zA-Z0-9-]+)/gi;
-          const extractedCodes: string[] = [];
-          let invMatch;
-          while ((invMatch = inviteRegex.exec(message.content)) !== null) {
-            extractedCodes.push(invMatch[1].toLowerCase());
-          }
-          if (extractedCodes.length > 0) {
-            for (const e of entries.filter(e => e.type === 'invite')) {
-              const cleanCode = e.value.trim().replace(/^(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord(?:app)?\.com\/invite)\//i, '').toLowerCase();
-              if (cleanCode === '*' || cleanCode === 'all' || extractedCodes.includes(cleanCode)) {
-                matched = e;
-                break;
-              }
-            }
+          const inviteRegex = /discord\.gg\/([a-zA-Z0-9]+)/g;
+          const inviteMatches = content.match(inviteRegex);
+          if (inviteMatches && entries.some(e => e.type === 'invite')) {
+            matched = entries.find(e => e.type === 'invite') || null;
           }
         }
 
@@ -475,10 +427,9 @@ export const BlacklistManifest: ModuleManifest = {
             context.logSyncEvent(`[Blacklist] Kicked blacklisted bot ${member.user.username} on join.`, 'warn');
           }
         } else {
-          if (member.id === member.guild?.ownerId || (await isOwnerOrExtraOwner(member.id, member.guild))) return;
           const userEntry = entries.find(e => e.type === 'user' && e.value === member.user.id);
           if (userEntry) {
-            const action = (!userEntry.action || userEntry.action === 'delete') ? 'ban' : userEntry.action;
+            const action = userEntry.action || 'ban';
             if (action === 'ban') {
               await member.ban({ reason: userEntry.reason || 'Blacklisted user' }).catch(() => {});
               context.logSyncEvent(`[Blacklist] Banned blacklisted user ${member.user.username} on join.`, 'warn');
@@ -499,11 +450,7 @@ export const BlacklistManifest: ModuleManifest = {
       path: '/state',
       method: 'get',
       handler: async (req: any, res: any, context: any) => {
-        if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-        const hasPerm = await getGuildAndCheckPermission(req.user, context);
-        if (!hasPerm) return res.status(403).json({ error: 'Forbidden' });
-
-        const modules = context.getModulesState(context.guildId);
+        const modules = context.getModulesState();
         const mod = modules.find((m: any) => m.id === 'blacklist');
         res.json({ entries: mod?.config?.entries || [] });
       }
@@ -512,42 +459,27 @@ export const BlacklistManifest: ModuleManifest = {
       path: '/action',
       method: 'post',
       handler: async (req: any, res: any, context: any) => {
-        if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-        const hasPerm = await getGuildAndCheckPermission(req.user, context);
-        if (!hasPerm) return res.status(403).json({ error: 'Forbidden' });
-
         const { action, payload } = req.body;
-        const modules = context.getModulesState(context.guildId);
+        const modules = context.getModulesState();
         const mod = modules.find((m: any) => m.id === 'blacklist');
         let entries: IBlacklistEntry[] = mod?.config?.entries || [];
 
         if (action === 'add') {
-          if (payload.type === 'regex' && !isSafeRegex(payload.value)) {
-            return res.status(400).json({ error: 'Invalid or unsafe regex pattern' });
-          }
           if (!entries.find(e => e.type === payload.type && e.value === payload.value)) {
-            const entry = {
-              ...payload,
-              action: payload.action || (payload.type === 'user' ? 'ban' : 'delete'),
-              id: `bl_${Date.now()}`,
-              createdAt: new Date()
-            };
+            const entry = { ...payload, id: `bl_${Date.now()}`, createdAt: new Date() };
             entries.push(entry);
 
             // Execute immediate action if the client is connected
             if (context.client && context.guildId && (payload.type === 'user' || payload.type === 'bot')) {
               context.client.guilds.fetch(context.guildId).then(async (guild: any) => {
                 if (guild) {
-                  if (payload.value === guild.ownerId || payload.value === context.client.user?.id || (await isOwnerOrExtraOwner(payload.value, guild))) {
-                    return;
-                  }
                   const member = await guild.members.fetch(payload.value).catch(() => null);
                   if (member) {
                     if (payload.type === 'bot') {
                       await member.kick('Blacklisted bot').catch(() => {});
                       context.logSyncEvent(`[Blacklist] Kicked blacklisted bot ${member.user.username} immediately (via dashboard).`, 'warn');
                     } else {
-                      const act = (!payload.action || payload.action === 'delete') ? 'ban' : payload.action;
+                      const act = payload.action || 'ban';
                       if (act === 'ban') {
                         await member.ban({ reason: payload.reason || 'Blacklisted user' }).catch(() => {});
                         context.logSyncEvent(`[Blacklist] Banned blacklisted user ${member.user.username} immediately (via dashboard).`, 'warn');

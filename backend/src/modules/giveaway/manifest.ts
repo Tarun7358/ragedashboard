@@ -14,24 +14,6 @@ import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 
 const activeGiveaways: Map<string, NodeJS.Timeout> = new Map();
 
-function scheduleGiveawayTimeout(gwId: string, callback: () => void, delayMs: number) {
-  const existing = activeGiveaways.get(gwId);
-  if (existing) {
-    clearTimeout(existing);
-    activeGiveaways.delete(gwId);
-  }
-  const MAX_HOP_MS = 2_000_000_000;
-  if (delayMs > MAX_HOP_MS) {
-    const t = setTimeout(() => {
-      scheduleGiveawayTimeout(gwId, callback, delayMs - MAX_HOP_MS);
-    }, MAX_HOP_MS);
-    activeGiveaways.set(gwId, t);
-  } else {
-    const t = setTimeout(callback, Math.max(0, delayMs));
-    activeGiveaways.set(gwId, t);
-  }
-}
-
 function makeId() { return `gw_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`; }
 function parseMs(str: string): number {
   if (!str) return 3_600_000;
@@ -46,12 +28,7 @@ function parseMs(str: string): number {
 }
 
 async function endGiveaway(client: any, giveaway: IGiveaway, context: any, reason = 'Ended naturally') {
-  const existing = activeGiveaways.get(giveaway.id);
-  if (existing) {
-    clearTimeout(existing);
-    activeGiveaways.delete(giveaway.id);
-  }
-  const gws: IGiveaway[] = context.getModulesState?.(giveaway.guildId)?.find((m: any) => m.id === 'giveaway')?.config?.giveaways || [];
+  const gws: IGiveaway[] = context.getModulesState?.()?.find((m: any) => m.id === 'giveaway')?.config?.giveaways || [];
   const gw = gws.find(g => g.id === giveaway.id);
   if (!gw || gw.ended) return;
 
@@ -229,13 +206,6 @@ export const GiveawayManifest: ModuleManifest = {
           }
 
           const ms = parseMs(durationStr || '1h');
-          if (isNaN(ms) || ms < 5000) {
-            return interaction.reply({ content: `${WRONG_ICON} Duration must be at least 5 seconds.`, flags: 64 });
-          }
-          if (isNaN(winnerCount) || winnerCount < 1) {
-            return interaction.reply({ content: `${WRONG_ICON} Number of winners must be at least 1.`, flags: 64 });
-          }
-
           const endsAt = new Date(Date.now() + ms);
           const gwId = makeId();
 
@@ -293,7 +263,8 @@ export const GiveawayManifest: ModuleManifest = {
           saveGiveaways(giveaways);
           context.logSyncEvent(`[Giveaway] Created giveaway "${prize}" by ${interaction.user.username}.`, 'success');
 
-          scheduleGiveawayTimeout(gwId, () => endGiveaway(client, giveaway, context), ms);
+          const timeout = setTimeout(() => endGiveaway(client, giveaway, context), ms);
+          activeGiveaways.set(gwId, timeout);
 
           if (interaction.editReply) {
             return interaction.editReply({ content: `${VERIFIED_ICON} Giveaway started in ${targetChannel}! ID: \`${gwId}\`` });
@@ -454,7 +425,8 @@ export const GiveawayManifest: ModuleManifest = {
           if (ms <= 0) {
             await endGiveaway(client, gw, context, 'Catch-up after restart');
           } else {
-            scheduleGiveawayTimeout(gw.id, () => endGiveaway(client, gw, context), ms);
+            const timeout = setTimeout(() => endGiveaway(client, gw, context), ms);
+            activeGiveaways.set(gw.id, timeout);
           }
         }
       }

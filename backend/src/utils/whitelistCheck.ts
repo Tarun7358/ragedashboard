@@ -539,13 +539,12 @@ export function migrateToUnifiedWhitelist(context: any) {
       }
     }
 
-    // 3. Populate from security exception roles (AutoMod/Anti-Spam only, NOT full Anti-Nuke bypass)
+    // 3. Populate from security exception roles
     const secRoles = secModule?.config?.exceptionRoleIds || secModule?.config?.whitelistRoles || [];
     for (const rId of secRoles) {
       if (rId) {
         registerEntry(rId, 'role', {
-          notes: 'Security Exception Role',
-          enabledModules: ['anti_everyone_ping', 'anti_everyone_here', 'anti_role_ping', 'anti_link']
+          notes: 'Security Exception Role'
         });
       }
     }
@@ -556,8 +555,7 @@ export function migrateToUnifiedWhitelist(context: any) {
       if (uId) {
         const type = getTargetType(uId, 'member');
         registerEntry(uId, type, {
-          notes: 'UPM Whitelist User',
-          enabledModules: ['anti_everyone_ping', 'anti_everyone_here', 'anti_role_ping', 'anti_link']
+          notes: 'UPM Whitelist User'
         });
       }
     }
@@ -567,8 +565,7 @@ export function migrateToUnifiedWhitelist(context: any) {
     for (const rId of upmRoles) {
       if (rId) {
         registerEntry(rId, 'role', {
-          notes: 'UPM Whitelist Role',
-          enabledModules: ['anti_everyone_ping', 'anti_everyone_here', 'anti_role_ping', 'anti_link']
+          notes: 'UPM Whitelist Role'
         });
       }
     }
@@ -579,8 +576,7 @@ export function migrateToUnifiedWhitelist(context: any) {
       if (uId) {
         const type = getTargetType(uId, 'member');
         registerEntry(uId, type, {
-          notes: 'Voice Whitelist User',
-          enabledModules: ['voice_protection']
+          notes: 'Voice Whitelist User'
         });
       }
     }
@@ -590,8 +586,7 @@ export function migrateToUnifiedWhitelist(context: any) {
     for (const rId of vpRoles) {
       if (rId) {
         registerEntry(rId, 'role', {
-          notes: 'Voice Whitelist Role',
-          enabledModules: ['voice_protection']
+          notes: 'Voice Whitelist Role'
         });
       }
     }

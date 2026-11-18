@@ -1,4 +1,3 @@
-import { PermissionFlagsBits } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 
 export const AutomationManifest: ModuleManifest = {
@@ -39,7 +38,7 @@ export const AutomationManifest: ModuleManifest = {
         const action = interaction.options.getString('action');
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
-        if (!isOwner) return interaction.reply({ content: '<a:warning:1546155193303957504> Requires Administrator.', flags: 64 });
+        if (!isOwner) return interaction.reply({ content: '<a:wrong:1546155193303957504> Requires Administrator.', flags: 64 });
         const modules = context.getModulesState();
         const autoMod = modules.find((m: any) => m.id === 'automation');
         if (!action || action === 'status' || action === 'list') {
@@ -51,11 +50,6 @@ export const AutomationManifest: ModuleManifest = {
             `- **Progress**: ${autoMod?.progress || 0}%`
           ];
           await interaction.reply({ content: lines.join('\n'), flags: 64 });
-        } else {
-          await interaction.reply({
-            content: `<a:warning:1546155193303957504> Unknown action \`${action}\`. Valid actions: \`status\`, \`list\`.`,
-            flags: 64
-          });
         }
       }
     },
@@ -73,15 +67,6 @@ export const AutomationManifest: ModuleManifest = {
         try {
           const role = member.guild.roles.cache.get(roleId);
           if (role) {
-            const botMember = member.guild.members?.me;
-            if (
-              role.managed ||
-              role.permissions?.has?.(PermissionFlagsBits.Administrator) ||
-              (botMember && role.position >= botMember.roles.highest.position)
-            ) {
-              context.logSyncEvent?.(`Automation Studio: Blocked auto-assigning privileged/managed role "${role.name}" on join.`, 'warn');
-              return;
-            }
             await member.roles.add(role);
             context.logSyncEvent(`Automation Studio: Automatically assigned role "${role.name}" to "${member.user.username}" on join.`, 'success');
           }
@@ -104,6 +89,9 @@ export const AutomationManifest: ModuleManifest = {
           if (content === '!rage') {
             await message.reply('<:ticks:1532620580266836148> **RAGE OPTIMISER Core System is Online!**\nEverything is operational. Manage your settings on the local Dashboard.');
             context.logSyncEvent(`Automation Studio: Handled keyword trigger "!rage" in #${message.channel.name}.`, 'success');
+          } else if (content === '!support' || content?.includes('need help')) {
+            await message.reply('<a:lovemail:1527647157371535420> Need help? Please open a support ticket using the ticket board or by running the `/setup-tickets` slash command!');
+            context.logSyncEvent(`Automation Studio: Handled keyword trigger for support help in #${message.channel.name}.`, 'info');
           }
         } catch (err) {
           console.error('Failed to handle automation keyword response:', err);

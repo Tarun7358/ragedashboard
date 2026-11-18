@@ -85,7 +85,7 @@ export async function computeBotStatsMetrics(client: any): Promise<BotStatsMetri
     const tfaRow = await db.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM prebot_2fa_config WHERE isEnabled = 1').catch(() => null);
     if (tfaRow) twoFactorServersCount = tfaRow.cnt;
 
-    const eoRow = await db.get<{ cnt: number }>('SELECT COUNT(DISTINCT guildId) as cnt FROM extra_owners').catch(() => null);
+    const eoRow = await db.get<{ cnt: number }>('SELECT COUNT(DISTINCT guildId) as cnt FROM guild_extra_owners').catch(() => null);
     if (eoRow) extraOwnerGuildsCount = eoRow.cnt;
   }
 
@@ -273,7 +273,7 @@ export function buildCategoryEmbed(category: string, m: BotStatsMetrics) {
  * Construct Navigation Action Row Buttons
  */
 export function buildBotStatsComponents(userId: string, currentCategory: string = 'overview') {
-  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`botstats_cat_overview_${userId}`)
       .setLabel('Overview')
@@ -291,19 +291,12 @@ export function buildBotStatsComponents(userId: string, currentCategory: string 
       .setLabel('Security')
       .setStyle(currentCategory === 'security' ? ButtonStyle.Success : ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId(`botstats_cat_performance_${userId}`)
-      .setLabel('Performance')
-      .setStyle(currentCategory === 'performance' ? ButtonStyle.Success : ButtonStyle.Secondary)
-  );
-
-  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`botstats_refresh_${currentCategory}_${userId}`)
+      .setCustomId(`botstats_refresh_${userId}`)
       .setLabel('Refresh')
       .setStyle(ButtonStyle.Primary)
   );
 
-  return [row1, row2];
+  return [row];
 }
 
 /**
@@ -395,14 +388,8 @@ export const BotStatsManifest: ModuleManifest = {
         if (interaction.customId.includes('cat_network')) category = 'network';
         else if (interaction.customId.includes('cat_system')) category = 'system';
         else if (interaction.customId.includes('cat_security')) category = 'security';
-        else if (interaction.customId.includes('cat_performance')) category = 'performance';
         else if (interaction.customId.includes('cat_overview')) category = 'overview';
-        else if (interaction.customId.startsWith('botstats_refresh_')) {
-          const refreshCat = parts[2];
-          if (['overview', 'network', 'system', 'security', 'performance'].includes(refreshCat)) {
-            category = refreshCat;
-          }
-        }
+        else if (interaction.customId.includes('refresh')) category = 'overview';
 
         const metrics = await computeBotStatsMetrics(client);
         const embed = buildCategoryEmbed(category, metrics);

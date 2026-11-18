@@ -26,7 +26,7 @@ import { PrefixHelpCenter } from './prefix/PrefixHelpCenter.js';
 import { AnalyticsService } from './AnalyticsService.js';
 import { PrefixCooldownManager } from './prefix/PrefixCooldownManager.js';
 import { protections, isOwnerOrExtraOwner, checkWhitelistPermission } from '../utils/whitelistCheck.js';
-import { CommandGuard } from './security/CommandGuard.js';
+import { CommandGuard, resolvePermissionFlag } from './security/CommandGuard.js';
 
 export type RouterDispatch = (eventName: string, ...args: any[]) => Promise<void>;
 export type RouterWrap = (interaction: any) => any;
@@ -248,7 +248,6 @@ export class InteractionRouter {
         if (reqPerms.length > 0) {
           const hasAdmin = (interaction.member.permissions as any)?.has?.(PermissionFlagsBits.Administrator);
           if (!hasAdmin) {
-            const { resolvePermissionFlag } = await import('./security/CommandGuard.js');
             const memberPerms: any = typeof (interaction.member.permissions as any) === 'string'
               ? ((await interaction.guild?.members?.fetch?.(interaction.user.id).catch(() => null))?.permissions ?? null)
               : interaction.member.permissions;
@@ -402,10 +401,13 @@ export class InteractionRouter {
     // Executor-ownership guard: if customId ends with :<userId>, only that user may interact
     // Exempt public role/ticket buttons whose customId ends with a Role/Channel/Entity Snowflake ID
     const isPublicColonCustomId =
+      interaction.customId.startsWith('vclock_') ||
+      interaction.customId.startsWith('np_btn_') ||
       interaction.customId.startsWith('sr_btn:') ||
       interaction.customId.startsWith('rr_btn:') ||
       interaction.customId.startsWith('dm_block_server:') ||
-      interaction.customId.startsWith('dm_reply:');
+      interaction.customId.startsWith('dm_reply:') ||
+      interaction.customId.startsWith('btn_deploy_draft:');
     const parts = interaction.customId.split(':');
     if (parts.length > 1 && !isPublicColonCustomId) {
       const targetExecutorId = parts[parts.length - 1];
@@ -542,6 +544,7 @@ export class InteractionRouter {
         ['btn_al_',      'button_al_generic'],
         ['select_al_',   'button_al_generic'],
         ['al_',          'button_al_generic'],
+        ['vclock_',      'button_vclock_generic'],
         ['prebot_',      'button_prebot_generic']
       ];
 
@@ -566,9 +569,15 @@ export class InteractionRouter {
   // ── Select Menus ─────────────────────────────────────────────────────────
 
   private async handleSelectMenu(interaction: any): Promise<void> {
+    const isPublicColonCustomId =
+      interaction.customId.startsWith('vclock_') ||
+      interaction.customId.startsWith('sr_select:') ||
+      interaction.customId.startsWith('rr_select:') ||
+      interaction.customId.startsWith('tickets_v2_');
+
     // Executor-ownership guard
     const parts = interaction.customId.split(':');
-    if (parts.length > 1) {
+    if (parts.length > 1 && !isPublicColonCustomId) {
       const targetExecutorId = parts[parts.length - 1];
       if (/^\d{17,20}$/.test(targetExecutorId) && interaction.user.id !== targetExecutorId) {
         return interaction.reply({
@@ -636,6 +645,7 @@ export class InteractionRouter {
         ['select_al_',       'button_al_generic'],
         ['btn_al_',          'button_al_generic'],
         ['al_',              'button_al_generic'],
+        ['vclock_',          'button_vclock_generic'],
         ['wl_',              'button_wl_generic'],
         ['select_wl_',       'button_wl_generic'],
         ['jtc_',             'button_jtc_generic'],

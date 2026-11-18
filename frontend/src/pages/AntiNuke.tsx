@@ -241,13 +241,14 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
       }}>
         {/* Global Action Policy */}
         <div style={{
-          background: '#161E2E', border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px'
+          background: '#FFFFFF', border: '1px solid #E4E4E8',
+          borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px',
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F8FAFC', fontWeight: 700, fontSize: '13.5px' }}>
-            <Lock size={16} color="#10B981" /> Default Threat Enforcement Action
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#09090B', fontWeight: 700, fontSize: '13.5px' }}>
+            <Lock size={16} color="#09090B" /> Default Threat Enforcement Action
           </div>
-          <div style={{ fontSize: '12px', color: '#94A3B8' }}>
+          <div style={{ fontSize: '12px', color: '#71717A' }}>
             Action automatically executed on any unwhitelisted administrator who triggers an unauthorized action:
           </div>
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
@@ -257,9 +258,9 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
                 onClick={() => handleUpdateGlobalAction(act)}
                 style={{
                   flex: 1, padding: '8px 12px', borderRadius: '8px',
-                  background: defaultAction === act ? 'rgba(16, 185, 129, 0.2)' : 'rgba(30, 41, 59, 0.5)',
-                  border: `1px solid ${defaultAction === act ? '#10B981' : 'rgba(255, 255, 255, 0.1)'}`,
-                  color: defaultAction === act ? '#34D399' : '#94A3B8',
+                  background: defaultAction === act ? (act === 'quarantine' ? '#FEF2F2' : act === 'ban' ? '#09090B' : '#FEF3C7') : '#F4F4F5',
+                  border: `1px solid ${defaultAction === act ? (act === 'quarantine' ? '#FECACA' : act === 'ban' ? '#09090B' : '#FDE68A') : '#E4E4E8'}`,
+                  color: defaultAction === act ? (act === 'quarantine' ? '#DC2626' : act === 'ban' ? '#FFFFFF' : '#B45309') : '#52525B',
                   fontSize: '12px', fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase'
                 }}
               >
@@ -271,13 +272,14 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
 
         {/* Quarantine Role */}
         <div style={{
-          background: '#161E2E', border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px'
+          background: '#FFFFFF', border: '1px solid #E4E4E8',
+          borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px',
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F8FAFC', fontWeight: 700, fontSize: '13.5px' }}>
-            <Users size={16} color="#F59E0B" /> Isolation Quarantine Role
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#09090B', fontWeight: 700, fontSize: '13.5px' }}>
+            <Users size={16} color="#DC2626" /> Isolation Quarantine Role
           </div>
-          <div style={{ fontSize: '12px', color: '#94A3B8' }}>
+          <div style={{ fontSize: '12px', color: '#71717A' }}>
             Offenders with action set to Quarantine will have roles stripped and receive this role:
           </div>
           <RoleSelect
@@ -293,13 +295,14 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
 
         {/* Alert Log Channel */}
         <div style={{
-          background: '#161E2E', border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px'
+          background: '#FFFFFF', border: '1px solid #E4E4E8',
+          borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px',
+          boxShadow: 'var(--shadow-sm)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F8FAFC', fontWeight: 700, fontSize: '13.5px' }}>
-            <Radio size={16} color="#3B82F6" /> Security Incident Dispatch Channel
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#09090B', fontWeight: 700, fontSize: '13.5px' }}>
+            <Radio size={16} color="#09090B" /> Security Incident Dispatch Channel
           </div>
-          <div style={{ fontSize: '12px', color: '#94A3B8' }}>
+          <div style={{ fontSize: '12px', color: '#71717A' }}>
             Real-time attack reports, rollback summaries, and intruder audits will be posted here:
           </div>
           <ChannelSelect
@@ -360,8 +363,8 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
             onChange={(e) => setSearch(e.target.value)}
             style={{
               width: '100%', padding: '8px 12px 8px 34px', borderRadius: '8px',
-              background: '#161E2E', border: '1px solid rgba(255, 255, 255, 0.1)',
-              color: '#F8FAFC', fontSize: '12.5px', outline: 'none'
+              background: '#FFFFFF', border: '1px solid #E4E4E8',
+              color: '#09090B', fontSize: '12.5px', outline: 'none'
             }}
           />
         </div>
@@ -381,8 +384,8 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
           return (
             <div key={cat.id} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#F8FAFC' }}>{cat.name}</span>
-                <span style={{ fontSize: '12px', color: '#64748B' }}>— {cat.desc}</span>
+                <span style={{ fontSize: '14px', fontWeight: 800, color: '#09090B' }}>{cat.name}</span>
+                <span style={{ fontSize: '12px', color: '#71717A' }}>— {cat.desc}</span>
               </div>
 
               <div style={{
@@ -397,22 +400,23 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
                     <div
                       key={rule.key}
                       style={{
-                        background: '#161E2E',
-                        border: `1px solid ${isEnabled ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.06)'}`,
+                        background: '#FFFFFF',
+                        border: `1px solid ${isEnabled ? '#E4E4E8' : '#F4F4F5'}`,
+                        borderLeft: isEnabled ? '3px solid #09090B' : '3px solid #E4E4E8',
                         borderRadius: '12px', padding: '18px',
                         display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                        gap: '14px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+                        gap: '14px', boxShadow: 'var(--shadow-sm)'
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
                         <div>
-                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#F8FAFC' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#09090B' }}>
                             {rule.name}
                           </div>
-                          <div style={{ fontSize: '11px', color: '#64748B', fontFamily: 'monospace', marginTop: '2px' }}>
+                          <div style={{ fontSize: '11px', color: '#71717A', fontFamily: 'monospace', marginTop: '2px' }}>
                             {rule.key}
                           </div>
-                          <p style={{ fontSize: '12px', color: '#94A3B8', margin: '8px 0 0', lineHeight: 1.5 }}>
+                          <p style={{ fontSize: '12px', color: '#52525B', margin: '8px 0 0', lineHeight: 1.5 }}>
                             {rule.desc}
                           </p>
                         </div>
@@ -439,15 +443,16 @@ export function AntiNuke({ onSaveConfig, modules, registry, onUpdateConfig }: An
                       {/* Rule Footer Info */}
                       <div style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                        paddingTop: '10px', borderTop: '1px solid #F4F4F5',
                         fontSize: '11.5px'
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10B981', fontWeight: 600 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#059669', fontWeight: 600 }}>
                           <Check size={13} /> Strict: 1 Incident / Instant Revert
                         </div>
                         <div style={{
                           padding: '2px 8px', borderRadius: '6px',
-                          background: 'rgba(255, 255, 255, 0.06)', color: '#CBD5E1', fontWeight: 700
+                          background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', fontWeight: 700,
+                          textTransform: 'uppercase', fontSize: '10.5px'
                         }}>
                           Action: {ruleAction}
                         </div>

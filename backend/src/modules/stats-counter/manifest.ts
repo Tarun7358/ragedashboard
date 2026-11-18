@@ -46,18 +46,9 @@ export function cleanSubCount(subStr: string): string {
   return s || '0';
 }
 
-const ytStatsCache = new Map<string, { subs: string; views: string; expiresAt: number }>();
-const guildSyncThrottle = new Map<string, number>();
-
 export async function fetchYouTubeSubscribers(channelHandle: string): Promise<{ subs: string; views: string }> {
   try {
     const cleanHandle = channelHandle.replace(/^https?:\/\/(www\.)?youtube\.com\//i, '').replace(/^\/?@?/, '');
-    const cacheKey = cleanHandle.toLowerCase();
-    const cached = ytStatsCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return { subs: cached.subs, views: cached.views };
-    }
-
     const url = `https://www.youtube.com/@${cleanHandle}/about`;
     const res = await fetch(url, {
       headers: {
@@ -87,9 +78,7 @@ export async function fetchYouTubeSubscribers(channelHandle: string): Promise<{ 
     const rawSub = subMatch ? subMatch[1] : '0';
     const rawViews = viewMatch ? viewMatch[1] : (videoMatch ? videoMatch[1] : '0');
 
-    const result = { subs: cleanSubCount(rawSub), views: formatViews(rawViews) };
-    ytStatsCache.set(cacheKey, { ...result, expiresAt: Date.now() + 10 * 60 * 1000 });
-    return result;
+    return { subs: cleanSubCount(rawSub), views: formatViews(rawViews) };
   } catch (err) {
     return { subs: 'N/A', views: 'N/A' };
   }
@@ -121,13 +110,8 @@ export async function setVoiceChannelStatusHelper(channel: any, statusText: stri
   }
 }
 
-export async function syncGuildStatCounters(guild: Guild, config: any, context?: any, force = false) {
-  if (!config || !config.enabled || !guild) return;
-
-  const now = Date.now();
-  const lastSync = guildSyncThrottle.get(guild.id) || 0;
-  if (!force && now - lastSync < 60_000) return;
-  guildSyncThrottle.set(guild.id, now);
+export async function syncGuildStatCounters(guild: Guild, config: any, context?: any) {
+  if (!config || !config.enabled) return;
 
   try {
     // 1. Calculate Live Guild Stats
@@ -222,34 +206,6 @@ export const StatsCounterManifest: ModuleManifest = {
       name: 'voiceStateUpdate',
       handler: async (client: any, oldState: any, newState: any, context: any) => {
         const guild = newState?.guild || oldState?.guild;
-        if (!guild) return;
-
-        const modules = context.getModulesState ? context.getModulesState() : [];
-        const mod = modules.find((m: any) => m.id === 'stats-counter');
-        const config = mod?.config || {};
-        if (!config || !config.enabled) return;
-
-        await syncGuildStatCounters(guild, config, context).catch(() => {});
-      }
-    },
-    {
-      name: 'guildMemberAdd',
-      handler: async (client: any, member: any, context: any) => {
-        const guild = member?.guild;
-        if (!guild) return;
-
-        const modules = context.getModulesState ? context.getModulesState() : [];
-        const mod = modules.find((m: any) => m.id === 'stats-counter');
-        const config = mod?.config || {};
-        if (!config || !config.enabled) return;
-
-        await syncGuildStatCounters(guild, config, context).catch(() => {});
-      }
-    },
-    {
-      name: 'guildMemberRemove',
-      handler: async (client: any, member: any, context: any) => {
-        const guild = member?.guild;
         if (!guild) return;
 
         const modules = context.getModulesState ? context.getModulesState() : [];

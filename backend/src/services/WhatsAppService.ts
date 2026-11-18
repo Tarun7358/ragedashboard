@@ -227,11 +227,14 @@ export class WhatsAppService {
       let qrcode: any;
 
       try {
+        // @ts-ignore
         const baileysMod = await import('@whiskeysockets/baileys');
         makeWASocket = (baileysMod as any).default || baileysMod;
         DisconnectReason = (baileysMod as any).DisconnectReason;
         useMultiFileAuthState = (baileysMod as any).useMultiFileAuthState;
+        // @ts-ignore
         pino = (await import('pino')).default;
+        // @ts-ignore
         qrcode = (await import('qrcode-terminal')).default;
       } catch (modErr) {
         console.warn('[WhatsApp] [WARN] Optional packages (@whiskeysockets/baileys, pino, qrcode-terminal) not found.');

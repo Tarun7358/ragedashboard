@@ -6,7 +6,13 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   StringSelectMenuBuilder,
-  ButtonStyle
+  ButtonStyle,
+  ContainerBuilder,
+  SectionBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
 } from 'discord.js';
 import { Database } from '../../core/Database.js';
 import { DashboardSyncService } from '../../services/DashboardSyncService.js';
@@ -211,27 +217,27 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
     : '**None (Strict full URL filter)**';
 
   const actionLabels: Record<string, string> = {
-    warn: '<a:warning:1546155193303957504> WARN & PURGE MESSAGE (DEFAULT)',
-    mute: '🔇 MUTE / TIMEOUT (10 MINUTES)',
-    kick: '👢 KICK MEMBER',
-    ban: '🔨 BAN MEMBER PERMANENTLY',
-    delete: '🗑️ DELETE MESSAGE ONLY'
+    warn: 'WARN & PURGE MESSAGE (DEFAULT)',
+    mute: 'MUTE / TIMEOUT (10 MINUTES)',
+    kick: 'KICK MEMBER',
+    ban: 'BAN MEMBER PERMANENTLY',
+    delete: 'DELETE MESSAGE ONLY'
   };
 
   const actionLabel = actionLabels[action] || action.toUpperCase();
 
   const embed = new EmbedBuilder()
-    .setTitle('<:link:1532620952087826602> Rage Optimiser • Anti-Link Control Center')
+    .setTitle('Rage Optimiser - Anti-Link Control Center')
     .setColor(0x2B2D31)
     .setDescription([
       `>>> ${[
-        `${isEnabled ? VERIFIED_ICON : WRONG_ICON} Anti-Link Interceptor & Threat Neutralizer • \`${isEnabled ? 'ACTIVE' : 'DISABLED'}\``,
-        `${allowInvites ? VERIFIED_ICON : WRONG_ICON} Discord Invites Filter • \`${allowInvites ? 'ALLOWED' : 'BLOCKED'}\``,
-        `<a:success_check:1546134620087783526> Violation Enforcement Threshold • \`${limit} Violations\``,
-        `<:gavel:1532621057318584380> Threat Mitigation Policy • \`${actionLabel}\``
+        `Anti-Link Interceptor & Threat Neutralizer - \`${isEnabled ? 'ACTIVE' : 'DISABLED'}\``,
+        `Discord Invites Filter - \`${allowInvites ? 'ALLOWED' : 'BLOCKED'}\``,
+        `Violation Enforcement Threshold - \`${limit} Violations\``,
+        `Threat Mitigation Policy - \`${actionLabel}\``
       ].join('\n')}`,
       '',
-      `**Autonomous Anti-Link Interceptor & Threat Neutralizer • Zero-Trust Baseline**`,
+      `**Autonomous Anti-Link Interceptor & Threat Neutralizer - Zero-Trust Baseline**`,
       '',
       `**Exemptions & Whitelists:**`,
       `• **Ignored Channels (${ignoredChannels.length}):** ${channelsDisplay}`,
@@ -286,41 +292,36 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
   const row3 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId('select_al_action')
-      .setPlaceholder(`⚡ Select Punishment Action (Current: ${action.toUpperCase()})`)
+      .setPlaceholder(`Select Punishment Action (Current: ${action.toUpperCase()})`)
       .addOptions([
         {
           label: 'Warn & Delete Message (Default)',
           value: 'warn',
           description: 'Purges message & sends temporary warning card + DM notice',
-          emoji: '⚠️',
           default: action === 'warn'
         },
         {
           label: 'Mute / Timeout Member (10 Minutes)',
           value: 'mute',
           description: 'Purges message & applies 10-minute server timeout',
-          emoji: '🔇',
           default: action === 'mute' || action === 'timeout'
         },
         {
           label: 'Kick Member from Server',
           value: 'kick',
           description: 'Purges message & kicks the violator immediately',
-          emoji: '👢',
           default: action === 'kick'
         },
         {
           label: 'Ban Member Permanently',
           value: 'ban',
           description: 'Purges message & issues permanent server ban',
-          emoji: '🔨',
           default: action === 'ban'
         },
         {
           label: 'Delete Message Only (Silent Purge)',
           value: 'delete',
           description: 'Silently purges link without warning notifications',
-          emoji: '🗑️',
           default: action === 'delete'
         }
       ])
@@ -330,41 +331,36 @@ export function buildAntiLinkDashboardGUI(guild: any, config: any) {
   const row4 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId('select_al_limit')
-      .setPlaceholder(`🎯 Select Violation Limit Threshold (Current: ${limit} Violations)`)
+      .setPlaceholder(`Select Violation Limit Threshold (Current: ${limit} Violations)`)
       .addOptions([
         {
           label: '1 Violation (Instant Action on 1st Link)',
           value: '1',
           description: 'Enforces punishment on the very first unauthorized link',
-          emoji: '⚡',
           default: limit === 1
         },
         {
           label: '2 Violations (1 Warning, Punish on 2nd)',
           value: '2',
           description: 'Allows 1 warning before enforcing punishment',
-          emoji: '2️⃣',
           default: limit === 2
         },
         {
           label: '3 Violations (2 Warnings, Punish on 3rd)',
           value: '3',
           description: 'Allows 2 warnings before enforcing punishment',
-          emoji: '3️⃣',
           default: limit === 3
         },
         {
           label: '5 Violations (Default — 4 Warnings, Punish on 5th)',
           value: '5',
           description: 'Recommended standard: 4 warnings, punishment on 5th',
-          emoji: '5️⃣',
           default: limit === 5
         },
         {
           label: '10 Violations (Lenient — 9 Warnings)',
           value: '10',
           description: 'Lenient threshold for active community servers',
-          emoji: '🔟',
           default: limit === 10
         }
       ])
@@ -1072,20 +1068,6 @@ export const AutomodManifest: ModuleManifest = {
           config.antiEveryoneEnabled = isEnabled;
           context.updateModuleConfig('automod', config);
 
-          const modules = context.getModulesState ? context.getModulesState(guild.id) : [];
-          const secModule = modules.find((m: any) => m.id === 'security');
-          if (secModule && context.updateModuleConfig) {
-            const secConfig = secModule.config || {};
-            const rules = { ...(secConfig.rules || {}) };
-            const existing = rules.anti_everyone_here || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
-            rules.anti_everyone_here = { ...existing, enabled: isEnabled };
-            context.updateModuleConfig('security', {
-              ...secConfig,
-              rules,
-              automod: { ...(secConfig.automod || {}), antiEveryoneEnabled: isEnabled }
-            });
-          }
-
           context.logSyncEvent?.(`AutoMod: Updated Anti-Everyone config to ${isEnabled ? 'ENABLED' : 'DISABLED'} by ${interaction.user.tag}`, 'info');
 
           return interaction.reply({
@@ -1562,6 +1544,28 @@ export const AutomodManifest: ModuleManifest = {
           }
         }
 
+        // 1b. Standalone Anti-Everyone & Anti-Here Mention Filter (Managed 100% inside AutoMod)
+        if (!deleted && config.antiEveryoneEnabled !== false) {
+          const hasEveryoneOrHere = message.mentions?.everyone === true ||
+            content.includes('@everyone') ||
+            content.includes('@here');
+
+          if (hasEveryoneOrHere) {
+            const isWhitelisted = await checkWhitelistPermission(message.author.id, message.guild, context, 'anti_everyone_here').catch(() => false) ||
+                                  await checkWhitelistPermission(message.author.id, message.guild, context, 'automod').catch(() => false);
+            if (!isWhitelisted) {
+              deleted = true;
+              reason = 'Unauthorized @everyone / @here mention';
+
+              if (message.webhookId) {
+                message.guild.fetchWebhooks().then((hooks: any) => {
+                  hooks?.get(message.webhookId)?.delete('AutoMod: Unauthorized Webhook @everyone ping').catch(() => { });
+                }).catch(() => { });
+              }
+            }
+          }
+        }
+
         // 2. Bad Words Filter
         if (!deleted && config.badWords && config.badWords.length > 0) {
           for (const word of config.badWords) {
@@ -1650,7 +1654,98 @@ export const AutomodManifest: ModuleManifest = {
           try {
             await message.delete().catch(() => { });
 
-            if (reason === 'Posting unauthorized links') {
+            if (reason === 'Unauthorized @everyone / @here mention') {
+              // ── ZERO TOLERANCE: ENFORCE IMMEDIATE PUNISHMENT ON 1ST ATTEMPT ──
+              const configuredAction = (config.antiEveryoneAction || config.punishmentAction || config.punishment || 'timeout').toLowerCase();
+              const punishAction = (configuredAction === 'warn' || configuredAction === 'delete' || configuredAction === 'delete_only') ? 'timeout' : configuredAction;
+
+              const botThumb =
+                message.client?.user?.displayAvatarURL?.({ size: 512 }) ||
+                'https://cdn.discordapp.com/embed/avatars/0.png';
+
+              const punishBody = [
+                `### **Mass Mention Policy Enforced (1st Attempt)**`,
+                ``,
+                `> <@${message.author.id}> unauthorized \`@everyone / @here\` ping was **deleted** and immediate enforcement was applied.`,
+                ``,
+                `> **Offender**: \`${userTag(message.author)}\` (\`${message.author.id}\`)`,
+                `> **Channel**: <#${message.channel.id}>`,
+                `> **Action Enforced**: \`${punishAction.toUpperCase()}\` *(Zero-Tolerance • 1st Attempt)*`,
+              ].join('\n');
+
+              const punishSection = new SectionBuilder()
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(punishBody))
+                .setThumbnailAccessory(new ThumbnailBuilder().setURL(botThumb));
+
+              const punishContainer = new ContainerBuilder()
+                .addSectionComponents(punishSection)
+                .addSeparatorComponents(
+                  new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+                )
+                .addTextDisplayComponents(
+                  new TextDisplayBuilder().setContent(`-# Rage Optimiser Enterprise • Anti-Ping Sentinel`)
+                );
+
+              await message.channel
+                .send({
+                  flags: MessageFlags.IsComponentsV2,
+                  components: [punishContainer],
+                })
+                .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 8000))
+                .catch(async () => {
+                  const fallbackEmbed = new EmbedBuilder()
+                    .setColor(0xED4245)
+                    .setTitle('Mass Mention Policy Enforced (1st Attempt)')
+                    .setDescription([
+                      `> <@${message.author.id}> unauthorized \`@everyone / @here\` ping was **deleted** and immediate enforcement was applied.`,
+                      ``,
+                      `> **Offender**: \`${userTag(message.author)}\` (\`${message.author.id}\`)`,
+                      `> **Action Enforced**: \`${punishAction.toUpperCase()}\` *(Zero-Tolerance • 1st Attempt)*`
+                    ].join('\n'))
+                    .setFooter({ text: 'Rage Optimiser Enterprise • Anti-Ping Sentinel' })
+                    .setTimestamp();
+                  await message.channel.send({ embeds: [fallbackEmbed] })
+                    .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 8000))
+                    .catch(() => {});
+                });
+
+              // Execute configured action
+              if (punishAction === 'mute' || punishAction === 'timeout') {
+                await message.member?.timeout(10 * 60 * 1000, 'AutoMod: Unauthorized @everyone / @here mention (1st Attempt)').catch(() => { });
+              } else if (punishAction === 'kick') {
+                await message.member?.kick('AutoMod: Unauthorized @everyone / @here mention (1st Attempt)').catch(() => { });
+              } else if (punishAction === 'ban') {
+                await message.member?.ban({ reason: 'AutoMod: Unauthorized @everyone / @here mention (1st Attempt)' }).catch(() => { });
+              } else if (punishAction === 'quarantine') {
+                const modules = context?.getModulesState ? context.getModulesState(message.guild.id) : [];
+                const secMod = modules?.find((m: any) => m.id === 'security');
+                const qRoleId = secMod?.config?.quarantineRoleId;
+                if (qRoleId && message.guild.roles.cache.has(qRoleId)) {
+                  await message.member?.roles.set([qRoleId], 'AutoMod: Unauthorized @everyone / @here mention (1st Attempt)').catch(() => { });
+                } else {
+                  await message.member?.timeout(60 * 60 * 1000, 'AutoMod: Unauthorized @everyone / @here mention (1st Attempt)').catch(() => { });
+                }
+              }
+
+              // Dispatch Global Event to Central Hub Logger across all servers
+              CentralLogger.automod({
+                guild: message.guild,
+                action: `AUTOMOD ${punishAction.toUpperCase()} (1ST ATTEMPT)`,
+                reason: `Unauthorized @everyone / @here mention in #${message.channel.name}`,
+                offenderId: message.author.id,
+                offenderName: userTag(message.author),
+                channelName: message.channel.name,
+                severity: punishAction === 'ban' ? 'critical' : 'high'
+              });
+
+              // Send DM notification of punishment
+              const dmEmbed = Embeds.error(
+                `<:gavel:1532621057318584380> Mass Mention Policy Enforced — ${message.guild.name}`,
+                `You triggered an unauthorized \`@everyone / @here\` mention in **${message.guild.name}**.\n\n**Action Enforced**: ${punishAction.toUpperCase()} *(1st Attempt Zero-Tolerance)*\n**Reason**: Unauthorized @everyone / @here mention.`,
+                { module: 'automod', footer: `${message.guild.name} • Anti-Ping Enforcement` }
+              );
+              await message.member?.send({ embeds: [dmEmbed] }).catch(() => { });
+            } else if (reason === 'Posting unauthorized links') {
               const maxLimit = typeof config.antiLinkLimit === 'number' && config.antiLinkLimit > 0
                 ? config.antiLinkLimit
                 : (typeof config.limit === 'number' && config.limit > 0 ? config.limit : 5);
@@ -1658,44 +1753,103 @@ export const AutomodManifest: ModuleManifest = {
               const currentCount = incrementLinkViolations(message.guild.id, message.author.id);
               const punishAction = (config.punishment || 'warn').toLowerCase();
 
+              const botThumb =
+                message.client?.user?.displayAvatarURL?.({ size: 512 }) ||
+                'https://cdn.discordapp.com/embed/avatars/0.png';
+
               if (currentCount < maxLimit) {
-                // WARNING PHASE (Violations 1 to limit-1)
-                const warnCard = buildLimeWarnCard({
-                  category: 'Unauthorized Link',
-                  user: message.author,
-                  reason: 'Posting unauthorized links',
-                  currentLimit: currentCount,
-                  maxLimit: maxLimit,
-                  thumbnailUrl: message.author.displayAvatarURL?.()
-                });
-                await message.channel.send({ embeds: [warnCard] })
-                  .then((m: any) => setTimeout(() => m.delete().catch(() => { }), 6000))
-                  .catch(() => { });
+                // WARNING PHASE (Violations 1 to limit-1) — Box UI
+                const warnBody = [
+                  `### **Anti-Link Warning (${currentCount}/${maxLimit})**`,
+                  ``,
+                  `> <@${message.author.id}> your message in **#${message.channel.name || 'channel'}** was **deleted** because external links are restricted.`,
+                  ``,
+                  `> **Violation Count**: \`${currentCount}/${maxLimit}\``,
+                  `> **Action on Limit**: Reaching \`${maxLimit}\` violations will trigger \`${punishAction.toUpperCase()}\`.`,
+                ].join('\n');
 
-                // Send DM warning notification
-                const dmEmbed = Embeds.warn(
-                  `Anti-Link Warning (${currentCount}/${maxLimit}) - ${message.guild.name}`,
-                  `Your message in **#${message.channel.name || 'channel'}** was **deleted** because external link sharing is restricted.\n\n**Violation Count**: **${currentCount}/${maxLimit}**\nReaching **${maxLimit} violations** will trigger **${punishAction.toUpperCase()}** enforcement.`,
-                  { module: 'automod', footer: `${message.guild.name} • Anti-Link Protection` }
-                );
-                await message.member?.send({ embeds: [dmEmbed] }).catch(() => { });
+                const warnSection = new SectionBuilder()
+                  .addTextDisplayComponents(new TextDisplayBuilder().setContent(warnBody))
+                  .setThumbnailAccessory(new ThumbnailBuilder().setURL(botThumb));
+
+                const warnContainer = new ContainerBuilder()
+                  .addSectionComponents(warnSection)
+                  .addSeparatorComponents(
+                    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+                  )
+                  .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(`-# Rage Optimiser Enterprise • Anti-Link Sentinel`)
+                  );
+
+                await message.channel
+                  .send({
+                    flags: MessageFlags.IsComponentsV2,
+                    components: [warnContainer],
+                  })
+                  .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 6000))
+                  .catch(() => {});
+
+                // Send DM warning notification in Box UI
+                const dmBody = [
+                  `### **Anti-Link Warning (${currentCount}/${maxLimit}) — ${message.guild.name}**`,
+                  ``,
+                  `> Your message in **#${message.channel.name || 'channel'}** was **deleted** because external link sharing is restricted.`,
+                  ``,
+                  `> **Violation Count**: \`${currentCount}/${maxLimit}\``,
+                  `> **Action on Limit**: Reaching \`${maxLimit}\` violations will trigger \`${punishAction.toUpperCase()}\` enforcement.`,
+                ].join('\n');
+
+                const dmSection = new SectionBuilder()
+                  .addTextDisplayComponents(new TextDisplayBuilder().setContent(dmBody))
+                  .setThumbnailAccessory(new ThumbnailBuilder().setURL(botThumb));
+
+                const dmContainer = new ContainerBuilder()
+                  .addSectionComponents(dmSection)
+                  .addSeparatorComponents(
+                    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+                  )
+                  .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(`-# ${message.guild.name} • Anti-Link Protection`)
+                  );
+
+                await message.member
+                  ?.send({
+                    flags: MessageFlags.IsComponentsV2,
+                    components: [dmContainer],
+                  })
+                  .catch(() => {});
               } else {
-                // THRESHOLD REACHED (Violation limit hit!)
-                const punishEmbed = createLimeEmbed({
-                  title: `<a:success_check:1546134620087783526> Anti-Link Punishment Enforced (${currentCount}/${maxLimit})`,
-                  description: [
-                    `> ${message.author} has reached the maximum Anti-Link violation limit (**${currentCount}/${maxLimit}**).`,
-                    ``,
-                    `• **Offender**: ${userTag(message.author)} (\`${message.author.id}\`)`,
-                    `• **Channel**: <#${message.channel.id}>`,
-                    `• **Action Enforced**: \`${punishAction.toUpperCase()}\``
-                  ].join('\n'),
-                  color: Colors.DANGER
-                });
+                // THRESHOLD REACHED (Violation limit hit!) — Box UI
+                const punishBody = [
+                  `### **Anti-Link Punishment Enforced (${currentCount}/${maxLimit})**`,
+                  ``,
+                  `> <@${message.author.id}> has reached the maximum Anti-Link violation limit (\`${currentCount}/${maxLimit}\`).`,
+                  ``,
+                  `> **Offender**: \`${userTag(message.author)}\` (\`${message.author.id}\`)`,
+                  `> **Channel**: <#${message.channel.id}>`,
+                  `> **Action Enforced**: \`${punishAction.toUpperCase()}\``,
+                ].join('\n');
 
-                await message.channel.send({ embeds: [punishEmbed] })
-                  .then((m: any) => setTimeout(() => m.delete().catch(() => { }), 8000))
-                  .catch(() => { });
+                const punishSection = new SectionBuilder()
+                  .addTextDisplayComponents(new TextDisplayBuilder().setContent(punishBody))
+                  .setThumbnailAccessory(new ThumbnailBuilder().setURL(botThumb));
+
+                const punishContainer = new ContainerBuilder()
+                  .addSectionComponents(punishSection)
+                  .addSeparatorComponents(
+                    new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+                  )
+                  .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(`-# Rage Optimiser Enterprise • Security Engine`)
+                  );
+
+                await message.channel
+                  .send({
+                    flags: MessageFlags.IsComponentsV2,
+                    components: [punishContainer],
+                  })
+                  .then((m: any) => setTimeout(() => m.delete().catch(() => {}), 8000))
+                  .catch(() => {});
 
                 // Execute configured action
                 if (punishAction === 'mute' || punishAction === 'timeout') {
@@ -1760,7 +1914,7 @@ export const AutomodManifest: ModuleManifest = {
             // Persist to audit log & sync live dashboard
             Database.saveAuditLog({
               guildId: message.guild.id,
-              action: reason === 'Posting unauthorized links' ? 'AUTOMOD_LINK' : 'AUTOMOD_FILTER',
+              action: reason === 'Unauthorized @everyone / @here mention' ? 'AUTOMOD_MASS_PING' : (reason === 'Posting unauthorized links' ? 'AUTOMOD_LINK' : 'AUTOMOD_FILTER'),
               targetId: message.author.id,
               targetType: 'User',
               targetName: userTag(message.author),

@@ -379,12 +379,12 @@ export async function captureLiveSnapshot(guild: any) {
     type: channel.type,
     parentId: channel.parentId,
     position: channel.position,
-    permissionOverwrites: channel.permissionOverwrites.cache.map((o: any) => ({
+    permissionOverwrites: channel.permissionOverwrites?.cache ? channel.permissionOverwrites.cache.map((o: any) => ({
       id: o.id,
       type: o.type,
-      allow: o.allow.bitfield.toString(),
-      deny: o.deny.bitfield.toString()
-    })),
+      allow: o.allow?.bitfield !== undefined ? o.allow.bitfield.toString() : (o.allow?.toString() || '0'),
+      deny: o.deny?.bitfield !== undefined ? o.deny.bitfield.toString() : (o.deny?.toString() || '0')
+    })) : [],
     topic: channel.topic || null,
     nsfw: channel.nsfw || false,
     rateLimitPerUser: channel.rateLimitPerUser || 0,
@@ -516,8 +516,8 @@ export function startAutoBackupScheduler(client: any, context?: any) {
           } else if (isSeverelyDepleted) {
             console.warn(`[Auto-Backup Anti-Poisoning] Skipped saving snapshot for guild ${guild.id}: channels dropped from ${prevChannelCount} to ${channelCount} (possible active nuke/raid).`);
           }
-        } catch (e) {
-          console.error(`[Auto-Backup 5m] Failed snapshot for guild ${guild?.id}:`, e);
+        } catch (e: any) {
+          console.error(`[Auto-Backup 5m] Failed snapshot for guild ${guild?.id}:`, e?.message || e);
         }
       }
     } catch (err) {
@@ -1408,8 +1408,8 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
   const categoryRules: Record<string, string[]> = {
     group_roles: ['anti_role_grant', 'anti_role_remove', 'anti_role_update', 'anti_role_create', 'anti_role_delete'],
     group_channels: ['anti_channel_create', 'anti_channel_delete', 'anti_channel_update'],
-    group_members: ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune', 'anti_everyone_here'],
-    group_server: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_invite_create', 'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update', 'anti_sticker_create', 'anti_sticker_delete']
+    group_members: ['anti_ban', 'anti_member_unban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune'],
+    group_server: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_integration', 'anti_invite_create', 'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update', 'anti_sticker_create', 'anti_sticker_delete', 'anti_sticker_update']
   };
 
   const {
@@ -1436,6 +1436,14 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
     const currentState = secConfig.antiNukeEnabled !== false;
     const newState = !currentState;
     secConfig.antiNukeEnabled = newState;
+    if (newState) {
+      // Heal: if every module was left saved as disabled (e.g. configured while master was OFF), re-arm them all.
+      const allKeys = Object.values(categoryRules).flat();
+      const stored = allKeys.filter(k => secConfig.rules[k] && secConfig.rules[k].enabled !== undefined);
+      if (stored.length > 0 && stored.every(k => secConfig.rules[k].enabled === false)) {
+        for (const k of allKeys) secConfig.rules[k] = { ...(secConfig.rules[k] || {}), enabled: true };
+      }
+    }
     context.updateModuleConfig('security', secConfig);
     context.logSyncEvent?.(`[Security GUI] Anti-Nuke master status set to ${newState ? 'ENABLED' : 'DISABLED'} by ${interaction.user.username}.`, newState ? 'success' : 'warn');
     CentralLogger.antinuke({
@@ -1715,7 +1723,8 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
 
   // 12. Category Specific Sensitivity Setters (`btn_sec_cat_thresh_<group>_<limit>_<window>`)
   if (customId.startsWith('btn_sec_cat_thresh_')) {
-    await interaction.deferUpdate().catch(() => { });
+    // Anti-Nuke thresholds are fixed at 1/1; legacy buttons are ignored.
+    return interaction.reply({ content: 'Anti-Nuke is fixed at an instant 1/1 policy. Thresholds can no longer be changed - toggle modules ON/OFF instead.', flags: 64 });
     const parts = customId.replace('btn_sec_cat_thresh_', '').split('_');
     const groupKey = `group_${parts[0]}`;
     const limit = parseInt(parts[1], 10) || 1;
@@ -1734,6 +1743,7 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
 
   // 12b. Custom Threshold Modal Opener (`btn_sec_cat_custom_thresh_<group>`)
   if (customId.startsWith('btn_sec_cat_custom_thresh_')) {
+    return interaction.reply({ content: 'Anti-Nuke is fixed at an instant 1/1 policy. Thresholds can no longer be changed - toggle modules ON/OFF instead.', flags: 64 });
     const groupKey = customId.replace('btn_sec_cat_custom_thresh_', '');
     const modal = new ModalBuilder()
       .setCustomId(`modal_sec_thresh_${groupKey}`)
@@ -1767,6 +1777,7 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
 
   // 12c. Custom Threshold Modal Submit Handler
   if (customId.startsWith('modal_sec_thresh_')) {
+    return interaction.reply({ content: 'Anti-Nuke is fixed at an instant 1/1 policy. Thresholds can no longer be changed.', flags: 64 });
     await interaction.deferUpdate().catch(() => { });
     const groupKey = customId.replace('modal_sec_thresh_', '');
     const limitVal = parseInt(interaction.fields.getTextInputValue('in_thresh_limit'), 10);
@@ -1786,6 +1797,32 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
 
     context.updateModuleConfig('security', secConfig);
     context.logSyncEvent?.(`[Security GUI] Category ${groupKey} threshold updated to ${validLimit} actions per ${validWindow}s by ${interaction.user.username}.`, 'success');
+
+    const payload = buildAntiNukeOverview(secConfig, groupKey);
+    return interaction.editReply(payload);
+  }
+
+  // 12d. Per-module ON/OFF toggle (`btn_sec_mod|<ruleKey>|<group>`)
+  if (customId.startsWith('btn_sec_mod|')) {
+    const isOwner = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild);
+    if (!isOwner) {
+      return interaction.reply({
+        content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** (<@${interaction.guild?.ownerId}>) or designated **Extra Owners** can toggle Anti-Nuke modules.`,
+        flags: 64
+      }).catch(() => { });
+    }
+    await interaction.deferUpdate().catch(() => { });
+    const [, ruleKey, groupKey] = customId.split('|');
+    const allowed = (categoryRules[groupKey] || []).includes(ruleKey);
+    if (!allowed) {
+      const payload = buildAntiNukeOverview(secConfig, groupKey);
+      return interaction.editReply(payload);
+    }
+    const current = getEffectiveRule({ rules: secConfig.rules }, ruleKey, { ...secConfig, antiNukeEnabled: true }).enabled;
+    const nextState = !current;
+    secConfig.rules[ruleKey] = { ...(secConfig.rules[ruleKey] || {}), enabled: nextState };
+    context.updateModuleConfig('security', secConfig);
+    context.logSyncEvent?.(`[Security GUI] Module ${ruleKey} turned ${nextState ? 'ON' : 'OFF'} by ${interaction.user.username}.`, nextState ? 'success' : 'warn');
 
     const payload = buildAntiNukeOverview(secConfig, groupKey);
     return interaction.editReply(payload);
@@ -1867,19 +1904,18 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
 
   if (customId === 'btn_sec_am_toggle_antieveryone') {
     await interaction.deferUpdate().catch(() => { });
-    const ruleEveryone = secConfig?.rules?.anti_everyone_here;
-    const current = (ruleEveryone?.enabled !== false) && (secConfig?.automod?.antiEveryoneEnabled !== false);
+    const amMod = modules.find((m: any) => m.id === 'automod');
+    const amConfig = { ...(amMod?.config || {}) };
+    const effectiveAmConfig = { ...(secConfig?.automod || {}), ...amConfig };
+    const current = effectiveAmConfig.antiEveryoneEnabled !== false;
     const next = !current;
 
-    secConfig.rules.anti_everyone_here = { ...(secConfig.rules.anti_everyone_here || {}), enabled: next };
+    amConfig.antiEveryoneEnabled = next;
+    context.updateModuleConfig('automod', amConfig);
+
     secConfig.automod = secConfig.automod || {};
     secConfig.automod.antiEveryoneEnabled = next;
     context.updateModuleConfig('security', secConfig);
-
-    const amMod = modules.find((m: any) => m.id === 'automod');
-    const amConfig = { ...(amMod?.config || {}) };
-    amConfig.antiEveryoneEnabled = next;
-    context.updateModuleConfig('automod', amConfig);
 
     context.logSyncEvent?.(`[AutoMod GUI] Anti-Ping toggled to ${next ? 'ON' : 'OFF'} by ${interaction.user.username}.`, next ? 'success' : 'warn');
 
@@ -2167,7 +2203,11 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
       context.toggleModule('logging', true);
       context.toggleModule('backups', true);
     }
-    const currentSec = { ...secConfig, antiNukeEnabled: true, prebotEnabled: true };
+    const armedRules = { ...(secConfig.rules || {}) };
+    for (const k of Object.values(categoryRules).flat()) {
+      armedRules[k] = { limit: 1, window: 1, action: 'kick', recovery: true, ...(armedRules[k] || {}), enabled: true };
+    }
+    const currentSec = { ...secConfig, antiNukeEnabled: true, prebotEnabled: true, rules: armedRules };
     if (context?.updateModuleConfig) {
       context.updateModuleConfig('security', currentSec);
     }
@@ -2345,8 +2385,6 @@ export const SecurityManifest: ModuleManifest = {
           options: [
             { name: 'rule', type: 3, description: 'Module rule name (e.g. anti_role_grant, anti_channel_delete)', required: true },
             { name: 'enabled', type: 5, description: 'Enable or disable rule', required: false },
-            { name: 'limit', type: 4, description: 'Action threshold limit', required: false },
-            { name: 'window', type: 4, description: 'Time window in seconds', required: false },
             {
               name: 'action', type: 3, description: 'Punishment action', required: false, choices: [
                 { name: 'Quarantine', value: 'quarantine' },
@@ -3378,8 +3416,8 @@ export const SecurityManifest: ModuleManifest = {
         if (sub === 'config-rule') {
           const ruleInput = interaction.options.getString('rule', true);
           const enabledOpt = interaction.options.getBoolean('enabled');
-          const limitOpt = interaction.options.getInteger('limit');
-          const windowOpt = interaction.options.getInteger('window');
+          const limitOpt = null; // threshold fixed at 1/1
+          const windowOpt = null;
           const actionOpt = interaction.options.getString('action');
           const reversionOpt = interaction.options.getBoolean('reversion');
 
@@ -3390,9 +3428,7 @@ export const SecurityManifest: ModuleManifest = {
           const updatedRule = {
             ...existingRule,
             ...(enabledOpt !== null && enabledOpt !== undefined ? { enabled: enabledOpt } : {}),
-            ...(limitOpt !== null && limitOpt !== undefined ? { limit: limitOpt } : {}),
-            ...(windowOpt !== null && windowOpt !== undefined ? { window: windowOpt } : {}),
-            ...(actionOpt ? { action: actionOpt } : {}),
+                        ...(actionOpt ? { action: actionOpt } : {}),
             ...(reversionOpt !== null && reversionOpt !== undefined ? { recovery: reversionOpt } : {})
           };
 
@@ -3410,7 +3446,7 @@ export const SecurityManifest: ModuleManifest = {
                 title: '<:config:1532425712844144701> UPDATED CONFIGURATION PARAMETERS',
                 items: [
                   `Status: ${updatedRule.enabled ? '<:ticks:1532620580266836148> ENABLED' : '<a:warning:1546155193303957504> DISABLED'}`,
-                  `Rate Threshold: \`${updatedRule.limit} actions / ${updatedRule.window} seconds\``,
+                  `Threshold: \`Instant (1/1, fixed)\``,
                   `Punishment Action: \`${updatedRule.action.toUpperCase()}\``,
                   `Automatic Reversion: \`${updatedRule.recovery ? 'ENABLED (Auto-Rollback)' : 'DISABLED'}\``
                 ]
@@ -5758,56 +5794,7 @@ export const SecurityManifest: ModuleManifest = {
         const automodConfig = automodModule?.config || {};
         const isAutoModDisabled = automodModule && (automodModule.status === 'disabled' || automodConfig.autoModEnabled === false);
 
-        // ─────────────────────────────────────────────────────────────────────────────
-        // ANTI-EVERYONE & ANTI-HERE MENTION PROTECTION MODULE
-        // ─────────────────────────────────────────────────────────────────────────────
-        const hasEveryoneOrHere = message.mentions?.everyone === true ||
-          ((Boolean(message.webhookId) || Boolean(message.author?.bot)) && (message.content?.includes('@everyone') || message.content?.includes('@here')));
-        if (hasEveryoneOrHere) {
-          const ruleEveryone = getEffectiveRule(config.rules, 'anti_everyone_here', config);
-          const isEveryoneActive = ruleEveryone.enabled &&
-            (config.antiNukeEnabled !== false) &&
-            (automodConfig.antiEveryoneEnabled !== false);
-
-          if (isEveryoneActive) {
-            const isBypassed = await isExecutorBypassed(guild, message.author.id, config, context, 'anti_everyone_here');
-            if (!isBypassed) {
-              // Mark handled so AutoMod does not double-process the same message
-              (message as any)._securityHandled = true;
-              // Delete offending mention message immediately
-              await message.delete().catch(() => { });
-
-              if (message.webhookId) {
-                // ZERO-TRUST WEBHOOK DEFENSE: Delete rogue webhook sending unauthorized mass pings
-                context.logSyncEvent(guild.id, ` [Anti-Everyone Webhook Defense]: Deleted unauthorized webhook @everyone/@here ping (Webhook ID: ${message.webhookId}).`, 'warn');
-                try {
-                  const hooks = await guild.fetchWebhooks().catch(() => null);
-                  const hook = hooks?.get(message.webhookId);
-                  if (hook) {
-                    await hook.delete('Anti-Nuke: Unauthorized Webhook Mention/Spam').catch(() => { });
-                    context.logSyncEvent(guild.id, ` [Anti-Everyone Webhook Defense]: Quarantined and deleted rogue webhook "${hook.name}".`, 'success');
-                  }
-                } catch { }
-                return;
-              }
-
-              if (message.author.bot) {
-                // ZERO-TRUST BOT DEFENSE: Instant permanent ban for rogue bot mass pinging @everyone/@here
-                context.logSyncEvent(guild.id, ` [Anti-Everyone Zero-Trust]: Deleted @everyone/@here ping & banning unwhitelisted bot ${message.author.username}.`, 'warn');
-                await revokeBotAndPurgeRoles(guild, message.author.id, message.author.username, 'Instant Ban for Unauthorized @everyone/@here Mention', client, context);
-                await restoreFromLiveSnapshot(guild, client, context).catch(() => { });
-                return;
-              }
-
-              const triggered = checkRateLimit(guild.id, message.author.id, 'anti_everyone_here', ruleEveryone.limit, ruleEveryone.window);
-              if (triggered) {
-                context.logSyncEvent(guild.id, ` [Anti-Everyone Triggered]: Deleted @everyone/@here ping by ${message.author.username}. Action: ${ruleEveryone.action}`, 'warn');
-                await punishViolator(client, guild, message.author.id, message.author.username, 'Anti-Nuke: Unauthorized @everyone/@here Mention', ruleEveryone.action, config, context, 'anti_everyone_here');
-                return;
-              }
-            }
-          }
-        }
+        // Anti-Everyone & Anti-Ping tag filtering is handled 100% standalone inside AutoMod pipeline.
       }
     }
   ],
@@ -6228,8 +6215,6 @@ export const SecurityManifest: ModuleManifest = {
         const updatedRule = {
           ...existingRule,
           ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}),
-          ...(limit !== undefined ? { limit: Number(limit) } : {}),
-          ...(rateWindow !== undefined ? { window: Number(rateWindow) } : {}),
           ...(action !== undefined ? { action: String(action) } : {}),
           ...(recovery !== undefined ? { recovery: Boolean(recovery) } : {})
         };

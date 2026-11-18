@@ -6,10 +6,8 @@ import { PrefixRegistry } from '../../core/prefix/PrefixRegistry.js';
 const reminderTimers: Map<string, NodeJS.Timeout> = new Map();
 
 function parseMs(str: string): number {
-  if (!str) return 0;
-  const unit = str.slice(-1).toLowerCase();
-  const val = parseInt(str, 10);
-  if (isNaN(val) || val <= 0) return 0;
+  const unit = str.slice(-1);
+  const val = parseInt(str);
   if (unit === 's') return val * 1000;
   if (unit === 'm') return val * 60_000;
   if (unit === 'h') return val * 3_600_000;
@@ -18,32 +16,8 @@ function parseMs(str: string): number {
   return val * 60_000;
 }
 
-function scheduleReminderTimeout(client: any, reminder: IReminder, context: any) {
-  const existing = reminderTimers.get(reminder.id);
-  if (existing) {
-    clearTimeout(existing);
-    reminderTimers.delete(reminder.id);
-  }
-  const targetMs = new Date(reminder.remindAt).getTime();
-  const remaining = targetMs - Date.now();
-  const MAX_HOP_MS = 2_000_000_000;
-  if (remaining > MAX_HOP_MS) {
-    const timer = setTimeout(() => {
-      scheduleReminderTimeout(client, reminder, context);
-    }, MAX_HOP_MS);
-    reminderTimers.set(reminder.id, timer);
-  } else {
-    const timer = setTimeout(() => {
-      reminderTimers.delete(reminder.id);
-      fireReminder(client, reminder, context);
-    }, Math.max(0, remaining));
-    reminderTimers.set(reminder.id, timer);
-  }
-}
-
 async function fireReminder(client: any, reminder: IReminder, context: any) {
   try {
-    reminderTimers.delete(reminder.id);
     const user = await client.users.fetch(reminder.userId).catch(() => null);
     if (!user) return;
 
@@ -73,10 +47,10 @@ async function fireReminder(client: any, reminder: IReminder, context: any) {
     const reminders: IReminder[] = rMod.config?.reminders || [];
     if (reminder.repeat) {
       const newRemindAt = new Date(Date.now() + parseMs(reminder.repeat === 'daily' ? '1d' : reminder.repeat === 'weekly' ? '7d' : '30d'));
-      const updatedReminder = { ...reminder, remindAt: newRemindAt };
-      const updated = reminders.map(r => r.id === reminder.id ? updatedReminder : r);
+      const updated = reminders.map(r => r.id === reminder.id ? { ...r, remindAt: newRemindAt } : r);
       context.updateModuleConfig('reminders', { reminders: updated });
-      scheduleReminderTimeout(client, updatedReminder, context);
+      const timer = setTimeout(() => fireReminder(client, { ...reminder, remindAt: newRemindAt }, context), newRemindAt.getTime() - Date.now());
+      reminderTimers.set(reminder.id, timer);
     } else {
       context.updateModuleConfig('reminders', { reminders: reminders.filter(r => r.id !== reminder.id) });
     }
@@ -143,12 +117,7 @@ export const RemindersManifest: ModuleManifest = {
     {
       name: 'command_remind',
       handler: async (client: any, interaction: any, context: any) => {
-        const rawArgs: string[] = interaction.parsed?.args || [];
-        let sub = interaction.options?.getSubcommand?.(false) || rawArgs[0]?.toLowerCase() || 'list';
-        if (!['set', 'list', 'cancel', 'snooze', 'clear'].includes(sub)) {
-          if (rawArgs.length >= 2) sub = 'set';
-          else sub = 'list';
-        }
+        const sub = interaction.options.getSubcommand(false);
         const modules = context.getModulesState ? context.getModulesState() : [];
         const rMod = modules.find((m: any) => m.id === 'reminders');
 
@@ -160,10 +129,9 @@ export const RemindersManifest: ModuleManifest = {
         const saveReminders = (updated: IReminder[]) => context.updateModuleConfig('reminders', { reminders: updated });
 
         if (sub === 'set') {
-          const argOffset = rawArgs[0]?.toLowerCase() === 'set' ? 1 : 0;
-          const timeStr = interaction.options?.getString?.('time') || rawArgs[argOffset] || '';
-          const message = interaction.options?.getString?.('message') || rawArgs.slice(argOffset + 1).join(' ') || 'Reminder';
-          const repeat = interaction.options?.getString?.('repeat') || null;
+          const timeStr = interaction.options.getString('time');
+          const message = interaction.options.getString('message');
+          const repeat = interaction.options.getString('repeat') || null;
           const ms = parseMs(timeStr);
 
           if (ms < 5000) return interaction.reply({ content: '<a:warning:1546155193303957504> Minimum reminder time is 5 seconds.', flags: 64 });
@@ -188,7 +156,8 @@ export const RemindersManifest: ModuleManifest = {
           reminders.push(reminder);
           saveReminders(reminders);
 
-          scheduleReminderTimeout(client, reminder, context);
+          const timer = setTimeout(() => fireReminder(client, reminder, context), ms);
+          reminderTimers.set(reminder.id, timer);
 
           const embed = new EmbedBuilder()
             .setTitle('<a:loading:1546134304625528882> Reminder Set!')
@@ -211,7 +180,7 @@ export const RemindersManifest: ModuleManifest = {
         }
 
         if (sub === 'cancel') {
-          const id = interaction.options?.getString?.('id') || rawArgs[1];
+          const id = interaction.options.getString('id');
           const rem = reminders.find(r => r.id === id && r.userId === interaction.user.id);
           if (!rem) return interaction.reply({ content: `<a:warning:1546155193303957504> Reminder \`${id}\` not found.`, flags: 64 });
           const existing = reminderTimers.get(id);
@@ -221,23 +190,21 @@ export const RemindersManifest: ModuleManifest = {
         }
 
         if (sub === 'snooze') {
-          const id = interaction.options?.getString?.('id') || rawArgs[1];
-          const timeStr = interaction.options?.getString?.('time') || rawArgs[2] || '';
+          const id = interaction.options.getString('id');
+          const timeStr = interaction.options.getString('time');
           const rem = reminders.find(r => r.id === id && r.userId === interaction.user.id);
           if (!rem) return interaction.reply({ content: `<a:warning:1546155193303957504> Reminder \`${id}\` not found.`, flags: 64 });
-
-          const ms = parseMs(timeStr);
-          if (ms < 5000) return interaction.reply({ content: '<a:warning:1546155193303957504> Minimum snooze time is 5 seconds.', flags: 64 });
 
           const existing = reminderTimers.get(id);
           if (existing) { clearTimeout(existing); reminderTimers.delete(id); }
 
+          const ms = parseMs(timeStr);
           const newRemindAt = new Date(Date.now() + ms);
-          const updatedReminder = { ...rem, remindAt: newRemindAt };
-          const updated = reminders.map(r => r.id === id ? updatedReminder : r);
+          const updated = reminders.map(r => r.id === id ? { ...r, remindAt: newRemindAt } : r);
           saveReminders(updated);
 
-          scheduleReminderTimeout(client, updatedReminder, context);
+          const timer = setTimeout(() => fireReminder(client, { ...rem, remindAt: newRemindAt }, context), ms);
+          reminderTimers.set(id, timer);
 
           return interaction.reply({ content: `<:ticks:1532620580266836148> Snoozed reminder \`${id}\` for **${timeStr}**! Will remind you <t:${Math.floor(newRemindAt.getTime() / 1000)}:R>.`, flags: 64 });
         }
@@ -267,7 +234,8 @@ export const RemindersManifest: ModuleManifest = {
           if (ms <= 0) {
             fireReminder(client, r, context);
           } else {
-            scheduleReminderTimeout(client, r, context);
+            const timer = setTimeout(() => fireReminder(client, r, context), ms);
+            reminderTimers.set(r.id, timer);
           }
         }
         if (reminders.length > 0) context.logSyncEvent(`[Reminders] Restored ${reminders.length} reminder(s) after startup.`, 'info');
@@ -344,7 +312,8 @@ export const RemindersManifest: ModuleManifest = {
         context.updateModuleConfig('reminders', { reminders });
 
         if (client) {
-          scheduleReminderTimeout(client, reminder as any, context);
+          const timer = setTimeout(() => fireReminder(client, reminder, context), ms);
+          reminderTimers.set(reminder.id, timer);
         }
 
         context.logSyncEvent(`[Reminders] Dashboard scheduled reminder for ${userTag}: ${message.substring(0, 50)}`, 'success');

@@ -127,6 +127,77 @@ class ProcessManager {
     });
   }
 
+  // ─── MUSIC BOT ─────────────────────────────────────────────────────────────
+
+  async spawnMusicBot(basePath) {
+    let musicPath = path.resolve(basePath, this.config.paths?.musicBot || 'clutch-music');
+    if (!fs.existsSync(musicPath)) {
+      musicPath = path.resolve(basePath, 'CLUTCH NATION', 'clutch-music');
+    }
+    this.logger.info(`Starting music bot from: ${musicPath}`);
+
+    return new Promise((resolve, reject) => {
+      const envFile = path.join(musicPath, '.env');
+      if (!fs.existsSync(envFile)) {
+        return reject(new Error(`Music bot .env not found at: ${envFile}`));
+      }
+
+      let tsxCli = this._resolveCliScript(basePath, 'clutch-music', 'node_modules/tsx/dist/cli.mjs');
+      if (!fs.existsSync(tsxCli)) {
+        tsxCli = path.resolve(musicPath, 'node_modules/tsx/dist/cli.mjs');
+      }
+
+      const proc = spawn('node', [tsxCli, 'src/index.ts'], {
+        cwd: musicPath,
+        env: { ...process.env, FORCE_COLOR: '0' },
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      this.processes.musicBot = proc;
+      let resolved = false;
+
+      const onData = (data) => {
+        const text = data.toString();
+        this.logger.info(`[MUSIC] ${text.trim()}`);
+        this.onEvent('music:log', text.trim());
+
+        if (!resolved && (text.includes('Ready') || text.includes('Logged in') || text.includes('bootstrap sequence initiated') || text.includes('Gateway connected'))) {
+          resolved = true;
+          resolve(proc);
+        }
+      };
+
+      proc.stdout.on('data', onData);
+      proc.stderr.on('data', (data) => {
+        const text = data.toString();
+        this.logger.debug(`[MUSIC:STDERR] ${text.trim()}`);
+        this.onEvent('music:log', text.trim());
+      });
+
+      proc.on('error', (err) => {
+        this.logger.error(`Music bot spawn error: ${err.message}`);
+        if (!resolved) reject(err);
+      });
+
+      proc.on('exit', (code, signal) => {
+        this.logger.warn(`Music bot exited (code=${code}, signal=${signal})`);
+        this.processes.musicBot = null;
+        this.onEvent('music:crashed', { code, signal });
+        if (!this.shuttingDown) {
+          this._handleCrash('musicBot', basePath);
+        }
+      });
+
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(proc);
+        }
+      }, 5000);
+    });
+  }
+
   // ─── DASHBOARD (Vite dev server) ─────────────────────────────────────────────
 
   async spawnDashboard(basePath) {

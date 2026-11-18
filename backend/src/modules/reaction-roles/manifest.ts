@@ -72,22 +72,15 @@ export function buildPublicReactionRolesPanel(guild: any, roleMap: Record<string
   // Create Clean Numbered / Named ActionRow Buttons (Text only, no emojis)
   const actionRows: ActionRowBuilder<ButtonBuilder>[] = [];
   let currentRow = new ActionRowBuilder<ButtonBuilder>();
-  const seenRoles = new Set<string>();
-  const uniqueEntries = entries.filter(([, roleId]) => {
-    const rId = String(roleId);
-    if (seenRoles.has(rId)) return false;
-    seenRoles.add(rId);
-    return true;
-  }).slice(0, 25);
 
-  uniqueEntries.forEach(([emoji, roleId], idx) => {
+  entries.forEach(([emoji, roleId], idx) => {
     const role = guild.roles.cache.get(roleId as string);
     const numStr = (idx + 1).toString().padStart(2, '0');
 
     let btnLabel = numStr;
-    if (uniqueEntries.length <= 5 && role?.name) {
+    if (entries.length <= 5 && role?.name) {
       btnLabel = `${numStr} • ${role.name.slice(0, 20)}`;
-    } else if (uniqueEntries.length <= 10 && role?.name) {
+    } else if (entries.length <= 10 && role?.name) {
       btnLabel = role.name.slice(0, 25);
     }
 
@@ -98,7 +91,7 @@ export function buildPublicReactionRolesPanel(guild: any, roleMap: Record<string
 
     currentRow.addComponents(btn);
 
-    if (currentRow.components.length === 5 || idx === uniqueEntries.length - 1) {
+    if (currentRow.components.length === 5 || idx === entries.length - 1) {
       actionRows.push(currentRow);
       currentRow = new ActionRowBuilder<ButtonBuilder>();
     }
@@ -224,14 +217,7 @@ export async function handleReactionRolesGuiInteraction(client: any, interaction
       components: actionRows,
       files: files.length > 0 ? files : undefined
     });
-    context.updateModuleConfig('reaction_roles', {
-      ...(rrMod?.config || {}),
-      roleMap,
-      channelId: interaction.channel.id,
-      panelMessageId: msg.id
-    });
-    for (const [emoji, roleId] of entries) {
-      if (emoji === roleId) continue;
+    for (const [emoji] of entries) {
       const reactionKey = parseReactionEmoji(emoji as string);
       await msg.react(reactionKey).catch(() => msg.react(emoji as string).catch(() => null));
     }
@@ -263,14 +249,17 @@ export async function handleReactionRolesGuiInteraction(client: any, interaction
 
   // 4. Remove Role Picked
   if (customId === 'rr_gui_remove_pick') {
+    await interaction.deferUpdate().catch(() => {});
     const keyToRemove = interaction.values?.[0];
     if (keyToRemove && roleMap[keyToRemove]) {
       delete roleMap[keyToRemove];
-      context.updateModuleConfig('reaction_roles', { ...(rrMod?.config || {}), roleMap });
+      context.updateModuleConfig('reaction_roles', { roleMap });
       context.logSyncEvent(`[ReactionRoles] Removed role key ${keyToRemove} via GUI.`, 'info');
       const payload = buildReactionRoleAdminDashboardGUI(interaction.guild, roleMap, client);
-      await interaction.update(payload).catch(() => {});
-      return interaction.followUp({ content: `${VERIFIED_ICON} Successfully removed role mapping!`, flags: 64 }).catch(() => {});
+      if (interaction.message?.interaction?.id || interaction.message?.editable) {
+        await interaction.message.edit(payload).catch(() => {});
+      }
+      return interaction.followUp({ content: `${VERIFIED_ICON} Successfully removed role mapping!`, flags: 64 });
     }
   }
 
@@ -437,16 +426,9 @@ export const ReactionRolesManifest: ModuleManifest = {
               components: actionRows,
               files: files.length > 0 ? files : undefined
             });
-            context.updateModuleConfig('reaction_roles', {
-              ...(rrMod?.config || {}),
-              roleMap,
-              channelId: channel.id,
-              panelMessageId: msg.id
-            });
             
             // Also react to message with custom emojis if configured for dual interaction
-            for (const [emoji, roleId] of entries) {
-              if (emoji === roleId) continue;
+            for (const [emoji] of entries) {
               const reactionKey = parseReactionEmoji(emoji as string);
               await msg.react(reactionKey).catch(() => msg.react(emoji as string).catch(() => null));
             }
@@ -504,28 +486,23 @@ export const ReactionRolesManifest: ModuleManifest = {
       handler: async (client: any, reaction: any, user: any, context: any) => {
         if (user.bot) return;
         if (reaction.partial) await reaction.fetch().catch(() => {});
-        if (reaction.message?.partial) await reaction.message.fetch().catch(() => {});
-        if (reaction.message?.author?.id && reaction.message.author.id !== client.user?.id) return;
-
         const modules = context.getModulesState ? context.getModulesState(reaction.message?.guild?.id) : [];
         const rrMod = modules.find((m: any) => m.id === 'reaction_roles');
         if (!rrMod) return;
 
-        const config = rrMod.config || {};
-        if (config.panelMessageId && reaction.message?.id !== config.panelMessageId) return;
-        if (!config.panelMessageId && config.channelId && reaction.message?.channelId !== config.channelId) return;
-
-        const roleMap = config.roleMap || {};
+        const roleMap = rrMod.config?.roleMap || {};
         const emojiKey = reaction.emoji.id ? `${reaction.emoji.name}:${reaction.emoji.id}` : reaction.emoji.name;
-        const customFull = reaction.emoji.id ? `<:${reaction.emoji.name}:${reaction.emoji.id}>` : undefined;
-        const customAnim = reaction.emoji.id ? `<a:${reaction.emoji.name}:${reaction.emoji.id}>` : undefined;
-
-        const roleId =
-          roleMap[emojiKey] ||
-          (reaction.emoji.name ? roleMap[reaction.emoji.name] : undefined) ||
-          (reaction.emoji.id ? roleMap[reaction.emoji.id] : undefined) ||
-          (customFull ? roleMap[customFull] : undefined) ||
-          (customAnim ? roleMap[customAnim] : undefined);
+        
+        let roleId = roleMap[emojiKey] || roleMap[reaction.emoji.name] || roleMap[reaction.emoji.id];
+        
+        if (!roleId) {
+          for (const [key, rId] of Object.entries(roleMap)) {
+            if (key.includes(reaction.emoji.name) || (reaction.emoji.id && key.includes(reaction.emoji.id))) {
+              roleId = rId as string;
+              break;
+            }
+          }
+        }
 
         if (roleId) {
           try {
@@ -546,28 +523,23 @@ export const ReactionRolesManifest: ModuleManifest = {
       handler: async (client: any, reaction: any, user: any, context: any) => {
         if (user.bot) return;
         if (reaction.partial) await reaction.fetch().catch(() => {});
-        if (reaction.message?.partial) await reaction.message.fetch().catch(() => {});
-        if (reaction.message?.author?.id && reaction.message.author.id !== client.user?.id) return;
-
         const modules = context.getModulesState ? context.getModulesState(reaction.message?.guild?.id) : [];
         const rrMod = modules.find((m: any) => m.id === 'reaction_roles');
         if (!rrMod) return;
 
-        const config = rrMod.config || {};
-        if (config.panelMessageId && reaction.message?.id !== config.panelMessageId) return;
-        if (!config.panelMessageId && config.channelId && reaction.message?.channelId !== config.channelId) return;
-
-        const roleMap = config.roleMap || {};
+        const roleMap = rrMod.config?.roleMap || {};
         const emojiKey = reaction.emoji.id ? `${reaction.emoji.name}:${reaction.emoji.id}` : reaction.emoji.name;
-        const customFull = reaction.emoji.id ? `<:${reaction.emoji.name}:${reaction.emoji.id}>` : undefined;
-        const customAnim = reaction.emoji.id ? `<a:${reaction.emoji.name}:${reaction.emoji.id}>` : undefined;
-
-        const roleId =
-          roleMap[emojiKey] ||
-          (reaction.emoji.name ? roleMap[reaction.emoji.name] : undefined) ||
-          (reaction.emoji.id ? roleMap[reaction.emoji.id] : undefined) ||
-          (customFull ? roleMap[customFull] : undefined) ||
-          (customAnim ? roleMap[customAnim] : undefined);
+        
+        let roleId = roleMap[emojiKey] || roleMap[reaction.emoji.name] || roleMap[reaction.emoji.id];
+        
+        if (!roleId) {
+          for (const [key, rId] of Object.entries(roleMap)) {
+            if (key.includes(reaction.emoji.name) || (reaction.emoji.id && key.includes(reaction.emoji.id))) {
+              roleId = rId as string;
+              break;
+            }
+          }
+        }
 
         if (roleId) {
           try {

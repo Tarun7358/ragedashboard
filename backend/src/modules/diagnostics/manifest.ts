@@ -3,7 +3,6 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, EmbedB
 import fs from 'fs';
 import { Colors, Embeds, buildLimeOverviewCard, fmt, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, MEMBER_ICON, BOT_ICON, INFO_ICON } from '../../core/UIFactory.js';
 import { UptimeBroadcaster } from '../../services/UptimeBroadcaster.js';
-import { Database } from '../../core/Database.js';
 
 function getPingStatus(ms: number) {
   if (ms < 100) return `${VERIFIED_ICON} Ultra Fast`;
@@ -243,7 +242,7 @@ export const DiagnosticsManifest: ModuleManifest = {
 
         if (sub === 'database') {
           try {
-            const db = context?.db || Database.getDb();
+            const db = context.db;
             const status = db ? `${VERIFIED_ICON} Operational` : `${WRONG_ICON} Offline / Unavailable`;
             const embed = buildLimeOverviewCard({
               title: 'DATABASE ENGINE STATUS',

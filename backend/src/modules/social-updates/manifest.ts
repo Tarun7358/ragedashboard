@@ -272,14 +272,22 @@ export const SocialUpdatesManifest: ModuleManifest = {
           const payload = await buildSocialDashboardGUI(interaction.guild);
           return interaction.reply(payload);
         } else if (action === 'forcecheck') {
-          const scheduler = getScheduler(client, context?.logSyncEvent);
-          await scheduler.forceCheckGuild(guildId);
-          const embed = new EmbedBuilder()
-            .setTitle('<:ticks:1532620580266836148> Global Force Check Initiated')
-            .setDescription('Force check triggered globally across all registered social media subscriptions.')
-            .setColor(0x99CC00)
-            .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
-          return interaction.reply({ embeds: [embed], flags: 64 });
+          if (_scheduler) {
+            _scheduler.triggerImmediateCheck();
+            const embed = new EmbedBuilder()
+              .setTitle('<:ticks:1532620580266836148> Global Force Check Initiated')
+              .setDescription('Force check triggered globally across all registered social media subscriptions.')
+              .setColor(0x99CC00)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            return interaction.reply({ embeds: [embed], flags: 64 });
+          } else {
+            const embed = new EmbedBuilder()
+              .setTitle('<a:warning:1546155193303957504> Scheduler Error')
+              .setDescription('Scheduler process is currently offline or not initialized.')
+              .setColor(0xEF4444)
+              .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
+            return interaction.reply({ embeds: [embed], flags: 64 });
+          }
         } else if (action === 'validate') {
           await interaction.deferReply({ flags: 64 });
           const subs = await SocialSubscriptionRepository.findAll(guildId);
@@ -307,7 +315,6 @@ export const SocialUpdatesManifest: ModuleManifest = {
               { name: 'Avg Delivery Time', value: `${analytics.avgDeliveryTimeMs}ms`, inline: true }
             )
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
-          return interaction.reply({ embeds: [embed], flags: 64 });
         } else if (action === 'connect') {
           const rawArgs = context?.parsed?.args || [];
           let username = interaction.options?.getString?.('source') || '';
@@ -643,19 +650,18 @@ export const SocialUpdatesManifest: ModuleManifest = {
             return interaction.editReply({ content: `${WRONG_ICON} Subscription not found.` });
           }
 
-          const sampleData = {
-            ...TemplateEngine.getSampleData(sub.provider as 'youtube' | 'instagram'),
-            'channel.name': sub.sourceName,
-            'profile.name': sub.sourceName,
-            'profile.username': sub.sourceName,
-            'video.title': 'Sample Test Broadcast — Live Preview',
-            'post.title': 'Sample Test Broadcast — Live Preview',
-            'post.caption': 'Sample Test Broadcast — Live Preview'
+          const sampleItem = {
+            id: `test_${Date.now()}`,
+            title: `[TEST ALERT] New ${sub.provider.toUpperCase()} Content Uploaded`,
+            url: sub.provider === 'youtube' ? 'https://youtube.com' : 'https://instagram.com',
+            publishedAt: new Date().toISOString(),
+            authorName: sub.sourceName,
+            type: 'video'
           };
 
           const embedConf = JSON.parse(sub.embedConfig || '{}');
           const roles = JSON.parse(sub.mentionRoles || '[]');
-          await NotificationService.send(client, sub.discordChannelId, { ...embedConf, mentionRoles: roles }, sampleData);
+          await NotificationService.send(client, sub.discordChannelId, { ...embedConf, mentionRoles: roles }, sampleItem);
 
           return interaction.editReply({
             content: `${VERIFIED_ICON} Test alert successfully sent to <#${sub.discordChannelId}>!`
@@ -1064,16 +1070,9 @@ export const SocialUpdatesManifest: ModuleManifest = {
       method: 'get',
       isPublic: true,
       handler: async (req: any, res: any, _context: any) => {
-        const escHtml = (str: any) =>
-          String(str || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-        const guildId = escHtml(req.query.guildId || '');
-        const username = escHtml(req.query.username || '');
-        const channelId = escHtml(req.query.channelId || '');
+        const guildId = req.query.guildId || '';
+        const username = req.query.username || '';
+        const channelId = req.query.channelId || '';
 
         const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1409,14 +1408,15 @@ export function registerSocialUpdatesCommands(): void {
       }
 
       if (action === 'forcecheck') {
-        const scheduler = getScheduler(message.client, context?.logSyncEvent);
-        await scheduler.forceCheckGuild(guildId);
-        const embed = new EmbedBuilder()
-          .setTitle('<:ticks:1532620580266836148> Global Force Check Initiated')
-          .setDescription('Force check triggered globally across all registered social media subscriptions.')
-          .setColor(0x99CC00)
-          .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
-        return message.reply({ embeds: [embed] });
+        if (_scheduler) {
+          _scheduler.triggerImmediateCheck();
+          const embed = new EmbedBuilder()
+            .setTitle('<:ticks:1532620580266836148> Global Force Check Initiated')
+            .setDescription('Force check triggered globally across all registered social media subscriptions.')
+            .setColor(0x99CC00)
+            .setFooter({ text: 'Rage Optimiser • Social Updates Engine' });
+          return message.reply({ embeds: [embed] });
+        }
       }
 
       if (action === 'validate') {

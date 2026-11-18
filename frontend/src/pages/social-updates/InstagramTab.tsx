@@ -300,11 +300,11 @@ export function InstagramTab({ guildId, token, channels, roles, onSaveConfig }: 
       {!loading && subscriptions.length === 0 && loaded && (
         <div style={{
           textAlign: 'center', padding: '48px 24px',
-          background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.08)',
+          background: '#FAFAFC', border: '1px dashed #E4E4E8',
           borderRadius: 12, color: 'var(--text-muted)'
         }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>📸</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>No Instagram profiles configured</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>No Instagram profiles configured</div>
           <div style={{ fontSize: 13 }}>Add a profile above to start receiving notifications.</div>
         </div>
       )}
@@ -312,7 +312,7 @@ export function InstagramTab({ guildId, token, channels, roles, onSaveConfig }: 
       {subscriptions.map(sub => (
         <div key={sub.id} className="section-panel" style={{ padding: 0, overflow: 'hidden' }}>
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: 'rgba(0,0,0,0.15)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: '#F8F8FA', borderBottom: '1px solid #E4E4E8' }}>
             <div style={{
               width: 44, height: 44, borderRadius: '50%',
               background: 'linear-gradient(135deg, #F9CE34, #EE2A7B, #6228D7)',

@@ -158,7 +158,7 @@ export async function createBackupData(guild: any, creatorTag: string): Promise<
   const everyoneRole = guild.roles?.everyone || rolesCollection?.get?.(guild.id) || rolesList.find((r: any) => r && (r.name === '@everyone' || r.id === guild.id));
   const everyonePermissions = everyoneRole?.permissions?.bitfield?.toString() || null;
 
-  const backupChannels = channelsList.filter((c: any) => c).map((c: any) => {
+  const backupChannels = channelsList.filter((c: any) => c && c.name !== '___hidden___').map((c: any) => {
     const rawOverwrites = c.permissionOverwrites?.cache
       ? Array.from(c.permissionOverwrites.cache.values())
       : (Array.isArray(c.permissionOverwrites) ? c.permissionOverwrites : (c.permissionOverwrites?.values ? Array.from(c.permissionOverwrites.values()) : []));

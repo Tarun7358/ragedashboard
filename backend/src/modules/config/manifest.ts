@@ -42,7 +42,6 @@ export const DEFAULT_SECURITY_RULES: Record<string, { enabled: boolean; limit: n
   anti_sticker_create: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
   anti_sticker_delete: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
   anti_sticker_update: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
-  anti_everyone_here: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
   anti_invite_create: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
   anti_integration: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
   anti_member_unban: { enabled: true, limit: 1, window: 1, action: 'kick', recovery: true },
@@ -150,8 +149,11 @@ export function getEffectiveRule(rules: any, ruleKey: string, secConfig?: any): 
   };
   // Zero-tolerance enforcement for critical Anti-Nuke rules: always trigger on 1st unauthorized action
   // and ensure unwhitelisted Administrators are kicked (or banned if configured as ban) instead of failing timeout
+  // Anti-Nuke is fixed at 1/1: no stored, imported, API or slash-command value can override it.
+  // Only anti_link (AutoMod content filter) keeps its configurable limit/window.
   if (normalizedKey !== 'anti_link') {
     merged.limit = 1;
+    merged.window = 1;
   }
   const CRITICAL_KICK_RULES = new Set([
     'anti_ban',
@@ -176,13 +178,12 @@ export function buildSecuritySelectMenu(currentValue?: string): ActionRowBuilder
     .setPlaceholder('Navigate Security, Anti-Nuke & AutoMod Systems...')
     .addOptions([
       { label: 'Security Hub Overview', value: 'group_hub', description: 'Master Status, Threat Scores & Quick Toggles' },
-      { label: 'Role Protections', value: 'group_roles', description: 'Anti-Role Create, Delete, Update, Grant, Revoke' },
-      { label: 'Channel Protections', value: 'group_channels', description: 'Anti-Channel Create, Delete, Update' },
-      { label: 'Member & Mod Protections', value: 'group_members', description: 'Anti-Ban, Anti-Kick, Anti-Timeout, Bot Add, Prune' },
-      { label: 'Server & Asset Protections', value: 'group_server', description: 'Webhooks, Guild Updates, Emojis, Stickers' },
+      { label: 'Role Protections (5 Rules)', value: 'group_roles', description: 'Anti-Role Create, Delete, Update, Grant, Revoke' },
+      { label: 'Channel Protections (3 Rules)', value: 'group_channels', description: 'Anti-Channel Create, Delete, Update' },
+      { label: 'Member & Mod Protections (7 Rules)', value: 'group_members', description: 'Anti-Ban, Anti-Kick, Anti-Timeout, Bot Add, Prune' },
+      { label: 'Server & Asset Protections (12 Rules)', value: 'group_server', description: 'Webhooks, Guild Updates, Emojis, Stickers' },
       { label: 'AutoMod & Content Filters', value: 'group_automod', description: 'Anti-Link, Anti-Spam, Mass Pings, Blacklist' },
       { label: 'Threat Punishment Policies', value: 'group_punishments', description: 'Configure Quarantine, Kick, Ban, Strip Roles' },
-      { label: 'Security Profiles & Presets', value: 'group_presets', description: 'Strict, Standard, Relaxed & Aggressive Profiles' },
       { label: 'Whitelist & Clearance Management', value: 'group_whitelist', description: 'Extra Owners & Whitelisted Members Overview' }
     ]);
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
@@ -197,9 +198,8 @@ export function buildAntiNukeSelectMenu(currentValue?: string): ActionRowBuilder
       { label: 'Role Protections (5 Rules)', value: 'group_roles', description: 'Anti-Role Create, Delete, Update, Grant, Revoke' },
       { label: 'Channel Protections (3 Rules)', value: 'group_channels', description: 'Anti-Channel Create, Delete, Update' },
       { label: 'Member & Mod Protections (7 Rules)', value: 'group_members', description: 'Anti-Ban, Anti-Kick, Anti-Timeout, Bot Add, Prune' },
-      { label: 'Server & Asset Protections (10 Rules)', value: 'group_server', description: 'Webhooks, Guild Updates, Emojis, Stickers' },
+      { label: 'Server & Asset Protections (12 Rules)', value: 'group_server', description: 'Webhooks, Guild Updates, Emojis, Stickers' },
       { label: 'Threat Punishment Policies', value: 'group_punishments', description: 'Configure Quarantine, Kick, Ban, Strip Roles' },
-      { label: 'Security Profiles & Presets', value: 'group_presets', description: 'Strict, Standard, Relaxed & Aggressive Profiles' },
       { label: 'Whitelist & Clearance Management', value: 'group_whitelist', description: 'Extra Owners & Whitelisted Members Overview' }
     ]);
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
@@ -352,10 +352,6 @@ export async function buildAntiNukeDashboardGUI(guild: any, secConfig: any, extr
       .setLabel('Whitelist Manager')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId('btn_sec_presets')
-      .setLabel('Security Presets')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
       .setCustomId('btn_an_refresh_hub')
       .setLabel('Refresh Status')
       .setStyle(ButtonStyle.Secondary)
@@ -375,7 +371,6 @@ export async function buildSecurityDashboardComponents(guild: any, secConfig: an
   const qRole = qRoleId ? guild?.roles.cache.get(qRoleId) : null;
   const qRoleText = qRole ? `${qRole}` : '`Not Configured`';
 
-  // 1. Fetch Real Extra Owners count from SQLite DB
   const db = Database.getDb();
   let extraOwnerCount = 0;
   try {
@@ -387,8 +382,6 @@ export async function buildSecurityDashboardComponents(guild: any, secConfig: an
   if (extraOwnerCount === 0 && Array.isArray(secConfig?.extraOwners)) {
     extraOwnerCount = secConfig.extraOwners.length;
   }
-
-  // 2. Fetch Real Whitelisted count
   let whitelistedCount = 0;
   if (Array.isArray(secConfig?.whitelistedUsers)) {
     whitelistedCount = secConfig.whitelistedUsers.length;
@@ -400,7 +393,7 @@ export async function buildSecurityDashboardComponents(guild: any, secConfig: an
   const logChan = logChanId ? guild?.channels.cache.get(logChanId) : null;
   const logChanText = logChan ? `${logChan}` : '`#rage-logs (Auto)`';
 
-  // 3. Fetch Real AutoMod State
+  // AutoMod state
   let amConfig: any = {};
   if (extraOrContext?.getModulesState) {
     const modules = extraOrContext.getModulesState(guildId) || [];
@@ -409,51 +402,84 @@ export async function buildSecurityDashboardComponents(guild: any, secConfig: an
   }
   const isAutoModActive = amConfig?.autoModEnabled !== false && amConfig?.antiLinkEnabled !== false;
 
-  const getStatus = (active: boolean) => (active
-    ? formatCustomEmoji(guild?.client, '1546134620087783526', 'success_check', true)
-    : formatCustomEmoji(guild?.client, '1546155193303957504', 'wrong', true));
+  // Anti-Nuke module statistics (27 modules)
+  const rules = secConfig?.rules || {};
+  const moduleKeys = Object.keys(DEFAULT_SECURITY_RULES).filter(k => k !== 'anti_link');
+  const totalModules = moduleKeys.length;
+  let armed = 0;
+  let revertOn = 0;
+  const punish: Record<string, number> = {};
+  for (const k of moduleKeys) {
+    const r = getEffectiveRule(rules, k, secConfig);
+    if (r.enabled) armed++;
+    if (r.recovery) revertOn++;
+    const a = String(r.action || 'kick').toUpperCase();
+    punish[a] = (punish[a] || 0) + 1;
+  }
+  const punishText = Object.entries(punish).map(([k, v]) => `${k}: ${v}`).join(' | ') || 'N/A';
 
-  const subsystems = [
-    `${getStatus(isAntiNukeEnabled)} Anti-Nuke Master Threat Mitigation Engine`,
-    `${getStatus(isAutoModActive)} AutoMod Chat Filtering & Content Protection`,
-    `${getStatus(isRaidMode)} Server Raid Shield & Lockout Guard`,
-    `${getStatus(isEmergencyLock)} Emergency Lockdown & Channel Silencer`,
-    `${getStatus(Boolean(qRoleId))} Quarantine Isolation Role Enforcer`,
-    `${getStatus(Boolean(logChanId))} Realtime Audit Logging & Incident Dispatcher`,
-    `${getStatus(extraOwnerCount > 0 || whitelistedCount > 0)} Whitelist & Access Hierarchy Protocol`,
-    `${getStatus(isAntiNukeEnabled)} Encrypted System State & Rollback Engine`
-  ];
+  // Overall security score
+  const score = Math.round(
+    (isAntiNukeEnabled ? 40 * (armed / totalModules) : 0) +
+    (isAutoModActive ? 15 : 0) +
+    (qRoleId ? 10 : 0) +
+    (logChanId ? 10 : 0) +
+    (extraOwnerCount > 0 || whitelistedCount > 0 ? 10 : 0) +
+    (isAntiNukeEnabled ? 15 * (revertOn / totalModules) : 0)
+  );
+  const grade = score >= 90 ? 'EXCELLENT' : score >= 70 ? 'GOOD' : score >= 50 ? 'MODERATE' : 'AT RISK';
 
-  const activeCount = [
-    isAntiNukeEnabled,
-    isAutoModActive,
-    isRaidMode,
-    isEmergencyLock,
-    Boolean(qRoleId),
-    Boolean(logChanId),
-    extraOwnerCount > 0 || whitelistedCount > 0,
-    isAntiNukeEnabled
-  ].filter(Boolean).length;
-
-  const subFooter = isAntiNukeEnabled
-    ? `**All ${activeCount} Security Engines Initialized & Fully Operational**`
-    : `**Security Engines Standby (Master Anti-Nuke Paused)**`;
-
-  const description = [
-    `>>> ${subsystems.join('\n')}`,
-    '',
-    subFooter,
-    '',
-    `**Quarantine Isolation:** ${qRoleText}`,
-    `**Security Audit Log:** ${logChanText}`,
-    `**Authorized Operators:** \`${extraOwnerCount} Extra Owners • ${whitelistedCount} Whitelisted\``,
-    `**Default Threat Action:** \`${(secConfig?.defaultPunishment || 'quarantine').toUpperCase()}\``
-  ].join('\n');
+  // Server statistics
+  const memberCount = guild?.memberCount ?? 0;
+  const roleCount = guild?.roles?.cache?.size ?? 0;
+  const channelCount = guild?.channels?.cache?.size ?? 0;
+  let adminRoles = 0;
+  try {
+    adminRoles = guild?.roles?.cache?.filter((r: any) => !r.managed && r.id !== guildId && r.permissions?.has(BigInt(8))).size ?? 0;
+  } catch { }
+  const onOff = (b: boolean) => (b ? 'ON' : 'OFF');
 
   const embed = new EmbedBuilder()
     .setColor(0x2B2D31)
-    .setTitle('Security & Antinuke Control Center')
-    .setDescription(description)
+    .setTitle('Security Overview')
+    .setDescription([
+      `**Security Score:** \`${score}/100 - ${grade}\``,
+      `**Anti-Nuke Modules Armed:** \`${isAntiNukeEnabled ? armed : 0}/${totalModules}\``,
+      `**Auto-Revert Coverage:** \`${revertOn}/${totalModules}\``,
+      `**Punishments:** \`${punishText}\``
+    ].join('\n'))
+    .addFields(
+      {
+        name: 'Protection Status',
+        value: [
+          `Anti-Nuke: \`${onOff(isAntiNukeEnabled)}\``,
+          `AutoMod: \`${onOff(isAutoModActive)}\``,
+          `Raid Mode: \`${onOff(isRaidMode)}\``,
+          `Lockdown: \`${onOff(isEmergencyLock)}\``
+        ].join('\n'),
+        inline: true
+      },
+      {
+        name: 'Server Stats',
+        value: [
+          `Members: \`${memberCount}\``,
+          `Channels: \`${channelCount}\``,
+          `Roles: \`${roleCount}\``,
+          `Admin Roles: \`${adminRoles}\``
+        ].join('\n'),
+        inline: true
+      },
+      {
+        name: 'Access & Logging',
+        value: [
+          `Quarantine: ${qRoleText}`,
+          `Audit Log: ${logChanText}`,
+          `Extra Owners: \`${extraOwnerCount}\``,
+          `Whitelisted: \`${whitelistedCount}\``
+        ].join('\n'),
+        inline: true
+      }
+    )
     .setFooter({
       text: BRAND_FOOTER,
       iconURL: guild?.iconURL() || undefined
@@ -489,10 +515,6 @@ export async function buildSecurityDashboardComponents(guild: any, secConfig: an
       .setLabel('Whitelist Manager')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId('btn_sec_presets')
-      .setLabel('Security Presets')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
       .setCustomId('btn_sec_refresh')
       .setLabel('Refresh Status')
       .setStyle(ButtonStyle.Secondary)
@@ -503,31 +525,53 @@ export async function buildSecurityDashboardComponents(guild: any, secConfig: an
   return { embed, embeds: [embed], components: [row1, row2, row3] };
 }
 
+export const ANTINUKE_CATEGORY_KEYS: Record<string, string[]> = {
+  group_roles: ['anti_role_grant', 'anti_role_remove', 'anti_role_update', 'anti_role_create', 'anti_role_delete'],
+  group_channels: ['anti_channel_create', 'anti_channel_delete', 'anti_channel_update'],
+  group_members: ['anti_ban', 'anti_member_unban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune'],
+  group_server: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_integration', 'anti_invite_create', 'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update', 'anti_sticker_create', 'anti_sticker_delete', 'anti_sticker_update']
+};
+
+const ANTINUKE_SHORT_LABELS: Record<string, string> = {
+  anti_role_grant: 'Role Grant',
+  anti_role_remove: 'Role Strip',
+  anti_role_update: 'Role Perms',
+  anti_role_create: 'Role Create',
+  anti_role_delete: 'Role Delete',
+  anti_channel_create: 'Channel Create',
+  anti_channel_delete: 'Channel Delete',
+  anti_channel_update: 'Channel Update',
+  anti_ban: 'Ban',
+  anti_member_unban: 'Unban',
+  anti_kick: 'Kick',
+  anti_timeout: 'Timeout',
+  anti_bot_add: 'Bot Add',
+  anti_bot_remove: 'Bot Remove',
+  anti_prune: 'Prune',
+  anti_everyone_here: 'Everyone Ping',
+  anti_webhook_create: 'Webhook Create',
+  anti_webhook_delete: 'Webhook Delete',
+  anti_webhook_update: 'Webhook Update',
+  anti_guild_update: 'Guild Update',
+  anti_integration: 'Integration',
+  anti_invite_create: 'Invite Create',
+  anti_emoji_create: 'Emoji Create',
+  anti_emoji_delete: 'Emoji Delete',
+  anti_emoji_update: 'Emoji Update',
+  anti_sticker_create: 'Sticker Create',
+  anti_sticker_delete: 'Sticker Delete',
+  anti_sticker_update: 'Sticker Update'
+};
+
 export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
   const rules = secConfig?.rules || {};
   const isMasterEnabled = secConfig?.antiNukeEnabled !== false;
 
-  const categoryDefinitions: Record<string, { label: string; title: string; keys: string[] }> = {
-    group_roles: {
-      label: 'ROLE PROTECTIONS',
-      title: 'ROLE PROTECTION MODULES',
-      keys: ['anti_role_grant', 'anti_role_remove', 'anti_role_update', 'anti_role_create', 'anti_role_delete']
-    },
-    group_channels: {
-      label: 'CHANNEL PROTECTIONS',
-      title: 'CHANNEL PROTECTION MODULES',
-      keys: ['anti_channel_create', 'anti_channel_delete', 'anti_channel_update']
-    },
-    group_members: {
-      label: 'MEMBER & MODERATION PROTECTIONS',
-      title: 'MEMBER & MODERATION MODULES',
-      keys: ['anti_ban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune', 'anti_everyone_here']
-    },
-    group_server: {
-      label: 'SERVER & ASSET PROTECTIONS',
-      title: 'SERVER & ASSET MODULES',
-      keys: ['anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_invite_create', 'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update', 'anti_sticker_create', 'anti_sticker_delete']
-    }
+  const categoryDefinitions: Record<string, { label: string; keys: string[] }> = {
+    group_roles: { label: 'ROLE PROTECTIONS', keys: ANTINUKE_CATEGORY_KEYS.group_roles },
+    group_channels: { label: 'CHANNEL PROTECTIONS', keys: ANTINUKE_CATEGORY_KEYS.group_channels },
+    group_members: { label: 'MEMBER & MODERATION PROTECTIONS', keys: ANTINUKE_CATEGORY_KEYS.group_members },
+    group_server: { label: 'SERVER & ASSET PROTECTIONS', keys: ANTINUKE_CATEGORY_KEYS.group_server }
   };
 
   const selectedKey = targetGroup?.toLowerCase();
@@ -549,118 +593,117 @@ export function buildAntiNukeOverview(secConfig: any, targetGroup?: string) {
     anti_channel_create: 'Channel Creation Interceptor',
     anti_channel_delete: 'Channel Deletion Mitigation Guard',
     anti_channel_update: 'Channel Override & Rename Guard',
-    anti_ban: 'Mass Member Ban Interceptor',
-    anti_kick: 'Mass Member Kick Blocker',
+    anti_ban: 'Member Ban Interceptor',
+    anti_member_unban: 'Unauthorized Unban Blocker',
+    anti_kick: 'Member Kick Blocker',
     anti_timeout: 'Unauthorized Timeout Interceptor',
     anti_bot_add: 'Rogue Bot Infiltration Gatekeeper',
     anti_bot_remove: 'Authorized Bot Removal Blocker',
-    anti_prune: 'Mass Member Prune Shield',
+    anti_prune: 'Member Prune Shield',
     anti_everyone_here: 'Everyone & Here Ping Suppressor',
     anti_webhook_create: 'Webhook Creation Interceptor',
     anti_webhook_delete: 'Webhook Deletion Mitigation Guard',
     anti_webhook_update: 'Webhook Modification Interceptor',
     anti_guild_update: 'Guild Settings & Vanity Hijack Guard',
-    anti_invite_create: 'Invite Creation Rate Limiter',
-    anti_emoji_create: 'Emoji Creation Flooding Guard',
-    anti_emoji_delete: 'Emoji Mass Deletion Shield',
-    anti_emoji_update: 'Emoji Renaming & Tamper Guard',
-    anti_sticker_create: 'Sticker Creation Flooding Guard',
-    anti_sticker_delete: 'Sticker Mass Deletion Shield',
-    anti_sticker_update: 'Sticker Modification Guard',
-    anti_link: 'Malicious URL & Invite Firewall'
+    anti_integration: 'Integration & App Add Guard',
+    anti_invite_create: 'Invite Creation Guard',
+    anti_emoji_create: 'Emoji Creation Guard',
+    anti_emoji_delete: 'Emoji Deletion Shield',
+    anti_emoji_update: 'Emoji Tamper Guard',
+    anti_sticker_create: 'Sticker Creation Guard',
+    anti_sticker_delete: 'Sticker Deletion Shield',
+    anti_sticker_update: 'Sticker Modification Guard'
+  };
+
+  const storedEnabled = (key: string) => {
+    const eff = getEffectiveRule({ rules }, key, { ...(secConfig || {}), antiNukeEnabled: true });
+    return Boolean(eff.enabled);
   };
 
   const subsystems: string[] = [];
   let activeInCat = 0;
   for (const key of activeDef.keys) {
     const rule = getEffectiveRule(rules, key, secConfig);
-    const isRuleActive = isMasterEnabled && rule.enabled;
-    if (isRuleActive) activeInCat++;
-    const icon = isRuleActive
-      ? formatCustomEmoji(null, '1546134620087783526', 'success_check', true)
-      : formatCustomEmoji(null, '1546155193303957504', 'wrong', true);
+    const on = storedEnabled(key);
+    if (isMasterEnabled && on) activeInCat++;
     const label = RULE_LABELS[key] || key;
     const revertTag = rule.recovery ? 'Auto-Revert' : 'No-Revert';
-    subsystems.push(`${icon} **${label}** • \`${rule.limit}/${rule.window}s\` • \`${rule.action.toUpperCase()}\` • \`${revertTag}\``);
+    subsystems.push(`\`${on ? 'ON ' : 'OFF'}\` **${label}** - \`${String(rule.action).toUpperCase()}\` - \`${revertTag}\``);
   }
 
   const subFooter = isMasterEnabled
-    ? `**${activeInCat}/${activeDef.keys.length} Category Engines Armed & Fully Operational**`
-    : `**All ${activeDef.keys.length} Category Engines Standby (Master Anti-Nuke Paused)**`;
+    ? `**${activeInCat}/${activeDef.keys.length} Modules Armed**`
+    : `**All ${activeDef.keys.length} Modules on Standby (Master Anti-Nuke Paused)**`;
 
   const description = [
-    `>>> ${subsystems.join('\n')}`,
+    subsystems.join('\n'),
     '',
     subFooter,
     '',
-    `**Category Scope:** \`${activeDef.label}\``,
-    `**Master Defense State:** \`${isMasterEnabled ? 'ARMED & ACTIVE' : 'OFFLINE / PAUSED'}\``,
-    `**Default Enforcement Action:** \`${(secConfig?.defaultPunishment || 'quarantine').toUpperCase()}\``
+    `**Category:** \`${activeDef.label}\``,
+    `**Master Defense:** \`${isMasterEnabled ? 'ARMED & ACTIVE' : 'OFFLINE / PAUSED'}\``
   ].join('\n');
 
   const embed = new EmbedBuilder()
     .setColor(0x2B2D31)
-    .setTitle(`Antinuke Category Inspection • ${activeDef.label}`)
+    .setTitle(`Antinuke - ${activeDef.label}`)
     .setDescription(description)
     .setFooter({ text: BRAND_FOOTER })
     .setTimestamp();
 
+  // Row 1: punishment + auto-revert + category toggle
+  const firstAction = String(getEffectiveRule(rules, activeDef.keys[0], secConfig).action || 'kick').toLowerCase();
+  const actionBtn = (id: string, label: string) => new ButtonBuilder()
+    .setCustomId(`btn_sec_cat_action_${normalizedGroup}_${id}`)
+    .setLabel(label)
+    .setStyle(firstAction === id ? ButtonStyle.Primary : ButtonStyle.Secondary);
+
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`btn_sec_cat_action_${normalizedGroup}_quarantine`)
-      .setLabel('Action: Quarantine')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`btn_sec_cat_action_${normalizedGroup}_kick`)
-      .setLabel('Action: Kick')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`btn_sec_cat_action_${normalizedGroup}_ban`)
-      .setLabel('Action: Ban')
-      .setStyle(ButtonStyle.Secondary),
+    actionBtn('quarantine', 'Quarantine'),
+    actionBtn('kick', 'Kick'),
+    actionBtn('ban', 'Ban'),
     new ButtonBuilder()
       .setCustomId(`btn_sec_cat_toggle_revert_${normalizedGroup}`)
       .setLabel('Toggle Auto-Revert')
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`btn_sec_cat_thresh_${normalizedGroup}_1_10`)
-      .setLabel('Strict (1/10s)')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`btn_sec_cat_thresh_${normalizedGroup}_3_10`)
-      .setLabel('Normal (3/10s)')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`btn_sec_cat_thresh_${normalizedGroup}_5_10`)
-      .setLabel('Relaxed (5/10s)')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`btn_sec_cat_custom_thresh_${normalizedGroup}`)
-      .setLabel('Custom Threshold')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`btn_sec_cat_toggle_all_${normalizedGroup}`)
-      .setLabel('Toggle Category')
+      .setLabel('Toggle All')
       .setStyle(ButtonStyle.Secondary)
   );
 
-  const row3 = buildSecuritySelectMenu(normalizedGroup);
+  // Per-module ON/OFF buttons (5 per row)
+  const toggleRows: ActionRowBuilder<ButtonBuilder>[] = [];
+  for (let i = 0; i < activeDef.keys.length; i += 5) {
+    const slice = activeDef.keys.slice(i, i + 5);
+    toggleRows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
+      slice.map(key => {
+        const on = storedEnabled(key);
+        return new ButtonBuilder()
+          .setCustomId(`btn_sec_mod|${key}|${normalizedGroup}`)
+          .setLabel(`${ANTINUKE_SHORT_LABELS[key] || key}: ${on ? 'ON' : 'OFF'}`)
+          .setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary);
+      })
+    ));
+  }
 
-  const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId('btn_sec_refresh')
-      .setLabel('Main Security Hub')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`btn_sec_refresh_cat_${normalizedGroup}`)
-      .setLabel('Refresh Category')
-      .setStyle(ButtonStyle.Secondary)
-  );
+  const rows: any[] = [row1, ...toggleRows, buildSecuritySelectMenu(normalizedGroup)];
 
-  return { embeds: [embed], components: [row1, row2, row3, row4] };
+  // Discord allows max 5 rows; add navigation buttons only when there is room
+  if (rows.length < 5) {
+    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('btn_sec_refresh')
+        .setLabel('Main Security Hub')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`btn_sec_refresh_cat_${normalizedGroup}`)
+        .setLabel('Refresh Category')
+        .setStyle(ButtonStyle.Secondary)
+    ));
+  }
+
+  return { embeds: [embed], components: rows };
 }
 
 export async function buildAutoModDashboardComponents(guild: any, secConfig: any, extraOrContext?: any) {
@@ -698,8 +741,7 @@ export async function buildAutoModDashboardComponents(guild: any, secConfig: any
   const isMasterActive = amModStatus !== 'disabled' && amConfig?.autoModEnabled !== false && secConfig?.autoModEnabled !== false;
   const isAntiLink = isMasterActive && amConfig?.blockLinks !== false && amConfig?.antiLinkEnabled !== false;
   const isAntiSpam = isMasterActive && (amConfig?.antiSpamEnabled === true || Boolean(amConfig?.maxSpamMessages));
-  const ruleEveryone = secConfig?.rules?.anti_everyone_here;
-  const isAntiEveryone = (ruleEveryone?.enabled !== false) && (amConfig?.antiEveryoneEnabled !== false) && (secConfig?.antiNukeEnabled !== false);
+  const isAntiEveryone = isMasterActive && amConfig?.antiEveryoneEnabled !== false;
   const isAntiInvites = isMasterActive && amConfig?.blockInvites !== false;
   const isAttachmentFilter = isMasterActive && amConfig?.attachmentFilterEnabled !== false;
   const isDuplicateFilter = isMasterActive && amConfig?.duplicateFilterEnabled !== false;
@@ -2656,10 +2698,7 @@ export function registerConfigCommands(): void {
           const isCapsActive = isMasterActive && (amConfig.preventCapsSpam === true || amConfig.capsLimitEnabled === true);
           const isEmojiActive = isMasterActive && (amConfig.emojiSpamEnabled === true);
 
-          const secModule = modules.find((m: any) => m.id === 'security');
-          const secConfig = secModule?.config || {};
-          const ruleEveryone = secConfig?.rules?.anti_everyone_here;
-          const isAntiEveryoneActive = (ruleEveryone?.enabled !== false) && (amConfig.antiEveryoneEnabled !== false) && (secConfig.antiNukeEnabled !== false);
+          const isAntiEveryoneActive = isMasterActive && amConfig.antiEveryoneEnabled !== false;
 
           const antispamIcon = isAntiSpamActive ? APPROVED_ICON : WRONG_EMOJI;
           const antilinkIcon = isAntiLinkActive ? APPROVED_ICON : WRONG_EMOJI;
@@ -2669,7 +2708,7 @@ export function registerConfigCommands(): void {
           const emojiIcon = isEmojiActive ? APPROVED_ICON : WRONG_EMOJI;
 
           const filterLines = [
-            `${everyoneIcon} **Anti-Everyone Tag**: \`${isAntiEveryoneActive ? 'ENABLED' : 'DISABLED'}\` | Target: \`@everyone / @here\` | Action: \`${(ruleEveryone?.action || 'quarantine').toUpperCase()}\``,
+            `${everyoneIcon} **Anti-Everyone Tag**: \`${isAntiEveryoneActive ? 'ENABLED' : 'DISABLED'}\` | Target: \`@everyone / @here\` | Action: \`${(amConfig.antiEveryoneAction || amConfig.punishment || 'delete').toUpperCase()}\``,
             `${antispamIcon} **Anti-Spam Filter**: \`${isAntiSpamActive ? 'ENABLED' : 'DISABLED'}\` | Limit: \`${amConfig.maxMessages || amConfig.maxSpamMessages || 5} msgs / ${amConfig.windowSeconds || amConfig.spamWindowSeconds || 5}s\` | Action: \`${(amConfig.spamAction || 'mute').toUpperCase()}\``,
             `${antilinkIcon} **Anti-Link Filter**: \`${isAntiLinkActive ? 'ENABLED' : 'DISABLED'}\` | Invites: \`${amConfig.allowInvites || amConfig.allowDiscordInvites ? 'ALLOWED' : 'BLOCKED'}\` | Action: \`${(amConfig.punishment || amConfig.linkAction || 'delete').toUpperCase()}\``,
             `${blacklistIcon} **Word Blacklist**: \`${isBlacklistActive ? 'ENABLED' : 'DISABLED'}\` | Words: \`${(amConfig.badWords || amConfig.blacklist || []).length} keywords\``,
@@ -2727,10 +2766,7 @@ export function registerConfigCommands(): void {
 
         if (['antieveryone', 'everyone', 'here', 'antihere', 'massping', 'antiping', 'everyonehere', 'antieveryonehere', 'mentions', 'antimention', 'ping', 'pings'].includes(cleanAction)) {
           const toggle = effectiveArgs[2]?.toLowerCase();
-          const secModule = modules.find((m: any) => m.id === 'security');
-          const secConfig = secModule?.config || {};
-          const ruleEveryone = secConfig?.rules?.anti_everyone_here;
-          const isAntiEveryoneActive = (ruleEveryone?.enabled !== false) && (amConfig.antiEveryoneEnabled !== false) && (secConfig.antiNukeEnabled !== false);
+          const isAntiEveryoneActive = amConfig.antiEveryoneEnabled !== false;
 
           if (!toggle || !['on', 'off', 'enable', 'disable'].includes(toggle)) {
             return message.reply({
@@ -2739,7 +2775,7 @@ export function registerConfigCommands(): void {
                 description: [
                   `• **Current Status**: \`${isAntiEveryoneActive ? 'ENABLED (ACTIVE)' : 'DISABLED (INACTIVE)'}\``,
                   `• **Target Filter**: \`@everyone / @here\` unauthorized mentions`,
-                  `• **Enforcement Action**: \`${(ruleEveryone?.action || 'quarantine').toUpperCase()}\``,
+                  `• **Enforcement Action**: \`${(amConfig.antiEveryoneAction || amConfig.punishment || 'delete').toUpperCase()}\``,
                   '',
                   `> **Syntax**: \`r!config automod anti-everyone <on|off>\` or \`r!antieveryone <on|off>\``,
                   `> **Example**: \`r!antieveryone off\``
@@ -2751,13 +2787,11 @@ export function registerConfigCommands(): void {
           const isEnabled = ['on', 'enable'].includes(toggle);
           updateAmConfig({ antiEveryoneEnabled: isEnabled });
 
+          const secModule = modules.find((m: any) => m.id === 'security');
           if (secModule && extra?.updateModuleConfig) {
-            const rules = { ...(secConfig.rules || {}) };
-            const existing = rules.anti_everyone_here || { enabled: true, limit: 1, window: 10, action: 'quarantine', recovery: true };
-            rules.anti_everyone_here = { ...existing, enabled: isEnabled };
+            const secConfig = secModule.config || {};
             extra.updateModuleConfig('security', {
               ...secConfig,
-              rules,
               automod: { ...(secConfig.automod || {}), antiEveryoneEnabled: isEnabled }
             });
           }

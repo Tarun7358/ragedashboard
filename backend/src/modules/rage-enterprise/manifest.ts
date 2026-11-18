@@ -46,11 +46,6 @@ export const RageEnterpriseManifest: ModuleManifest = {
           description: 'Open Welcome, Goodbye & AutoRole Suite'
         },
         {
-          name: 'music',
-          type: 1,
-          description: 'Open Music Player & Audio Engine Controls'
-        },
-        {
           name: 'config',
           type: 1,
           description: 'Open Master System Configuration Panel'
@@ -493,30 +488,6 @@ export const RageEnterpriseManifest: ModuleManifest = {
       }
     },
     {
-      name: 'button_music_play',
-      handler: async (client: any, interaction: any, context: any) => {
-        await interaction.reply({ content: `<:voicechannelgreen:1532425750278438962> Use \`/voice play song:Query\` or \`/rage play\` to stream music into your voice channel.`, flags: 64 });
-      }
-    },
-    {
-      name: 'button_music_skip',
-      handler: async (client: any, interaction: any, context: any) => {
-        await interaction.reply({ content: `<:lightpurplearrow:1532621364115013693> Track skipped. Use \`/voice skip\` during an active playback session.`, flags: 64 });
-      }
-    },
-    {
-      name: 'button_music_queue',
-      handler: async (client: any, interaction: any, context: any) => {
-        await interaction.reply({ content: `<a:lovemail:1527647157371535420> No active music queue playing in voice channels currently.`, flags: 64 });
-      }
-    },
-    {
-      name: 'button_music_shuffle',
-      handler: async (client: any, interaction: any, context: any) => {
-        await interaction.reply({ content: `<:config:1532425712844144701> Queue shuffle mode updated.`, flags: 64 });
-      }
-    },
-    {
       name: 'button_wizard_cancel',
       handler: async (client: any, interaction: any, context: any) => {
         const cancelEmbed = new EmbedBuilder()
@@ -688,27 +659,6 @@ async function handleEnterpriseAction(action: string, client: any, interaction: 
     case 'boost':
     case 'milestones': {
       const res = RageEnterpriseService.getWelcomeOverview(interaction.guild, context);
-      if (interaction.reply) await interaction.reply(res);
-      break;
-    }
-
-    case 'music':
-    case 'player':
-    case 'play':
-    case 'pause':
-    case 'resume':
-    case 'stop':
-    case 'back':
-    case 'loop':
-    case 'nowplaying':
-    case 'queue':
-    case 'skip':
-    case 'shuffle':
-    case 'autoplay':
-    case 'filters':
-    case 'lyrics':
-    case 'volume': {
-      const res = RageEnterpriseService.getMusicPlayerCard(interaction.guild);
       if (interaction.reply) await interaction.reply(res);
       break;
     }

@@ -1,6 +1,8 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { PermissionFlagsBits, ChannelType, MessageFlags, Message, EmbedBuilder } from 'discord.js';
 import { Colors, buildRichCard, buildListCard, buildStatusCard, buildSuccessCard, buildErrorCard, buildPermCard, MEMBER_ICON, SHIELD_ICON, VERIFIED_ICON, WRONG_ICON, INFO_ICON, VOICE_ICON, ARROW_ICON, BRAND_FOOTER } from '../../core/UIFactory.js';
+import { isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
+import { VCLockControllerService, VCLockSession } from './VCLockControllerService.js';
 import {
   VoiceStatusState,
   getVoiceStatusConfig,
@@ -404,17 +406,60 @@ export const VoiceManagerManifest: ModuleManifest = {
         // LOCK
         if (sub === 'lock') {
           const channel = interaction.options.getChannel('channel');
-          await channel.permissionOverwrites.edit(guild.id, { Connect: false }).catch(() => {});
+          await channel.permissionOverwrites.edit(guild.id, {
+            ViewChannel: true,
+            Connect: false,
+            SendMessages: false
+          }).catch(() => {});
+          
+          // Grant lock executor full connect + chat permissions
+          await channel.permissionOverwrites.edit(interaction.user.id, {
+            Connect: true,
+            SendMessages: true,
+            ViewChannel: true
+          }).catch(() => {});
+
+          const session: VCLockSession = {
+            channelId: channel.id,
+            guildId: guild.id,
+            ownerId: interaction.user.id,
+            lockedAt: Date.now(),
+            addedUserIds: [],
+            chatPermittedUserIds: [interaction.user.id]
+          };
+          VCLockControllerService.setSession(channel.id, session);
+
+          const botAvatar = client.user?.displayAvatarURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
+          const guiPayload = VCLockControllerService.buildLockControllerPayload({
+            channel,
+            session,
+            guild,
+            botAvatarUrl: botAvatar
+          });
+
+          const panelMsg = await (channel as any).send(guiPayload).catch(() => null);
+          if (panelMsg) session.panelMessageId = panelMsg.id;
+
           logVoiceAction('Lock', `#${channel.name}`);
-          return interaction.reply({ content: `<a:success_check:1546134620087783526> Locked ${channel}.`, flags: 64 });
+          return interaction.reply({ content: `<a:success_check:1546134620087783526> Locked ${channel} and spawned Voice Controller in chat.`, flags: 64 });
         }
 
         // UNLOCK
         if (sub === 'unlock') {
           const channel = interaction.options.getChannel('channel');
-          await channel.permissionOverwrites.edit(guild.id, { Connect: null }).catch(() => {});
+          const existingSession = VCLockControllerService.getSession(channel.id);
+          if (existingSession) {
+            await VCLockControllerService.cleanupSessionOverwrites(channel, existingSession);
+            VCLockControllerService.deleteSession(channel.id);
+          }
+
+          await channel.permissionOverwrites.edit(guild.id, {
+            ViewChannel: true,
+            Connect: true,
+            SendMessages: true,
+          }).catch(() => {});
           logVoiceAction('Unlock', `#${channel.name}`);
-          return interaction.reply({ content: `<:ticks:1532620580266836148> Unlocked ${channel}.`, flags: 64 });
+          return interaction.reply({ content: `<:ticks:1532620580266836148> Unlocked ${channel} (Public access restored).`, flags: 64 });
         }
 
         // RENAME
@@ -889,6 +934,209 @@ export const VoiceManagerManifest: ModuleManifest = {
       handler: async (client: any, data: any, context: any) => {
         const { oldState, newState } = data || {};
         await processVoiceStateUpdate(client, oldState, newState, context);
+
+        // Auto-Unlock on Empty Voice Channel
+        const oldChannel = oldState?.channel;
+        if (oldChannel && oldChannel.isVoiceBased()) {
+          const humanCount = oldChannel.members?.filter((m: any) => !m.user.bot).size ?? 0;
+          if (humanCount === 0) {
+            const session = VCLockControllerService.getSession(oldChannel.id);
+            if (session) {
+              await VCLockControllerService.cleanupSessionOverwrites(oldChannel, session);
+              VCLockControllerService.deleteSession(oldChannel.id);
+
+              await oldChannel.permissionOverwrites.edit(oldChannel.guild.id, {
+                ViewChannel: true,
+                Connect: true,
+                SendMessages: true
+              }).catch(() => {});
+
+              context?.logSyncEvent?.(`[Voice Manager] Auto-unlocked empty voice channel #${oldChannel.name}`, 'info');
+            }
+          }
+        }
+      }
+    },
+    {
+      name: 'button_vclock_generic',
+      handler: async (client: any, interaction: any, context: any) => {
+        const customId = interaction.customId || '';
+        const guild = interaction.guild;
+        if (!guild) return;
+
+        const [actionKey, channelId] = customId.split(':');
+        if (!channelId) return;
+
+        const channel = guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null);
+        if (!channel || !channel.isVoiceBased()) {
+          return interaction.reply({ content: `${WRONG_ICON} Voice channel not found or deleted.`, flags: 64 });
+        }
+
+        const session = VCLockControllerService.getSession(channel.id)
+          || await VCLockControllerService.getOrRecoverSession(channel, interaction.user.id);
+        if (!session) {
+          return interaction.reply({ content: `${WRONG_ICON} No active lock session found for this channel.`, flags: 64 });
+        }
+
+        const member = interaction.member || await guild.members.fetch(interaction.user.id).catch(() => null);
+        const authorized = await VCLockControllerService.isAuthorized(member, guild, session);
+        if (!authorized) {
+          return interaction.reply({
+            content: `${WRONG_ICON} **Access Denied**: Only the Lock Executor (<@${session.ownerId}>), Extra Owners, or Server Owner can manage this voice channel.`,
+            flags: 64
+          });
+        }
+
+        const botAvatar = client.user?.displayAvatarURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
+
+        // 1. UNLOCK VC
+        if (actionKey === 'vclock_btn_unlock') {
+          await VCLockControllerService.cleanupSessionOverwrites(channel, session);
+          VCLockControllerService.deleteSession(channel.id);
+
+          await channel.permissionOverwrites.edit(guild.id, {
+            ViewChannel: true,
+            Connect: true,
+            SendMessages: true
+          }).catch(() => {});
+
+          await interaction.reply({
+            content: `<:ticks:1532620580266836148> <#${channel.id}> has been **unlocked** (Public access restored).`,
+            flags: 64
+          });
+
+          // Delete or update controller
+          if (session.panelMessageId) {
+            const panelMsg = await (channel as any).messages.fetch(session.panelMessageId).catch(() => null);
+            if (panelMsg) await panelMsg.delete().catch(() => {});
+          }
+          return;
+        }
+
+        // 2. GRANT CHAT TO ALL IN VC
+        if (actionKey === 'vclock_btn_chat_all') {
+          await interaction.deferUpdate().catch(() => {});
+          const currentHumans = channel.members.filter((m: any) => !m.user.bot);
+          for (const [mId] of currentHumans) {
+            await channel.permissionOverwrites.edit(mId, {
+              SendMessages: true,
+              ViewChannel: true
+            }).catch(() => {});
+            if (!session.chatPermittedUserIds.includes(mId)) {
+              session.chatPermittedUserIds.push(mId);
+            }
+          }
+
+          const updatedPayload = VCLockControllerService.buildLockControllerPayload({
+            channel,
+            session,
+            guild,
+            botAvatarUrl: botAvatar
+          });
+
+          return interaction.editReply(updatedPayload).catch(() => {});
+        }
+
+        // 3. REMOVE EXTRA CHAT (Only owner keeps chat)
+        if (actionKey === 'vclock_btn_chat_none') {
+          await interaction.deferUpdate().catch(() => {});
+          for (const uid of session.chatPermittedUserIds) {
+            if (uid !== session.ownerId && !session.addedUserIds.includes(uid)) {
+              await channel.permissionOverwrites.delete(uid).catch(() => {});
+            } else if (uid !== session.ownerId && session.addedUserIds.includes(uid)) {
+              await channel.permissionOverwrites.edit(uid, {
+                Connect: true,
+                SendMessages: false
+              }).catch(() => {});
+            }
+          }
+          session.chatPermittedUserIds = [session.ownerId];
+
+          const updatedPayload = VCLockControllerService.buildLockControllerPayload({
+            channel,
+            session,
+            guild,
+            botAvatarUrl: botAvatar
+          });
+
+          return interaction.editReply(updatedPayload).catch(() => {});
+        }
+
+        // 4. REFRESH GUI
+        if (actionKey === 'vclock_btn_refresh') {
+          await interaction.deferUpdate().catch(() => {});
+          const updatedPayload = VCLockControllerService.buildLockControllerPayload({
+            channel,
+            session,
+            guild,
+            botAvatarUrl: botAvatar
+          });
+          return interaction.editReply(updatedPayload).catch(() => {});
+        }
+
+        // 5. USER SELECT MENU: ADD MEMBER
+        if (actionKey === 'vclock_select_add') {
+          const selectedUserId = interaction.values?.[0];
+          if (!selectedUserId) {
+            return interaction.reply({ content: `${WRONG_ICON} No member selected.`, flags: 64 });
+          }
+
+          if (session.addedUserIds.length >= 15) {
+            return interaction.reply({ content: `${WRONG_ICON} Maximum limit of 15 added members reached for this room.`, flags: 64 });
+          }
+
+          await interaction.deferUpdate().catch(() => {});
+          await channel.permissionOverwrites.edit(selectedUserId, {
+            Connect: true,
+            SendMessages: true,
+            ViewChannel: true
+          }).catch(() => {});
+
+          if (!session.addedUserIds.includes(selectedUserId)) {
+            session.addedUserIds.push(selectedUserId);
+          }
+          if (!session.chatPermittedUserIds.includes(selectedUserId)) {
+            session.chatPermittedUserIds.push(selectedUserId);
+          }
+
+          const updatedPayload = VCLockControllerService.buildLockControllerPayload({
+            channel,
+            session,
+            guild,
+            botAvatarUrl: botAvatar
+          });
+
+          return interaction.editReply(updatedPayload).catch(() => {});
+        }
+
+        // 6. USER SELECT MENU: REMOVE MEMBER
+        if (actionKey === 'vclock_select_remove') {
+          const selectedUserId = interaction.values?.[0];
+          if (!selectedUserId) {
+            return interaction.reply({ content: `${WRONG_ICON} No member selected.`, flags: 64 });
+          }
+
+          await interaction.deferUpdate().catch(() => {});
+          await channel.permissionOverwrites.delete(selectedUserId).catch(() => {});
+
+          session.addedUserIds = session.addedUserIds.filter(id => id !== selectedUserId);
+          session.chatPermittedUserIds = session.chatPermittedUserIds.filter(id => id !== selectedUserId);
+
+          // Disconnect member if they are currently inside this locked channel
+          const targetMember = channel.members.get(selectedUserId);
+          if (targetMember && targetMember.id !== session.ownerId) {
+            await targetMember.voice.disconnect('Removed from locked voice room').catch(() => {});
+          }
+
+          const updatedPayload = VCLockControllerService.buildLockControllerPayload({
+            channel,
+            session,
+            guild,
+            botAvatarUrl: botAvatar
+          });
+
+          return interaction.editReply(updatedPayload).catch(() => {});
+        }
       }
     },
     {
@@ -949,11 +1197,26 @@ export function registerVoiceManagerCommands() {
       }
 
       // 2. Fallback to user's active Voice Channel if no target argument was provided
+      const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+      const authorConnectedChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+
+      // If a specific channel was provided via argument:
+      // ONLY Server Owner and Extra Owners can lock a channel they are not currently inside.
+      if (args[0] && !args[0].startsWith('--')) {
+        const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild).catch(() => false);
+        if (!isOwnerOrExtra) {
+          const deniedEmbed = new EmbedBuilder()
+            .setColor(Colors.DANGER)
+            .setTitle(`${SHIELD_ICON} Access Denied`)
+            .setDescription(`Locking a remote voice channel is restricted to the **Server Owner** and **Extra Owners**.\n\n> To lock a channel, connect directly to that voice channel and type \`r!vclock\`.`)
+            .setFooter({ text: BRAND_FOOTER });
+          return message.reply({ embeds: [deniedEmbed] });
+        }
+      }
+
       if (!targetChannel) {
-        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
-        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
-        if (authorChannelId) {
-          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        if (authorConnectedChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorConnectedChannelId);
         }
       }
 
@@ -1037,11 +1300,26 @@ export function registerVoiceManagerCommands() {
         }
       }
 
+      const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+      const authorConnectedChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+
+      // If a specific channel was provided via argument:
+      // ONLY Server Owner and Extra Owners can lock a channel they are not currently inside.
+      if (args[0] && !args[0].startsWith('--')) {
+        const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild).catch(() => false);
+        if (!isOwnerOrExtra) {
+          const deniedEmbed = new EmbedBuilder()
+            .setColor(Colors.DANGER)
+            .setTitle(`${SHIELD_ICON} Access Denied`)
+            .setDescription(`Locking a remote voice channel is restricted to the **Server Owner** and **Extra Owners**.\n\n> To lock a channel, connect directly to that voice channel and type \`r!vclock\`.`)
+            .setFooter({ text: BRAND_FOOTER });
+          return message.reply({ embeds: [deniedEmbed] });
+        }
+      }
+
       if (!targetChannel) {
-        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
-        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
-        if (authorChannelId) {
-          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        if (authorConnectedChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorConnectedChannelId);
         }
       }
 
@@ -1125,11 +1403,26 @@ export function registerVoiceManagerCommands() {
         }
       }
 
+      const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+      const authorConnectedChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+
+      // If a specific channel was provided via argument:
+      // ONLY Server Owner and Extra Owners can lock a channel they are not currently inside.
+      if (args[0] && !args[0].startsWith('--')) {
+        const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild).catch(() => false);
+        if (!isOwnerOrExtra) {
+          const deniedEmbed = new EmbedBuilder()
+            .setColor(Colors.DANGER)
+            .setTitle(`${SHIELD_ICON} Access Denied`)
+            .setDescription(`Locking a remote voice channel is restricted to the **Server Owner** and **Extra Owners**.\n\n> To lock a channel, connect directly to that voice channel and type \`r!vclock\`.`)
+            .setFooter({ text: BRAND_FOOTER });
+          return message.reply({ embeds: [deniedEmbed] });
+        }
+      }
+
       if (!targetChannel) {
-        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
-        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
-        if (authorChannelId) {
-          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        if (authorConnectedChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorConnectedChannelId);
         }
       }
 
@@ -1213,11 +1506,26 @@ export function registerVoiceManagerCommands() {
         }
       }
 
+      const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+      const authorConnectedChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+
+      // If a specific channel was provided via argument:
+      // ONLY Server Owner and Extra Owners can lock a channel they are not currently inside.
+      if (args[0] && !args[0].startsWith('--')) {
+        const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild).catch(() => false);
+        if (!isOwnerOrExtra) {
+          const deniedEmbed = new EmbedBuilder()
+            .setColor(Colors.DANGER)
+            .setTitle(`${SHIELD_ICON} Access Denied`)
+            .setDescription(`Locking a remote voice channel is restricted to the **Server Owner** and **Extra Owners**.\n\n> To lock a channel, connect directly to that voice channel and type \`r!vclock\`.`)
+            .setFooter({ text: BRAND_FOOTER });
+          return message.reply({ embeds: [deniedEmbed] });
+        }
+      }
+
       if (!targetChannel) {
-        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
-        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
-        if (authorChannelId) {
-          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        if (authorConnectedChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorConnectedChannelId);
         }
       }
 
@@ -1307,11 +1615,26 @@ export function registerVoiceManagerCommands() {
         }
       }
 
+      const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+      const authorConnectedChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+
+      // If a specific channel was provided via argument:
+      // ONLY Server Owner and Extra Owners can lock a channel they are not currently inside.
+      if (args[0] && !args[0].startsWith('--')) {
+        const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild).catch(() => false);
+        if (!isOwnerOrExtra) {
+          const deniedEmbed = new EmbedBuilder()
+            .setColor(Colors.DANGER)
+            .setTitle(`${SHIELD_ICON} Access Denied`)
+            .setDescription(`Locking a remote voice channel is restricted to the **Server Owner** and **Extra Owners**.\n\n> To lock a channel, connect directly to that voice channel and type \`r!vclock\`.`)
+            .setFooter({ text: BRAND_FOOTER });
+          return message.reply({ embeds: [deniedEmbed] });
+        }
+      }
+
       if (!targetChannel) {
-        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
-        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
-        if (authorChannelId) {
-          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        if (authorConnectedChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorConnectedChannelId);
         }
       }
 
@@ -1325,10 +1648,41 @@ export function registerVoiceManagerCommands() {
       }
 
       const makePrivate = args.some((a: any) => a.toLowerCase() === '--private' || a.toLowerCase() === '-p');
-      const overwrites: any = { Connect: false, SendMessages: false };
-      if (makePrivate) overwrites.ViewChannel = false;
+      const overwrites: any = {
+        Connect: false,
+        SendMessages: false,
+        ViewChannel: makePrivate ? false : true
+      };
 
       await targetChannel.permissionOverwrites.edit(message.guild.id, overwrites).catch(() => {});
+
+      // Grant lock executor full connect + chat permissions
+      await targetChannel.permissionOverwrites.edit(message.author.id, {
+        Connect: true,
+        SendMessages: true,
+        ViewChannel: true
+      }).catch(() => {});
+
+      const session: VCLockSession = {
+        channelId: targetChannel.id,
+        guildId: message.guild.id,
+        ownerId: message.author.id,
+        lockedAt: Date.now(),
+        addedUserIds: [],
+        chatPermittedUserIds: [message.author.id]
+      };
+      VCLockControllerService.setSession(targetChannel.id, session);
+
+      const botAvatar = message.client.user?.displayAvatarURL?.({ size: 512 }) || 'https://cdn.discordapp.com/embed/avatars/0.png';
+      const guiPayload = VCLockControllerService.buildLockControllerPayload({
+        channel: targetChannel,
+        session,
+        guild: message.guild,
+        botAvatarUrl: botAvatar
+      });
+
+      const panelMsg = await (targetChannel as any).send(guiPayload).catch(() => null);
+      if (panelMsg) session.panelMessageId = panelMsg.id;
 
       context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} locked voice channel #${targetChannel.name}`, 'warn');
 
@@ -1339,7 +1693,8 @@ export function registerVoiceManagerCommands() {
           `> **Status**: \`Locked (No new joins permitted)\``,
           `> **Voice Channel**: ${targetChannel} (\`#${targetChannel.name}\`)`,
           `> **Privacy Mode**: ${makePrivate ? '\`Hidden (ViewChannel Denied)\`' : '\`Visible (Connect Denied)\`'}`,
-          `> **Executed By**: <@${message.author.id}>`
+          `> **Executed By**: <@${message.author.id}>`,
+          `> **Controller**: Spawned Box UI Controller in VC chat.`
         ].join('\n'))
         .setFooter({ text: BRAND_FOOTER })
         .setTimestamp();
@@ -1392,11 +1747,26 @@ export function registerVoiceManagerCommands() {
         }
       }
 
+      const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
+      const authorConnectedChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
+
+      // If a specific channel was provided via argument:
+      // ONLY Server Owner and Extra Owners can lock a channel they are not currently inside.
+      if (args[0] && !args[0].startsWith('--')) {
+        const isOwnerOrExtra = await isOwnerOrExtraOwner(message.author.id, message.guild).catch(() => false);
+        if (!isOwnerOrExtra) {
+          const deniedEmbed = new EmbedBuilder()
+            .setColor(Colors.DANGER)
+            .setTitle(`${SHIELD_ICON} Access Denied`)
+            .setDescription(`Locking a remote voice channel is restricted to the **Server Owner** and **Extra Owners**.\n\n> To lock a channel, connect directly to that voice channel and type \`r!vclock\`.`)
+            .setFooter({ text: BRAND_FOOTER });
+          return message.reply({ embeds: [deniedEmbed] });
+        }
+      }
+
       if (!targetChannel) {
-        const authorVoiceState = message.guild.voiceStates?.cache?.get(message.author.id);
-        const authorChannelId = authorMember?.voice?.channelId || authorVoiceState?.channelId;
-        if (authorChannelId) {
-          targetChannel = message.guild.channels.cache.get(authorChannelId);
+        if (authorConnectedChannelId) {
+          targetChannel = message.guild.channels.cache.get(authorConnectedChannelId);
         }
       }
 
@@ -1409,10 +1779,16 @@ export function registerVoiceManagerCommands() {
         return message.reply({ embeds: [noVcEmbed] });
       }
 
+      const existingSession = VCLockControllerService.getSession(targetChannel.id);
+      if (existingSession) {
+        await VCLockControllerService.cleanupSessionOverwrites(targetChannel, existingSession);
+        VCLockControllerService.deleteSession(targetChannel.id);
+      }
+
       await targetChannel.permissionOverwrites.edit(message.guild.id, {
-        Connect: null,
-        SendMessages: null,
-        ViewChannel: null
+        ViewChannel: true,
+        Connect: true,
+        SendMessages: true
       }).catch(() => {});
 
       context?.logSyncEvent?.(`[Voice Manager] ${message.author.tag} unlocked voice channel #${targetChannel.name}`, 'info');

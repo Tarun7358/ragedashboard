@@ -9,6 +9,7 @@
   "paths": {
     "backend": "backend",
     "dashboard": "frontend",
+    "musicBot": "CLUTCH NATION/clutch-music",
     "logs": "logs",
     "backups": "backups",
     "config": "config",

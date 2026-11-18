@@ -10,54 +10,6 @@ function userTag(user: any): string {
   return user?.globalName ?? user?.username ?? user?.tag ?? user?.id ?? 'Unknown';
 }
 
-function parseModDurationMs(durationStr: string | null | undefined): number {
-  if (!durationStr || typeof durationStr !== 'string') return NaN;
-  const match = durationStr.trim().match(/^(\d+)\s*([smhdw])?$/i);
-  if (!match) return NaN;
-  const val = parseInt(match[1], 10);
-  if (isNaN(val) || val <= 0) return NaN;
-  const unit = (match[2] || 'm').toLowerCase();
-  if (unit === 's') return val * 1000;
-  if (unit === 'm') return val * 60000;
-  if (unit === 'h') return val * 3600000;
-  if (unit === 'd') return val * 86400000;
-  if (unit === 'w') return val * 7 * 86400000;
-  return NaN;
-}
-
-function scheduleSafeTimeout(fn: () => void, delayMs: number): void {
-  const MAX_TIMEOUT = 2147483647;
-  if (delayMs > MAX_TIMEOUT) {
-    setTimeout(() => scheduleSafeTimeout(fn, delayMs - MAX_TIMEOUT), MAX_TIMEOUT);
-  } else {
-    setTimeout(fn, Math.max(1000, delayMs));
-  }
-}
-
-function canModerateTarget(interaction: any, targetUser: any, targetMember?: any): { allowed: boolean; reason?: string } {
-  const guild = interaction.guild;
-  const executorId = interaction.user?.id || interaction.author?.id;
-  const targetId = targetUser?.id || targetMember?.id || targetMember?.user?.id;
-  if (!targetId) {
-    return { allowed: false, reason: 'Could not resolve the specified target user.' };
-  }
-  if (targetId === executorId) {
-    return { allowed: false, reason: 'You cannot execute a moderation action against yourself.' };
-  }
-  if (guild?.ownerId && targetId === guild.ownerId) {
-    return { allowed: false, reason: 'You cannot execute a moderation action against the Server Owner.' };
-  }
-  const resolvedMember = targetMember || (guild?.members?.cache?.get?.(targetId) ?? null);
-  if (resolvedMember && guild?.ownerId !== executorId) {
-    const executorHighest = interaction.member?.roles?.highest?.position;
-    const targetHighest = resolvedMember.roles?.highest?.position;
-    if (typeof executorHighest === 'number' && typeof targetHighest === 'number' && targetHighest >= executorHighest) {
-      return { allowed: false, reason: 'You cannot moderate a member whose highest role is equal to or higher than your own.' };
-    }
-  }
-  return { allowed: true };
-}
-
 // Firestore-backed warnings helpers — stored under guild_warnings/{guildId}/users/{userId}
 async function loadUserWarnings(guildId: string, userId: string): Promise<any[]> {
   try {
@@ -262,16 +214,6 @@ export const ModerationManifest: ModuleManifest = {
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
         const user = interaction.options.getUser('user');
-        const targetMember = interaction.options.getMember?.('user') || (user ? interaction.guild?.members?.cache?.get(user.id) : null);
-        const modCheck = canModerateTarget(interaction, user, targetMember);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
         const reason = interaction.options.getString('reason') || 'No reason provided';
         try {
           await interaction.guild.members.ban(user, { reason });
@@ -313,15 +255,6 @@ export const ModerationManifest: ModuleManifest = {
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
-        const modCheck = canModerateTarget(interaction, member.user, member);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
         try {
@@ -366,25 +299,12 @@ export const ModerationManifest: ModuleManifest = {
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
-        const modCheck = canModerateTarget(interaction, member.user, member);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
-
-        const ms = parseModDurationMs(durationStr);
-        if (isNaN(ms) || ms < 1000 || ms > 28 * 86400000) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Invalid Timeout Duration')
-            .setDescription('Please specify a valid duration between `1s` and `28d` (e.g. `10m`, `1h`, `7d`).')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Validation Check' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
+        
+        let ms = 60000;
+        if (durationStr.endsWith('m')) ms = parseInt(durationStr) * 60000;
+        else if (durationStr.endsWith('h')) ms = parseInt(durationStr) * 3600000;
+        else if (durationStr.endsWith('d')) ms = parseInt(durationStr) * 86400000;
+        else ms = parseInt(durationStr) * 60000;
 
         try {
           await member.timeout(ms, 'Moderator Timeout');
@@ -427,15 +347,6 @@ export const ModerationManifest: ModuleManifest = {
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
-        const modCheck = canModerateTarget(interaction, member.user, member);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
         try {
           await member.timeout(null, 'Timeout removed by Moderator');
           const { buildMinimalAction } = await import('../../core/UIFactory.js');
@@ -468,7 +379,6 @@ export const ModerationManifest: ModuleManifest = {
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
         const member = interaction.options.getMember('user');
-        const durationOpt = interaction.options.getString?.('duration');
         if (!member) {
           const errEmbed = new EmbedBuilder()
             .setTitle('<a:warning:1546155193303957504> Member Location Failed')
@@ -477,36 +387,17 @@ export const ModerationManifest: ModuleManifest = {
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
-        const modCheck = canModerateTarget(interaction, member.user, member);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
-        const durationLabel = durationOpt || '1h';
-        const ms = durationOpt ? parseModDurationMs(durationOpt) : 60 * 60 * 1000;
-        if (isNaN(ms) || ms < 1000 || ms > 28 * 86400000) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Invalid Mute Duration')
-            .setDescription('Please specify a valid duration between `1s` and `28d` (e.g. `10m`, `1h`, `7d`).')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Validation Check' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
         try {
-          await member.timeout(ms, 'Moderator Mute');
+          await member.timeout(60 * 60 * 1000, 'Moderator Mute');
           const { buildMinimalAction } = await import('../../core/UIFactory.js');
           const successEmbed = buildMinimalAction({
             user: interaction.user,
             action: 'Has Muted',
             target: member.user,
-            duration: durationLabel
+            duration: '1h'
           });
           await interaction.reply({ embeds: [successEmbed] });
-          logModAction(interaction.guild, member.user, interaction.user, 'Mute', durationLabel, context);
+          logModAction(interaction.guild, member.user, interaction.user, 'Mute', '1h', context);
         } catch (e) {
           const errEmbed = new EmbedBuilder()
             .setTitle('<a:warning:1546155193303957504> Mute Execution Failed')
@@ -535,15 +426,6 @@ export const ModerationManifest: ModuleManifest = {
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
-        const modCheck = canModerateTarget(interaction, member.user, member);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
         try {
@@ -578,16 +460,6 @@ export const ModerationManifest: ModuleManifest = {
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
         const user = interaction.options.getUser('user');
-        const targetMember = interaction.options.getMember?.('user') || (user ? interaction.guild?.members?.cache?.get(user.id) : null);
-        const modCheck = canModerateTarget(interaction, user, targetMember);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
         const reason = interaction.options.getString('reason') || 'No reason provided';
         const guildId = interaction.guildId;
 
@@ -642,16 +514,6 @@ export const ModerationManifest: ModuleManifest = {
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
         const user = interaction.options.getUser('user');
-        const targetMember = interaction.options.getMember?.('user') || (user ? interaction.guild?.members?.cache?.get(user.id) : null);
-        const modCheck = canModerateTarget(interaction, user, targetMember);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
         const guildId = interaction.guildId;
         await clearUserWarnings(guildId, user.id);
 
@@ -898,8 +760,7 @@ export const ModerationManifest: ModuleManifest = {
             .setFooter({ text: 'Rage Optimiser • Access Control System' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
-        const rawSeconds = interaction.options.getInteger('seconds');
-        const seconds = Math.max(0, Math.min(21600, Number(rawSeconds) || 0));
+        const seconds = interaction.options.getInteger('seconds');
         try {
           await interaction.channel.setRateLimitPerUser(seconds);
           const { buildMinimalAction } = await import('../../core/UIFactory.js');
@@ -975,15 +836,6 @@ export const ModerationManifest: ModuleManifest = {
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
-        const modCheck = canModerateTarget(interaction, member.user, member);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
         try {
           await interaction.guild.members.ban(member.user.id, { deleteMessageSeconds: 7 * 24 * 60 * 60, reason });
           await interaction.guild.members.unban(member.user.id, 'Softban automatic unban');
@@ -1028,25 +880,11 @@ export const ModerationManifest: ModuleManifest = {
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
-        const modCheck = canModerateTarget(interaction, member.user, member);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
 
-        const ms = parseModDurationMs(durationStr);
-        if (isNaN(ms) || ms < 5000 || ms > 365 * 86400000) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Invalid Tempban Duration')
-            .setDescription('Please specify a valid duration between `5s` and `365d` (e.g. `1h`, `1d`, `7d`).')
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Validation Check' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
+        let ms = 86400000;
+        if (durationStr.endsWith('m')) ms = parseInt(durationStr) * 60000;
+        else if (durationStr.endsWith('h')) ms = parseInt(durationStr) * 3600000;
+        else if (durationStr.endsWith('d')) ms = parseInt(durationStr) * 86400000;
 
         try {
           await interaction.guild.members.ban(member.user.id, { reason });
@@ -1061,7 +899,7 @@ export const ModerationManifest: ModuleManifest = {
           await interaction.reply({ embeds: [successEmbed] });
           logModAction(interaction.guild, member.user, interaction.user, `Tempban (${durationStr})`, reason, context);
 
-          scheduleSafeTimeout(async () => {
+          setTimeout(async () => {
             await interaction.guild.members.unban(member.user.id, 'Tempban duration expired.').catch(() => {});
             context.logSyncEvent(`Moderation: Auto-unbanned ${member.user.username} (tempban expired).`, 'success');
           }, ms);
@@ -1094,15 +932,6 @@ export const ModerationManifest: ModuleManifest = {
             .setDescription('The specified user is not present in this server.')
             .setColor('#ff4444')
             .setFooter({ text: 'Rage Optimiser • Error Logs' });
-          return interaction.reply({ embeds: [errEmbed], flags: 64 });
-        }
-        const modCheck = canModerateTarget(interaction, member.user, member);
-        if (!modCheck.allowed) {
-          const errEmbed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Hierarchy & Target Protection')
-            .setDescription(modCheck.reason!)
-            .setColor('#ff4444')
-            .setFooter({ text: 'Rage Optimiser • Access Control System' });
           return interaction.reply({ embeds: [errEmbed], flags: 64 });
         }
         try {

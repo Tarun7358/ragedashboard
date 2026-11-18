@@ -70,8 +70,8 @@ export function Leveling({
   };
 
   const handleSaveSettings = async () => {
-    const token = localStorage.getItem('cn_token');
-    const currentGuild = localStorage.getItem('cn_active_guild');
+    const token = authToken || localStorage.getItem('cn_token');
+    const currentGuild = authGuildId || localStorage.getItem('cn_active_guild');
     if (!token) return;
 
     setSaving(true);
@@ -87,7 +87,6 @@ export function Leveling({
       });
 
       if (res.ok) {
-        const data = await res.json();
         onUpdateConfig('leveling', { multiplier, roleRewards });
         onSaveConfig('Leveling & XP configurations saved successfully.');
       } else {
@@ -117,8 +116,8 @@ export function Leveling({
   };
 
   const handleResetDatabase = async () => {
-    const token = localStorage.getItem('cn_token');
-    const currentGuild = localStorage.getItem('cn_active_guild');
+    const token = authToken || localStorage.getItem('cn_token');
+    const currentGuild = authGuildId || localStorage.getItem('cn_active_guild');
     if (!token) return;
 
     try {
@@ -140,75 +139,59 @@ export function Leveling({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
       
-      {/* Premium Header */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.14) 0%, rgba(15, 23, 42, 0.95) 100%)',
-        padding: '24px 32px',
-        borderRadius: '16px',
-        border: '1px solid rgba(234, 179, 8, 0.3)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
-        backdropFilter: 'blur(8px)',
-        position: 'relative',
-        overflow: 'hidden',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '20px'
-      }}>
-        <div style={{
-          position: 'absolute', top: '-50px', right: '-50px', width: '150px', height: '150px',
-          background: 'radial-gradient(circle, rgba(234, 179, 8, 0.2) 0%, transparent 70%)',
-          filter: 'blur(20px)', pointerEvents: 'none'
-        }} />
-
+      {/* Signature Enterprise Black Hero Header Card */}
+      <div className="hero-black-card">
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{
-            background: 'linear-gradient(135deg, #EAB308 0%, #F97316 100%)',
+            background: 'rgba(220, 38, 38, 0.12)',
+            border: '1px solid rgba(220, 38, 38, 0.3)',
             padding: '12px',
             borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(234, 179, 8, 0.3)',
-            color: '#fff',
+            color: '#EF4444',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            flexShrink: 0
           }}>
-            <Award size={28} />
+            <Award size={26} />
           </div>
           <div>
-            <h1 style={{
-              fontSize: '26px',
-              fontWeight: 800,
-              color: '#F8FAFC',
-              margin: 0,
-              letterSpacing: '-0.5px'
-            }}>Leveling & XP System</h1>
-            <p style={{
-              fontSize: '14px',
-              color: '#94A3B8',
-              margin: '4px 0 0 0',
-              fontWeight: 500
-            }}>
-              Configure message activity experience rates, rank progression rewards, and view leaderboard metrics.
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                Leveling & XP Engine
+              </h1>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '6px',
+                background: isEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                color: isEnabled ? '#34D399' : '#F87171',
+                border: `1px solid ${isEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
+              }}>
+                {isEnabled ? 'ACTIVE' : 'DISABLED'}
+              </span>
+            </div>
+            <p style={{ fontSize: '13px', color: '#A1A1AA', margin: '4px 0 0 0' }}>
+              Configure message activity experience rates, rank progression rewards, and view real-time leaderboard metrics.
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', position: 'relative', zIndex: 2 }}>
+        <div style={{ display: 'flex', gap: '10px' }}>
           <button 
-            className={`btn ${isEnabled ? 'btn-danger' : 'btn-primary'}`}
             style={{
-              padding: '10px 18px',
+              padding: '9px 16px',
               borderRadius: '8px',
-              fontWeight: 600,
+              fontWeight: 700,
+              fontSize: '13px',
               cursor: 'pointer',
-              transition: 'all 0.2s',
-              background: isEnabled ? 'linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)' : 'linear-gradient(135deg, #EAB308 0%, #C2410C 100%)',
-              border: 'none',
-              color: '#FFF',
-              boxShadow: isEnabled ? '0 4px 14px rgba(239, 68, 68, 0.25)' : '0 4px 14px rgba(234, 179, 8, 0.25)'
+              transition: 'all 0.15s',
+              background: isEnabled ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255, 255, 255, 0.1)',
+              border: `1px solid ${isEnabled ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255, 255, 255, 0.2)'}`,
+              color: isEnabled ? '#F87171' : '#FFFFFF'
             }}
             onClick={handleToggleEnable}
           >
@@ -216,105 +199,95 @@ export function Leveling({
           </button>
           
           <button 
-            className="btn btn-primary"
             style={{
-              padding: '10px 18px',
+              padding: '9px 18px',
               borderRadius: '8px',
-              fontWeight: 600,
+              fontWeight: 700,
+              fontSize: '13px',
               cursor: 'pointer',
-              transition: 'all 0.2s',
-              background: 'linear-gradient(135deg, #10B981 0%, #047857 100%)',
-              border: 'none',
-              color: '#FFF',
-              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)',
+              transition: 'all 0.15s',
+              background: '#FFFFFF',
+              border: '1px solid #FFFFFF',
+              color: '#09090B',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              boxShadow: 'var(--shadow-sm)'
             }}
             onClick={handleSaveSettings}
             disabled={saving}
           >
-            <Save size={16} />
+            <Save size={15} />
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
         </div>
       </div>
 
       {/* Main Grid Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '22px', alignItems: 'start' }}>
         
         {/* Left Hand Options */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* Rate and Multipliers */}
-          <div className="section-panel" style={{
-            background: 'rgba(30, 41, 59, 0.3)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            borderRadius: '16px',
-            padding: '24px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', marginTop: 0, marginBottom: '16px' }}>
+          <div className="section-panel" style={{ padding: '22px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', marginTop: 0, marginBottom: '14px' }}>
               XP Generation Velocity
             </h3>
 
             <div className="form-group">
-              <label className="form-label" style={{ fontWeight: 600, color: '#E2E8F0', marginBottom: '8px' }}>Global XP Multiplier</label>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <select
-                  className="form-select"
-                  value={multiplier}
-                  onChange={e => setMultiplier(e.target.value)}
-                  style={{ width: '100%', height: '42px' }}
-                >
-                  <option value="0.5">0.5x Multiplier (Slower Progression)</option>
-                  <option value="1.0">1.0x Multiplier (Standard Progression)</option>
-                  <option value="1.5">1.5x Multiplier (Boosted progression)</option>
-                  <option value="2.0">2.0x Multiplier (Double Speed)</option>
-                  <option value="3.0">3.0x Multiplier (Event Triple Speed)</option>
-                </select>
-              </div>
-              <p style={{ fontSize: '12px', color: '#94A3B8', marginTop: '8px', lineHeight: 1.5 }}>
+              <label className="form-label" style={{ fontWeight: 600, color: '#09090B', marginBottom: '8px' }}>
+                Global XP Multiplier
+              </label>
+              <select
+                className="form-select"
+                value={multiplier}
+                onChange={e => setMultiplier(e.target.value)}
+                style={{ width: '100%', height: '42px' }}
+              >
+                <option value="0.5">0.5x Multiplier (Slower Progression)</option>
+                <option value="1.0">1.0x Multiplier (Standard Progression)</option>
+                <option value="1.5">1.5x Multiplier (Boosted progression)</option>
+                <option value="2.0">2.0x Multiplier (Double Speed)</option>
+                <option value="3.0">3.0x Multiplier (Event Triple Speed)</option>
+              </select>
+              <p style={{ fontSize: '12px', color: '#71717A', marginTop: '8px', lineHeight: 1.5 }}>
                 Controls how much XP members earn per text message. Standard XP yields between 15-25 XP per message. Multiplier directly boosts this reward.
               </p>
             </div>
           </div>
 
           {/* Level Role Rewards Milestones */}
-          <div className="section-panel" style={{
-            background: 'rgba(30, 41, 59, 0.3)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            borderRadius: '16px',
-            padding: '24px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', marginTop: 0, marginBottom: '16px' }}>
+          <div className="section-panel" style={{ padding: '22px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', marginTop: 0, marginBottom: '14px' }}>
               Level Milestone Role Rewards
             </h3>
 
             {/* Input fields */}
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '18px' }}>
               <div className="form-group" style={{ flex: '1 1 100px' }}>
-                <label className="form-label" style={{ fontWeight: 600, color: '#E2E8F0', marginBottom: '8px' }}>Level Milestone</label>
+                <label className="form-label" style={{ fontWeight: 600, color: '#09090B', marginBottom: '6px' }}>
+                  Level Milestone
+                </label>
                 <input
                   type="number"
                   className="form-input-text"
                   placeholder="e.g. 5"
                   value={newLevel}
                   onChange={e => setNewLevel(e.target.value)}
-                  style={{ height: '42px', fontSize: '15px' }}
+                  style={{ height: '40px' }}
                 />
               </div>
 
               <div className="form-group" style={{ flex: '2 1 200px' }}>
-                <label className="form-label" style={{ fontWeight: 600, color: '#E2E8F0', marginBottom: '8px' }}>Reward Role</label>
+                <label className="form-label" style={{ fontWeight: 600, color: '#09090B', marginBottom: '6px' }}>
+                  Reward Role
+                </label>
                 <select
                   className="form-select"
                   value={newRoleId}
                   onChange={e => setNewRoleId(e.target.value)}
-                  style={{ width: '100%', height: '42px' }}
+                  style={{ width: '100%', height: '40px' }}
                 >
                   <option value="">-- Choose Role --</option>
                   {(registry?.roles || []).filter(r => r.name !== '@everyone').map(r => (
@@ -328,63 +301,62 @@ export function Leveling({
                 onClick={handleAddReward}
                 disabled={!newLevel || !newRoleId}
                 style={{
-                  height: '42px', padding: '0 20px', borderRadius: '8px', fontWeight: 600,
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  background: 'linear-gradient(135deg, #EAB308 0%, #C2410C 100%)', border: 'none', color: '#fff', cursor: 'pointer'
+                  height: '40px', padding: '0 18px', borderRadius: '8px', fontWeight: 600,
+                  display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0
                 }}
               >
-                <Plus size={16} /> Add Milestone
+                <Plus size={15} /> Add Milestone
               </button>
             </div>
 
             {/* List */}
             {Object.keys(roleRewards).length === 0 ? (
               <div style={{
-                textAlign: 'center', padding: '24px', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '12px', color: '#94A3B8'
+                textAlign: 'center', padding: '22px', border: '1px dashed #E4E4E8', borderRadius: '10px', color: '#71717A', background: '#FAFAFC'
               }}>
-                <p style={{ margin: 0 }}>No role reward milestones configured.</p>
-                <p style={{ margin: '4px 0 0 0', fontSize: '12px' }}>Members won't receive extra roles on leveling up until milestones are configured.</p>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 500 }}>No role reward milestones configured.</p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '12px' }}>Members receive extra roles on leveling up once milestones are added.</p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {Object.entries(roleRewards).map(([levelVal, roleId]) => {
                   const role = (registry?.roles || []).find(r => r.id === roleId);
                   return (
                     <div key={levelVal} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '12px 20px', background: 'rgba(15, 23, 42, 0.3)',
-                      border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px'
+                      padding: '12px 16px', background: '#FAFAFC',
+                      border: '1px solid #E4E4E8', borderRadius: '8px'
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                         <div style={{
-                          background: 'rgba(234, 179, 8, 0.1)', color: '#EAB308',
-                          width: '40px', height: '40px', borderRadius: '50%',
+                          background: '#09090B', color: '#FFFFFF',
+                          width: '38px', height: '38px', borderRadius: '8px',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 800, fontSize: '14px'
+                          fontWeight: 800, fontSize: '13px'
                         }}>
-                          Lvl {levelVal}
+                          L{levelVal}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 600, color: '#F1F5F9', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ fontWeight: 600, color: '#09090B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px' }}>
                             {role?.name || `Unknown Role (${roleId})`}
                             {role?.color && (
                               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: role.color }} />
                             )}
                           </div>
-                          <span style={{ fontSize: '11px', color: '#94A3B8' }}>Awarded automatically at Level {levelVal}</span>
+                          <span style={{ fontSize: '11px', color: '#71717A' }}>Awarded automatically at Level {levelVal}</span>
                         </div>
                       </div>
 
                       <button
-                        className="btn"
                         onClick={() => handleRemoveReward(levelVal)}
                         style={{
-                          background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#EF4444',
-                          borderRadius: '8px', cursor: 'pointer', padding: '8px',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
+                          background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626',
+                          borderRadius: '8px', cursor: 'pointer', padding: '7px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s'
                         }}
+                        title="Delete milestone"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   );
@@ -393,20 +365,13 @@ export function Leveling({
             )}
           </div>
           
-          {/* Danger zone reset */}
-          <div className="section-panel" style={{
-            background: 'rgba(239, 68, 68, 0.03)',
-            border: '1px solid rgba(239, 68, 68, 0.15)',
-            borderRadius: '16px',
-            padding: '24px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#EF4444', marginTop: 0, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <ShieldAlert size={18} /> Administrative Commands
+          {/* Administrative Danger Zone in Clean Light Red */}
+          <div className="light-red-card">
+            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#991B1B', marginTop: 0, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldAlert size={16} color="#DC2626" /> Administrative Commands
             </h3>
-            <p style={{ fontSize: '13px', color: '#94A3B8', marginTop: 0, marginBottom: '16px', lineHeight: 1.5 }}>
-              Resetting Leveling database clears all member accumulated XP files and returns everybody back to Level 0. This action is permanent and cannot be undone.
+            <p style={{ fontSize: '12.5px', color: '#7F1D1D', marginTop: 0, marginBottom: '14px', lineHeight: 1.5 }}>
+              Resetting Leveling database clears all member accumulated XP records and resets all users back to Level 0. This action is permanent and cannot be undone.
             </p>
 
             {resetConfirm ? (
@@ -414,14 +379,14 @@ export function Leveling({
                 <button
                   className="btn btn-danger"
                   onClick={handleResetDatabase}
-                  style={{ background: '#EF4444', border: 'none', color: '#fff', fontWeight: 600, padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}
+                  style={{ padding: '8px 16px', fontSize: '12px' }}
                 >
                   Yes, Clear Database
                 </button>
                 <button
                   className="btn btn-secondary"
                   onClick={() => setResetConfirm(false)}
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}
+                  style={{ padding: '8px 16px', fontSize: '12px' }}
                 >
                   Cancel
                 </button>
@@ -430,12 +395,7 @@ export function Leveling({
               <button
                 className="btn btn-danger"
                 onClick={() => setResetConfirm(true)}
-                style={{
-                  background: 'transparent', border: '1px solid #EF4444', color: '#EF4444',
-                  fontWeight: 600, padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.2s'
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#EF4444'; e.currentTarget.style.color = '#fff'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#EF4444'; }}
+                style={{ padding: '8px 16px', fontSize: '12px' }}
               >
                 Reset Member XP Database
               </button>
@@ -445,42 +405,36 @@ export function Leveling({
         </div>
 
         {/* Leaderboard Table Right */}
-        <div className="section-panel" style={{
-          background: 'rgba(30, 41, 59, 0.3)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: '16px',
-          padding: '24px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
-          backdropFilter: 'blur(10px)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#FFF', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BarChart2 size={18} color="#EAB308" /> Server Leaderboard
+        <div className="section-panel" style={{ padding: '22px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BarChart2 size={17} color="#09090B" /> Server Leaderboard
             </h3>
             <button
               onClick={fetchState}
               disabled={loading}
               style={{
-                background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)',
-                padding: '6px', borderRadius: '6px', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center'
+                background: '#F4F4F5', border: '1px solid #E4E4E8',
+                padding: '6px 10px', borderRadius: '6px', color: '#52525B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: '12px'
               }}
             >
-              <RefreshCw size={14} className={loading ? 'spin' : ''} />
+              <RefreshCw size={13} className={loading ? 'spin' : ''} />
+              <span>Refresh</span>
             </button>
           </div>
 
           {loading && leaderboard.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>Loading leaderboard...</div>
+            <div style={{ textAlign: 'center', padding: '32px', color: '#71717A', fontSize: '13px' }}>Loading leaderboard...</div>
           ) : leaderboard.length === 0 ? (
             <div style={{
-              textAlign: 'center', padding: '40px', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '12px', color: '#94A3B8'
+              textAlign: 'center', padding: '36px 20px', border: '1px dashed #E4E4E8', borderRadius: '10px', color: '#71717A', background: '#FAFAFC'
             }}>
-              <Info size={32} style={{ marginBottom: '12px', color: '#EAB308' }} />
-              <p style={{ margin: 0 }}>Leaderboard is empty.</p>
+              <Info size={28} style={{ marginBottom: '10px', color: '#09090B' }} />
+              <p style={{ margin: 0, fontWeight: 600, color: '#09090B', fontSize: '14px' }}>Leaderboard is empty.</p>
               <p style={{ margin: '4px 0 0 0', fontSize: '12px' }}>Start sending messages in text channels to accumulate XP activity.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {leaderboard.map((user, index) => {
                 const maxLevelXp = Math.pow((user.level + 1) * 10, 2);
                 const currentLevelXp = Math.pow(user.level * 10, 2);
@@ -489,52 +443,55 @@ export function Leveling({
                 return (
                   <div key={user.userId} style={{
                     display: 'flex', gap: '12px', alignItems: 'center',
-                    background: index === 0 ? 'rgba(234, 179, 8, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-                    border: index === 0 ? '1px solid rgba(234, 179, 8, 0.2)' : '1px solid rgba(255, 255, 255, 0.05)',
-                    padding: '12px 16px', borderRadius: '12px'
+                    background: index === 0 ? '#FEF2F2' : '#FFFFFF',
+                    border: `1px solid ${index === 0 ? '#FECACA' : '#E4E4E8'}`,
+                    padding: '10px 14px', borderRadius: '10px',
+                    boxShadow: 'var(--shadow-sm)'
                   }}>
                     {/* Rank Badge */}
                     <div style={{
-                      fontWeight: 800, fontSize: '14px', width: '24px', textAlign: 'center',
-                      color: index === 0 ? '#EAB308' : index === 1 ? '#94A3B8' : index === 2 ? '#B45309' : '#475569'
+                      fontWeight: 800, fontSize: '13px', width: '22px', textAlign: 'center',
+                      color: index === 0 ? '#DC2626' : index === 1 ? '#09090B' : index === 2 ? '#D97706' : '#71717A'
                     }}>
                       #{index + 1}
                     </div>
 
                     {/* Avatar */}
                     {user.avatar ? (
-                      <img src={user.avatar} alt="" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                      <img src={user.avatar} alt="" style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover' }} />
                     ) : (
                       <div style={{
-                        width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#94A3B8'
+                        width: '34px', height: '34px', borderRadius: '50%', background: '#F4F4F5', border: '1px solid #E4E4E8',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: '#09090B'
                       }}>
                         {user.username.substring(0, 2).toUpperCase()}
                       </div>
                     )}
 
                     {/* Profile */}
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 600, color: index === 0 ? '#fff' : '#CBD5E1', fontSize: '14px' }}>
+                        <span style={{ fontWeight: 600, color: '#09090B', fontSize: '13.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {user.username}
                         </span>
-                        <span style={{ fontSize: '11px', color: '#94A3B8' }}>Lvl {user.level}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: index === 0 ? '#DC2626' : '#71717A', marginLeft: '6px' }}>
+                          Lvl {user.level}
+                        </span>
                       </div>
 
                       {/* XP Bar */}
-                      <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ width: '100%', height: '4px', background: '#F4F4F5', borderRadius: '2px', overflow: 'hidden' }}>
                         <div style={{
                           height: '100%', width: `${progressPct}%`,
-                          background: 'linear-gradient(90deg, #EAB308 0%, #F97316 100%)', borderRadius: '2px'
+                          background: index === 0 ? '#DC2626' : '#09090B', borderRadius: '2px'
                         }} />
                       </div>
                     </div>
 
                     {/* XP Value */}
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFF' }}>{user.xp}</span>
-                      <span style={{ display: 'block', fontSize: '9px', color: '#94A3B8' }}>total xp</span>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>{user.xp}</span>
+                      <span style={{ display: 'block', fontSize: '9px', color: '#71717A', textTransform: 'uppercase' }}>xp</span>
                     </div>
                   </div>
                 );

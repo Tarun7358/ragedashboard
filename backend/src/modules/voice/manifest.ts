@@ -39,7 +39,7 @@ export const VoiceManifest: ModuleManifest = {
     {
       name: '247',
       description: 'Manage 24/7 bot voice presence — keep the bot alive in a voice channel permanently.',
-      aliases: ['24/7', '24-7', 'vp'],
+      aliases: ['24/7', '24-7', 'vc', 'voice', 'vp'],
       usage: 'r!247 <join|leave|status|set> [#channel]',
       examples: [
         'r!247 join #General',
@@ -98,7 +98,7 @@ export const VoiceManifest: ModuleManifest = {
         const isOwner = interaction.guild?.ownerId === interaction.user?.id ||
                         interaction.member?.permissions?.has?.('Administrator');
         if (!isOwner) {
-          return interaction.reply({ content: '<a:warning:1546155193303957504> Voice Presence commands require Administrator permissions.', flags: 64 });
+          return interaction.reply({ content: '<a:wrong:1546155193303957504> Voice Presence commands require Administrator permissions.', flags: 64 });
         }
         const guildId = interaction.guildId;
         const modules = (context.getModulesState ? context.getModulesState(guildId) : null) || [];
@@ -112,7 +112,7 @@ export const VoiceManifest: ModuleManifest = {
             flags: 64
           });
         } else if (action === 'join') {
-          if (!channelId) return interaction.reply({ content: '<a:warning:1546155193303957504> No voice channel configured. Use `r!247 join #channel` to configure and connect.', flags: 64 });
+          if (!channelId) return interaction.reply({ content: '<a:wrong:1546155193303957504> No voice channel configured. Use `r!247 join #channel` to configure and connect.', flags: 64 });
           if (context.toggleModule) context.toggleModule('voice', true);
           context.logSyncEvent(`Voice command: Owner requested join to channel ${channelId}.`, 'info');
           await interaction.reply({ content: `<:ticks:1532620580266836148> Bot will attempt to join <#${channelId}> on the next check cycle (within 10 seconds).`, flags: 64 });
@@ -133,7 +133,7 @@ export const VoiceManifest: ModuleManifest = {
           context.logSyncEvent('Voice command: Owner requested voice disconnect.', 'info');
           await interaction.reply({ content: '<:ticks:1532620580266836148> 24/7 Voice Presence disabled. Bot disconnected.', flags: 64 });
         } else {
-          await interaction.reply({ content: '<a:warning:1546155193303957504> Unknown action. Use: `status`, `join`, or `leave`.', flags: 64 });
+          await interaction.reply({ content: '<a:wrong:1546155193303957504> Unknown action. Use: `status`, `join`, or `leave`.', flags: 64 });
         }
       }
     },
@@ -145,7 +145,7 @@ export const VoiceManifest: ModuleManifest = {
                         interaction.member?.permissions?.has?.('Administrator');
         if (!isAdmin) {
           const embed = new EmbedBuilder()
-            .setTitle('<a:warning:1546155193303957504> Access Denied')
+            .setTitle('<a:wrong:1546155193303957504> Access Denied')
             .setDescription('Administrator permissions are required to manage the 24/7 Voice Presence system.')
             .setColor(0x99CC00)
             .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -200,7 +200,7 @@ export const VoiceManifest: ModuleManifest = {
 
           if (!channel) {
             const embed = new EmbedBuilder()
-              .setTitle('<a:warning:1546155193303957504> Voice Channel Required')
+              .setTitle('<a:wrong:1546155193303957504> Voice Channel Required')
               .setDescription('Please specify a voice channel (e.g. `r!24/7 join #General`) or join a voice channel first.')
               .setColor(0x99CC00)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -213,7 +213,7 @@ export const VoiceManifest: ModuleManifest = {
             const perms = channel.permissionsFor(botMember);
             if (perms && (!perms.has('ViewChannel') || !perms.has('Connect'))) {
               const embed = new EmbedBuilder()
-                .setTitle('<a:warning:1546155193303957504> Missing Permissions')
+                .setTitle('<a:wrong:1546155193303957504> Missing Permissions')
                 .setDescription(`The bot lacks **View Channel** or **Connect** permissions in **${channel.name}**.`)
                 .setColor(0x99CC00)
                 .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -276,7 +276,7 @@ export const VoiceManifest: ModuleManifest = {
             await interaction.editReply({ embeds: [embed] });
           } catch (err: any) {
             const embed = new EmbedBuilder()
-              .setTitle('<a:warning:1546155193303957504> Connection Failed')
+              .setTitle('<a:wrong:1546155193303957504> Connection Failed')
               .setDescription(`Failed to join the voice channel. Check that the bot has **Connect** and **View Channel** permissions in **${channel.name}**.`)
               .addFields({ name: 'Error Detail', value: `\`${err?.message || err}\`` })
               .setColor(0x99CC00)
@@ -349,7 +349,7 @@ export const VoiceManifest: ModuleManifest = {
           const isConnected = !!existingConnection;
           const channelId = config.channelId;
 
-          const statusText = isConnected ? '<:ticks:1532620580266836148> Connected' : (channelId ? '<:config:1532425712844144701> Configured (Not Connected)' : '<a:warning:1546155193303957504> Not Configured');
+          const statusText = isConnected ? '<:ticks:1532620580266836148> Connected' : (channelId ? '<:config:1532425712844144701> Configured (Not Connected)' : '<a:wrong:1546155193303957504> Not Configured');
 
           const connState = voiceMod?.connectionStatus || (isConnected ? 'connected' : 'disconnected');
           const duration = voiceMod?.connectionDuration || '—';
@@ -379,7 +379,7 @@ export const VoiceManifest: ModuleManifest = {
 
           if (!channel) {
             const embed = new EmbedBuilder()
-              .setTitle('<a:warning:1546155193303957504> Voice Channel Required')
+              .setTitle('<a:wrong:1546155193303957504> Voice Channel Required')
               .setDescription('Please specify a valid Voice or Stage Channel (e.g. `r!24/7 set #General`) or join a voice channel first.')
               .setColor(0x99CC00)
               .setFooter({ text: 'Rage Optimiser • Unbypassable Security' });
@@ -419,7 +419,7 @@ export const VoiceManifest: ModuleManifest = {
             await interaction.editReply({ embeds: [embed] });
           } catch (err: any) {
             await interaction.editReply({
-              content: `<a:warning:1546155193303957504> Failed to update 24/7 target: \`${err?.message || err}\``
+              content: `<a:wrong:1546155193303957504> Failed to update 24/7 target: \`${err?.message || err}\``
             });
           }
         }

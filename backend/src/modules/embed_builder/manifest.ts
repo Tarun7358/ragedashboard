@@ -42,35 +42,33 @@ export function parseColor(colorInput?: string): number {
  */
 export function buildCustomEmbed(data: Record<string, any>): EmbedBuilder {
   const embed = new EmbedBuilder();
-  const validUrl = (u?: any) => (typeof u === 'string' && /^https?:\/\//i.test(u.trim()) ? u.trim() : undefined);
 
   if (data.title) embed.setTitle(String(data.title));
   if (data.description) embed.setDescription(String(data.description));
   if (data.color) embed.setColor(parseColor(String(data.color)));
   else embed.setColor(Colors.BRAND);
 
-  const safeUrl = validUrl(data.url);
-  if (safeUrl) embed.setURL(safeUrl);
+  if (data.url) embed.setURL(String(data.url));
 
   if (data.author) {
     if (typeof data.author === 'string') {
       embed.setAuthor({ name: data.author });
     } else if (typeof data.author === 'object' && data.author.name) {
       embed.setAuthor({
-        name: String(data.author.name),
-        iconURL: validUrl(data.author.icon_url || data.author.iconURL),
-        url: validUrl(data.author.url)
+        name: data.author.name,
+        iconURL: data.author.icon_url || data.author.iconURL,
+        url: data.author.url
       });
     }
   }
 
   if (data.thumbnail) {
-    const url = validUrl(typeof data.thumbnail === 'string' ? data.thumbnail : data.thumbnail.url);
+    const url = typeof data.thumbnail === 'string' ? data.thumbnail : data.thumbnail.url;
     if (url) embed.setThumbnail(url);
   }
 
   if (data.image) {
-    const url = validUrl(typeof data.image === 'string' ? data.image : data.image.url);
+    const url = typeof data.image === 'string' ? data.image : data.image.url;
     if (url) embed.setImage(url);
   }
 
@@ -79,8 +77,8 @@ export function buildCustomEmbed(data: Record<string, any>): EmbedBuilder {
       embed.setFooter({ text: data.footer });
     } else if (typeof data.footer === 'object' && data.footer.text) {
       embed.setFooter({
-        text: String(data.footer.text),
-        iconURL: validUrl(data.footer.icon_url || data.footer.iconURL)
+        text: data.footer.text,
+        iconURL: data.footer.icon_url || data.footer.iconURL
       });
     }
   } else {
@@ -88,9 +86,7 @@ export function buildCustomEmbed(data: Record<string, any>): EmbedBuilder {
   }
 
   if (data.timestamp) {
-    const tsDate = new Date(data.timestamp);
-    if (!isNaN(tsDate.getTime())) embed.setTimestamp(tsDate);
-    else embed.setTimestamp();
+    embed.setTimestamp(new Date(data.timestamp));
   } else {
     embed.setTimestamp();
   }
@@ -219,9 +215,8 @@ export function registerEmbedPrefixCommands(): void {
 
         return message.reply({
           content: `${VERIFIED_ICON} **Quick Embed Draft Created**:`,
-          embeds: [embed],
-          _rawEmbed: true
-        } as any);
+          embeds: [embed]
+        });
       }
 
       if (sub === 'delete') {
@@ -412,9 +407,8 @@ export const EmbedBuilderManifest: ModuleManifest = {
 
           return interaction.reply({
             content: `${VERIFIED_ICON} **Custom Embed Draft Rendered**:`,
-            embeds: [embed],
-            _rawEmbed: true
-          } as any);
+            embeds: [embed]
+          });
         }
 
         // ─── SEND PRESET ─────────────────────────────────────────
@@ -461,9 +455,8 @@ export const EmbedBuilderManifest: ModuleManifest = {
           const embed = buildCustomEmbed(embedData);
           return interaction.reply({
             content: `${VERIFIED_ICON} Saved custom embed preset **"${name.toLowerCase()}"** to database! Preview:`,
-            embeds: [embed],
-            _rawEmbed: true
-          } as any);
+            embeds: [embed]
+          });
         }
 
         // ─── JSON IMPORT / EXPORT ────────────────────────────────
@@ -544,9 +537,8 @@ export const EmbedBuilderManifest: ModuleManifest = {
 
           return interaction.reply({
             content: `${VERIFIED_ICON} Rendered preview for field **"${title}"**:`,
-            embeds: [embed],
-            _rawEmbed: true
-          } as any);
+            embeds: [embed]
+          });
         }
 
         // ─── LIST PRESETS ────────────────────────────────────────
@@ -583,7 +575,7 @@ export const EmbedBuilderManifest: ModuleManifest = {
       }
     },
     {
-      name: 'modal_embed_builder_modal_submit',
+      name: 'interaction_embed_builder_modal',
       handler: async (client: any, interaction: any) => {
         if (interaction.customId !== 'embed_builder_modal_submit') return;
 
@@ -597,9 +589,8 @@ export const EmbedBuilderManifest: ModuleManifest = {
 
         return interaction.reply({
           content: `${VERIFIED_ICON} **Interactive Custom Embed Created Successfully!**`,
-          embeds: [embed],
-          _rawEmbed: true
-        } as any);
+          embeds: [embed]
+        });
       }
     }
   ]

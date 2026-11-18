@@ -79,14 +79,14 @@ export class PayloadFormatter {
         .replace(/(^|\n)([> ]*)<a?:\w+:1546155193303957504>[ \t]*/g, '$1$2\uE001');
     }
     work = work
+      .replace(/\uE000/g, '')
+      .replace(/\uE001/g, '')
       .replace(EMOJI_REGEX, '')
       .replace(/\u2022/g, '-')
       .replace(/[ \t]{2,}/g, ' ')
       .replace(/^ +/gm, '')
       .trim();
-    return work
-      .replace(/\uE000/g, '<a:success_check:1546134620087783526> ')
-      .replace(/\uE001/g, '<a:warning:1546155193303957504> ');
+    return work;
   }
   /**
    * Normalize any Discord reply options object before sending.

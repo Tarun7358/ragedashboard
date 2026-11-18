@@ -257,9 +257,8 @@ export const DiscordDashboardManifest: ModuleManifest = {
           const message = await channel.messages.fetch(config.messageId).catch(() => null);
           if (!message) return;
 
-          const activePage = dashModule?.config?.currentPage || 'home';
-          const embed = generateDashboardEmbed(guild, activePage, client, context);
-          const components = generateDashboardComponents(config, activePage, client);
+          const embed = generateDashboardEmbed(guild, 'home', client, context);
+          const components = generateDashboardComponents(config, 'home', client);
           await message.edit({ embeds: [embed], components });
         } catch (err: any) {
           if (!err?.message?.includes('Expected token to be set')) {
@@ -288,27 +287,18 @@ export const DiscordDashboardManifest: ModuleManifest = {
           const message = await interaction.reply({ embeds: [embed], components, fetchReply: true });
           
           // Save message ID to backend config
-          if (dashModule) {
-            if (!dashModule.config) dashModule.config = {};
-            dashModule.config.channelId = interaction.channelId;
-            dashModule.config.messageId = message.id;
-            dashModule.config.currentPage = 'home';
-          }
           if (context.updateModuleConfig) {
             context.updateModuleConfig('discord-dashboard', {
               ...(dashModule?.config || {}),
               channelId: interaction.channelId,
-              messageId: message.id,
-              currentPage: 'home'
+              messageId: message.id
             });
           }
 
           context.logSyncEvent('Discord Dashboard initialized and pinned.', 'success');
         } catch (err) {
           console.error(err);
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Failed to setup dashboard.', flags: 64 }).catch(() => {});
-          }
+          await interaction.reply({ content: '❌ Failed to setup dashboard.', flags: 64 });
         }
       }
     },
@@ -333,9 +323,7 @@ export const DiscordDashboardManifest: ModuleManifest = {
           await interaction.reply({ embeds: [embed], components });
         } catch (err) {
           console.error(err);
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Failed to display dashboard.', flags: 64 }).catch(() => {});
-          }
+          await interaction.reply({ content: '❌ Failed to display dashboard.', flags: 64 });
         }
       }
     },
@@ -346,22 +334,12 @@ export const DiscordDashboardManifest: ModuleManifest = {
           const modules = context.getModulesState ? context.getModulesState() : [];
           const dashModule = modules.find((m: any) => m.id === 'discord-dashboard');
           const config = dashModule?.config || {};
-          if (dashModule) {
-            if (!dashModule.config) dashModule.config = {};
-            dashModule.config.currentPage = page;
-          }
-          if (context?.updateModuleConfig) {
-            context.updateModuleConfig('discord-dashboard', { ...config, currentPage: page });
-          }
 
           const embed = generateDashboardEmbed(interaction.guild, page, client, context);
-          const components = generateDashboardComponents(dashModule?.config || config, page, client);
+          const components = generateDashboardComponents(config, page, client);
           await interaction.update({ embeds: [embed], components });
         } catch (err) {
           console.error(err);
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Failed to update dashboard view.', flags: 64 }).catch(() => {});
-          }
         }
       }
     })),
@@ -372,16 +350,12 @@ export const DiscordDashboardManifest: ModuleManifest = {
           const modules = context.getModulesState ? context.getModulesState() : [];
           const dashModule = modules.find((m: any) => m.id === 'discord-dashboard');
           const config = dashModule?.config || {};
-          const activePage = config.currentPage || 'home';
 
-          const embed = generateDashboardEmbed(interaction.guild, activePage, client, context);
-          const components = generateDashboardComponents(config, activePage, client);
+          const embed = generateDashboardEmbed(interaction.guild, 'home', client, context);
+          const components = generateDashboardComponents(config, 'home', client);
           await interaction.update({ embeds: [embed], components });
         } catch (err) {
           console.error(err);
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: '❌ Failed to refresh dashboard.', flags: 64 }).catch(() => {});
-          }
         }
       }
     },

@@ -427,7 +427,26 @@ export function registerWelcomeCommands(): void {
             return message.reply({ embeds: [syntaxCard] });
           }
 
-          updateCommConfig({ autoRoleId: role.id });
+          if (role.id === message.guild?.id) {
+            return message.reply({ content: `${WRONG_ICON} **Invalid Role**: Cannot use \`@everyone\` as an auto-role.` });
+          }
+          if (role.managed) {
+            return message.reply({ content: `${WRONG_ICON} **Managed Role**: Cannot assign integration/managed bot roles.` });
+          }
+          if (role.permissions?.has?.(PermissionFlagsBits.Administrator)) {
+            return message.reply({ content: `${WRONG_ICON} **Security Block**: Cannot assign a role with \`Administrator\` permissions as an auto-role.` });
+          }
+          const botMember = message.guild?.members.me;
+          if (botMember && role.position >= botMember.roles.highest.position) {
+            return message.reply({
+              content: `${WRONG_ICON} **Hierarchy Error**: Role <@&${role.id}> is higher than or equal to my highest role. Please drag my role above <@&${role.id}> in Server Settings > Roles.`
+            });
+          }
+
+          let existingList: string[] = Array.isArray(commConfig.autoRoleIds) ? [...commConfig.autoRoleIds] : [];
+          if (!existingList.includes(role.id)) existingList.push(role.id);
+
+          updateCommConfig({ autoRoleId: role.id, autoRoleIds: existingList });
 
           const savedEmbed = new EmbedBuilder()
             .setColor(Colors.BRAND)
@@ -1208,15 +1227,53 @@ export const CommunityManifest: ModuleManifest = {
         const commModule = modules.find((m: any) => m.id === 'community');
         if (!commModule || commModule.status !== 'enabled') return;
 
-        const config = commModule.config;
+        const config = commModule.config || {};
+        const botMember = member.guild?.members.me;
 
-        if (config.autoRoleId && !member.user?.bot) {
-          try {
-            const role = member.guild.roles.cache.get(config.autoRoleId) || await member.guild.roles.fetch(config.autoRoleId).catch(() => null);
-            if (role && !role.managed && !role.permissions?.has?.(PermissionFlagsBits.Administrator)) {
-              await member.roles.add(config.autoRoleId, 'Community Welcome Auto-Role').catch(() => {});
+        // ─────────────────────────────────────────────
+        // 1. AUTO-ROLE DISPATCH (HUMANS & BOTS)
+        // ─────────────────────────────────────────────
+        if (member.user?.bot) {
+          // Bot Auto-Role
+          if (config.botAutoRoleId) {
+            try {
+              const botRole = member.guild.roles.cache.get(config.botAutoRoleId) || await member.guild.roles.fetch(config.botAutoRoleId).catch(() => null);
+              if (botRole && !botRole.managed && !botRole.permissions?.has?.(PermissionFlagsBits.Administrator)) {
+                if (!botMember || botRole.position < botMember.roles.highest.position) {
+                  await member.roles.add(config.botAutoRoleId, 'Community Bot Auto-Role').catch(() => {});
+                  if (context.logSyncEvent) {
+                    context.logSyncEvent(member.guild.id, `AutoRole: Assigned bot role "${botRole.name}" to bot "${member.user.tag}".`, 'success');
+                  }
+                }
+              }
+            } catch {}
+          }
+        } else {
+          // Human Member Auto-Role(s)
+          const rolesToAssign: string[] = [];
+          if (Array.isArray(config.autoRoleIds) && config.autoRoleIds.length > 0) {
+            for (const rId of config.autoRoleIds) {
+              if (rId && !rolesToAssign.includes(rId)) rolesToAssign.push(rId);
             }
-          } catch {}
+          } else if (config.autoRoleId) {
+            rolesToAssign.push(config.autoRoleId);
+          }
+
+          if (rolesToAssign.length > 0) {
+            try {
+              for (const rId of rolesToAssign) {
+                const role = member.guild.roles.cache.get(rId) || await member.guild.roles.fetch(rId).catch(() => null);
+                if (role && !role.managed && !role.permissions?.has?.(PermissionFlagsBits.Administrator)) {
+                  if (!botMember || role.position < botMember.roles.highest.position) {
+                    await member.roles.add(rId, 'Community Welcome Auto-Role').catch(() => {});
+                    if (context.logSyncEvent) {
+                      context.logSyncEvent(member.guild.id, `AutoRole: Assigned role "${role.name}" to member "${member.user.username}".`, 'success');
+                    }
+                  }
+                }
+              }
+            } catch {}
+          }
         }
 
         const channelId = config.welcomeChannelId;

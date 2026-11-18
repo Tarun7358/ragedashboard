@@ -107,10 +107,10 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      {/* Top Hero Banner */}
+      {/* Top Hero Banner - Black Obsidian Theme */}
       <div style={{
-        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%)',
-        border: '1px solid rgba(59, 130, 246, 0.3)',
+        background: '#09090B',
+        border: '1px solid #27272A',
         borderRadius: '16px',
         padding: '24px 28px',
         display: 'flex',
@@ -118,33 +118,33 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: '20px',
-        boxShadow: '0 12px 36px rgba(0, 0, 0, 0.4)'
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
           <div style={{
             width: '54px', height: '54px', borderRadius: '14px',
-            background: isEnabled ? 'rgba(59, 130, 246, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-            border: `1px solid ${isEnabled ? '#3B82F6' : '#EF4444'}`,
+            background: isEnabled ? 'rgba(255, 255, 255, 0.1)' : '#FEF2F2',
+            border: `1px solid ${isEnabled ? '#3F3F46' : '#FECACA'}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: isEnabled ? '#60A5FA' : '#F87171'
+            color: isEnabled ? '#FAFAFA' : '#DC2626'
           }}>
             <Bot size={28} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#F8FAFC', margin: 0 }}>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#FFFFFF', margin: 0, letterSpacing: '-0.02em' }}>
                 AutoMod & Chat Security Center
               </h1>
               <span style={{
                 fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px',
-                background: isEnabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                color: isEnabled ? '#34D399' : '#F87171',
-                border: `1px solid ${isEnabled ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`
+                background: isEnabled ? '#ECFDF5' : '#FEF2F2',
+                color: isEnabled ? '#059669' : '#DC2626',
+                border: `1px solid ${isEnabled ? '#A7F3D0' : '#FECACA'}`
               }}>
                 {isEnabled ? 'FILTERS ONLINE & ACTIVE' : 'SYSTEM OFFLINE'}
               </span>
             </div>
-            <p style={{ fontSize: '13px', color: '#94A3B8', margin: '4px 0 0' }}>
+            <p style={{ fontSize: '13px', color: '#A1A1AA', margin: '4px 0 0' }}>
               Real-time message inspection, standalone mass ping interception, phishing filter, and high-frequency anti-spam.
             </p>
           </div>
@@ -154,10 +154,10 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
           onClick={handleToggleMaster}
           style={{
             padding: '10px 20px', borderRadius: '10px',
-            background: isEnabled ? 'rgba(239, 68, 68, 0.15)' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-            border: `1px solid ${isEnabled ? 'rgba(239, 68, 68, 0.4)' : 'none'}`,
-            color: '#FFFFFF', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-            boxShadow: isEnabled ? 'none' : '0 4px 14px rgba(16, 185, 129, 0.3)'
+            background: isEnabled ? '#FEF2F2' : '#09090B',
+            border: `1px solid ${isEnabled ? '#FECACA' : '#FFFFFF'}`,
+            color: isEnabled ? '#DC2626' : '#FFFFFF', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+            transition: 'all 0.2s ease'
           }}
         >
           {isEnabled ? 'Disable Master AutoMod' : 'Enable Master AutoMod'}
@@ -169,25 +169,26 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
         
         {/* 1. Standalone Anti-Everyone & Anti-Here (Single-Switch Engine) */}
         <div style={{
-          background: '#161E2E',
-          border: `1px solid ${isAntiEveryone ? 'rgba(16, 185, 129, 0.35)' : 'rgba(255, 255, 255, 0.08)'}`,
+          background: '#FFFFFF',
+          border: `1px solid ${isAntiEveryone ? '#FECACA' : '#E4E4E7'}`,
           borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)', position: 'relative'
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)', position: 'relative'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 10,
-                background: 'rgba(16, 185, 129, 0.15)', color: '#34D399',
+                background: '#FEF2F2', color: '#DC2626',
+                border: '1px solid #FECACA',
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
                 <AtSign size={18} />
               </div>
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#F8FAFC' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>
                   Anti-Everyone / Anti-Here Mention Shield
                 </div>
-                <div style={{ fontSize: '11px', color: '#10B981', fontWeight: 700, marginTop: 1 }}>
+                <div style={{ fontSize: '11px', color: '#DC2626', fontWeight: 700, marginTop: 1 }}>
                   Zero-Tolerance • 1st Attempt Punishment
                 </div>
               </div>
@@ -202,53 +203,54 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
               }}
               style={{
                 width: '46px', height: '26px', borderRadius: '14px',
-                background: isAntiEveryone ? '#10B981' : 'rgba(255, 255, 255, 0.1)',
+                background: isAntiEveryone ? '#09090B' : '#E4E4E7',
                 border: 'none', position: 'relative', cursor: 'pointer', flexShrink: 0
               }}
             >
               <div style={{
                 width: '20px', height: '20px', borderRadius: '50%', background: '#FFFFFF',
                 position: 'absolute', top: '3px', left: isAntiEveryone ? '23px' : '3px',
-                transition: 'left 0.2s ease'
+                transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
               }} />
             </button>
           </div>
 
-          <p style={{ fontSize: '12.5px', color: '#94A3B8', margin: 0, lineHeight: 1.5 }}>
-            Decoupled single-switch protection. Intercepts unauthorized `@everyone` and `@here` mentions, deletes the offending message, instantly quarantines rogue webhooks, and applies punishment on the 1st attempt.
+          <p style={{ fontSize: '12.5px', color: '#71717A', margin: 0, lineHeight: 1.5 }}>
+            Decoupled single-switch protection. Intercepts unauthorized <code>@everyone</code> and <code>@here</code> mentions, deletes the offending message, instantly quarantines rogue webhooks, and applies punishment on the 1st attempt.
           </p>
 
           <div style={{
             padding: '10px 14px', borderRadius: '8px',
-            background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255, 255, 255, 0.06)',
+            background: '#FAFAFA', border: '1px solid #E4E4E7',
             fontSize: '11.5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
           }}>
-            <span style={{ color: '#94A3B8' }}>Enforcement Timing:</span>
-            <span style={{ color: '#34D399', fontWeight: 700 }}>Immediate (1/1 Attempt)</span>
+            <span style={{ color: '#71717A' }}>Enforcement Timing:</span>
+            <span style={{ color: '#DC2626', fontWeight: 700 }}>Immediate (1/1 Attempt)</span>
           </div>
         </div>
 
         {/* 2. Malicious URL & Anti-Link Shield */}
         <div style={{
-          background: '#161E2E',
-          border: `1px solid ${isAntiLink ? 'rgba(59, 130, 246, 0.35)' : 'rgba(255, 255, 255, 0.08)'}`,
+          background: '#FFFFFF',
+          border: `1px solid ${isAntiLink ? '#FECACA' : '#E4E4E7'}`,
           borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)'
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 10,
-                background: 'rgba(59, 130, 246, 0.15)', color: '#60A5FA',
+                background: '#FEF2F2', color: '#DC2626',
+                border: '1px solid #FECACA',
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
                 <Link size={18} />
               </div>
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#F8FAFC' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>
                   Anti-Link & Phishing Interceptor
                 </div>
-                <div style={{ fontSize: '11px', color: '#60A5FA', fontWeight: 700, marginTop: 1 }}>
+                <div style={{ fontSize: '11px', color: '#DC2626', fontWeight: 700, marginTop: 1 }}>
                   External Link & Scam Shield
                 </div>
               </div>
@@ -262,14 +264,14 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
               }}
               style={{
                 width: '46px', height: '26px', borderRadius: '14px',
-                background: isAntiLink ? '#3B82F6' : 'rgba(255, 255, 255, 0.1)',
+                background: isAntiLink ? '#09090B' : '#E4E4E7',
                 border: 'none', position: 'relative', cursor: 'pointer', flexShrink: 0
               }}
             >
               <div style={{
                 width: '20px', height: '20px', borderRadius: '50%', background: '#FFFFFF',
                 position: 'absolute', top: '3px', left: isAntiLink ? '23px' : '3px',
-                transition: 'left 0.2s ease'
+                transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
               }} />
             </button>
           </div>
@@ -277,7 +279,7 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
           <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
             {/* Limit Counter */}
             <div style={{ flex: 1, minWidth: 120 }}>
-              <div style={{ fontSize: '11.5px', color: '#94A3B8', marginBottom: 4 }}>Violation Limit:</div>
+              <div style={{ fontSize: '11.5px', color: '#71717A', marginBottom: 4, fontWeight: 600 }}>Violation Limit:</div>
               <input
                 type="number"
                 min="1"
@@ -286,22 +288,22 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
                 onChange={(e) => handleUpdate({ antiLinkLimit: parseInt(e.target.value, 10) || 5, limit: parseInt(e.target.value, 10) || 5 })}
                 style={{
                   width: '100%', padding: '8px 12px', borderRadius: 8,
-                  background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#F8FAFC', fontSize: '13px', fontWeight: 700
+                  background: '#FFFFFF', border: '1px solid #E4E4E7',
+                  color: '#09090B', fontSize: '13px', fontWeight: 700
                 }}
               />
             </div>
 
             {/* Punishment Policy */}
             <div style={{ flex: 1.5, minWidth: 150 }}>
-              <div style={{ fontSize: '11.5px', color: '#94A3B8', marginBottom: 4 }}>Action On Limit:</div>
+              <div style={{ fontSize: '11.5px', color: '#71717A', marginBottom: 4, fontWeight: 600 }}>Action On Limit:</div>
               <select
                 value={linkPunishment}
                 onChange={(e) => handleUpdate({ punishment: e.target.value })}
                 style={{
                   width: '100%', padding: '8px 12px', borderRadius: 8,
-                  background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#F8FAFC', fontSize: '13px', fontWeight: 700, outline: 'none'
+                  background: '#FFFFFF', border: '1px solid #E4E4E7',
+                  color: '#09090B', fontSize: '13px', fontWeight: 700, outline: 'none'
                 }}
               >
                 <option value="warn">Warn (1-4) & Timeout (5)</option>
@@ -312,37 +314,38 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
             </div>
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '12.5px', color: '#CBD5E1', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '12.5px', color: '#3F3F46', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={!allowInvites}
               onChange={(e) => handleUpdate({ allowInvites: !e.target.checked, blockInvites: e.target.checked })}
             />
-            <span>Block Discord Server Invite Links (`discord.gg/*`)</span>
+            <span>Block Discord Server Invite Links (<code>discord.gg/*</code>)</span>
           </label>
         </div>
 
         {/* 3. High-Frequency Anti-Spam Rate Limiter */}
         <div style={{
-          background: '#161E2E',
-          border: `1px solid ${isAntiSpam ? 'rgba(245, 158, 11, 0.35)' : 'rgba(255, 255, 255, 0.08)'}`,
+          background: '#FFFFFF',
+          border: `1px solid ${isAntiSpam ? '#FECACA' : '#E4E4E7'}`,
           borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)'
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 10,
-                background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B',
+                background: '#FEF2F2', color: '#DC2626',
+                border: '1px solid #FECACA',
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
                 <Clock size={18} />
               </div>
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#F8FAFC' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>
                   High-Frequency Anti-Spam
                 </div>
-                <div style={{ fontSize: '11px', color: '#F59E0B', fontWeight: 700, marginTop: 1 }}>
+                <div style={{ fontSize: '11px', color: '#DC2626', fontWeight: 700, marginTop: 1 }}>
                   Message Velocity & Raid Filter
                 </div>
               </div>
@@ -356,21 +359,21 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
               }}
               style={{
                 width: '46px', height: '26px', borderRadius: '14px',
-                background: isAntiSpam ? '#F59E0B' : 'rgba(255, 255, 255, 0.1)',
+                background: isAntiSpam ? '#09090B' : '#E4E4E7',
                 border: 'none', position: 'relative', cursor: 'pointer', flexShrink: 0
               }}
             >
               <div style={{
                 width: '20px', height: '20px', borderRadius: '50%', background: '#FFFFFF',
                 position: 'absolute', top: '3px', left: isAntiSpam ? '23px' : '3px',
-                transition: 'left 0.2s ease'
+                transition: 'left 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
               }} />
             </button>
           </div>
 
           <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '11.5px', color: '#94A3B8', marginBottom: 4 }}>Max Messages:</div>
+              <div style={{ fontSize: '11.5px', color: '#71717A', marginBottom: 4, fontWeight: 600 }}>Max Messages:</div>
               <input
                 type="number"
                 min="2"
@@ -379,14 +382,14 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
                 onChange={(e) => handleUpdate({ maxMessages: parseInt(e.target.value, 10) || 5, maxSpamMessages: parseInt(e.target.value, 10) || 5 })}
                 style={{
                   width: '100%', padding: '8px 12px', borderRadius: 8,
-                  background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#F8FAFC', fontSize: '13px', fontWeight: 700
+                  background: '#FFFFFF', border: '1px solid #E4E4E7',
+                  color: '#09090B', fontSize: '13px', fontWeight: 700
                 }}
               />
             </div>
 
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '11.5px', color: '#94A3B8', marginBottom: 4 }}>Window (Seconds):</div>
+              <div style={{ fontSize: '11.5px', color: '#71717A', marginBottom: 4, fontWeight: 600 }}>Window (Seconds):</div>
               <input
                 type="number"
                 min="2"
@@ -395,8 +398,8 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
                 onChange={(e) => handleUpdate({ windowSeconds: parseInt(e.target.value, 10) || 5, spamWindowSeconds: parseInt(e.target.value, 10) || 5 })}
                 style={{
                   width: '100%', padding: '8px 12px', borderRadius: 8,
-                  background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#F8FAFC', fontSize: '13px', fontWeight: 700
+                  background: '#FFFFFF', border: '1px solid #E4E4E7',
+                  color: '#09090B', fontSize: '13px', fontWeight: 700
                 }}
               />
             </div>
@@ -404,8 +407,8 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
 
           <div style={{
             padding: '8px 12px', borderRadius: 8,
-            background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255, 255, 255, 0.06)',
-            fontSize: '11.5px', color: '#CBD5E1'
+            background: '#FAFAFA', border: '1px solid #E4E4E7',
+            fontSize: '11.5px', color: '#52525B'
           }}>
             Threshold: Trigger mute if user posts more than <strong>{maxSpam} messages</strong> in <strong>{spamWindow} seconds</strong>.
           </div>
@@ -415,24 +418,25 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
 
       {/* Advanced Media & Flood Protection */}
       <div style={{
-        background: '#161E2E', border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '18px'
+        background: '#FFFFFF', border: '1px solid #E4E4E7',
+        borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '18px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
       }}>
-        <div style={{ fontSize: '15px', fontWeight: 700, color: '#F8FAFC' }}>
+        <div style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>
           Payload, Media & Repetitive Text Filters
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
           {/* Attachment Scanner */}
           <div style={{
-            padding: '14px', borderRadius: 10, background: 'rgba(15, 23, 42, 0.6)',
-            border: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            padding: '14px', borderRadius: 10, background: '#FAFAFA',
+            border: '1px solid #E4E4E7', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <FileWarning size={18} color="#8B5CF6" />
+              <FileWarning size={18} color="#09090B" />
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>Suspicious File Scanner</div>
-                <div style={{ fontSize: '11px', color: '#94A3B8' }}>Blocks `.exe`, `.bat`, `.scr`, `.vbs` payloads</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>Suspicious File Scanner</div>
+                <div style={{ fontSize: '11px', color: '#71717A' }}>Blocks <code>.exe</code>, <code>.bat</code>, <code>.scr</code>, <code>.vbs</code> payloads</div>
               </div>
             </div>
             <input
@@ -445,14 +449,14 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
 
           {/* Duplicate Suppressor */}
           <div style={{
-            padding: '14px', borderRadius: 10, background: 'rgba(15, 23, 42, 0.6)',
-            border: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            padding: '14px', borderRadius: 10, background: '#FAFAFA',
+            border: '1px solid #E4E4E7', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Copy size={18} color="#3B82F6" />
+              <Copy size={18} color="#09090B" />
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>Duplicate Flood Suppressor</div>
-                <div style={{ fontSize: '11px', color: '#94A3B8' }}>Blocks copy-pasted repeated messages</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>Duplicate Flood Suppressor</div>
+                <div style={{ fontSize: '11px', color: '#71717A' }}>Blocks copy-pasted repeated messages</div>
               </div>
             </div>
             <input
@@ -465,14 +469,14 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
 
           {/* Caps Limit */}
           <div style={{
-            padding: '14px', borderRadius: 10, background: 'rgba(15, 23, 42, 0.6)',
-            border: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            padding: '14px', borderRadius: 10, background: '#FAFAFA',
+            border: '1px solid #E4E4E7', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Type size={18} color="#EC4899" />
+              <Type size={18} color="#09090B" />
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>Caps Flood Limit (70%)</div>
-                <div style={{ fontSize: '11px', color: '#94A3B8' }}>Suppresses messages with excessive capital letters</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>Caps Flood Limit (70%)</div>
+                <div style={{ fontSize: '11px', color: '#71717A' }}>Suppresses messages with excessive capital letters</div>
               </div>
             </div>
             <input
@@ -485,14 +489,14 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
 
           {/* Emoji Flood */}
           <div style={{
-            padding: '14px', borderRadius: 10, background: 'rgba(15, 23, 42, 0.6)',
-            border: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+            padding: '14px', borderRadius: 10, background: '#FAFAFA',
+            border: '1px solid #E4E4E7', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Smile size={18} color="#F59E0B" />
+              <Smile size={18} color="#09090B" />
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>Emoji Spam Limit (10+)</div>
-                <div style={{ fontSize: '11px', color: '#94A3B8' }}>Suppresses custom & animated emoji floods</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#09090B' }}>Emoji Spam Limit (10+)</div>
+                <div style={{ fontSize: '11px', color: '#71717A' }}>Suppresses custom & animated emoji floods</div>
               </div>
             </div>
             <input
@@ -507,13 +511,14 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
 
       {/* Word Blacklist Manager */}
       <div style={{
-        background: '#161E2E', border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px'
+        background: '#FFFFFF', border: '1px solid #E4E4E7',
+        borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#F8FAFC' }}>Word & Phrase Blacklist ({badWords.length})</div>
-            <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: 2 }}>Messages containing any of these keywords will be deleted automatically.</div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#09090B' }}>Word & Phrase Blacklist ({badWords.length})</div>
+            <div style={{ fontSize: '12px', color: '#71717A', marginTop: 2 }}>Messages containing any of these keywords will be deleted automatically.</div>
           </div>
 
           <form onSubmit={handleAddWord} style={{ display: 'flex', gap: 8 }}>
@@ -524,15 +529,15 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
               onChange={(e) => setNewWord(e.target.value)}
               style={{
                 padding: '8px 14px', borderRadius: 8,
-                background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255, 255, 255, 0.1)',
-                color: '#F8FAFC', fontSize: '13px', outline: 'none'
+                background: '#FFFFFF', border: '1px solid #E4E4E7',
+                color: '#09090B', fontSize: '13px', outline: 'none'
               }}
             />
             <button
               type="submit"
               style={{
                 padding: '8px 14px', borderRadius: 8,
-                background: '#10B981', border: 'none', color: '#FFFFFF',
+                background: '#09090B', border: 'none', color: '#FFFFFF',
                 fontSize: '13px', fontWeight: 700, cursor: 'pointer'
               }}
             >
@@ -543,11 +548,11 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
 
         <div style={{
           display: 'flex', flexWrap: 'wrap', gap: 8, minHeight: 60,
-          padding: 12, borderRadius: 10, background: 'rgba(15, 23, 42, 0.6)',
-          border: '1px solid rgba(255, 255, 255, 0.06)'
+          padding: 12, borderRadius: 10, background: '#FAFAFA',
+          border: '1px solid #E4E4E7'
         }}>
           {badWords.length === 0 ? (
-            <div style={{ color: '#64748B', fontSize: '12.5px', margin: 'auto' }}>
+            <div style={{ color: '#A1A1AA', fontSize: '12.5px', margin: 'auto' }}>
               No blacklisted keywords. Type a word above to add.
             </div>
           ) : (
@@ -557,8 +562,8 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
                   padding: '4px 10px', borderRadius: 16,
-                  background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#F87171', fontSize: '12px', fontWeight: 600
+                  background: '#FEF2F2', border: '1px solid #FECACA',
+                  color: '#991B1B', fontSize: '12px', fontWeight: 600
                 }}
               >
                 {word}
@@ -579,13 +584,13 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
       }}>
         {/* Ignored Channels */}
         <div style={{
-          background: '#161E2E', border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: '#FFFFFF', border: '1px solid #E4E4E7', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
           borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '14px'
         }}>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: '#F8FAFC' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: '#09090B' }}>
             Exempted Channels ({ignoredChannels.length})
           </div>
-          <div style={{ fontSize: '12px', color: '#94A3B8' }}>
+          <div style={{ fontSize: '12px', color: '#71717A' }}>
             AutoMod filters will be completely disabled in these channels:
           </div>
 
@@ -602,7 +607,7 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
               onClick={handleAddChannel}
               style={{
                 padding: '8px 14px', borderRadius: 8,
-                background: '#3B82F6', border: 'none', color: '#FFFFFF',
+                background: '#09090B', border: 'none', color: '#FFFFFF',
                 fontSize: '12.5px', fontWeight: 700, cursor: 'pointer'
               }}
             >
@@ -619,8 +624,8 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     padding: '4px 10px', borderRadius: 6,
-                    background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)',
-                    color: '#60A5FA', fontSize: '12px', fontWeight: 600
+                    background: '#F4F4F5', border: '1px solid #E4E4E7',
+                    color: '#09090B', fontSize: '12px', fontWeight: 600
                   }}
                 >
                   #{ch?.name || id}
@@ -633,13 +638,13 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
 
         {/* Ignored Roles */}
         <div style={{
-          background: '#161E2E', border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: '#FFFFFF', border: '1px solid #E4E4E7', boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
           borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '14px'
         }}>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: '#F8FAFC' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: '#09090B' }}>
             Exempted Roles ({ignoredRoles.length})
           </div>
-          <div style={{ fontSize: '12px', color: '#94A3B8' }}>
+          <div style={{ fontSize: '12px', color: '#71717A' }}>
             Users holding any of these roles bypass all AutoMod checks:
           </div>
 
@@ -656,7 +661,7 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
               onClick={handleAddRole}
               style={{
                 padding: '8px 14px', borderRadius: 8,
-                background: '#10B981', border: 'none', color: '#FFFFFF',
+                background: '#09090B', border: 'none', color: '#FFFFFF',
                 fontSize: '12.5px', fontWeight: 700, cursor: 'pointer'
               }}
             >
@@ -673,8 +678,8 @@ export function Automod({ onSaveConfig, modules, registry, onUpdateConfig }: Aut
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     padding: '4px 10px', borderRadius: 6,
-                    background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)',
-                    color: '#34D399', fontSize: '12px', fontWeight: 600
+                    background: '#F4F4F5', border: '1px solid #E4E4E7',
+                    color: '#09090B', fontSize: '12px', fontWeight: 600
                   }}
                 >
                   @{r?.name || id}

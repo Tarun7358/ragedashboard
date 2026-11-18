@@ -19,13 +19,7 @@
     "test:whatsapp": "tsx src/scripts/test_whatsapp_hotline.ts",
     "upm:snapshot": "tsx src/scripts/upm-snapshot.ts",
     "upm:restore": "tsx src/scripts/upm-restore.ts",
-    "upm:rollback": "tsx src/scripts/upm-rollback.ts",
-    "send:ff-dm": "tsx src/scripts/send_freefire_dm.ts",
-    "send:ff-channel": "tsx src/scripts/send_channel_freefire.ts",
-    "send:ff-india": "tsx src/scripts/send_channel_freefire_india.ts",
-    "send:rulebook-dm": "tsx src/scripts/send_rulebook_dm.ts",
-    "send:rulebook-channel": "tsx src/scripts/send_channel_rulebook.ts",
-    "send:uptime-demo": "tsx src/scripts/send_uptime_demo_dm.ts"
+    "upm:rollback": "tsx src/scripts/upm-rollback.ts"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",

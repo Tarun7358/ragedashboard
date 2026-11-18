@@ -219,6 +219,8 @@ export class NoPrefixManager {
     await this.initialize();
     const cfg = this.getConfig(guildId);
     cfg.users = [];
+    cfg.roles = [];
+    cfg.channels = [];
     await this.save(cfg);
 
     const db = Database.getDb();

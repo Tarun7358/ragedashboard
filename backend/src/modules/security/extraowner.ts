@@ -10,7 +10,7 @@ import { TwoFactorManager } from '../../core/security/TwoFactorManager.js';
 const VIP_EMOJI = '<:vip:1532620837117759508>';
 const SHIELD_EMOJI = '<a:success_check:1546134620087783526>';
 const APPROVED_ICON = '<:ticks:1532620580266836148>';
-const WRONG_EMOJI = '<a:warning:1546155193303957504>';
+const WRONG_EMOJI = '<a:wrong:1546155193303957504>';
 const ARROW_ICON = '<:lightpurplearrow:1532621364115013693>';
 
 export function registerExtraOwnerCommands(): void {

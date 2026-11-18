@@ -197,26 +197,9 @@ export async function handleVerificationGuiInteraction(interaction: any, context
 
   // 0. Interactive Role Select Menu
   if (customId === 'ver_role_select') {
+    await interaction.deferUpdate().catch(() => {});
     const selectedRoleId = interaction.values?.[0];
     if (selectedRoleId) {
-      const role = interaction.guild.roles.cache.get(selectedRoleId) || await interaction.guild.roles.fetch(selectedRoleId).catch(() => null);
-      const botHighest = interaction.guild.members?.me?.roles?.highest?.position;
-      const DANGEROUS_PERMS = [
-        PermissionFlagsBits.Administrator,
-        PermissionFlagsBits.ManageGuild,
-        PermissionFlagsBits.ManageRoles,
-        PermissionFlagsBits.ManageChannels,
-        PermissionFlagsBits.KickMembers,
-        PermissionFlagsBits.BanMembers,
-        PermissionFlagsBits.ManageWebhooks
-      ];
-      if (!role || role.managed || role.id === interaction.guild.id || (typeof botHighest === 'number' && role.position >= botHighest) || DANGEROUS_PERMS.some(p => role.permissions?.has?.(p))) {
-        return interaction.reply({
-          content: `${WRONG_ICON} Cannot select a managed role, a role equal to/above the bot's highest role, or a role with administrative/dangerous permissions.`,
-          flags: 64
-        }).catch(() => {});
-      }
-      await interaction.deferUpdate().catch(() => {});
       saveConfig({ verifiedRoleId: selectedRoleId });
       context.logSyncEvent(`[Verification] Selected verified access role <@&${selectedRoleId}>.`, 'success');
       const count = await getVerifiedUsersCount(interaction.guildId);
@@ -534,7 +517,6 @@ export const VerificationManifest: ModuleManifest = {
     {
       name: 'guildMemberAdd',
       handler: async (client: any, member: any, context: any) => {
-        if (member.user?.bot) return;
         const modules = context.getModulesState ? context.getModulesState() : [];
         const verModule = modules.find((m: any) => m.id === 'verification');
         if (!verModule || verModule.status !== 'enabled') return;
@@ -559,11 +541,6 @@ export const VerificationManifest: ModuleManifest = {
       handler: async (client: any, interaction: any, context: any) => {
         const guild = interaction.guild;
         if (!guild) return;
-
-        const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
-        if (!(await isOwnerOrExtraOwner(interaction.user.id, guild))) {
-          return interaction.reply({ content: 'Only the Server Owner or Extra Owners can run verification setup.', flags: 64 });
-        }
 
         // Auto-enable verification module if not enabled
         if (context.toggleModule) {

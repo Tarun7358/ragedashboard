@@ -134,6 +134,22 @@ export class PrefixRegistry {
     'vc-unlock': 'vcunlock',
     'automations': 'automation',
     'auto': 'automation',
+    'autorole': 'autorole',
+    'joinrole': 'autorole',
+    'joinroles': 'autorole',
+    'ar': 'autorole',
+    'botavatar': 'botavatar',
+    'serveravatar': 'botavatar',
+    'guildavatar': 'botavatar',
+    'setbotavatar': 'botavatar',
+    'botpfp': 'botavatar',
+    'botnick': 'botnick',
+    'botname': 'botnick',
+    'setbotnick': 'botnick',
+    'botbanner': 'botbanner',
+    'setbanner': 'botbanner',
+    'setbotbanner': 'botbanner',
+    'globalbanner': 'botbanner',
     'tickets': 'ticket',
     'tkmgr': 'ticketmanager',
     'social': 'social-updates',
@@ -146,9 +162,6 @@ export class PrefixRegistry {
     'h': 'help',
     'cmds': 'help',
     'commands': 'help',
-    'p': 'play',
-    's': 'skip',
-    'q_music': 'queue',
     'ui': 'userinfo',
     'av': 'avatar',
     'si': 'serverinfo',
@@ -621,159 +634,16 @@ export class PrefixRegistry {
       });
     }
 
-    // ── Music commands ────────────────────────────────────────────
-    // Registered here so they enter the standard pipeline (permissions, cooldowns, analytics).
-    // The CommandPipeline dispatches them to the rage-enterprise module's manifest event handlers.
-    const musicCommands: Array<Partial<PrefixCommandMeta> & { name: string; description: string; category: string }> = [
-      {
-        name: 'play',
-        description: 'Play a song from YouTube, Spotify, SoundCloud or a direct URL.',
-        category: 'Voice',
-        usage: 'r!play <song name | URL>',
-        aliases: ['p'],
-        cooldownSeconds: 2,
-        examples: ['r!play Blinding Lights', 'r!play https://youtu.be/xxx'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'pause',
-        description: 'Pause the currently playing track.',
-        category: 'Voice',
-        usage: 'r!pause',
-        aliases: [],
-        cooldownSeconds: 2,
-        examples: ['r!pause'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'resume',
-        description: 'Resume a paused track.',
-        category: 'Voice',
-        usage: 'r!resume',
-        aliases: [],
-        cooldownSeconds: 2,
-        examples: ['r!resume'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'skip',
-        description: 'Skip the current track and play the next one in queue.',
-        category: 'Voice',
-        usage: 'r!skip',
-        aliases: ['s'],
-        cooldownSeconds: 2,
-        examples: ['r!skip'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'back',
-        description: 'Go back to the previously played track.',
-        category: 'Voice',
-        usage: 'r!back',
-        aliases: ['prev', 'previous'],
-        cooldownSeconds: 2,
-        examples: ['r!back'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'stop',
-        description: 'Stop playback, clear the queue and disconnect from voice.',
-        category: 'Voice',
-        usage: 'r!stop',
-        aliases: ['leave', 'disconnect'],
-        cooldownSeconds: 2,
-        examples: ['r!stop'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'queue',
-        description: 'View the current music playback queue.',
-        category: 'Voice',
-        usage: 'r!queue',
-        aliases: ['q'],
-        cooldownSeconds: 2,
-        examples: ['r!queue'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'shuffle',
-        description: 'Shuffle the current music queue randomly.',
-        category: 'Voice',
-        usage: 'r!shuffle',
-        aliases: [],
-        cooldownSeconds: 2,
-        examples: ['r!shuffle'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'loop',
-        description: 'Toggle loop mode: off, track, or queue.',
-        category: 'Voice',
-        usage: 'r!loop <off|track|queue>',
-        aliases: ['repeat'],
-        cooldownSeconds: 2,
-        examples: ['r!loop track', 'r!loop queue', 'r!loop off'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'volume',
-        description: 'Adjust the playback volume (1-200).',
-        category: 'Voice',
-        usage: 'r!volume <1-200>',
-        aliases: ['vol'],
-        cooldownSeconds: 2,
-        examples: ['r!volume 80'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'nowplaying',
-        description: 'Display the currently playing track with progress bar.',
-        category: 'Voice',
-        usage: 'r!nowplaying',
-        aliases: ['current'],
-        cooldownSeconds: 2,
-        examples: ['r!nowplaying'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      },
-      {
-        name: 'autoplay',
-        description: 'Toggle autoplay mode to queue related tracks automatically.',
-        category: 'Voice',
-        usage: 'r!autoplay <on|off>',
-        aliases: [],
-        cooldownSeconds: 3,
-        examples: ['r!autoplay on', 'r!autoplay off'],
-        moduleOwnerId: 'rage-enterprise',
-        dangerLevel: 'Low'
-      }
-    ];
-
-    for (const mc of musicCommands) {
-      this.register(mc as any);
-    }
   }
 
   private static printStartupSummary(): void {
     const totalCmds = this.commandsMap.size;
     const totalAliases = this.aliasMap.size;
     const categories = this.getCategories();
-    const musicCmds = this.getCommandsByCategory('Voice').filter(c => c.moduleOwnerId === 'rage-enterprise' || c.moduleOwnerId === 'music').length;
 
     console.log(`[PrefixRegistry] ═══════════════════════════════════════`);
     console.log(`[PrefixRegistry] Initialized: ${totalCmds} commands across ${categories.length} categories`);
     console.log(`[PrefixRegistry] Aliases mapped: ${totalAliases}`);
-    console.log(`[PrefixRegistry] Music commands (pipeline-integrated): ${musicCmds}`);
     console.log(`[PrefixRegistry] Categories: ${categories.join(', ')}`);
     if (this._duplicateWarnings > 0) {
       console.warn(`[PrefixRegistry] ⚠  Duplicate registrations suppressed: ${this._duplicateWarnings}`);

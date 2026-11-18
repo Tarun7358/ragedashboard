@@ -1644,7 +1644,7 @@ async function createTicketChannel(client: any, interaction: any, context: any, 
   const cleanCat = (category || 'support').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10);
   const channelName = `ticket-${cleanUser || 'user'}-${cleanCat}`;
 
-  const botId = interaction.client?.user?.id || client?.user?.id;
+  const botId = interaction.client?.user?.id || client?.user?.id || guild.client?.user?.id;
 
   const overwrites: any[] = [
     {
@@ -1783,7 +1783,23 @@ async function createTicketChannel(client: any, interaction: any, context: any, 
         `Support staff will assist you shortly. Click **Close Ticket** when resolved or **Ping Admin** to request assistance.`
       );
 
-    await ticketChannel.send({ content: `${user} | Ticket #${ticketNumber}`, embeds: [ticketCardEmbed], components: [controlRow] });
+    try {
+      await ticketChannel.send({ content: `${user} | Ticket #${ticketNumber}`, embeds: [ticketCardEmbed], components: [controlRow] });
+    } catch (sendErr: any) {
+      console.error('[Tickets] Initial ticket card send failed, retrying without embed:', sendErr?.message || sendErr);
+      try {
+        await ticketChannel.send({
+          content:
+            `${user} | **Ticket #${ticketNumber}**\n` +
+            `**Category:** ${category === 'vip' ? 'VIP & Billing' : category === 'moderation' ? 'Moderation & Reports' : 'General Support'}\n` +
+            `**Subject:** ${subject || 'General Support Inquiry'}\n` +
+            `Support staff will assist you shortly. Click **Close Ticket** when resolved or **Ping Admin** to request assistance.`,
+          components: [controlRow]
+        });
+      } catch (fallbackErr: any) {
+        console.error('[Tickets] Fallback ticket message also failed:', fallbackErr?.message || fallbackErr);
+      }
+    }
 
     // Send Ephemeral Response in original channel matching video (Frame 36)
     const responseEmbed = new EmbedBuilder()

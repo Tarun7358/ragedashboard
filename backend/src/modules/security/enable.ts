@@ -1479,7 +1479,7 @@ export function registerEnableDisableCommands(): void {
             {
               title: `${SHIELD_EMOJI} SECURITY & DEFENSE SUITES`,
               items: [
-                `• \`${prefix}enable antinuke\` — Enable all 29 Anti-Nuke & Unbypassable rules`,
+                `• \`${prefix}enable antinuke\` — Enable all 27 Anti-Nuke & Unbypassable rules`,
                 `• \`${prefix}enable automod\` — Enable Anti-Link, Anti-Spam & Chat Filters`,
                 `• \`${prefix}enable voice\` — Enable Voice Protection, Dynamic JTC & 24/7`,
                 `• \`${prefix}enable logging [#channel]\` — Enable Server Audit Logging Center`,
@@ -1617,8 +1617,8 @@ export function registerEnableDisableCommands(): void {
           },
           {
             label: target === 'all'
-              ? 'Arming All 29 Anti-Nuke Rules & Enterprise Protection Engines...'
-              : 'Arming All 29 Anti-Nuke Protection Rules...',
+              ? 'Arming All 27 Anti-Nuke Rules & Enterprise Protection Engines...'
+              : 'Arming All 27 Anti-Nuke Protection Rules...',
             detail: 'Armed'
           }
         ];
@@ -1735,9 +1735,13 @@ export function registerEnableDisableCommands(): void {
 
         if (updateConfig) updateConfig('security', newSecConfig);
 
-        // Always deploy to #rage-dashboard channel at position 0
-        const deployed = await deploySecurityDashboardToChannel(message.guild);
-        const dashChannel = deployed?.channel;
+        // Only update dashboard if one is already deployed (creation is gated to r!enable all)
+        const existingDash = await Database.getDashboard(message.guild.id);
+        let dashChannel: any = null;
+        if (existingDash) {
+          const deployed = await deploySecurityDashboardToChannel(message.guild);
+          dashChannel = deployed?.channel;
+        }
 
         const overviewCard = buildLimeOverviewCard({
           title: 'ANTINUKE PROTECTION SUITE ACTIVATED',
@@ -1756,7 +1760,7 @@ export function registerEnableDisableCommands(): void {
             {
               title: 'ACTIVE DEFENSE SYSTEMS',
               items: [
-                '• **Anti-Nuke Matrix**: All 29 Protection rules active with instant rollback',
+                '• **Anti-Nuke Matrix**: All 27 Protection rules active with instant rollback',
                 '• **PreBot Whitelist & Quarantine**: Unauthorized bots automatically neutralized',
                 '• **Threat Watcher**: Continuous monitoring of roles, channels, webhooks & threads'
               ]
@@ -1775,11 +1779,11 @@ export function registerEnableDisableCommands(): void {
           .addTextDisplayComponents(
             new TextDisplayBuilder().setContent([
               `> **Server:** \`${message.guild.name}\``,
-              `> **Status:** \`All 29 Rules Armed & Fully Operational\``,
+              `> **Status:** \`All 27 Rules Armed & Fully Operational\``,
               `> **Dashboard:** ${dashChannel ? `<#${dashChannel.id}>` : '\`#rage-dashboard\`'}`,
               '',
               '### **Active Defense Systems**',
-              '• **Anti-Nuke Matrix:** All 29 Protection rules active with instant rollback',
+              '• **Anti-Nuke Matrix:** All 27 Protection rules active with instant rollback',
               '• **PreBot Whitelist & Quarantine:** Unauthorized bots automatically neutralized',
               '• **Threat Watcher:** Continuous monitoring of roles, channels, webhooks & threads'
             ].join('\n'))
@@ -1815,8 +1819,12 @@ export function registerEnableDisableCommands(): void {
 
         if (updateConfig) updateConfig('automod', newAmConfig);
 
-        const deployed = await deploySecurityDashboardToChannel(message.guild);
-        const dashChannel = deployed?.channel;
+        const existingDashVp = await Database.getDashboard(message.guild.id);
+        let dashChannel: any = null;
+        if (existingDashVp) {
+          const deployed = await deploySecurityDashboardToChannel(message.guild);
+          dashChannel = deployed?.channel;
+        }
 
         const card = buildLimeOverviewCard({
           title: 'AUTOMOD PROTECTION ACTIVATED',
@@ -1849,8 +1857,12 @@ export function registerEnableDisableCommands(): void {
           toggleMod('voice', true);
         }
 
-        const deployed = await deploySecurityDashboardToChannel(message.guild);
-        const dashChannel = deployed?.channel;
+        const existingDashVp = await Database.getDashboard(message.guild.id);
+        let dashChannel: any = null;
+        if (existingDashVp) {
+          const deployed = await deploySecurityDashboardToChannel(message.guild);
+          dashChannel = deployed?.channel;
+        }
 
         const card = buildLimeOverviewCard({
           title: 'VOICE PROTECTION ACTIVATED',
@@ -2850,7 +2862,7 @@ export function registerEnableDisableCommands(): void {
           .setTitle(`${SUCCESS_CHECK_ICON} Threat Defense Matrix — Offline`)
           .setDescription(
             `**Suite**: \`ANTI-NUKE\` \`[ STANDBY ]\`\n\n` +
-            `${SUCCESS_CHECK_ICON} All 29 threat sensors have been gracefully wound down.\n` +
+            `${SUCCESS_CHECK_ICON} All 27 threat sensors have been gracefully wound down.\n` +
             `${SUCCESS_CHECK_ICON} Role-based backup authorities remain intact on server.\n` +
             `${WRONG_EMOJI} Active monitoring & auto-quarantine enforcement paused.\n\n` +
             `> Use \`${prefix}enable antinuke\` to restore full protection instantly.`

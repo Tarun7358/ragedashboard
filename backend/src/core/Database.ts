@@ -137,9 +137,13 @@ export class Database {
     await this.exec('PRAGMA cache_size = -8000;');
     // Synchronous=NORMAL is safe with WAL mode and faster than FULL
     await this.exec('PRAGMA synchronous = NORMAL;');
+    // Temporary tables and indices in memory (never hits disk)
+    await this.exec('PRAGMA temp_store = MEMORY;');
+    // Memory-mapped I/O (256 MB) for high-speed page reads directly from kernel cache
+    await this.exec('PRAGMA mmap_size = 268435456;');
     // Enables WAL checkpoint to be done automatically
     await this.exec('PRAGMA wal_autocheckpoint = 1000;');
-    console.log('[Database] PRAGMAs applied: WAL, FK=ON, busy_timeout=5000ms');
+    console.log('[Database] PRAGMAs applied: WAL, FK=ON, busy_timeout=5000ms, temp_store=MEMORY, mmap=256MB');
   }
 
 

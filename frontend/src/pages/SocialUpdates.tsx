@@ -108,32 +108,43 @@ export function SocialUpdates({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Header Panel */}
-      <div className="section-panel" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* Signature Enterprise Black Hero Header Card */}
+      <div className="hero-black-card">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
-            width: 44, height: 44, borderRadius: 10,
-            background: 'rgba(124,92,252,0.1)', border: '1px solid rgba(124,92,252,0.2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-purple)'
+            width: 44, height: 44, borderRadius: 12,
+            background: 'rgba(220, 38, 38, 0.12)', border: '1px solid rgba(220, 38, 38, 0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444',
+            flexShrink: 0
           }}>
-            <Radio size={24} />
+            <Radio size={22} />
           </div>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-              Social Updates
-              <span className={`status-badge ${isEnabled ? 'status-active' : 'status-inactive'}`} style={{ fontSize: 11, padding: '2px 8px' }}>
-                {isEnabled ? 'ENABLED' : 'DISABLED'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                Social Feeds & Auto-Announcer
+              </h1>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '6px',
+                background: isEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                color: isEnabled ? '#34D399' : '#F87171',
+                border: `1px solid ${isEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
+              }}>
+                {isEnabled ? 'ACTIVE' : 'DISABLED'}
               </span>
-            </h1>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              Automatically announce new YouTube videos and Instagram posts in your Discord server.
+            </div>
+            <p style={{ fontSize: '13px', color: '#A1A1AA', margin: '4px 0 0 0' }}>
+              Automatically announce new YouTube uploads and Instagram reels with instant Discord notifications.
             </p>
           </div>
         </div>
 
         {/* Toggle Switch */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>Module Status</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#A1A1AA' }}>Module Status</span>
           <label className="switch">
             <input type="checkbox" checked={isEnabled} onChange={handleToggleModule} />
             <span className="slider" />

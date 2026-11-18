@@ -868,7 +868,7 @@ export const PrebotWhitelistManifest: ModuleManifest = {
           const isEnabled = sub === 'on' || sub === 'enable' || (sub === 'toggle' && secConfig.prebotEnabled === false);
 
           if (context.updateModuleConfig) {
-            context.updateModuleConfig('security', { ...secConfig, prebotEnabled: isEnabled });
+            context.updateModuleConfig(guild.id, 'security', { ...secConfig, prebotEnabled: isEnabled });
           }
 
           const embed = new EmbedBuilder()

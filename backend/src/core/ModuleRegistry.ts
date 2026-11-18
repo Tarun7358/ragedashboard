@@ -5,8 +5,28 @@ import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { DashboardSyncService } from '../services/DashboardSyncService.js';
 
 
+// The 27 Anti-Nuke modules (anti_link and anti_everyone belong to AutoMod and are intentionally excluded).
+const ANTINUKE_MODULE_KEYS = [
+  'anti_role_grant', 'anti_role_remove', 'anti_role_update', 'anti_role_create', 'anti_role_delete',
+  'anti_channel_create', 'anti_channel_delete', 'anti_channel_update',
+  'anti_ban', 'anti_member_unban', 'anti_kick', 'anti_timeout', 'anti_bot_add', 'anti_bot_remove', 'anti_prune',
+  'anti_webhook_create', 'anti_webhook_delete', 'anti_webhook_update', 'anti_guild_update', 'anti_integration', 'anti_invite_create',
+  'anti_emoji_create', 'anti_emoji_delete', 'anti_emoji_update', 'anti_sticker_create', 'anti_sticker_delete', 'anti_sticker_update'
+];
+
+/** Returns a copy of the security config with all 28 Anti-Nuke modules switched ON (keeps custom punishment / revert). */
+function armAllAntiNukeModules(config: Record<string, any>): Record<string, any> {
+  const rules: Record<string, any> = { ...(config.rules || {}) };
+  for (const key of ANTINUKE_MODULE_KEYS) {
+    rules[key] = { limit: 1, window: 1, action: 'kick', recovery: true, ...(rules[key] || {}), enabled: true };
+  }
+  return { ...config, rules };
+}
+
 export class ModuleRegistry {
   private static instance: ModuleRegistry | null = null;
+  // Tracks the last known master Anti-Nuke state per guild so an OFF -> ON change can arm all 28 modules.
+  private masterArmed = new Map<string, boolean>();
   public static getInstance(): ModuleRegistry | null {
     return ModuleRegistry.instance;
   }
@@ -52,7 +72,7 @@ export class ModuleRegistry {
           progress: 0,
           errors: [],
           config: manifest.id === 'security'
-            ? { antiNukeEnabled: false }
+            ? armAllAntiNukeModules({ antiNukeEnabled: false })
             : manifest.id === 'automod'
             ? { autoModEnabled: false, blockLinks: false }
             : {}
@@ -137,6 +157,13 @@ export class ModuleRegistry {
           }
         }
         
+        // One-time migration: servers that already run Anti-Nuke get all 28 modules ON by default.
+        if (secMod && secMod.status === 'enabled' && secMod.config && secMod.config.antiNukeEnabled === true && !secMod.config.allModulesArmedV1) {
+          secMod.config = { ...armAllAntiNukeModules(secMod.config), allModulesArmedV1: true };
+          this.saveGuildState(guildId, state);
+        }
+        this.masterArmed.set(guildId, !secMod || !secMod.config || secMod.config.antiNukeEnabled !== false);
+
         this.reevaluateAllModules(guildId);
         this.triggerWhitelistMigration(guildId);
       }
@@ -163,6 +190,7 @@ export class ModuleRegistry {
       };
       this.guildStates.set(id, state);
       this.fillManifestModules(state.modules);
+      this.masterArmed.set(id, false);
       this.reevaluateAllModules(id);
       this.saveGuildState(id, state);
     }
@@ -477,6 +505,15 @@ export class ModuleRegistry {
     if (!mod) return null;
 
     mod.config = { ...mod.config, ...config };
+    if (mod.id === 'security') {
+      const nowArmed = mod.config.antiNukeEnabled !== false;
+      const wasArmed = this.masterArmed.get(gId) ?? false;
+      if (nowArmed && !wasArmed) {
+        // Master Anti-Nuke switched OFF -> ON: arm all 28 modules.
+        mod.config = { ...armAllAntiNukeModules(mod.config), allModulesArmedV1: true };
+      }
+      this.masterArmed.set(gId, nowArmed);
+    }
     this.reevaluateAllModules(gId);
 
     if (['member_whitelist', 'security', 'voice-protection'].includes(mod.id)) {
@@ -544,7 +581,7 @@ export class ModuleRegistry {
         progress: 0,
         errors: [],
         config: manifest.id === 'security'
-          ? { antiNukeEnabled: false }
+          ? armAllAntiNukeModules({ antiNukeEnabled: false })
           : manifest.id === 'automod'
           ? { autoModEnabled: false, blockLinks: false }
           : {}

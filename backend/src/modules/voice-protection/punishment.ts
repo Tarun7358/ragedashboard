@@ -6,14 +6,14 @@ const cooldowns: Map<string, number> = new Map();
 
 export async function isMemberImmune(member: any, config: any, context?: any): Promise<boolean> {
   if (!member) return true;
-  if (member.id === member.guild?.ownerId) return true;
-  if (config?.whitelistedUsers?.includes(member.id)) return true;
-  if (config?.whitelistedRoles?.some((rId: string) => rId && member.roles?.cache?.has(rId))) return true;
-  if (config?.ignoredRoles?.some((rId: string) => rId && member.roles?.cache?.has(rId))) return true;
-  if (context) {
-    return checkBypassImmunity(member.id, member.guild, context, 'voice_protection');
+  if (!context) {
+    // Fallback if context is not supplied (e.g. from tests)
+    if (member.id === member.guild.ownerId) return true;
+    if (config.whitelistedUsers?.includes(member.id)) return true;
+    if (config.whitelistedRoles?.some((rId: string) => rId && member.roles?.cache?.has(rId))) return true;
+    return false;
   }
-  return false;
+  return checkBypassImmunity(member.id, member.guild, context, 'voice_protection');
 }
 
 export async function executePunishment(
@@ -27,8 +27,6 @@ export async function executePunishment(
   context: any,
   reason = 'Excessive volume detected'
 ) {
-  if (config?.ignoredChannels?.includes(channelId)) return;
-
   // Check cooldown
   const now = Date.now();
   const cooldownEnd = cooldowns.get(userId);

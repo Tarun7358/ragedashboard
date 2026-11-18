@@ -419,20 +419,13 @@ async function renderWhitelistConfigUI(
 
   if (!reply) return;
 
-  if ((reply as any)._activeWlCollector) {
-    try { (reply as any)._activeWlCollector.stop('replaced'); } catch {}
-  }
-
   const collector = reply.createMessageComponentCollector({
     time: 600000 // 10 minutes
   });
-  (reply as any)._activeWlCollector = collector;
 
   collector.on('collect', async (rawI: any) => {
     try {
-      (rawI as any)._wlCollectorHandled = true;
       const i = wrapInteraction(rawI);
-      (i as any)._wlCollectorHandled = true;
       if (i.user.id !== executor.id) {
         const embedErr = new EmbedBuilder()
           .setTitle('❌ Interactivity Denied')
@@ -991,7 +984,6 @@ export const MemberWhitelistManifest: ModuleManifest = {
     {
       name: 'button_wl_generic',
       handler: async (client: any, interaction: any, context: any) => {
-        if ((interaction as any)._wlCollectorHandled) return;
         const customId = interaction.customId;
         const verifiedIcon = '<:ticks:1532620580266836148>';
         const wrongIcon = '<a:warning:1546155193303957504>';
@@ -1215,7 +1207,7 @@ export const MemberWhitelistManifest: ModuleManifest = {
 
         // Persistent fallback for configuration controls when active collector has expired
         if (customId.startsWith('wl_cat_') || customId.startsWith('wl_action_') || customId.startsWith('wl_config_select_')) {
-          if ((interaction as any)._wlCollectorHandled || interaction.replied || interaction.deferred) return;
+          if (interaction.replied || interaction.deferred) return;
           const parts = customId.split('_');
           const executorId = parts[parts.length - 1];
           const targetId = parts[parts.length - 2];
