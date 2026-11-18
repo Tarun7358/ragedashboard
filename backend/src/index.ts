@@ -86,6 +86,8 @@ import { VoiceProtectionManifest } from './modules/voice-protection/index.js';
 import { JoinRoleAssignmentGuardManifest } from './modules/join-role-guard/manifest.js';
 import { SocialUpdatesManifest, registerSocialUpdatesCommands } from './modules/social-updates/manifest.js';
 import { registerWelcomeCommands } from './modules/community/manifest.js';
+import { registerAutoRoleCommands } from './modules/community/autorole.js';
+import { registerBotAvatarCommands } from './modules/community/botAvatar.js';
 import { AnalyticsManifest, registerAnalyticsCommands } from './modules/analytics/manifest.js';
 import { AuditManifest } from './modules/audit/manifest.js';
 import { ModerationManifest } from './modules/moderation/manifest.js';
@@ -201,9 +203,6 @@ async function bootstrap() {
     // 3. Initialize Express Web Server & API Router
     webServer = new WebServer(registry);
 
-    const PORT = Number(process.env.SERVER_PORT || process.env.PORT || 5000);
-    webServer.listen(PORT);
-
     // 4. Initialize Discord Bot Gateway Client
     gateway = new Gateway(
       (guildId, msg, type) => registry.logSyncEvent(guildId, msg, type),
@@ -233,6 +232,9 @@ async function bootstrap() {
     gateway.registerModuleManifests(ALL_MANIFESTS);
     webServer.registerModuleManifests(ALL_MANIFESTS);
 
+    const PORT = Number(process.env.SERVER_PORT || process.env.PORT || 5000);
+    webServer.listen(PORT);
+
     // 4-b. Initialize WhatsApp Owner Hotline (non-fatal if disabled)
     WhatsAppService.init(gateway, registry).catch((waErr) => {
       console.error('[WhatsApp] Failed to initialize hotline:', waErr);
@@ -250,6 +252,8 @@ async function bootstrap() {
     registerBotStatsCommands();
     registerUptimeCommands();
     registerWelcomeCommands();
+    registerAutoRoleCommands();
+    registerBotAvatarCommands();
     registerLoggingCommands();
     registerBrainCommands();
     registerEmbedPrefixCommands();

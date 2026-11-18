@@ -120,9 +120,12 @@ export function InstagramTab({ guildId, token, channels, roles, onSaveConfig }: 
     setLoaded(true);
   };
 
+  // Load subscriptions whenever guild or auth token updates
   React.useEffect(() => {
-    if (!loaded) loadSubscriptions();
-  }, []);
+    if (guildId && token) {
+      loadSubscriptions();
+    }
+  }, [guildId, token]);
 
   const handleAddInstagram = async () => {
     if (!instagramInput.trim()) return;

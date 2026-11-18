@@ -1,6 +1,7 @@
 import { API_BASE } from '../config';
 import React, { useState, useEffect } from 'react';
 import { Award, Save, RefreshCw, Trash2, Plus, Info, ShieldAlert, BarChart2, Shield } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
 import type { ModuleState, DiscordRole } from '../hooks/useDiscordSync';
 
 interface LevelingProps {
@@ -16,6 +17,7 @@ export function Leveling({
   registry,
   onUpdateConfig
 }: LevelingProps) {
+  const { activeGuildId: authGuildId, token: authToken } = useAuth();
   const levelingModule = (modules || []).find(m => m.id === 'leveling');
   const isEnabled = levelingModule?.status === 'enabled';
   
@@ -29,8 +31,8 @@ export function Leveling({
   const [resetConfirm, setResetConfirm] = useState(false);
 
   const fetchState = async () => {
-    const token = localStorage.getItem('cn_token');
-    const currentGuild = localStorage.getItem('cn_active_guild');
+    const token = authToken || localStorage.getItem('cn_token');
+    const currentGuild = authGuildId || localStorage.getItem('cn_active_guild');
     if (!token) return;
 
     setLoading(true);
@@ -58,7 +60,7 @@ export function Leveling({
 
   useEffect(() => {
     fetchState();
-  }, [modules]);
+  }, [authGuildId, authToken, modules]);
 
   const handleToggleEnable = () => {
     if (!levelingModule) return;
@@ -142,11 +144,11 @@ export function Leveling({
       
       {/* Premium Header */}
       <div style={{
-        background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, rgba(249, 115, 22, 0.03) 100%)',
+        background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.14) 0%, rgba(15, 23, 42, 0.95) 100%)',
         padding: '24px 32px',
         borderRadius: '16px',
-        border: '1px solid rgba(234, 179, 8, 0.15)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+        border: '1px solid rgba(234, 179, 8, 0.3)',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
         backdropFilter: 'blur(8px)',
         position: 'relative',
         overflow: 'hidden',
@@ -176,16 +178,14 @@ export function Leveling({
             <Award size={28} />
           </div>
           <div>
-            <h1 className="page-title" style={{
-              fontSize: '28px',
+            <h1 style={{
+              fontSize: '26px',
               fontWeight: 800,
-              background: 'linear-gradient(135deg, #FFF 30%, #FDE047 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: '#F8FAFC',
               margin: 0,
               letterSpacing: '-0.5px'
             }}>Leveling & XP System</h1>
-            <p className="page-subtitle" style={{
+            <p style={{
               fontSize: '14px',
               color: '#94A3B8',
               margin: '4px 0 0 0',

@@ -129,10 +129,12 @@ export function YouTubeTab({ guildId, token, channels, roles, onSaveConfig }: Yo
     setLoaded(true);
   };
 
-  // Load on mount
+  // Load subscriptions whenever guild or auth token updates
   React.useEffect(() => {
-    if (!loaded) loadSubscriptions();
-  }, []);
+    if (guildId && token) {
+      loadSubscriptions();
+    }
+  }, [guildId, token]);
 
   const handleAddChannel = async () => {
     if (!channelInput.trim()) return;

@@ -13,8 +13,6 @@ function userTag(user: any): string {
   return user?.globalName ?? user?.username ?? user?.tag ?? user?.id ?? 'Unknown';
 }
 
-const xpCooldowns = new Map<string, number>();
-
 async function getUserXP(guildId: string, userId: string): Promise<number> {
   try {
     const db = Database.getDb();
@@ -153,12 +151,6 @@ export const LevelingManifest: ModuleManifest = {
 
         const guildId = message.guildId;
         if (!guildId) return;
-
-        const cooldownKey = `${message.guild?.id || guildId}_${message.author.id}`;
-        const now = Date.now();
-        const lastXpTime = xpCooldowns.get(cooldownKey) || 0;
-        if (now - lastXpTime < 45_000) return;
-        xpCooldowns.set(cooldownKey, now);
 
         const currentXp = await getUserXP(guildId, message.author.id);
         const multiplier = parseFloat(lvlMod.config?.multiplier || '1.0');
@@ -401,9 +393,8 @@ export const LevelingManifest: ModuleManifest = {
         const guildId = interaction.guildId;
         if (!guildId) return;
 
-        if (!target || target.bot) return interaction.reply({ content: '❌ Please specify a valid non-bot user to transfer coins to.', flags: 64 });
         if (target.id === interaction.user.id) return interaction.reply({ content: '❌ You cannot pay yourself.', flags: 64 });
-        if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) return interaction.reply({ content: '❌ Amount must be a valid number greater than 0.', flags: 64 });
+        if (amount <= 0) return interaction.reply({ content: '❌ Amount must be greater than 0.', flags: 64 });
 
         const senderEco = await getUserEco(guildId, interaction.user.id);
 
@@ -482,7 +473,6 @@ export const LevelingManifest: ModuleManifest = {
         const guildId = interaction.guildId;
         if (!guildId) return;
 
-        if (!target || target.bot) return interaction.reply({ content: '❌ Please specify a valid non-bot user to rob.', flags: 64 });
         if (target.id === interaction.user.id) return interaction.reply({ content: '❌ You cannot rob yourself.', flags: 64 });
 
         const myEco = await getUserEco(guildId, interaction.user.id);
@@ -539,7 +529,7 @@ export const LevelingManifest: ModuleManifest = {
         const guildId = interaction.guildId;
         if (!guildId) return;
 
-        if (typeof bet !== 'number' || isNaN(bet) || bet <= 0) return interaction.reply({ content: '❌ Bet must be a valid number greater than 0.', flags: 64 });
+        if (bet <= 0) return interaction.reply({ content: '❌ Bet must be greater than 0.', flags: 64 });
 
         const eco = await getUserEco(guildId, interaction.user.id);
 
@@ -602,15 +592,19 @@ export const LevelingManifest: ModuleManifest = {
         const leaderboard = [];
         const sorted = await getTopXP(context.guildId, 50);
 
-        for (const item of sorted) {
+        for (let i = 0; i < sorted.length; i++) {
+          const item = sorted[i];
           let username = `User_${item.userId.substring(0, 5)}`;
           let avatar = null;
 
           if (client) {
             try {
-              const user = await client.users.fetch(item.userId).catch(() => null);
+              let user = client.users.cache.get(item.userId);
+              if (!user && i < 15) {
+                user = await client.users.fetch(item.userId).catch(() => null);
+              }
               if (user) {
-                username = user.username;
+                username = user.username || user.tag || username;
                 avatar = user.displayAvatarURL ? user.displayAvatarURL() : null;
               }
             } catch { }

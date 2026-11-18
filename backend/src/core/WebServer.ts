@@ -28,6 +28,7 @@ export class WebServer {
   public publicFeed?: PublicFeedManager;
   // Wired by index.ts after gateway is initialized — triggers a live Discord registry sync
   public syncRegistryCallback: ((guildId?: string) => void) | null = null;
+  private moduleRouter: express.Router = express.Router();
 
   constructor(private registry?: ModuleRegistry) {
     this.app = express();
@@ -166,9 +167,12 @@ export class WebServer {
             }
           };
 
+          const subPath = `/${manifest.id}${route.path}`;
           if (route.method === 'post') {
+            this.moduleRouter.post(subPath, ...authMiddleware, handler);
             this.app.post(routePath, ...authMiddleware, handler);
           } else {
+            this.moduleRouter.get(subPath, ...authMiddleware, handler);
             this.app.get(routePath, ...authMiddleware, handler);
           }
         });
@@ -369,6 +373,9 @@ export class WebServer {
     // ── JWT Auth Middleware Reference ────────────────────────────────────────
     const authenticateToken = this.authenticateToken;
     // ─────────────────────────────────────────────────────────────────────────
+
+    // Mount dedicated dynamic module router early so module endpoints always match before any fallback
+    this.app.use('/api/modules', this.moduleRouter);
 
     // State endpoint (BUG-05 fix: require authentication)
     this.app.get('/api/state', authenticateToken, (req: Request, res: Response) => {

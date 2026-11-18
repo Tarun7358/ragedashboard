@@ -355,21 +355,21 @@ export function Layout({
                 width: '100%',
                 background: activePage === 'admin'
                   ? 'linear-gradient(135deg, #EAB308 0%, #CA8A04 100%)'
-                  : 'linear-gradient(135deg, rgba(234,179,8,0.1) 0%, rgba(202,138,4,0.1) 100%)',
-                color: activePage === 'admin' ? '#09090B' : '#92400E',
+                  : 'linear-gradient(135deg, rgba(234,179,8,0.15) 0%, rgba(202,138,4,0.15) 100%)',
+                color: activePage === 'admin' ? '#0F172A' : '#FBBF24',
                 border: '1px solid rgba(234,179,8,0.4)',
                 fontWeight: 700,
                 letterSpacing: '0.02em',
               }}
             >
-              <Crown size={14} color={activePage === 'admin' ? '#09090B' : '#D97706'} />
+              <Crown size={14} color={activePage === 'admin' ? '#0F172A' : '#FBBF24'} />
               <span>Admin Panel</span>
             </button>
           </div>
         )}
 
         {/* User profile footer */}
-        <div className="sidebar-footer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderTop: '1px solid var(--border-color)', backgroundColor: '#FAFAFA' }}>
+        <div className="sidebar-footer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderTop: '1px solid var(--border-color)' }}>
           <div className="user-avatar" style={{ padding: 0, overflow: 'hidden', backgroundColor: 'transparent', flexShrink: 0, width: '32px', height: '32px' }}>
             {avatarUrl ? (
               <img src={avatarUrl} alt={user?.username} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
