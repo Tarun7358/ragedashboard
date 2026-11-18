@@ -277,27 +277,32 @@ export class PayloadFormatter {
       const isValidMediaUrl = (u: string | null | undefined): u is string =>
         typeof u === 'string' && /^(https?:\/\/|attachment:\/\/)/i.test(u.trim());
 
-      if (isRoleAction || !isValidMediaUrl(thumbnailUrl)) {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(titleContent));
-      } else {
-        const sec = new SectionBuilder()
-          .addTextDisplayComponents(new TextDisplayBuilder().setContent(titleContent));
-        sec.setThumbnailAccessory(new ThumbnailBuilder().setURL(thumbnailUrl.trim()));
-        container.addSectionComponents(sec);
-      }
-
-      container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
-
-      if (body) {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(body));
-      }
-
+      // Display banner image at the top of the outer box container
       if (isValidMediaUrl(imageUrl)) {
         container.addMediaGalleryComponents(
           new MediaGalleryBuilder().addItems(
             new MediaGalleryItemBuilder().setURL(imageUrl.trim())
           )
         );
+      }
+
+      const isHelpBanner = typeof imageUrl === 'string' && imageUrl.includes('help-box');
+
+      if (!isHelpBanner) {
+        if (isRoleAction || !isValidMediaUrl(thumbnailUrl)) {
+          container.addTextDisplayComponents(new TextDisplayBuilder().setContent(titleContent));
+        } else {
+          const sec = new SectionBuilder()
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(titleContent));
+          sec.setThumbnailAccessory(new ThumbnailBuilder().setURL(thumbnailUrl.trim()));
+          container.addSectionComponents(sec);
+        }
+
+        container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+      }
+
+      if (body) {
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(body));
       }
 
       for (const row of actionRows) {

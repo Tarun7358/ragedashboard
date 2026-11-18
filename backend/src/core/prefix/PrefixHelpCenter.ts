@@ -247,7 +247,6 @@ export class PrefixHelpCenter {
           label: 'Back to Home Center',
           value: 'help_cat_home',
           description: 'View all modules and status statistics',
-          emoji: '🏠',
           default: true
         },
         ...categories.slice(0, 24).map(cat => {
@@ -256,8 +255,7 @@ export class PrefixHelpCenter {
           return {
             label: cat,
             value: `help_cat_${cat.toLowerCase().replace(/\s+/g, '_')}`,
-            description: `${count} commands · ${meta.description.slice(0, 45)}`,
-            emoji: meta.icon
+            description: `${count} commands · ${meta.description.slice(0, 45)}`
           };
         })
       );
@@ -268,7 +266,7 @@ export class PrefixHelpCenter {
     const btnSelect = new ButtonBuilder().setCustomId(`help_btn_dummy${execSuffix}`).setLabel('Select Category').setStyle(ButtonStyle.Secondary);
     const btnEnd = new ButtonBuilder().setCustomId(`help_btn_end${execSuffix}`).setLabel('>|').setStyle(ButtonStyle.Secondary);
     const btnDash = new ButtonBuilder().setLabel('Dashboard').setStyle(ButtonStyle.Link).setURL('https://ragesecuredashboard.netlify.app/');
-    const btnRefresh = new ButtonBuilder().setCustomId(`help_btn_refresh_home_1${execSuffix}`).setLabel('🔄').setStyle(ButtonStyle.Secondary);
+    const btnRefresh = new ButtonBuilder().setCustomId(`help_btn_refresh_home_1${execSuffix}`).setLabel('Refresh').setStyle(ButtonStyle.Secondary);
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btnHome, btnSelect, btnEnd, btnDash, btnRefresh);
 
@@ -322,7 +320,7 @@ export class PrefixHelpCenter {
     const visibleCmds = allCategoryCmds.filter(c => !c.hidden);
     const meta = this.getCategoryMeta(category);
 
-    const bannerBuffer = await HelpBannerGenerator.generate(`Help > ${meta.icon} ${category}`, `${visibleCmds.length} commands`).catch(() => null);
+    const bannerBuffer = await HelpBannerGenerator.generate(`Help > ${category}`, `${visibleCmds.length} commands`).catch(() => null);
     const files: AttachmentBuilder[] = [];
     if (bannerBuffer) {
       files.push(new AttachmentBuilder(bannerBuffer, { name: 'help-box-category.png' }));
@@ -333,17 +331,17 @@ export class PrefixHelpCenter {
     const currentPage = Math.min(Math.max(1, page), totalPages);
     const pageCmds = visibleCmds.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-    // Group commands into pill boxes
+    // Group commands into pill boxes (no emojis)
     const commandSections = pageCmds.map(c => {
       const allNames = [c.name, ...(c.aliases || []), ...(c.subcommands?.map(s => s.name.split(' ')[0]) || [])];
       const uniqueNames = [...new Set(allNames)];
       const pillList = uniqueNames.map(n => `\`${n}\``).join(' ');
-      return `**${meta.icon} ${c.name.toUpperCase()} [${uniqueNames.length}]**\n${pillList}`;
+      return `**${c.name.toUpperCase()} [${uniqueNames.length}]**\n${pillList}`;
     });
 
     const embedDesc = [
       `\`R A G E   O P T I M I S E R\`\n`,
-      ...(commandSections.length > 0 ? commandSections : [`> ${WRONG_ICON} __**No Commands Registered in this Module**__`]),
+      ...(commandSections.length > 0 ? commandSections : [`> No Commands Registered in this Module`]),
       `\n*open a module from the sub module menu below, then pick a command to see its full explanation, or use \`${prefix}help <cmd name>\`*`
     ].join('\n\n');
 
@@ -365,8 +363,7 @@ export class PrefixHelpCenter {
         {
           label: 'Back to Home Center',
           value: 'help_cat_home',
-          description: 'View all modules and status statistics',
-          emoji: '🏠'
+          description: 'View all modules and status statistics'
         },
         ...categories.slice(0, 24).map(cat => {
           const catMeta = this.getCategoryMeta(cat);
@@ -374,7 +371,6 @@ export class PrefixHelpCenter {
             label: cat,
             value: `help_cat_${cat.toLowerCase().replace(/\s+/g, '_')}`,
             description: `View all ${cat} commands and syntax`,
-            emoji: catMeta.icon,
             default: cat.toLowerCase() === category.toLowerCase()
           };
         })
@@ -382,12 +378,11 @@ export class PrefixHelpCenter {
 
     const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
-    // Sub-module / command selection menu
+    // Sub-module / command selection menu (no emojis)
     const subOptions = visibleCmds.slice(0, 25).map(c => ({
       label: `${prefix}${c.name}`,
       value: `help_cmd_${c.name.toLowerCase()}`,
-      description: `${c.description.slice(0, 50)}`,
-      emoji: meta.icon
+      description: `${c.description.slice(0, 50)}`
     }));
 
     const rows: ActionRowBuilder<any>[] = [row1];

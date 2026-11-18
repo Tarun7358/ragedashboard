@@ -33,3 +33,4 @@ export class HelpBannerGenerator {
     return await sharp(Buffer.from(svg)).png().toBuffer();
   }
 }
+
