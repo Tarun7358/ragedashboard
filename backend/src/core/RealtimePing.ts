@@ -13,12 +13,10 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { Database } from './Database.js';
 import { PayloadFormatter } from './PayloadFormatter.js';
 import { Colors } from './UIFactory.js';
+import { RedisManager } from './RedisManager.js';
 
 export async function measureRedisLatency(): Promise<number> {
-  const tDb0 = process.hrtime.bigint();
-  await Database.get('SELECT 1').catch(() => null);
-  const tDb1 = process.hrtime.bigint();
-  return Math.max(1, Math.round(Number(tDb1 - tDb0) / 1_000_000));
+  return RedisManager.measureLatency();
 }
 
 export async function buildBoxPingPayload(

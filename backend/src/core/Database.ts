@@ -133,8 +133,8 @@ export class Database {
     await this.exec('PRAGMA foreign_keys = ON;');
     // Wait up to 5s before returning SQLITE_BUSY on a locked table
     await this.exec('PRAGMA busy_timeout = 5000;');
-    // Increase page cache size for better read performance
-    await this.exec('PRAGMA cache_size = -8000;');
+    // Increase page cache size for ultra-fast read performance (64 MB cache)
+    await this.exec('PRAGMA cache_size = -64000;');
     // Synchronous=NORMAL is safe with WAL mode and faster than FULL
     await this.exec('PRAGMA synchronous = NORMAL;');
     // Temporary tables and indices in memory (never hits disk)

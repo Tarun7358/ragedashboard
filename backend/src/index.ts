@@ -1,3 +1,5 @@
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '64';
+
 import { createRequire } from 'module';
 import path from 'path';
 import fs from 'fs';
@@ -62,6 +64,7 @@ import { ModuleRegistry } from './core/ModuleRegistry.js';
 import { WebServer } from './core/WebServer.js';
 import { Gateway } from './core/Gateway.js';
 import { Database } from './core/Database.js';
+import { RedisManager } from './core/RedisManager.js';
 
 // ---- Feature Module Manifests ----
 import { SecurityManifest } from './modules/security/manifest.js';
@@ -178,8 +181,9 @@ async function bootstrap() {
       process.exit(1);
     }
 
-    // 0. Connect Database
+    // 0. Connect Database & Redis Caching Layer
     await Database.connect();
+    await RedisManager.init();
 
     // 0-b. Initialize email alert service (non-fatal — missing config just means no alerts)
     await EmailService.testConnection();
