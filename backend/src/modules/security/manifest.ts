@@ -1,5 +1,5 @@
 import { AuditLogEvent, PermissionFlagsBits, EmbedBuilder, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, MessageFlags } from 'discord.js';
-import crypto from 'crypto';
+import crypto, { randomInt } from 'crypto';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { checkWhitelistPermission, getGuildAndCheckPermission, checkBypassImmunity, isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
 import { isUrlCommandBypass, isMessageAntiLinkHandled, markMessageAntiLinkHandled } from '../../utils/antiLinkBypass.js';
@@ -2053,7 +2053,7 @@ async function handleSecurityGuiInteraction(interaction: any, context: any) {
       });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = randomInt(100000, 1000000).toString();
     EmailService.setPending2FA(interaction.guild.id, {
       email,
       code: otp,

@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto';
 /**
  * Email Alert Prefix Commands — Rage Optimiser Enterprise
  *
@@ -116,7 +117,7 @@ export function registerEmailCommands(): void {
         }
 
         // Generate 6-digit OTP code & dispatch
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = randomInt(100000, 1000000).toString();
         EmailService.setPending2FA(guildId, {
           email,
           code: otp,

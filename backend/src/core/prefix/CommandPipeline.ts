@@ -172,7 +172,7 @@ export class CommandPipeline {
           PrefixAnalytics.trackFailure('permission');
           return this.sendError(
             ctx,
-            '🔒 **Access Denied**: High-security and moderation commands (`kick`, `ban`, `mute`, `antinuke`, server settings) are strictly restricted to the **Server Owner** and designated **Extra Owners**.'
+            '**Access Denied**: High-security and moderation commands (`kick`, `ban`, `mute`, `antinuke`, server settings) are strictly restricted to the **Server Owner** and designated **Extra Owners**.'
           );
         }
       }
@@ -187,7 +187,7 @@ export class CommandPipeline {
         const isWhitelisted = await checkWhitelistPermission(ctx.executor.id, ctx.guild, { getModulesState: getModules ? () => getModules(ctx.guild.id) : () => [] }, 'anti_role_grant');
         if (!isOwner && !isWhitelisted) {
           PrefixAnalytics.trackFailure('permission');
-          return this.sendError(ctx, '🔒 Access Denied: Role management commands can only be executed by the Server Owner, Extra Owners, and Whitelisted Members. Normal Administrators cannot use role commands.');
+          return this.sendError(ctx, 'Access Denied: Role management commands can only be executed by the Server Owner, Extra Owners, and Whitelisted Members. Normal Administrators cannot use role commands.');
         }
       }
 

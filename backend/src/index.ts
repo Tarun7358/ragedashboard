@@ -330,6 +330,14 @@ const handleGracefulShutdown = async (signal: string) => {
   }
   
   try {
+    console.log('[Shutdown] Flushing queued module state...');
+    ModuleRegistry.getInstance()?.flushPending();
+    await new Promise(r => setTimeout(r, 150));
+  } catch (e: any) {
+    console.error('Error flushing module state:', e.message);
+  }
+
+  try {
     console.log('[Shutdown] Closing SQLite database...');
     await Database.close();
   } catch (e: any) {

@@ -54,22 +54,32 @@ export class WebServer {
     }));
 
     // ── CORS (BUG-12 fix: restrict to allowlist, support * wildcard & dev ports) ──
-    const rawOrigins = process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173,http://localhost:5000,*';
+    const isProd = process.env.NODE_ENV === 'production';
+    const devOrigins = 'http://localhost:3000,http://localhost:5173,http://localhost:5000';
+    const rawOrigins = [
+      process.env.CORS_ORIGIN || (isProd ? '' : devOrigins),
+      process.env.FRONTEND_URL || '',
+      process.env.DASHBOARD_URL || ''
+    ].filter(Boolean).join(',');
     const allowedOrigins = rawOrigins
       .split(',')
       .map(o => o.trim())
       .filter(Boolean);
+    if (allowedOrigins.includes('*') && isProd) {
+      console.warn('[WebServer] SECURITY WARNING: CORS_ORIGIN contains "*" in production. With credentials enabled this is unsafe; set explicit origins.');
+    }
     this.app.use(cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, curl, Postman), wildcard '*', or exact match
-        if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return callback(null, true);
-        callback(new Error(`CORS: origin '${origin}' not allowed`));
+        // No Origin header (server-to-server, curl) is allowed; browsers must match the allowlist.
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        if (allowedOrigins.includes('*')) return callback(null, true);
+        callback(null, false);
       },
       credentials: true
     }));
 
-    this.app.use(express.json({ limit: '10mb' }));
-    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+    this.app.use(express.json({ limit: '2mb' }));
+    this.app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
     // ── Block Sensitive File Probes (.env, .git, .sqlite, package.json, etc.) ──
     this.app.use((req: Request, res: Response, next: NextFunction) => {

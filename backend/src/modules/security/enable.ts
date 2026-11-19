@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto';
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -45,7 +46,10 @@ import {
   SECURITY_SHIELD_ICON
 } from '../../core/UIFactory.js';
 import { DEFAULT_SECURITY_RULES, buildEnableAllDashboardGUI } from '../config/manifest.js';
+
+const RULE_COUNT = Object.keys(DEFAULT_SECURITY_RULES).length;
 import { isOwnerOrExtraOwner, checkBypassImmunity } from '../../utils/whitelistCheck.js';
+import { safe } from '../../utils/safe.js';
 import { DashboardSyncService } from '../../services/DashboardSyncService.js';
 import { Database } from '../../core/Database.js';
 import { EmailService } from '../../services/EmailService.js';
@@ -1030,7 +1034,7 @@ export async function sendOwnerSecurityConsultationDM(guild: Guild, targetUser?:
       : `${VERIFIED_ICON} **Optimal** — Rage Optimiser holds top authority`;
 
     // Automatically strip dangerous roles from unwhitelisted members upon activation
-    await stripPrivilegedNonWhitelistedMembers(guild).catch(() => { });
+    await safe('pipeline:stripPrivilegedNonWhitelistedMembers', stripPrivilegedNonWhitelistedMembers(guild));
 
     const consultationEmbed = new EmbedBuilder()
       .setColor(0x2B2D31)
@@ -1480,7 +1484,7 @@ export function registerEnableDisableCommands(): void {
             {
               title: `${SHIELD_EMOJI} SECURITY & DEFENSE SUITES`,
               items: [
-                `• \`${prefix}enable antinuke\` — Enable all 27 Anti-Nuke & Unbypassable rules`,
+                `• \`${prefix}enable antinuke\` — Enable all ${RULE_COUNT} Anti-Nuke & Unbypassable rules`,
                 `• \`${prefix}enable automod\` — Enable Anti-Link, Anti-Spam & Chat Filters`,
                 `• \`${prefix}enable voice\` — Enable Voice Protection, Dynamic JTC & 24/7`,
                 `• \`${prefix}enable logging [#channel]\` — Enable Server Audit Logging Center`,
@@ -1517,38 +1521,6 @@ export function registerEnableDisableCommands(): void {
       const toggleMod = context?.toggleModule;
       const modulesState = context?.getModulesState ? context.getModulesState(guildId) : [];
 
-      // Check if r!enable all has already been executed in this server
-      const secModInit = modulesState.find((m: any) => m.id === 'security');
-      const amModInit = modulesState.find((m: any) => m.id === 'automod');
-      const vpModInit = modulesState.find((m: any) => m.id === 'voice-protection');
-      const logModInit = modulesState.find((m: any) => m.id === 'logging');
-      const bakModInit = modulesState.find((m: any) => m.id === 'backups');
-
-      const isAlreadyEnabledAll = Boolean(
-        secModInit?.status === 'enabled' &&
-        secModInit?.config?.antiNukeEnabled === true &&
-        (
-          secModInit?.config?.enableAllCompleted === true ||
-          (
-            amModInit?.status === 'enabled' &&
-            amModInit?.config?.autoModEnabled === true &&
-            vpModInit?.status === 'enabled' &&
-            logModInit?.status === 'enabled' &&
-            bakModInit?.status === 'enabled'
-          )
-        )
-      );
-
-      if (target === 'all') {
-        // Guarantee all server modules are enabled
-        if (toggleMod) {
-          for (const m of modulesState) {
-            toggleMod(m.id, true);
-          }
-          toggleMod('join_to_create', true);
-          toggleMod('joinToCreate', true);
-        }
-      }
 
       // Only run High-Tech Setup animation pipeline for 'all'
       const isAllSetup = target === 'all';
@@ -1588,8 +1560,8 @@ export function registerEnableDisableCommands(): void {
           },
           {
             label: target === 'all'
-              ? 'Arming All 27 Anti-Nuke Rules & Enterprise Protection Engines...'
-              : 'Arming All 27 Anti-Nuke Protection Rules...',
+              ? `Arming All ${RULE_COUNT} Anti-Nuke Rules & Enterprise Protection Engines...`
+              : `Arming All ${RULE_COUNT} Anti-Nuke Protection Rules...`,
             detail: 'Armed'
           }
         ];
@@ -1658,17 +1630,17 @@ export function registerEnableDisableCommands(): void {
         if (replyMsg) await replyMsg.edit(renderSetupCard(2)).catch(() => null);
 
         // Step 3: Role Integrity Check & Create/Heal Backup Roles
-        await repairRageBotAdminPermissions(guild).catch(() => { });
+        await safe('pipeline:repairRageBotAdminPermissions', repairRageBotAdminPermissions(guild));
         if (replyMsg) await replyMsg.edit(renderSetupCard(3)).catch(() => null);
 
         // Step 4: Role Hierarchy & Top Positioning
         const { ensureRageRoleAtTop } = await import('../backups/manifest.js');
-        await ensureRageRoleAtTop(guild).catch(() => { });
-        await stripPrivilegedNonWhitelistedMembers(guild).catch(() => { });
+        await safe('pipeline:ensureRageRoleAtTop', ensureRageRoleAtTop(guild));
+        await safe('pipeline:stripPrivilegedNonWhitelistedMembers', stripPrivilegedNonWhitelistedMembers(guild));
         if (replyMsg) await replyMsg.edit(renderSetupCard(4)).catch(() => null);
 
         // Step 5: Deploy Live Cyber Dashboard Channel (#rage-dashboard)
-        await deploySecurityDashboardToChannel(guild).catch(() => null);
+        await safe('pipeline:deploySecurityDashboardToChannel', deploySecurityDashboardToChannel(guild));
         if (replyMsg) await replyMsg.edit(renderSetupCard(5)).catch(() => null);
 
         // Step 6: Arming completed & prepare smooth transition
@@ -1731,7 +1703,7 @@ export function registerEnableDisableCommands(): void {
             {
               title: 'ACTIVE DEFENSE SYSTEMS',
               items: [
-                '• **Anti-Nuke Matrix**: All 27 Protection rules active with instant rollback',
+                `• **Anti-Nuke Matrix**: All ${RULE_COUNT} Protection rules active with instant rollback`,
                 '• **PreBot Whitelist & Quarantine**: Unauthorized bots automatically neutralized',
                 '• **Threat Watcher**: Continuous monitoring of roles, channels, webhooks & threads'
               ]
@@ -1750,11 +1722,11 @@ export function registerEnableDisableCommands(): void {
           .addTextDisplayComponents(
             new TextDisplayBuilder().setContent([
               `> **Server:** \`${message.guild.name}\``,
-              `> **Status:** \`All 27 Rules Armed & Fully Operational\``,
+              `> **Status:** \`All ${RULE_COUNT} Rules Armed & Fully Operational\``,
               `> **Dashboard:** ${dashChannel ? `<#${dashChannel.id}>` : '\`#rage-dashboard\`'}`,
               '',
               '### **Active Defense Systems**',
-              '• **Anti-Nuke Matrix:** All 27 Protection rules active with instant rollback',
+              `• **Anti-Nuke Matrix:** All ${RULE_COUNT} Protection rules active with instant rollback`,
               '• **PreBot Whitelist & Quarantine:** Unauthorized bots automatically neutralized',
               '• **Threat Watcher:** Continuous monitoring of roles, channels, webhooks & threads'
             ].join('\n'))
@@ -2727,7 +2699,7 @@ export function registerEnableDisableCommands(): void {
 
       } else if (alertEmail) {
         // No OTP provided yet, but one is required — send code and gate
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = randomInt(100000, 1000000).toString();
         EmailService.setPending2FA(guildId, {
           email: alertEmail,
           code: otp,
@@ -2837,7 +2809,7 @@ export function registerEnableDisableCommands(): void {
           .setTitle(`${SUCCESS_CHECK_ICON} Threat Defense Matrix — Offline`)
           .setDescription(
             `**Suite**: \`ANTI-NUKE\` \`[ STANDBY ]\`\n\n` +
-            `${SUCCESS_CHECK_ICON} All 27 threat sensors have been gracefully wound down.\n` +
+            `${SUCCESS_CHECK_ICON} All ${RULE_COUNT} threat sensors have been gracefully wound down.\n` +
             `${SUCCESS_CHECK_ICON} Role-based backup authorities remain intact on server.\n` +
             `${WRONG_EMOJI} Active monitoring & auto-quarantine enforcement paused.\n\n` +
             `> Use \`${prefix}enable antinuke\` to restore full protection instantly.`

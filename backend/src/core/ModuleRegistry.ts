@@ -27,6 +27,47 @@ export class ModuleRegistry {
   private static instance: ModuleRegistry | null = null;
   // Tracks the last known master Anti-Nuke state per guild so an OFF -> ON change can arm all 28 modules.
   private masterArmed = new Map<string, boolean>();
+  // Tracks how many manifests were last merged into each guild's module list (avoids re-scanning per call).
+  private filledManifestCount = new Map<string, number>();
+  // Per-guild debounced persistence/broadcast so bulk toggles (e.g. `enable all`) produce one write.
+  private pendingFlush = new Map<string, NodeJS.Timeout>();
+
+  private scheduleFlush(gId: string, state: any) {
+    const existing = this.pendingFlush.get(gId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      this.pendingFlush.delete(gId);
+      this.saveGuildState(gId, state);
+      this.broadcast({ type: 'STATE_UPDATE', modules: state.modules, registry: state.registry, guildId: gId });
+      DashboardSyncService.triggerSync(gId);
+    }, 75);
+    this.pendingFlush.set(gId, timer);
+  }
+
+  /** Flush any queued writes immediately (call on shutdown). */
+  public flushPending() {
+    for (const [gId, timer] of this.pendingFlush) {
+      clearTimeout(timer);
+      const st = this.guildStates.get(gId);
+      if (st) this.saveGuildState(gId, st);
+    }
+    this.pendingFlush.clear();
+  }
+
+  /** Enable/disable many modules in one state mutation (single save + broadcast). */
+  public setModulesEnabled(guildId: string | undefined, ids: string[], enabled: boolean): number {
+    const gId = guildId || process.env.GUILD_ID || 'default_guild';
+    const state = this.getGuildState(gId);
+    let changed = 0;
+    for (const id of new Set(ids)) {
+      const mod = this.findModuleInState(state, id);
+      if (!mod) continue;
+      const next = enabled ? 'enabled' : 'disabled';
+      if (mod.status !== next) { mod.status = next; changed++; }
+    }
+    this.scheduleFlush(gId, state);
+    return changed;
+  }
   public static getInstance(): ModuleRegistry | null {
     return ModuleRegistry.instance;
   }
@@ -196,8 +237,10 @@ export class ModuleRegistry {
       this.masterArmed.set(id, false);
       this.reevaluateAllModules(id);
       this.saveGuildState(id, state);
-    } else {
+    } else if (this.filledManifestCount.get(id) !== this.manifests.size) {
+      // Only re-scan when new manifests were registered since the last fill
       this.fillManifestModules(state.modules);
+      this.filledManifestCount.set(id, this.manifests.size);
     }
 
     return state;
@@ -535,29 +578,18 @@ export class ModuleRegistry {
   public toggleModule(guildId: string | undefined, id: string, enabledOverride?: boolean): ModuleState | null {
     const gId = guildId || process.env.GUILD_ID || 'default_guild';
     const state = this.getGuildState(gId);
-    let mod = this.findModuleInState(state, id);
-    if (!mod) {
-      const manifest = this.manifests.get(id);
-      mod = {
-        id,
-        name: manifest?.name || id,
-        status: enabledOverride !== undefined ? (enabledOverride ? 'enabled' : 'disabled') : 'enabled',
-        progress: 0,
-        errors: [],
-        config: {}
-      };
-      state.modules.push(mod);
+    const mod = this.findModuleInState(state, id);
+    // Unknown IDs (typos, aliases without a manifest) must NOT create phantom modules.
+    if (!mod) return null;
+
+    const before = mod.status;
+    if (enabledOverride !== undefined) {
+      mod.status = enabledOverride ? 'enabled' : 'disabled';
     } else {
-      if (enabledOverride !== undefined) {
-        mod.status = enabledOverride ? 'enabled' : 'disabled';
-      } else {
-        mod.status = mod.status === 'enabled' ? 'disabled' : 'enabled';
-      }
+      mod.status = mod.status === 'enabled' ? 'disabled' : 'enabled';
     }
 
-    this.saveGuildState(gId, state);
-    this.broadcast({ type: 'STATE_UPDATE', modules: state.modules, registry: state.registry, guildId: gId });
-    DashboardSyncService.triggerSync(gId);
+    if (mod.status !== before) this.scheduleFlush(gId, state);
     return mod;
   }
 
