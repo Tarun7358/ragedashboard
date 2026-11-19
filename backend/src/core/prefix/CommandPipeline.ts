@@ -8,6 +8,7 @@ import { ParsedCommand, PrefixParser } from './PrefixParser.js';
 import { isOwnerOrExtraOwner, checkWhitelistPermission } from '../../utils/whitelistCheck.js';
 import { CommandGuard } from '../security/CommandGuard.js';
 import { PayloadFormatter } from '../PayloadFormatter.js';
+import { resolveCanonicalModuleId } from '../ModuleIdResolver.js';
 
 export class CommandContext {
   public message: Message;
@@ -71,10 +72,15 @@ export class CommandPipeline {
       const guildId = ctx.guild.id;
       const getModulesFn = ctx.get('getModulesState');
       const modules = getModulesFn ? getModulesFn(guildId) : [];
-      const normOwner = (cmdMeta.moduleOwnerId || '').toLowerCase().replace(/[-_]/g, '');
+      const rawOwner = cmdMeta.moduleOwnerId || '';
+      const canonOwner = resolveCanonicalModuleId(rawOwner);
+      const normOwner = rawOwner.toLowerCase().replace(/[-_]/g, '');
+      const normCanon = canonOwner.toLowerCase().replace(/[-_]/g, '');
       const modState = modules.find((m: any) =>
-        m.id === cmdMeta.moduleOwnerId ||
-        (m.id && m.id.toLowerCase().replace(/[-_]/g, '') === normOwner)
+        m.id === rawOwner ||
+        m.id === canonOwner ||
+        (m.id && m.id.toLowerCase().replace(/[-_]/g, '') === normOwner) ||
+        (m.id && m.id.toLowerCase().replace(/[-_]/g, '') === normCanon)
       );
       
       const managementCmdNames = [

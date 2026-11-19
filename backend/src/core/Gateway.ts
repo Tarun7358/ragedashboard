@@ -25,6 +25,7 @@ import { OAuthService } from './OAuthService.js';
 import { ensureAntiNukeBackupRoles } from '../modules/security/enable.js';
 import { DashboardSyncService } from '../services/DashboardSyncService.js';
 import { CentralLogger } from './security/CentralLogger.js';
+import { ModuleRegistry } from './ModuleRegistry.js';
 import { UptimeBroadcaster } from '../services/UptimeBroadcaster.js';
 import { handlePingMessage } from './RealtimePing.js';
 import {
@@ -1380,6 +1381,7 @@ export class Gateway {
         getGlobalSettings: (gId?: string) => this.getGlobalSettings(gId || cmdGuildId),
         updateModuleConfig: (id: string, config: Record<string, any>) => this.updateModuleConfig(cmdGuildId, id, config),
         toggleModule: (id: string, enabledOverride?: boolean) => this.toggleModule ? this.toggleModule(cmdGuildId, id, enabledOverride) : null,
+        setModulesEnabled: (ids: string[], enabled: boolean) => ModuleRegistry.getInstance()?.setModulesEnabled(cmdGuildId, ids, enabled) ?? 0,
         registry: {
           logWhitelistAudit: (gId: string | undefined, audit: any) => {
             this.logSyncEvent(gId || cmdGuildId, `[Audit] ${audit.action || 'whitelist change'}`, 'info');

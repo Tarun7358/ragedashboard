@@ -11,3 +11,4 @@ export async function safe<T>(label: string, p: Promise<T> | T, fallback: T | nu
     return fallback;
   }
 }
+

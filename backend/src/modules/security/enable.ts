@@ -53,6 +53,7 @@ import { safe } from '../../utils/safe.js';
 import { DashboardSyncService } from '../../services/DashboardSyncService.js';
 import { Database } from '../../core/Database.js';
 import { EmailService } from '../../services/EmailService.js';
+import { MODULE_ALIAS_MAP, resolveCanonicalModuleId, CANONICAL_MODULE_IDS } from '../../core/ModuleIdResolver.js';
 
 const APPROVED_ICON = SUCCESS_CHECK_ICON;
 const WRONG_EMOJI = WRONG_ICON;
@@ -75,171 +76,7 @@ export const ALL_BACKUP_ROLE_NAMES = [
 
 export const LEGACY_BACKUP_ROLE_NAMES = ['Created by Rage', 'Rage Backup Authority'];
 
-export const MODULE_ALIASES: Record<string, string> = {
-  // Anti-Nuke & Security
-  antinuke: 'security',
-  'anti-nuke': 'security',
-  an: 'security',
-  sec: 'security',
-  nuke: 'security',
-  security: 'security',
-  threats: 'security',
-  quarantine: 'security',
-
-  // AutoMod
-  automod: 'automod',
-  'auto-mod': 'automod',
-  am: 'automod',
-  antilink: 'automod',
-  'anti-link': 'automod',
-  antispam: 'automod',
-  'anti-spam': 'automod',
-  filter: 'automod',
-  chatfilter: 'automod',
-
-  // Voice & JTC
-  voice: 'voice',
-  vc: 'voice',
-  'voice-protection': 'voice',
-  jointocreate: 'voice',
-  'join-to-create': 'voice',
-  jtc: 'voice',
-  '247': 'voice',
-  voicepresence: 'voice',
-  voicemanager: 'voice',
-  'voice-manager': 'voice',
-
-  // Backups
-  backup: 'backups',
-  backups: 'backups',
-  'backup-recovery': 'backups',
-  recovery: 'backups',
-  snapshot: 'backups',
-  snapshots: 'backups',
-
-  // Logging
-  logging: 'logging',
-  logs: 'logging',
-  log: 'logging',
-  audit: 'logging',
-  auditlog: 'logging',
-  auditlogs: 'logging',
-  'audit-logging': 'logging',
-  telemetry: 'logging',
-
-  // Tickets
-  ticket: 'tickets',
-  tickets: 'tickets',
-  ticketsystem: 'tickets',
-  'ticket-system': 'tickets',
-  tkmgr: 'tickets',
-  support: 'tickets',
-
-  // Verification
-  verification: 'verification',
-  verify: 'verification',
-  captcha: 'verification',
-  gatekeeper: 'verification',
-  'verification-gate': 'verification',
-
-  // Join Role Guard / AutoRole
-  autorole: 'join_role_guard',
-  'auto-role': 'join_role_guard',
-  joinrole: 'join_role_guard',
-  'join-role': 'join_role_guard',
-  joinroles: 'join_role_guard',
-  joinroleguard: 'join_role_guard',
-  'join-role-guard': 'join_role_guard',
-  join_role_guard: 'join_role_guard',
-
-  // Giveaway
-  giveaway: 'giveaway',
-  giveaways: 'giveaway',
-  gw: 'giveaway',
-  gstart: 'giveaway',
-
-  // Reaction Roles & Self Roles
-  reactionroles: 'reaction_roles',
-  'reaction-roles': 'reaction_roles',
-  reaction_roles: 'reaction_roles',
-  rr: 'reaction_roles',
-  selfroles: 'self-roles',
-  'self-roles': 'self-roles',
-  self_roles: 'self-roles',
-
-  // Leveling / Rank
-  leveling: 'leveling',
-  levels: 'leveling',
-  level: 'leveling',
-  rank: 'leveling',
-  xp: 'leveling',
-  economy: 'leveling',
-
-  // Social Updates
-  social: 'social_updates',
-  socials: 'social_updates',
-  'social-updates': 'social_updates',
-  social_updates: 'social_updates',
-  youtube: 'social_updates',
-  twitch: 'social_updates',
-  twitter: 'social_updates',
-
-  // Stats Counter
-  stats: 'stats-counter',
-  statscounter: 'stats-counter',
-  'stats-counter': 'stats-counter',
-  serverstats: 'stats-counter',
-  'server-stats': 'stats-counter',
-  membercount: 'stats-counter',
-
-  // Reminders
-  reminder: 'reminders',
-  reminders: 'reminders',
-  remind: 'reminders',
-
-  // Announcements
-  announcement: 'announcements',
-  announcements: 'announcements',
-  announce: 'announcements',
-
-  // Promotion
-  promotion: 'promotion',
-  promo: 'promotion',
-  bump: 'promotion',
-
-  // Moderation
-  moderation: 'moderation',
-  mod: 'moderation',
-  modtools: 'moderation',
-
-  // Embed Builder
-  embed: 'embed_builder',
-  embeds: 'embed_builder',
-  embedbuilder: 'embed_builder',
-  'embed-builder': 'embed_builder',
-  embed_builder: 'embed_builder',
-
-  // Bot Stats
-  botstats: 'botstats',
-  'bot-stats': 'botstats',
-  botinfo: 'botstats',
-
-  // Whitelists
-  prebot: 'prebot_whitelist',
-  prebot_whitelist: 'prebot_whitelist',
-  'prebot-whitelist': 'prebot_whitelist',
-  member_whitelist: 'member_whitelist',
-  'member-whitelist': 'member_whitelist',
-  whitelist: 'member_whitelist',
-
-  // Blacklist
-  blacklist: 'blacklist',
-
-  // All
-  all: 'all',
-  full: 'all',
-  everything: 'all'
-};
+export const MODULE_ALIASES: Record<string, string> = MODULE_ALIAS_MAP;
 
 export async function cleanupLegacyBackupRoles(guild: any): Promise<void> {
   if (!guild || !guild.roles) return;
@@ -1430,6 +1267,9 @@ export async function deploySecurityDashboardToChannel(guild: Guild): Promise<{ 
 
     if (targetMessage) {
       await DashboardSyncService.registerDashboard(guild.id, channel.id, targetMessage.id);
+      if (!targetMessage.pinned) {
+        await targetMessage.pin().catch(() => null);
+      }
       console.log(`[deploySecurityDashboardToChannel] ✅ Successfully deployed live dashboard in #${channel.name} (${guild.id})`);
     }
 
@@ -1473,7 +1313,7 @@ export function registerEnableDisableCommands(): void {
 
       const prefix = PrefixResolver.getPrefix(guildId);
       const rawTarget = (args[0] || '').toLowerCase().trim();
-      const target = MODULE_ALIASES[rawTarget] || rawTarget;
+      const target = resolveCanonicalModuleId(rawTarget);
 
       if (!rawTarget) {
         const usageEmbed = buildLimeOverviewCard({
@@ -2489,19 +2329,11 @@ export function registerEnableDisableCommands(): void {
           punishment: currentAmConfig.punishment || 'warn'
         });
 
-        // Enable All Modules & Subsystems
-        if (toggleMod) {
-          const ALL_KNOWN_MODULE_IDS = [
-            'security', 'automod', 'voice', 'voice-protection', 'voice_manager',
-            'logging', 'backups', 'tickets', 'verification', 'giveaway',
-            'reaction-roles', 'reaction_roles', 'self-roles', 'leveling',
-            'social-updates', 'social_updates', 'stats-counter', 'statscounter',
-            'reminders', 'announcements', 'promotion', 'embed_builder',
-            'join-role-guard', 'join_role_guard', 'joinToCreate', 'join_to_create',
-            'member_whitelist', 'prebot_whitelist', 'community', 'moderation',
-            'audit', 'automation', 'analytics', 'botstats', 'bulk_ops', 'config'
-          ];
-          for (const modId of ALL_KNOWN_MODULE_IDS) {
+        // Enable All Modules & Subsystems (Batched)
+        if (context?.setModulesEnabled) {
+          context.setModulesEnabled(CANONICAL_MODULE_IDS as unknown as string[], true);
+        } else if (toggleMod) {
+          for (const modId of CANONICAL_MODULE_IDS) {
             toggleMod(modId, true);
           }
           for (const m of modulesState) {
@@ -2644,7 +2476,7 @@ export function registerEnableDisableCommands(): void {
 
       const prefix = PrefixResolver.getPrefix(guildId);
       const rawTarget = (args[0] || '').toLowerCase().trim();
-      const target = MODULE_ALIASES[rawTarget] || rawTarget;
+      const target = resolveCanonicalModuleId(rawTarget);
 
       if (!rawTarget) {
         return message.reply({

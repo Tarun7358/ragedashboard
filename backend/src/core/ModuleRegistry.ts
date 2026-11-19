@@ -1,6 +1,7 @@
 import { ModuleState, DiscordResourceRegistry, ModuleManifest, LogEntry } from './types.js';
 import { Database } from './Database.js';
 import { migrateToUnifiedWhitelist, loadExtraOwnersCache } from '../utils/whitelistCheck.js';
+import { resolveCanonicalModuleId } from './ModuleIdResolver.js';
 import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { DashboardSyncService } from '../services/DashboardSyncService.js';
 
@@ -59,7 +60,7 @@ export class ModuleRegistry {
     const gId = guildId || process.env.GUILD_ID || 'default_guild';
     const state = this.getGuildState(gId);
     let changed = 0;
-    for (const id of new Set(ids)) {
+    for (const id of new Set(ids.map(i => resolveCanonicalModuleId(i)))) {
       const mod = this.findModuleInState(state, id);
       if (!mod) continue;
       const next = enabled ? 'enabled' : 'disabled';
@@ -95,6 +96,14 @@ export class ModuleRegistry {
 
   public registerModule(manifest: ModuleManifest) {
     this.manifests.set(manifest.id, manifest);
+    const canon = resolveCanonicalModuleId(manifest.id);
+    if (canon && canon !== manifest.id) {
+      this.manifests.set(canon, manifest);
+    }
+  }
+
+  public getManifest(id: string): ModuleManifest | undefined {
+    return this.manifests.get(id) || this.manifests.get(resolveCanonicalModuleId(id));
   }
 
   private fillManifestModules(modules: ModuleState[]) {
@@ -539,10 +548,14 @@ export class ModuleRegistry {
 
   public findModuleInState(state: any, id: string): any {
     if (!id || !state?.modules) return undefined;
+    const canon = resolveCanonicalModuleId(id);
     const normalizedId = id.toLowerCase().replace(/[-_]/g, '');
+    const normalizedCanon = canon.toLowerCase().replace(/[-_]/g, '');
     return state.modules.find((m: any) =>
       m.id === id ||
-      m.id?.toLowerCase().replace(/[-_]/g, '') === normalizedId
+      m.id === canon ||
+      m.id?.toLowerCase().replace(/[-_]/g, '') === normalizedId ||
+      m.id?.toLowerCase().replace(/[-_]/g, '') === normalizedCanon
     );
   }
 
