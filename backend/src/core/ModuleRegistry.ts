@@ -62,13 +62,16 @@ export class ModuleRegistry {
       'discord-dashboard', 'brain', 'backups', 'join_role_guard',
       'join_to_create', 'voice', 'voice_manager', 'voice-protection'
     ];
+    const secMod = modules.find(m => m.id === 'security');
+    const isMasterEnabled = Boolean(secMod?.config?.enableAllCompleted || (secMod?.status === 'enabled' && secMod?.config?.antiNukeEnabled));
+
     this.manifests.forEach(manifest => {
       if (!modules.find(m => m.id === manifest.id)) {
         const isCore = alwaysEnabledCore.includes(manifest.id);
         modules.push({
           id: manifest.id,
           name: manifest.name,
-          status: isCore ? 'enabled' : 'disabled',
+          status: (isCore || isMasterEnabled) ? 'enabled' : 'disabled',
           progress: 0,
           errors: [],
           config: manifest.id === 'security'
@@ -193,6 +196,8 @@ export class ModuleRegistry {
       this.masterArmed.set(id, false);
       this.reevaluateAllModules(id);
       this.saveGuildState(id, state);
+    } else {
+      this.fillManifestModules(state.modules);
     }
 
     return state;
@@ -530,13 +535,24 @@ export class ModuleRegistry {
   public toggleModule(guildId: string | undefined, id: string, enabledOverride?: boolean): ModuleState | null {
     const gId = guildId || process.env.GUILD_ID || 'default_guild';
     const state = this.getGuildState(gId);
-    const mod = this.findModuleInState(state, id);
-    if (!mod) return null;
-
-    if (enabledOverride !== undefined) {
-      mod.status = enabledOverride ? 'enabled' : 'disabled';
+    let mod = this.findModuleInState(state, id);
+    if (!mod) {
+      const manifest = this.manifests.get(id);
+      mod = {
+        id,
+        name: manifest?.name || id,
+        status: enabledOverride !== undefined ? (enabledOverride ? 'enabled' : 'disabled') : 'enabled',
+        progress: 0,
+        errors: [],
+        config: {}
+      };
+      state.modules.push(mod);
     } else {
-      mod.status = mod.status === 'enabled' ? 'disabled' : 'enabled';
+      if (enabledOverride !== undefined) {
+        mod.status = enabledOverride ? 'enabled' : 'disabled';
+      } else {
+        mod.status = mod.status === 'enabled' ? 'disabled' : 'enabled';
+      }
     }
 
     this.saveGuildState(gId, state);

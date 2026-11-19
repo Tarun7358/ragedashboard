@@ -1284,15 +1284,15 @@ export async function ensurePrivateDashboardChannel(guild: Guild): Promise<TextC
     if (everyoneRole) {
       permissionOverwrites.push({
         id: everyoneRole.id,
-        allow: [],
-        deny: [
+        allow: [
           PermissionFlagsBits.ViewChannel,
           PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.SendMessages
+        ],
+        deny: [
           PermissionFlagsBits.SendMessagesInThreads,
           PermissionFlagsBits.CreatePublicThreads,
-          PermissionFlagsBits.CreatePrivateThreads,
-          PermissionFlagsBits.AddReactions
+          PermissionFlagsBits.CreatePrivateThreads
         ]
       });
     }
@@ -1319,13 +1319,14 @@ export async function ensurePrivateDashboardChannel(guild: Guild): Promise<TextC
         topic: 'Rage Optimiser Enterprise • Live Cyber Security Dashboard [Real-Time Sync Active]',
         permissionOverwrites,
         position: 0,
-        reason: 'Auto-provisioning private Rage Security Dashboard at top of server'
+        reason: 'Auto-provisioning public Rage Security Dashboard at top of server'
       }) as TextChannel;
     } else {
       await channel.permissionOverwrites.set(permissionOverwrites).catch((err) => {
         console.warn(`[ensurePrivateDashboardChannel] Overwrites set warning on #${channel?.name}:`, err?.message || err);
       });
       await channel.edit({
+        name: channelName,
         parent: null,
         topic: 'Rage Optimiser Enterprise • Live Cyber Security Dashboard [Real-Time Sync Active]'
       }).catch((err) => {
@@ -1549,41 +1550,11 @@ export function registerEnableDisableCommands(): void {
         }
       }
 
-      const hasAnyDisabledModule = modulesState.some((m: any) => m.status === 'disabled' && m.id !== 'rage-enterprise');
-
-      if (target === 'all' && isAlreadyEnabledAll && !hasAnyDisabledModule) {
-        // Still guarantee @everyone does not hold Administrator privilege
-        await sanitizeEveryoneRolePermissions(guild).catch(() => null);
-        if (updateConfig && !secModInit?.config?.enableAllCompleted) {
-          updateConfig('security', { ...(secModInit?.config || {}), enableAllCompleted: true });
-        }
-
-        const alreadyEnabledEmbed = new EmbedBuilder()
-          .setColor(0x0a0a0c)
-          .setAuthor({
-            name: 'RAGE OPTIMISER ENTERPRISE • SYSTEM STATUS',
-            iconURL: message.client.user?.displayAvatarURL()
-          })
-          .setTitle(`${SUCCESS_CHECK_ICON} Already Enabled All`)
-          .setDescription(
-            `Already you have enabled all security and protection modules in **${guild.name}**!\n\n` +
-            `> ${SECURITY_SHIELD_ICON} **Anti-Nuke Matrix**: \`[ ARMED & ACTIVE ]\`\n` +
-            `> ${LINK_ICON} **AutoMod & Content Filter**: \`[ ARMED & ACTIVE ]\`\n` +
-            `> ${VOICE_ICON} **Voice, Logging & Backups**: \`[ ONLINE ]\`\n` +
-            `> ${VERIFIED_ICON} **\`@everyone\` Admin Privilege**: \`[ TURNED OFF / SECURED ]\`\n\n` +
-            `Use \`${prefix}config\` or \`${prefix}security\` to customize individual settings.`
-          )
-          .setFooter({ text: 'Rage Optimiser Enterprise • One-Time Master Activation Guard', iconURL: guild.iconURL() || undefined })
-          .setTimestamp();
-
-        return message.reply({ embeds: [alreadyEnabledEmbed] });
-      }
-
-      // Only run High-Tech Antinuke animation for antinuke / security / all
-      const isAntinukeOrAll = target === 'security' || target === 'all';
+      // Only run High-Tech Setup animation pipeline for 'all'
+      const isAllSetup = target === 'all';
       let replyMsg: any = null;
 
-      if (isAntinukeOrAll) {
+      if (isAllSetup) {
         const dbHash = Math.floor(1000000000000000 + Math.random() * 9000000000000000).toString();
         const guildCleanName = message.guild.name.replace(/[*_`~|]/g, '');
 
@@ -1753,7 +1724,7 @@ export function registerEnableDisableCommands(): void {
               items: [
                 `• **Dashboard Channel**: ${dashChannel ? `<#${dashChannel.id}>` : '`#rage-dashboard`'}`,
                 `• **Position**: Positioned at the **top of all channels & categories**`,
-                `• **Access Control**: Public Read-Only (@everyone) • Chat Locked`,
+                `• **Access Control**: Public (@everyone) • Real-Time Channel`,
                 `• **Sync Engine**: Real-Time Event Sync & Automatic Background Auto-Sync`
               ]
             },
@@ -2548,18 +2519,22 @@ export function registerEnableDisableCommands(): void {
 
         // Enable All Modules & Subsystems
         if (toggleMod) {
-          for (const m of modulesState) {
-            toggleMod(m.id, true);
+          const ALL_KNOWN_MODULE_IDS = [
+            'security', 'automod', 'voice', 'voice-protection', 'voice_manager',
+            'logging', 'backups', 'tickets', 'verification', 'giveaway',
+            'reaction-roles', 'reaction_roles', 'self-roles', 'leveling',
+            'social-updates', 'social_updates', 'stats-counter', 'statscounter',
+            'reminders', 'announcements', 'promotion', 'embed_builder',
+            'join-role-guard', 'join_role_guard', 'joinToCreate', 'join_to_create',
+            'member_whitelist', 'prebot_whitelist', 'community', 'moderation',
+            'audit', 'automation', 'analytics', 'botstats', 'bulk_ops', 'config'
+          ];
+          for (const modId of ALL_KNOWN_MODULE_IDS) {
+            toggleMod(modId, true);
           }
-          toggleMod('voice-protection', true);
-          toggleMod('join_to_create', true);
-          toggleMod('joinToCreate', true);
-          toggleMod('join_role_guard', true);
-          toggleMod('join-role-guard', true);
-          toggleMod('logging', true);
-          toggleMod('backups', true);
-          toggleMod('voice', true);
-          toggleMod('voice_manager', true);
+          for (const m of modulesState) {
+            if (m.id) toggleMod(m.id, true);
+          }
         }
 
         // Auto-configure logging channel if none set

@@ -68,7 +68,9 @@ export class CommandPipeline {
       }
 
       // 2. Module Validation
-      const modules = ctx.get('getModulesState') ? ctx.get('getModulesState')() : [];
+      const guildId = ctx.guild.id;
+      const getModulesFn = ctx.get('getModulesState');
+      const modules = getModulesFn ? getModulesFn(guildId) : [];
       const normOwner = (cmdMeta.moduleOwnerId || '').toLowerCase().replace(/[-_]/g, '');
       const modState = modules.find((m: any) =>
         m.id === cmdMeta.moduleOwnerId ||
@@ -94,10 +96,25 @@ export class CommandPipeline {
         managementCmdNames.includes(cmdMeta.name) ||
         managementSubCmds.includes(parsed.subcommand || '');
 
-      let isModuleActive = modState && modState.status === 'enabled';
+      const secMod = modules.find((m: any) => m.id === 'security');
+      const isEnableAllActive = Boolean(
+        secMod?.config?.enableAllCompleted === true ||
+        (secMod?.status === 'enabled' && secMod?.config?.antiNukeEnabled === true)
+      );
+
+      let isModuleActive = modState ? modState.status !== 'disabled' : true;
+
+      if (!isModuleActive && isEnableAllActive) {
+        const toggle = ctx.get('toggleModule');
+        if (toggle && cmdMeta.moduleOwnerId) {
+          toggle(cmdMeta.moduleOwnerId, true);
+        }
+        if (modState) modState.status = 'enabled';
+        isModuleActive = true;
+      }
+
       if (!isModuleActive && (cmdMeta.moduleOwnerId === 'prebot_whitelist' || cmdMeta.name === 'prebot')) {
-        const secMod = modules.find((m: any) => m.id === 'security');
-        if (secMod && secMod.status === 'enabled') {
+        if (secMod && (secMod.status === 'enabled' || isEnableAllActive)) {
           const toggle = ctx.get('toggleModule');
           if (toggle) toggle('prebot_whitelist', true);
           isModuleActive = true;
@@ -105,7 +122,7 @@ export class CommandPipeline {
       }
 
       if (!isModuleActive && (cmdMeta.moduleOwnerId === 'voice' || ['247', '24/7', 'voicepresence', 'voice', 'vc'].includes(cmdMeta.name))) {
-        if (['join', 'set'].includes(parsed.subcommand || '')) {
+        if (['join', 'set'].includes(parsed.subcommand || '') || isEnableAllActive) {
           const toggle = ctx.get('toggleModule');
           if (toggle) toggle('voice', true);
           isModuleActive = true;
@@ -167,7 +184,7 @@ export class CommandPipeline {
       if (isRoleCommand && ctx.guild) {
         const isOwner = await isOwnerOrExtraOwner(ctx.executor.id, ctx.guild);
         const getModules = ctx.get('getModulesState');
-        const isWhitelisted = await checkWhitelistPermission(ctx.executor.id, ctx.guild, { getModulesState: getModules ? () => getModules() : () => [] }, 'anti_role_grant');
+        const isWhitelisted = await checkWhitelistPermission(ctx.executor.id, ctx.guild, { getModulesState: getModules ? () => getModules(ctx.guild.id) : () => [] }, 'anti_role_grant');
         if (!isOwner && !isWhitelisted) {
           PrefixAnalytics.trackFailure('permission');
           return this.sendError(ctx, '🔒 Access Denied: Role management commands can only be executed by the Server Owner, Extra Owners, and Whitelisted Members. Normal Administrators cannot use role commands.');
