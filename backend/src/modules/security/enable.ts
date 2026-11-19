@@ -84,7 +84,7 @@ export const MODULE_ALIASES: Record<string, string> = MODULE_ALIAS_MAP;
  */
 function resolveCommandTarget(raw: string): string {
   const t = resolveCanonicalModuleId(raw);
-  if (t === 'join_to_create' || t === 'voice_manager' || t === 'voice-protection') return 'voice';
+  if (t === 'voice_manager' || t === 'voice-protection') return 'voice';
   if (t === 'audit') return 'logging';
   return t;
 }

@@ -1,0 +1,10 @@
+const fs = require('fs');
+const p = 'backend/src/modules/security/enable.ts';
+let s = fs.readFileSync(p, 'utf8');
+const a = "if (t === 'join_to_create' || t === 'voice_manager' || t === 'voice-protection') return 'voice';";
+const b = "if (t === 'voice_manager' || t === 'voice-protection') return 'voice';";
+if (!s.includes(a)) throw new Error('missing');
+s = s.replace(a, b);
+s = s.replace("folds voice sub-systems into the\n * 'voice' suite", "folds voice sub-systems into the\n * 'voice' suite");
+fs.writeFileSync(p, s);
+console.log('ok');
