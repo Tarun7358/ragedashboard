@@ -79,13 +79,12 @@ export const LEGACY_BACKUP_ROLE_NAMES = ['Created by Rage', 'Rage Backup Authori
 export const MODULE_ALIASES: Record<string, string> = MODULE_ALIAS_MAP;
 
 /**
- * Command-level target resolution: canonical ID, then fold voice sub-systems into the
- * 'voice' suite and audit aliases into 'logging' (preserves pre-refactor enable/disable UX).
+ * Command-level target resolution: canonical ID, folding voice sub-systems
+ * into the main 'voice' suite when applicable.
  */
 function resolveCommandTarget(raw: string): string {
   const t = resolveCanonicalModuleId(raw);
   if (t === 'voice_manager' || t === 'voice-protection') return 'voice';
-  if (t === 'audit') return 'logging';
   return t;
 }
 
@@ -1717,7 +1716,7 @@ export function registerEnableDisableCommands(): void {
       }
 
       // C3. ENABLE LOGGING
-      if (['logging', 'logs', 'audit', 'auditlog', 'audit-logging'].includes(target)) {
+      if (['logging', 'logs', 'auditlog', 'audit-logging'].includes(target) || target === 'logging') {
         if (toggleMod) {
           toggleMod('logging', true);
         }
