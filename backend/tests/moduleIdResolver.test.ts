@@ -63,3 +63,4 @@ describe('ModuleIdResolver', () => {
     expect(CANONICAL_MODULE_IDS).toContain('backups');
   });
 });
+
