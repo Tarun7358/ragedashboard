@@ -1,10 +1,13 @@
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
-import { MessageFlags } from 'discord.js';
+import { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { IAnnouncement } from '../../models/index.js';
 import {
   Colors, Embeds, buildRichCard, buildListCard, buildStatusCard, fmt, ts,
   VERIFIED_ICON, WRONG_ICON, SHIELD_ICON, TIMER_ICON, INFO_ICON, CONFIG_ICON,
 } from '../../core/UIFactory.js';
+import { isOwnerOrExtraOwner } from '../../utils/whitelistCheck.js';
+import { BlockedDMSettings } from '../../core/Gateway.js';
+import { Database } from '../../core/Database.js';
 
 export const AnnouncementsManifest: ModuleManifest = {
   id: 'announcements',
@@ -219,31 +222,200 @@ export const AnnouncementsManifest: ModuleManifest = {
 
         // ─── DM ──────────────────────────────────────────────────
         else if (sub === 'dm') {
-          const message = interaction.options.getString('message');
+          // 1. Owner / Extra Owner Gate (Discord Terms Compliance: strict access control)
+          const isAuthorized = await isOwnerOrExtraOwner(interaction.user.id, interaction.guild).catch(() => false);
+          if (!isAuthorized) {
+            return interaction.reply({
+              content: `${SHIELD_ICON} **Access Denied**: Under Discord Developer Policy against platform spam, direct message broadcasts can only be initiated by the **Server Owner** or **Extra Owners**.\nAdministrator permissions alone are not sufficient.`,
+              flags: 64
+            });
+          }
+
+          // 2. Anti-Spam Server Cooldown (6 hours)
+          const COOLDOWN_MS = 6 * 60 * 60 * 1000;
+          const lastBlast = Number(aMod.config?.lastDmBlastTimestamp || 0);
+          const timeSince = Date.now() - lastBlast;
+          if (timeSince < COOLDOWN_MS) {
+            const nextAvailable = Math.floor((lastBlast + COOLDOWN_MS) / 1000);
+            return interaction.reply({
+              content: `⏳ **Cooldown Active**: To comply with Discord's anti-spam regulations, mass DM announcements are restricted to once every **6 hours** per server.\nNext broadcast available: <t:${nextAvailable}:R> (<t:${nextAvailable}:f>).`,
+              flags: 64
+            });
+          }
+
+          const rawMessage = interaction.options.getString('message', true).trim();
           const role = interaction.options.getRole('role');
 
+          // 3. Content Sanitization: Strip @everyone / @here mentions
+          let cleanMessage = rawMessage.replace(/@everyone/gi, '').replace(/@here/gi, '').trim();
+          if (!cleanMessage) {
+            return interaction.reply({
+              content: `${WRONG_ICON} Announcement content cannot be empty or solely composed of mention tags.`,
+              flags: 64
+            });
+          }
+
+          // Max length check
+          if (cleanMessage.length > 1500) {
+            return interaction.reply({
+              content: `${WRONG_ICON} Message length exceeds limit (${cleanMessage.length} / 1500 characters).`,
+              flags: 64
+            });
+          }
+
+          // 4. Anti-Invite Link Gate (Strict anti-solicitation check)
+          const INVITE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord(?:app)?\.com\/invite|dsc\.gg)\/[a-zA-Z0-9-]+/i;
+          if (INVITE_REGEX.test(cleanMessage)) {
+            return interaction.reply({
+              content: `${WRONG_ICON} **Compliance Violation**: Mass DM announcements cannot contain external Discord server invite links. Discord Trust & Safety flags unsolicited invite DMs as platform spam.`,
+              flags: 64
+            });
+          }
+
           await interaction.deferReply({ flags: 64 });
+
           try {
             const members = await interaction.guild.members.fetch();
             let targets = members.filter((m: any) => !m.user.bot);
-            if (role) targets = targets.filter((m: any) => m.roles.cache.has(role.id));
-
-            let sent = 0, failed = 0;
-            const embed = Embeds.info(
-              `Announcement from ${interaction.guild.name}`,
-              message,
-              { module: 'announcements' }
-            );
-
-            for (const [, member] of targets) {
-              await member.send({ embeds: [embed] }).then(() => sent++).catch(() => failed++);
-              await new Promise(r => setTimeout(r, 300));
+            if (role) {
+              targets = targets.filter((m: any) => m.roles.cache.has(role.id));
             }
 
-            context.logSyncEvent(`[Announcements] DM blast: sent ${sent}, failed ${failed} by ${interaction.user.username}.`, 'info');
-            await interaction.editReply({ content: `${VERIFIED_ICON} DM sent to **${sent}** members. Failed: **${failed}** (closed DMs).` });
-          } catch (err) {
-            await interaction.editReply({ content: `${WRONG_ICON} Failed to send DMs.` });
+            // 5. Audience Size Cap (Maximum 500 recipients per blast)
+            const MAX_TARGETS = 500;
+            if (targets.size > MAX_TARGETS) {
+              return interaction.editReply({
+                content: `⚠️ **Audience Limit Exceeded**: This target group has **${targets.size}** members. To protect our bot token from Discord rate-limits and abuse flags, blasts are capped at **${MAX_TARGETS}** members per execution.\n\nPlease select a specific role using the \`role\` option to target under ${MAX_TARGETS} members.`
+              });
+            }
+
+            // 6. Filter Opted-out / Blocked Users
+            await BlockedDMSettings.init();
+            const eligibleMembers: any[] = [];
+            let blockedCount = 0;
+
+            for (const [, member] of targets) {
+              if (BlockedDMSettings.isBlocked(member.id, interaction.guild.id)) {
+                blockedCount++;
+              } else {
+                eligibleMembers.push(member);
+              }
+            }
+
+            if (eligibleMembers.length === 0) {
+              return interaction.editReply({
+                content: `${INFO_ICON} No eligible members found to receive this announcement (target group is empty or all members have blocked alerts from this server).`
+              });
+            }
+
+            // 7. Build Compliant Embed with Mandatory Identification & 1-Click Opt-out
+            const guildIcon = interaction.guild.iconURL({ size: 128 });
+            const embed = new EmbedBuilder()
+              .setColor(Colors.INFO)
+              .setAuthor({
+                name: interaction.guild.name,
+                iconURL: guildIcon || undefined
+              })
+              .setTitle(`Official Announcement from ${interaction.guild.name}`)
+              .setDescription(
+                `${cleanMessage}\n\n` +
+                `-# **Notice**: You received this official direct message because you are a member of **${interaction.guild.name}**.\n` +
+                `-# **Dispatched by**: ${interaction.user.tag}`
+              )
+              .setFooter({ text: 'Rage Optimiser • Discord Policy Compliant' });
+
+            const optOutBtn = new ButtonBuilder()
+              .setCustomId(`dm_block_server:${interaction.guild.id}`)
+              .setLabel('Block Server Messages')
+              .setStyle(ButtonStyle.Secondary);
+
+            const componentsRow = new ActionRowBuilder<ButtonBuilder>().addComponents(optOutBtn);
+
+            let sent = 0;
+            let closedDMs = 0;
+            let consecutiveFailures = 0;
+            let circuitBreakerTripped = false;
+
+            // 8. Safe Dispatch Engine with Adaptive Pacing (800ms) & Circuit Breaker
+            for (const member of eligibleMembers) {
+              // Circuit breaker: abort if 15 consecutive API failures occur
+              if (consecutiveFailures >= 15) {
+                circuitBreakerTripped = true;
+                console.warn(`[Announcements] Circuit breaker tripped for guild ${interaction.guild.id} after 15 consecutive failures.`);
+                break;
+              }
+
+              try {
+                await member.send({
+                  embeds: [embed],
+                  components: [componentsRow]
+                });
+                sent++;
+                consecutiveFailures = 0;
+              } catch (sendErr: any) {
+                // Discord 50007: Cannot send messages to this user (Closed DMs / blocked)
+                if (sendErr?.code === 50007) {
+                  closedDMs++;
+                  consecutiveFailures = 0; // Not a platform/rate-limit error
+                } else if (sendErr?.status === 429) {
+                  // Rate limited: respect retry-after and back off
+                  const retryAfter = (sendErr?.rawError?.retry_after || 2) * 1000;
+                  console.warn(`[Announcements] Discord 429 hit. Backing off for ${retryAfter}ms`);
+                  await new Promise(r => setTimeout(r, retryAfter + 1000));
+                  consecutiveFailures++;
+                } else {
+                  consecutiveFailures++;
+                }
+              }
+
+              // Pacing interval (800ms)
+              await new Promise(r => setTimeout(r, 800));
+            }
+
+            // 9. Update Cooldown & Module Config
+            context.updateModuleConfig('announcements', {
+              ...(aMod.config || {}),
+              lastDmBlastTimestamp: Date.now()
+            });
+
+            // 10. Record Comprehensive Audit Log
+            try {
+              await Database.saveAuditLog({
+                guildId: interaction.guild.id,
+                action: 'ANNOUNCEMENT_DM_BLAST',
+                targetType: 'Members',
+                targetName: role ? `Role: ${role.name}` : 'All Members',
+                executorId: interaction.user.id,
+                executorTag: interaction.user.tag,
+                reason: 'Mass DM announcement broadcast',
+                details: {
+                  sent,
+                  closedDMs,
+                  blockedByRecipient: blockedCount,
+                  totalAudience: targets.size,
+                  circuitBreakerTripped,
+                  messageSnippet: cleanMessage.slice(0, 120)
+                },
+                type: 'info'
+              });
+            } catch { }
+
+            context.logSyncEvent(`[Announcements] DM blast: sent ${sent}, closed ${closedDMs}, blocked ${blockedCount} by ${interaction.user.tag}.`, 'info');
+
+            let report = `${VERIFIED_ICON} **Announcement Dispatch Completed**\n\n` +
+              `> **Successfully Sent**: \`${sent}\`\n` +
+              `> **Closed DMs (Unavailable)**: \`${closedDMs}\`\n` +
+              `> **Opted Out (Blocked by User)**: \`${blockedCount}\`\n` +
+              `> **Target Audience**: ${role ? `Role <@&${role.id}>` : 'All Non-Bot Members'} (\`${targets.size}\` total)`;
+
+            if (circuitBreakerTripped) {
+              report += `\n\n⚠️ **Circuit Breaker Activated**: The broadcast was halted early because Discord API rate limits were encountered. Sent: **${sent}** members.`;
+            }
+
+            await interaction.editReply({ content: report });
+          } catch (err: any) {
+            console.error('[Announcements DM Error]:', err);
+            await interaction.editReply({ content: `${WRONG_ICON} An error occurred while processing the announcement: ${err.message || 'Unknown error'}` });
           }
         }
 
