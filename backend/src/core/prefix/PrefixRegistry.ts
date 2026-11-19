@@ -42,6 +42,7 @@ export interface PrefixCommandMeta {
 export class PrefixRegistry {
   private static commandsMap = new Map<string, PrefixCommandMeta>();
   private static aliasMap = new Map<string, string>();
+  private static _manuallyRegisteredMap = new Map<string, PrefixCommandMeta>();
   private static manifests: ModuleManifest[] = [];
   private static _duplicateWarnings = 0;
 
@@ -212,6 +213,7 @@ export class PrefixRegistry {
         }
         if (meta.examples) existing.examples = meta.examples;
         if (meta.hidden !== undefined) existing.hidden = meta.hidden;
+        this._manuallyRegisteredMap.set(name, existing);
         return;
       }
       this._duplicateWarnings++;
@@ -236,6 +238,7 @@ export class PrefixRegistry {
     };
 
     this.commandsMap.set(name, commandMeta);
+    this._manuallyRegisteredMap.set(name, commandMeta);
     for (const alias of commandMeta.aliases) {
       this.aliasMap.set(alias.toLowerCase(), name);
     }
@@ -262,7 +265,7 @@ export class PrefixRegistry {
 
     // 2. Auto-discover commands from Module Manifests
     for (const manifest of manifests) {
-      const category = this.resolveCategory(manifest.id, manifest.name);
+      const defaultCategory = this.resolveCategory(manifest.id, manifest.name);
 
       if (manifest.commands) {
         for (const cmdOfManifest of manifest.commands) {
@@ -285,6 +288,8 @@ export class PrefixRegistry {
               aliases.push(alias);
             }
           }
+
+          const category = cmd.category || this.inferCommandCategory(name) || defaultCategory;
 
           const meta: PrefixCommandMeta = {
             name,
@@ -320,7 +325,31 @@ export class PrefixRegistry {
     // 3. Register built-in commands (using register() so dedup logic applies)
     this.registerBuiltinCommands();
 
-    // 4. Print startup summary
+    // 4. Re-apply manually registered commands (preserving execute, custom category, subcommands)
+    for (const [name, meta] of this._manuallyRegisteredMap.entries()) {
+      const existing = this.commandsMap.get(name);
+      if (existing) {
+        if (meta.execute) existing.execute = meta.execute;
+        if (meta.category) existing.category = meta.category;
+        if (meta.subcommands && meta.subcommands.length > 0) existing.subcommands = meta.subcommands;
+        if (meta.usage) existing.usage = meta.usage;
+        if (meta.description) existing.description = meta.description;
+        if (meta.examples) existing.examples = meta.examples;
+        if (meta.aliases) {
+          for (const a of meta.aliases) {
+            if (!existing.aliases.includes(a)) existing.aliases.push(a);
+            this.aliasMap.set(a.toLowerCase(), name);
+          }
+        }
+      } else {
+        this.commandsMap.set(name, meta);
+        for (const a of meta.aliases || []) {
+          this.aliasMap.set(a.toLowerCase(), name);
+        }
+      }
+    }
+
+    // 5. Print startup summary
     this.printStartupSummary();
   }
 
@@ -355,11 +384,31 @@ export class PrefixRegistry {
   // Private helpers
   // ─────────────────────────────────────────────
 
+  private static inferCommandCategory(name: string): string | null {
+    const n = (name || '').toLowerCase();
+    if (['antinuke', 'an', 'antiraid', 'whitelist', 'member_whitelist', 'extraowner', 'extra-owner', '2fa', 'twofactor', 'owner2fa', 'panic', 'lockdown', 'quarantine', 'unquarantine', 'vanityguard', 'prebot', 'email', 'threatdefense', 'threats'].includes(n)) {
+      return 'AntiNuke';
+    }
+    if (['automod', 'antilink', 'antispam', 'antiping', 'antighostping', 'whitelist-domain'].includes(n)) {
+      return 'AutoMod';
+    }
+    if (['ban', 'unban', 'kick', 'mute', 'unmute', 'timeout', 'untimeout', 'warn', 'warnings', 'clearwarnings', 'purge', 'clear', 'lock', 'unlock', 'slowmode', 'softban', 'tempban', 'nick', 'history'].includes(n)) {
+      return 'Moderation';
+    }
+    if (['welcome', 'welcomer', 'autorole', 'avatar', 'userinfo', 'serverinfo', 'poll', 'weather', 'afk', 'remindme', '8ball', 'flip', 'roll', 'meme', 'rps', 'ship', 'timestamp', 'hash', 'color', 'embed-builder', 'tickets'].includes(n)) {
+      return 'Community';
+    }
+    if (['security', 'cases', 'temprole', 'addrole', 'removerole', 'emergency', 'botleave', 'noprefix'].includes(n)) {
+      return 'Security';
+    }
+    return null;
+  }
+
   private static resolveCategory(moduleId: string, moduleName: string): string {
     const normalized = (moduleId || '').toLowerCase().replace(/[-_]/g, '_');
     const map: Record<string, string> = {
-      'security': 'Security',
-      'moderation': 'Security',
+      'security': 'AntiNuke',
+      'moderation': 'Moderation',
       'verification': 'System',
       'community': 'Community',
       'welcome_v2': 'Community',
@@ -370,8 +419,8 @@ export class PrefixRegistry {
       'voice': 'Voice',
       'voice_protection': 'Voice',
       'voice-protection': 'Voice',
-      'member_whitelist': 'Security',
-      'prebot_whitelist': 'Security',
+      'member_whitelist': 'AntiNuke',
+      'prebot_whitelist': 'AntiNuke',
       'botstats': 'Diagnostics',
       'config': 'Configuration',
       'reaction_roles': 'Reaction Roles',
@@ -582,6 +631,194 @@ export class PrefixRegistry {
             content: `Mention alerts for server \`${targetGuildId}\` have been blocked. You will no longer receive mention notifications from this server.`
           });
         }
+      },
+      // ── Anti-Nuke Threat Defense Suite ───────────────────────────
+      {
+        name: 'antinuke',
+        description: 'Anti-Nuke Threat Defense Matrix, instant rollbacks & rule telemetry',
+        category: 'AntiNuke',
+        usage: 'r!antinuke [roles | channels | members | server | webhooks | threshold | punishment | reversion | whitelist | presets]',
+        aliases: ['an', 'antiraid', 'threats'],
+        cooldownSeconds: 3,
+        userPermissions: ['Administrator'],
+        examples: [
+          'r!antinuke',
+          'r!antinuke roles',
+          'r!antinuke threshold role_create 3 10',
+          'r!antinuke punishment ban',
+          'r!antinuke reversion on',
+          'r!antinuke presets'
+        ],
+        subcommands: [
+          { name: 'roles', description: 'Anti-Role Create/Delete/Update defense' },
+          { name: 'channels', description: 'Anti-Channel Create/Delete/Update defense' },
+          { name: 'members', description: 'Anti-Bot Add, Anti-Kick, Anti-Ban defense' },
+          { name: 'server', description: 'Anti-Guild Update & Vanity Guard defense' },
+          { name: 'webhooks', description: 'Anti-Webhook Create/Delete defense' },
+          { name: 'threshold', description: 'Configure action rate limits & windows' },
+          { name: 'punishment', description: 'Set penalty: Kick, Ban, Quarantine' },
+          { name: 'reversion', description: 'Toggle automated state recovery rollback' },
+          { name: 'whitelist', description: 'Inspect immune admins & trusted actors' },
+          { name: 'presets', description: 'Apply Maximum, Balanced, or Lax security profiles' }
+        ],
+        moduleOwnerId: 'security',
+        dangerLevel: 'High',
+        execute: async (message: any, args: string[], extra?: any) => {
+          const configCmd = PrefixRegistry.get('config');
+          if (configCmd && configCmd.execute) {
+            return configCmd.execute(message, ['antinuke', ...args], extra);
+          }
+        }
+      },
+      {
+        name: 'whitelist',
+        description: 'Manage Anti-Nuke immunity whitelist for administrators and bots',
+        category: 'AntiNuke',
+        usage: 'r!whitelist [add | remove | show | clear] <@user | ID>',
+        aliases: ['wl', 'trust', 'immune'],
+        cooldownSeconds: 3,
+        userPermissions: ['Administrator'],
+        examples: ['r!whitelist show', 'r!whitelist add @Admin', 'r!whitelist remove 1234567890'],
+        subcommands: [
+          { name: 'add', description: 'Grant Anti-Nuke immunity to a user or bot' },
+          { name: 'remove', description: 'Revoke Anti-Nuke immunity from a target' },
+          { name: 'show', description: 'List all currently whitelisted members & roles' },
+          { name: 'clear', description: 'Purge all whitelisted entries' }
+        ],
+        moduleOwnerId: 'security',
+        dangerLevel: 'High'
+      },
+      {
+        name: 'extraowner',
+        description: 'Configure designated Extra Owners with full Anti-Nuke and bot override rights',
+        category: 'AntiNuke',
+        usage: 'r!extraowner [add | remove | list | clear] <@user | ID>',
+        aliases: ['extra-owner', 'eo', 'owners'],
+        cooldownSeconds: 3,
+        userPermissions: ['Administrator'],
+        examples: ['r!extraowner list', 'r!extraowner add @User', 'r!extraowner remove @User'],
+        subcommands: [
+          { name: 'add', description: 'Designate a trusted user as an Extra Owner' },
+          { name: 'remove', description: 'Revoke Extra Owner status from a user' },
+          { name: 'list', description: 'Display all current Extra Owners' },
+          { name: 'clear', description: 'Remove all designated Extra Owners' }
+        ],
+        moduleOwnerId: 'security',
+        dangerLevel: 'Critical'
+      },
+      {
+        name: '2fa',
+        description: 'Configure and verify Owner 2FA passcode for bot departure & overrides',
+        category: 'AntiNuke',
+        usage: 'r!2fa [set | verify | status | disable] [pin]',
+        aliases: ['twofactor', 'owner2fa'],
+        cooldownSeconds: 3,
+        userPermissions: ['Administrator'],
+        examples: ['r!2fa status', 'r!2fa set 123456', 'r!2fa verify 123456'],
+        subcommands: [
+          { name: 'set', description: 'Set 6-digit owner 2FA PIN' },
+          { name: 'verify', description: 'Submit 2FA verification PIN code' },
+          { name: 'status', description: 'Check 2FA security status' },
+          { name: 'disable', description: 'Disable 2FA passcode protection' }
+        ],
+        moduleOwnerId: 'security',
+        dangerLevel: 'High'
+      },
+      {
+        name: 'panic',
+        description: 'Trigger immediate Emergency Lockdown across all guild text and voice channels',
+        category: 'AntiNuke',
+        usage: 'r!panic [enable | disable | status]',
+        aliases: ['lockserver'],
+        cooldownSeconds: 5,
+        userPermissions: ['Administrator'],
+        examples: ['r!panic enable', 'r!panic disable', 'r!panic status'],
+        subcommands: [
+          { name: 'enable', description: 'Lock down all text channels and freeze server' },
+          { name: 'disable', description: 'Release server lockdown and restore normal permissions' },
+          { name: 'status', description: 'Inspect current emergency lockdown status' }
+        ],
+        moduleOwnerId: 'security',
+        dangerLevel: 'Critical'
+      },
+      {
+        name: 'quarantine',
+        description: 'Isolate suspicious actors in Quarantine role and revoke destructive permissions',
+        category: 'AntiNuke',
+        usage: 'r!quarantine [user | list | setup] <@user | ID>',
+        aliases: ['isolate', 'jail'],
+        cooldownSeconds: 3,
+        userPermissions: ['Administrator'],
+        examples: ['r!quarantine @RaidAccount', 'r!quarantine list', 'r!quarantine setup @Quarantine'],
+        subcommands: [
+          { name: 'user', description: 'Isolate target member into quarantine' },
+          { name: 'list', description: 'View all actively quarantined members' },
+          { name: 'setup', description: 'Configure quarantine isolation role' }
+        ],
+        moduleOwnerId: 'security',
+        dangerLevel: 'High'
+      },
+      {
+        name: 'unquarantine',
+        description: 'Release a member from quarantine and restore original roles',
+        category: 'AntiNuke',
+        usage: 'r!unquarantine <@user | ID>',
+        aliases: ['unisolate', 'unjail'],
+        cooldownSeconds: 3,
+        userPermissions: ['Administrator'],
+        examples: ['r!unquarantine @User', 'r!unquarantine 1234567890'],
+        moduleOwnerId: 'security',
+        dangerLevel: 'High'
+      },
+      {
+        name: 'lockdown',
+        description: 'Lock or unlock current channel or entire server',
+        category: 'AntiNuke',
+        usage: 'r!lockdown [server | channel] [enable | disable]',
+        aliases: ['serverlock', 'lockall'],
+        cooldownSeconds: 3,
+        userPermissions: ['Administrator'],
+        examples: ['r!lockdown server enable', 'r!lockdown channel enable'],
+        subcommands: [
+          { name: 'server', description: 'Lock all guild channels' },
+          { name: 'channel', description: 'Lock current channel' }
+        ],
+        moduleOwnerId: 'security',
+        dangerLevel: 'High'
+      },
+      {
+        name: 'vanityguard',
+        description: 'Monitor and protect server vanity URL against unauthorized changes',
+        category: 'AntiNuke',
+        usage: 'r!vanityguard [status | set | reset]',
+        aliases: ['vanity', 'antivanity'],
+        cooldownSeconds: 3,
+        userPermissions: ['Administrator'],
+        examples: ['r!vanityguard status'],
+        subcommands: [
+          { name: 'status', description: 'View vanity protection telemetry' },
+          { name: 'set', description: 'Bind protected vanity URL' }
+        ],
+        moduleOwnerId: 'security',
+        dangerLevel: 'Medium'
+      },
+      {
+        name: 'prebot',
+        description: 'Anti-bot invite gate and unauthorized bot defense matrix',
+        category: 'AntiNuke',
+        usage: 'r!prebot [status | toggle | 2fa | whitelist]',
+        aliases: ['antibot', 'botguard'],
+        cooldownSeconds: 3,
+        userPermissions: ['Administrator'],
+        examples: ['r!prebot status', 'r!prebot toggle on'],
+        subcommands: [
+          { name: 'status', description: 'View anti-bot protection status' },
+          { name: 'toggle', description: 'Enable or disable unauthorized bot kicks' },
+          { name: '2fa', description: 'Configure 2FA PIN for bot departure' },
+          { name: 'whitelist', description: 'Whitelist authorized bot IDs' }
+        ],
+        moduleOwnerId: 'security',
+        dangerLevel: 'High'
       },
     ];
 

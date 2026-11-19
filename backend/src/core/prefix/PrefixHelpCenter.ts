@@ -102,7 +102,11 @@ export class PrefixHelpCenter {
 
     // 1. Check if query is an exact category match
     const categories = PrefixRegistry.getCategories();
-    const matchedCategory = categories.find(c => c.toLowerCase() === cleanQuery);
+    const matchedCategory = categories.find(c => {
+      const cNorm = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const qNorm = cleanQuery.replace(/[^a-z0-9]/g, '');
+      return cNorm === qNorm || (qNorm === 'an' && cNorm === 'antinuke');
+    });
     if (matchedCategory) {
       return this.sendModuleHelp(message, matchedCategory, currentPrefix, 1);
     }

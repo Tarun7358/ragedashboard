@@ -170,14 +170,18 @@ export function registerWelcomeCommands(): void {
           args.shift();
         }
 
+        const gId = message.guild?.id;
         const action = args[0]?.toLowerCase() || 'status';
-        const modules = extra?.getModulesState ? extra.getModulesState() : [];
+        const modules = extra?.getModulesState ? extra.getModulesState(gId) : [];
         const commModule = modules.find((m: any) => m.id === 'community');
         const commConfig = commModule?.config || {};
 
         const updateCommConfig = (newCfg: Record<string, any>) => {
           if (extra?.updateModuleConfig) {
             extra.updateModuleConfig('community', { ...commConfig, ...newCfg });
+          }
+          if (extra?.toggleModule && commModule?.status !== 'enabled') {
+            extra.toggleModule('community', true);
           }
           if (extra?.logSyncEvent) {
             extra.logSyncEvent(message.guild?.id, 'Community Welcomer Config: Updated parameters via CLI.', 'success');
@@ -603,7 +607,11 @@ export const CommunityManifest: ModuleManifest = {
       const errors: string[] = [];
       let progress = 0;
 
-      const channelExists = (id: string) => registry.channels.some(c => c.id === id);
+      const channelExists = (id: string) => {
+        if (!id) return true;
+        if (!registry || !registry.channels || registry.channels.length === 0) return true;
+        return registry.channels.some(c => c.id === id);
+      };
 
       if (config.welcomeChannelId) {
         progress += 100;
@@ -1221,11 +1229,12 @@ export const CommunityManifest: ModuleManifest = {
     {
       name: 'guildMemberAdd',
       handler: async (client: any, member: any, context: any) => {
-        const globalSettings = context.getGlobalSettings ? context.getGlobalSettings() : {};
+        const gId = member?.guild?.id || context?.guildId;
+        const globalSettings = context.getGlobalSettings ? context.getGlobalSettings(gId) : {};
         if (globalSettings.useV2Welcome) return;
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(gId) : [];
         const commModule = modules.find((m: any) => m.id === 'community');
-        if (!commModule || commModule.status !== 'enabled') return;
+        if (!commModule || commModule.status === 'disabled') return;
 
         const config = commModule.config || {};
         const botMember = member.guild?.members.me;
@@ -1300,11 +1309,12 @@ export const CommunityManifest: ModuleManifest = {
     {
       name: 'guildMemberRemove',
       handler: async (client: any, member: any, context: any) => {
-        const globalSettings = context.getGlobalSettings ? context.getGlobalSettings() : {};
+        const gId = member?.guild?.id || context?.guildId;
+        const globalSettings = context.getGlobalSettings ? context.getGlobalSettings(gId) : {};
         if (globalSettings.useV2Welcome) return;
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(gId) : [];
         const commModule = modules.find((m: any) => m.id === 'community');
-        if (!commModule || commModule.status !== 'enabled') return;
+        if (!commModule || commModule.status === 'disabled') return;
 
         const config = commModule.config;
         const defaultEmbed = { title: 'Goodbye {user}!', description: '**{userTag}** has left.', color: '#ff4444', showAvatar: true, footer: 'User ID: {userId}' };
