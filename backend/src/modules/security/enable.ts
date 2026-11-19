@@ -78,6 +78,18 @@ export const LEGACY_BACKUP_ROLE_NAMES = ['Created by Rage', 'Rage Backup Authori
 
 export const MODULE_ALIASES: Record<string, string> = MODULE_ALIAS_MAP;
 
+/**
+ * Command-level target resolution: canonical ID, then fold voice sub-systems into the
+ * 'voice' suite and audit aliases into 'logging' (preserves pre-refactor enable/disable UX).
+ */
+function resolveCommandTarget(raw: string): string {
+  const t = resolveCanonicalModuleId(raw);
+  if (t === 'join_to_create' || t === 'voice_manager' || t === 'voice-protection') return 'voice';
+  if (t === 'audit') return 'logging';
+  return t;
+}
+
+
 export async function cleanupLegacyBackupRoles(guild: any): Promise<void> {
   if (!guild || !guild.roles) return;
   try {
@@ -1313,7 +1325,7 @@ export function registerEnableDisableCommands(): void {
 
       const prefix = PrefixResolver.getPrefix(guildId);
       const rawTarget = (args[0] || '').toLowerCase().trim();
-      const target = resolveCanonicalModuleId(rawTarget);
+      const target = resolveCommandTarget(rawTarget);
 
       if (!rawTarget) {
         const usageEmbed = buildLimeOverviewCard({
@@ -2476,7 +2488,7 @@ export function registerEnableDisableCommands(): void {
 
       const prefix = PrefixResolver.getPrefix(guildId);
       const rawTarget = (args[0] || '').toLowerCase().trim();
-      const target = resolveCanonicalModuleId(rawTarget);
+      const target = resolveCommandTarget(rawTarget);
 
       if (!rawTarget) {
         return message.reply({
