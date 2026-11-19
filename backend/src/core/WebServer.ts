@@ -58,6 +58,7 @@ export class WebServer {
     const devOrigins = 'http://localhost:3000,http://localhost:5173,http://localhost:5000';
     const rawOrigins = [
       process.env.CORS_ORIGIN || (isProd ? '' : devOrigins),
+      'https://ragesecuredashboard.netlify.app',
       process.env.FRONTEND_URL || '',
       process.env.DASHBOARD_URL || ''
     ].filter(Boolean).join(',');
