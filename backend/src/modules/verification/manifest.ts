@@ -6,7 +6,11 @@ import {
   Message,
   PermissionFlagsBits,
   AttachmentBuilder,
-  RoleSelectMenuBuilder
+  RoleSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ChannelType
 } from 'discord.js';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 import { Database } from '../../core/Database.js';
@@ -101,10 +105,100 @@ export function buildPublicVerificationCard(guild: any) {
   return { embeds: [embed], components: [row], files: files.length > 0 ? files : undefined };
 }
 
+export async function syncVerificationChannelPermissions(
+  guild: any,
+  verifiedRoleId: string,
+  unverifiedRoleId?: string,
+  verificationChannelId?: string,
+  logSyncEvent?: (msg: string, type: 'info' | 'warn' | 'success') => void
+): Promise<{ updated: number; failed: number }> {
+  let updated = 0;
+  let failed = 0;
+
+  if (!guild || !verifiedRoleId) return { updated: 0, failed: 0 };
+
+  const everyoneRole = guild.roles.everyone;
+  const verifiedRole = guild.roles.cache.get(verifiedRoleId);
+  const unverifiedRole = unverifiedRoleId ? guild.roles.cache.get(unverifiedRoleId) : null;
+
+  const channels = Array.from(guild.channels.cache.values());
+
+  for (const ch of channels as any[]) {
+    if (!ch || !ch.permissionOverwrites || typeof ch.permissionOverwrites.edit !== 'function') continue;
+
+    try {
+      // 1. Is this the Verification Gate Channel?
+      if (verificationChannelId && ch.id === verificationChannelId) {
+        // @everyone can see, read history, but CANNOT send messages or add reactions
+        await ch.permissionOverwrites.edit(everyoneRole.id, {
+          ViewChannel: true,
+          SendMessages: false,
+          ReadMessageHistory: true,
+          AddReactions: false
+        }, { reason: 'Rage Optimiser: Verification Gate Channel Access' }).catch(() => {});
+
+        // Unverified role can see, read history, but CANNOT send messages
+        if (unverifiedRole) {
+          await ch.permissionOverwrites.edit(unverifiedRole.id, {
+            ViewChannel: true,
+            SendMessages: false,
+            ReadMessageHistory: true,
+            AddReactions: false
+          }, { reason: 'Rage Optimiser: Unverified Gate Channel Access' }).catch(() => {});
+        }
+
+        // Verified role: Hide verification channel to keep chat clean once verified
+        if (verifiedRole) {
+          await ch.permissionOverwrites.edit(verifiedRole.id, {
+            ViewChannel: false
+          }, { reason: 'Rage Optimiser: Hide Verification Gate from Verified Members' }).catch(() => {});
+        }
+
+        updated++;
+        continue;
+      }
+
+      // 2. All Other Channels:
+      // If channel was already private to @everyone (like staff-only, mod-logs), do NOT expose to @Verified!
+      const isPublicToEveryone = ch.permissionsFor(everyoneRole.id)?.has(PermissionFlagsBits.ViewChannel) ?? true;
+
+      // Lock from @everyone
+      await ch.permissionOverwrites.edit(everyoneRole.id, {
+        ViewChannel: false
+      }, { reason: 'Rage Optimiser: Lock Server Channels from Unverified Everyone' }).catch(() => {});
+
+      // Lock from @Unverified
+      if (unverifiedRole) {
+        await ch.permissionOverwrites.edit(unverifiedRole.id, {
+          ViewChannel: false
+        }, { reason: 'Rage Optimiser: Lock Server Channels from Unverified Role' }).catch(() => {});
+      }
+
+      // Allow ViewChannel for @Verified ONLY if channel was meant to be public
+      if (verifiedRole && isPublicToEveryone) {
+        await ch.permissionOverwrites.edit(verifiedRole.id, {
+          ViewChannel: true
+        }, { reason: 'Rage Optimiser: Unlock Channels for Verified Members' }).catch(() => {});
+      }
+
+      updated++;
+    } catch {
+      failed++;
+    }
+  }
+
+  if (logSyncEvent) {
+    logSyncEvent(`Verification Service: Locked down and synced permissions across ${updated} channels.`, 'success');
+  }
+
+  return { updated, failed };
+}
+
 export function buildVerificationAdminDashboardGUI(guild: any, config: any, verifiedCount: number = 0) {
   const isMasterEnabled = config.enabled !== false;
   const verifiedRole = config.verifiedRoleId ? `<@&${config.verifiedRoleId}>` : '`Not Configured (Click Setup Below)`';
   const unverifiedRole = config.unverifiedRoleId ? `<@&${config.unverifiedRoleId}>` : '`None Configured`';
+  const channelStr = config.verificationChannelId ? `<#${config.verificationChannelId}>` : '`Not Set (Click Send Card)`';
 
   const banner = getBrandBannerAttachment('rage-banner.png');
   const files: AttachmentBuilder[] = [];
@@ -116,12 +210,13 @@ export function buildVerificationAdminDashboardGUI(guild: any, config: any, veri
       `> **Automated Member Entry Gatekeeper**\n` +
       `Manages automatic captcha/one-click verification, anti-bot screening, quarantine on join, and instant role assignment for new server members.\n\n` +
       `**Verification Gate Status:** \`${isMasterEnabled ? 'ACTIVE & PROTECTED' : 'DISABLED'}\`\n` +
+      `**Verification Channel:** ${channelStr}\n` +
       `**Verified Access Role:** ${verifiedRole}\n` +
       `**Unverified Quarantine Role:** ${unverifiedRole}\n` +
       `**Verified Members in Database:** \`${verifiedCount} Members Registered\`\n` +
       `**Auto-Restore on Rejoin:** \`ENABLED\`\n\n` +
-      `• **Choose Role**: Select any existing server role below to bind as the verified role.\n` +
-      `• **Send Card**: Click Send Verification Card to post the entry button panel to any channel.`
+      `• **Send Verification Card**: Prompts for target channel ID to post the card and automatically locks down all other channels.\n` +
+      `• **Lock / Sync Channel Perms**: Enforces channel isolation so unverified members cannot see other channels.`
     )
     .setThumbnail(guild.iconURL({ size: 256 }) || undefined)
     .setFooter({ text: BRAND_FOOTER });
@@ -160,8 +255,8 @@ export function buildVerificationAdminDashboardGUI(guild: any, config: any, veri
       .setLabel('Send Verification Card')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId('ver_btn_reset_db')
-      .setLabel('Reset Verification DB')
+      .setCustomId('ver_btn_sync_perms')
+      .setLabel('Lock / Sync Channel Perms')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('ver_btn_refresh')
@@ -183,14 +278,14 @@ export async function handleVerificationGuiInteraction(interaction: any, context
     });
   }
 
-  if (!customId.startsWith('ver_btn_') && customId !== 'ver_role_select') return;
+  if (!customId.startsWith('ver_') && customId !== 'ver_role_select') return;
 
   const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
   if (!(await isOwnerOrExtraOwner(interaction.user.id, interaction.guild))) {
     return interaction.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can configure Verification settings.`, flags: 64 });
   }
 
-  const modules = context.getModulesState ? context.getModulesState() : [];
+  const modules = context.getModulesState ? context.getModulesState(interaction.guildId) : [];
   const verModule = modules.find((m: any) => m.id === 'verification');
   const config = verModule?.config || {};
   const saveConfig = (updated: any) => context.updateModuleConfig('verification', { ...config, ...updated });
@@ -263,11 +358,136 @@ export async function handleVerificationGuiInteraction(interaction: any, context
     return interaction.editReply(payload);
   }
 
-  // 4. Send Verification Card to Channel
+  // 4. Send Verification Card to Channel (Show Modal to specify Channel ID)
   if (customId === 'ver_btn_send_card') {
-    const payload = buildPublicVerificationCard(interaction.guild);
-    await interaction.channel?.send(payload);
-    return interaction.reply({ content: `<:ticks:1532620580266836148> Posted interactive Verification Card to ${interaction.channel}!`, flags: 64 });
+    const modal = new ModalBuilder()
+      .setCustomId('ver_modal_send_card')
+      .setTitle('Deploy Verification Card');
+
+    const channelInput = new TextInputBuilder()
+      .setCustomId('ver_channel_input')
+      .setLabel('Channel ID or #channel to post in')
+      .setPlaceholder('e.g. 123456789012345678 or #verify')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    if (config.verificationChannelId) {
+      channelInput.setValue(config.verificationChannelId);
+    }
+
+    const modalRow = new ActionRowBuilder<TextInputBuilder>().addComponents(channelInput);
+    modal.addComponents(modalRow);
+
+    return interaction.showModal(modal);
+  }
+
+  // 4-b. Handle Modal Submit for Verification Card Channel ID
+  if (interaction.isModalSubmit && interaction.isModalSubmit() && customId === 'ver_modal_send_card') {
+    await interaction.deferReply({ flags: 64 }).catch(() => {});
+
+    const rawInput = interaction.fields.getTextInputValue('ver_channel_input')?.trim() || '';
+    const channelId = rawInput.replace(/[<#>]/g, '').trim();
+
+    const targetChannel = interaction.guild.channels.cache.get(channelId) ||
+      await interaction.guild.channels.fetch(channelId).catch(() => null);
+
+    if (!targetChannel || !targetChannel.isTextBased()) {
+      return interaction.editReply({
+        content: `${WRONG_ICON} **Invalid Channel**: Could not find a text channel with ID or mention \`${rawInput}\`. Please check the channel ID and bot permissions.`
+      });
+    }
+
+    // Auto-create verified role if not set
+    let verifiedRoleId = config.verifiedRoleId;
+    if (!verifiedRoleId) {
+      let role: any = interaction.guild.roles.cache.find((r: any) => r.name.toLowerCase() === '. verified' || r.name.toLowerCase() === 'verified');
+      if (!role) {
+        role = await interaction.guild.roles.create({
+          name: '. Verified',
+          color: 0x99CC00,
+          reason: 'Auto-provisioned by Verification Control Center'
+        }).catch(() => null);
+      }
+      if (role) {
+        verifiedRoleId = role.id;
+      }
+    }
+
+    // Auto-create unverified role if not set
+    let unverifiedRoleId = config.unverifiedRoleId;
+    if (!unverifiedRoleId) {
+      let role: any = interaction.guild.roles.cache.find((r: any) => r.name.toLowerCase() === '. unverified' || r.name.toLowerCase() === 'unverified');
+      if (!role) {
+        role = await interaction.guild.roles.create({
+          name: '. Unverified',
+          color: 0x808080,
+          reason: 'Auto-provisioned by Verification Control Center'
+        }).catch(() => null);
+      }
+      if (role) {
+        unverifiedRoleId = role.id;
+      }
+    }
+
+    saveConfig({
+      verificationChannelId: targetChannel.id,
+      verifiedRoleId,
+      unverifiedRoleId,
+      enabled: true
+    });
+
+    // Post verification card to target channel
+    const cardPayload = buildPublicVerificationCard(interaction.guild);
+    await targetChannel.send(cardPayload);
+
+    // Sync channel permissions across server
+    const syncResult = await syncVerificationChannelPermissions(
+      interaction.guild,
+      verifiedRoleId,
+      unverifiedRoleId,
+      targetChannel.id,
+      (msg, type) => context.logSyncEvent?.(msg, type)
+    );
+
+    context.logSyncEvent(`[Verification] Card posted to #${targetChannel.name} and locked down ${syncResult.updated} channels.`, 'success');
+
+    return interaction.editReply({
+      content: `<:ticks:1532620580266836148> **Verification Gate Deployed Successfully!**\n\n` +
+        `• **Target Channel**: <#${targetChannel.id}>\n` +
+        `• **Verified Access Role**: ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '`None`'}\n` +
+        `• **Unverified Quarantine Role**: ${unverifiedRoleId ? `<@&${unverifiedRoleId}>` : '`None`'}\n` +
+        `• **Channel Permissions**: Synced and locked down across **${syncResult.updated}** channels.\n\n` +
+        `> **Unverified users will only see <#${targetChannel.id}> until clicking "Verify Me".**`
+    });
+  }
+
+  // 4-c. Sync Channel Permissions Button
+  if (customId === 'ver_btn_sync_perms') {
+    await interaction.deferReply({ flags: 64 }).catch(() => {});
+
+    let verifiedRoleId = config.verifiedRoleId;
+    if (!verifiedRoleId) {
+      return interaction.editReply({
+        content: `${WRONG_ICON} **Missing Verified Role**: Please configure or auto-setup a Verified Role first before syncing permissions.`
+      });
+    }
+
+    const syncResult = await syncVerificationChannelPermissions(
+      interaction.guild,
+      verifiedRoleId,
+      config.unverifiedRoleId,
+      config.verificationChannelId,
+      (msg, type) => context.logSyncEvent?.(msg, type)
+    );
+
+    return interaction.editReply({
+      content: `<:ticks:1532620580266836148> **Channel Permissions Synced & Enforced!**\n\n` +
+        `• **Channels Configured**: **${syncResult.updated}**\n` +
+        `• **Verification Channel**: ${config.verificationChannelId ? `<#${config.verificationChannelId}>` : '`Not configured (click Send Verification Card)`'}\n` +
+        `• **Verified Access Role**: <@&${verifiedRoleId}>\n` +
+        `• **Unverified Quarantine Role**: ${config.unverifiedRoleId ? `<@&${config.unverifiedRoleId}>` : '`None`'}\n\n` +
+        `Unverified users are restricted from viewing other server channels until verified!`
+    });
   }
 
   // 5. Reset Verification DB
@@ -295,21 +515,99 @@ export async function handleVerificationGuiInteraction(interaction: any, context
 PrefixRegistry.register({
   name: 'setup-verify',
   category: 'Verification',
-  description: 'Post the interactive verification entry card button to the channel.',
-  usage: 'r!setup-verify',
+  description: 'Deploy verification entry card and lock/sync channel permissions.',
+  usage: 'r!setup-verify [#channel|channelId]',
   aliases: ['verify-setup', 'setupverify'],
   cooldownSeconds: 3,
   userPermissions: ['ManageGuild'],
-  botPermissions: ['ManageRoles'],
-  execute: async (message: Message) => {
+  botPermissions: ['ManageRoles', 'ManageChannels'],
+  execute: async (message: Message, args?: string[], extra?: any) => {
     try {
       if (!message.guild) return;
       const { isOwnerOrExtraOwner } = await import('../../utils/whitelistCheck.js');
       if (!(await isOwnerOrExtraOwner(message.author.id, message.guild))) {
         return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can run verification setup.` });
       }
+
+      let targetChannel: any = message.channel;
+      const targetArg = args?.[0];
+      if (targetArg) {
+        const cleanId = targetArg.replace(/[<#>]/g, '').trim();
+        const found = message.guild.channels.cache.get(cleanId) || await message.guild.channels.fetch(cleanId).catch(() => null);
+        if (found && found.isTextBased()) {
+          targetChannel = found;
+        }
+      }
+
+      const modules = extra?.getModulesState ? extra.getModulesState(message.guild.id) : [];
+      let verModule = modules.find((m: any) => m.id === 'verification');
+      const config = verModule?.config || {};
+
+      // Auto-provision verified role if missing
+      let verifiedRoleId = config.verifiedRoleId;
+      if (!verifiedRoleId) {
+        let role: any = message.guild.roles.cache.find((r: any) => r.name.toLowerCase() === '. verified' || r.name.toLowerCase() === 'verified');
+        if (!role) {
+          role = await message.guild.roles.create({
+            name: '. Verified',
+            color: 0x99CC00,
+            reason: 'Auto-provisioned by setup-verify'
+          }).catch(() => null);
+        }
+        if (role) {
+          verifiedRoleId = role.id;
+        }
+      }
+
+      // Auto-provision unverified role if missing
+      let unverifiedRoleId = config.unverifiedRoleId;
+      if (!unverifiedRoleId) {
+        let role: any = message.guild.roles.cache.find((r: any) => r.name.toLowerCase() === '. unverified' || r.name.toLowerCase() === 'unverified');
+        if (!role) {
+          role = await message.guild.roles.create({
+            name: '. Unverified',
+            color: 0x808080,
+            reason: 'Auto-provisioned by setup-verify'
+          }).catch(() => null);
+        }
+        if (role) {
+          unverifiedRoleId = role.id;
+        }
+      }
+
+      if (extra?.updateModuleConfig) {
+        await extra.updateModuleConfig('verification', {
+          ...config,
+          verificationChannelId: targetChannel.id,
+          verifiedRoleId,
+          unverifiedRoleId,
+          enabled: true
+        });
+      }
+
       const payload = buildPublicVerificationCard(message.guild);
-      return message.reply(payload);
+      await targetChannel.send(payload);
+
+      // Automatically sync and lock down permissions across all channels
+      const syncResult = await syncVerificationChannelPermissions(
+        message.guild,
+        verifiedRoleId,
+        unverifiedRoleId,
+        targetChannel.id,
+        (msg, type) => extra?.logSyncEvent?.(msg, type)
+      );
+
+      return message.reply({
+        embeds: [createLimeEmbed({
+          title: 'Verification Setup & Permissions Locked',
+          description: `<:ticks:1532620580266836148> **Verification Gate Deployed Successfully!**\n\n` +
+            `• **Verification Card**: <#${targetChannel.id}>\n` +
+            `• **Verified Role**: ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '`None`'}\n` +
+            `• **Unverified Role**: ${unverifiedRoleId ? `<@&${unverifiedRoleId}>` : '`None`'}\n` +
+            `• **Channels Locked & Synced**: **${syncResult.updated}** channels\n\n` +
+            `Unverified members will only see <#${targetChannel.id}> until clicking **Verify Me**!`
+        })]
+      });
     } catch (err: any) {
       return message.reply({
         embeds: [createLimeEmbed({
@@ -325,7 +623,7 @@ PrefixRegistry.register({
   name: 'verification',
   category: 'Verification',
   description: 'Launch the Verification Control Center GUI or verify membership.',
-  usage: 'r!verification [setup|config]',
+  usage: 'r!verification [setup|config|sync-perms]',
   aliases: ['verify', 'v', 'chkverify', 'verify-me'],
   cooldownSeconds: 2,
   execute: async (message: Message, args?: string[], extra?: any) => {
@@ -341,8 +639,61 @@ PrefixRegistry.register({
       if (!isOwnerOrExtra) {
         return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can deploy the verification card.` });
       }
+      let targetChannel: any = message.channel;
+      const targetArg = args?.[1];
+      if (targetArg) {
+        const cleanId = targetArg.replace(/[<#>]/g, '').trim();
+        const found = guild.channels.cache.get(cleanId) || await guild.channels.fetch(cleanId).catch(() => null);
+        if (found && found.isTextBased()) targetChannel = found;
+      }
+      const modules = extra?.getModulesState ? extra.getModulesState(guild.id) : [];
+      let verModule = modules.find((m: any) => m.id === 'verification');
+      const config = verModule?.config || {};
+      if (extra?.updateModuleConfig) {
+        await extra.updateModuleConfig('verification', {
+          ...config,
+          verificationChannelId: targetChannel.id,
+          enabled: true
+        });
+      }
       const payload = buildPublicVerificationCard(guild);
-      return message.reply(payload);
+      await targetChannel.send(payload);
+
+      if (config.verifiedRoleId) {
+        await syncVerificationChannelPermissions(guild, config.verifiedRoleId, config.unverifiedRoleId, targetChannel.id, (msg, type) => extra?.logSyncEvent?.(msg, type));
+      }
+
+      return message.reply({
+        embeds: [createLimeEmbed({
+          title: 'Verification Card Posted',
+          description: `<:ticks:1532620580266836148> Interactive Verification Card posted to <#${targetChannel.id}> and permissions locked!`
+        })]
+      });
+    }
+
+    if (sub === 'sync-perms' || sub === 'sync' || sub === 'lock') {
+      if (!isOwnerOrExtra) {
+        return message.reply({ content: `${WRONG_ICON} **Access Denied**: Only the **Server Owner** and designated **Extra Owners** can sync verification permissions.` });
+      }
+      const modules = extra?.getModulesState ? extra.getModulesState(guild.id) : [];
+      const verModule = modules.find((m: any) => m.id === 'verification');
+      const config = verModule?.config || {};
+      if (!config.verifiedRoleId) {
+        return message.reply({ content: `${WRONG_ICON} **Missing Verified Role**: Configure a Verified Role first via \`r!verification config\`.` });
+      }
+      const syncResult = await syncVerificationChannelPermissions(
+        guild,
+        config.verifiedRoleId,
+        config.unverifiedRoleId,
+        config.verificationChannelId,
+        (msg, type) => extra?.logSyncEvent?.(msg, type)
+      );
+      return message.reply({
+        embeds: [createLimeEmbed({
+          title: 'Verification Permissions Synced',
+          description: `<:ticks:1532620580266836148> **${syncResult.updated} channels** updated! Unverified users are restricted from viewing server channels until verified.`
+        })]
+      });
     }
 
     if (sub === 'config' || sub === 'gui' || sub === 'admin') {
@@ -716,6 +1067,18 @@ export const VerificationManifest: ModuleManifest = {
     },
     {
       name: 'button_ver_generic',
+      handler: async (client: any, interaction: any, context: any) => {
+        await handleVerificationGuiInteraction(interaction, context);
+      }
+    },
+    {
+      name: 'modal_ver_modal_send_card',
+      handler: async (client: any, interaction: any, context: any) => {
+        await handleVerificationGuiInteraction(interaction, context);
+      }
+    },
+    {
+      name: 'button_ver_sync_perms',
       handler: async (client: any, interaction: any, context: any) => {
         await handleVerificationGuiInteraction(interaction, context);
       }

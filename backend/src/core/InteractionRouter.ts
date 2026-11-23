@@ -749,6 +749,8 @@ export class InteractionRouter {
         ['jtc_',             'button_jtc_generic'],
         ['modal_social_',    'modal_social_generic'],
         ['social_',          'modal_social_generic'],
+        ['modal_ver_',       'button_ver_generic'],
+        ['ver_',             'button_ver_generic'],
       ];
 
       const dispatched = new Set<string>();
