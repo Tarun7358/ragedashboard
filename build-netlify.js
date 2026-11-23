@@ -24,3 +24,14 @@ if (fs.existsSync(sourceDir)) {
   console.error('[build-netlify] ERROR: frontend/dist was not found!');
   process.exit(1);
 }
+
+// 3. Also compile backend if not running in Netlify frontend-only container
+if (!process.env.NETLIFY) {
+  try {
+    console.log('[build-netlify] Compiling backend workspace...');
+    execSync('npm run build --workspace=backend', { stdio: 'inherit' });
+  } catch (err) {
+    console.warn('[build-netlify] Backend workspace build skipped or warning:', err.message);
+  }
+}
+
