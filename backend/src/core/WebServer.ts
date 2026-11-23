@@ -872,7 +872,7 @@ export class WebServer {
     });
 
     // Public feed endpoints
-    this.app.get('/api/public/events', (req: Request, res: Response) => {
+    this.app.get('/api/public/events', async (req: Request, res: Response) => {
       if (!this.publicFeed) {
         return res.json({ events: [], total: 0 });
       }
@@ -880,7 +880,7 @@ export class WebServer {
       const timeFilter = req.query.timeFilter ? parseInt(req.query.timeFilter as string) : undefined;
       const page = req.query.page ? parseInt(req.query.page as string) : 1;
       
-      const result = this.publicFeed.getEvents(category, timeFilter, page, 10);
+      const result = await this.publicFeed.getEvents(category, timeFilter, page, 10);
       res.json(result);
     });
 

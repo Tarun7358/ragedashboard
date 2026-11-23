@@ -65,6 +65,7 @@ import { WebServer } from './core/WebServer.js';
 import { Gateway } from './core/Gateway.js';
 import { Database } from './core/Database.js';
 import { RedisManager } from './core/RedisManager.js';
+import { PublicFeedManager } from './core/PublicFeedManager.js';
 
 // ---- Feature Module Manifests ----
 import { SecurityManifest } from './modules/security/manifest.js';
@@ -207,6 +208,12 @@ async function bootstrap() {
     // 3. Initialize Express Web Server & API Router
     webServer = new WebServer(registry);
 
+    // Initialize Public Activity Feed Manager
+    const publicFeed = new PublicFeedManager((msg) => {
+      if (webServer) webServer.broadcast(msg);
+    });
+    webServer.publicFeed = publicFeed;
+
     // 4. Initialize Discord Bot Gateway Client
     gateway = new Gateway(
       (guildId, msg, type) => registry.logSyncEvent(guildId, msg, type),
@@ -217,7 +224,7 @@ async function bootstrap() {
       (msg) => { if (webServer) webServer.broadcast(msg); },
       (guildId) => registry.getModulesState(guildId),
       (guildId) => registry.getGlobalSettings(guildId),
-      null as any,
+      publicFeed,
       (guildId, id, config) => registry.updateModuleConfig(guildId, id, config),
       (guildId, id, enabledOverride) => registry.toggleModule(guildId, id, enabledOverride)
     );
