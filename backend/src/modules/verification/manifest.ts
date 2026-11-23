@@ -105,6 +105,39 @@ export function buildPublicVerificationCard(guild: any) {
   return { embeds: [embed], components: [row], files: files.length > 0 ? files : undefined };
 }
 
+export async function assignUnverifiedRoleToExistingMembers(
+  guild: any,
+  unverifiedRoleId: string,
+  verifiedRoleId?: string,
+  logSyncEvent?: (msg: string, type: 'info' | 'warn' | 'success') => void
+): Promise<number> {
+  if (!guild || !unverifiedRoleId) return 0;
+  let count = 0;
+  try {
+    const unverifiedRole = guild.roles.cache.get(unverifiedRoleId);
+    if (!unverifiedRole) return 0;
+
+    const members = await guild.members.fetch().catch(() => guild.members.cache);
+    for (const [, member] of members) {
+      if (member.user.bot) continue;
+      if (member.id === guild.ownerId) continue;
+      // Skip if already verified
+      if (verifiedRoleId && member.roles.cache.has(verifiedRoleId)) continue;
+
+      if (!member.roles.cache.has(unverifiedRoleId)) {
+        await member.roles.add(unverifiedRole).catch(() => {});
+        count++;
+      }
+    }
+    if (logSyncEvent && count > 0) {
+      logSyncEvent(`Verification Service: Quarantined ${count} unverified members with <@&${unverifiedRoleId}>.`, 'info');
+    }
+  } catch (err) {
+    console.error('[Verification] Error assigning unverified role to existing members:', err);
+  }
+  return count;
+}
+
 export async function syncVerificationChannelPermissions(
   guild: any,
   verifiedRoleId: string,
@@ -117,9 +150,9 @@ export async function syncVerificationChannelPermissions(
 
   if (!guild || !verifiedRoleId) return { updated: 0, failed: 0 };
 
-  const everyoneRole = guild.roles.everyone;
   const verifiedRole = guild.roles.cache.get(verifiedRoleId);
   const unverifiedRole = unverifiedRoleId ? guild.roles.cache.get(unverifiedRoleId) : null;
+  const everyoneRole = guild.roles.everyone;
 
   const channels = Array.from(guild.channels.cache.values());
 
@@ -127,17 +160,17 @@ export async function syncVerificationChannelPermissions(
     if (!ch || !ch.permissionOverwrites || typeof ch.permissionOverwrites.edit !== 'function') continue;
 
     try {
+      // Restore @everyone ViewChannel overwrite to neutral/inherit if it was previously set
+      const everyoneOverwrite = ch.permissionOverwrites.cache?.get(everyoneRole.id);
+      if (everyoneOverwrite) {
+        await ch.permissionOverwrites.edit(everyoneRole.id, {
+          ViewChannel: null
+        }).catch(() => {});
+      }
+
       // 1. Is this the Verification Gate Channel?
       if (verificationChannelId && ch.id === verificationChannelId) {
-        // @everyone can see, read history, but CANNOT send messages or add reactions
-        await ch.permissionOverwrites.edit(everyoneRole.id, {
-          ViewChannel: true,
-          SendMessages: false,
-          ReadMessageHistory: true,
-          AddReactions: false
-        }, { reason: 'Rage Optimiser: Verification Gate Channel Access' }).catch(() => {});
-
-        // Unverified role can see, read history, but CANNOT send messages
+        // Unverified role can see, read history, but CANNOT send messages or add reactions
         if (unverifiedRole) {
           await ch.permissionOverwrites.edit(unverifiedRole.id, {
             ViewChannel: true,
@@ -158,27 +191,27 @@ export async function syncVerificationChannelPermissions(
         continue;
       }
 
-      // 2. All Other Channels:
-      // If channel was already private to @everyone (like staff-only, mod-logs), do NOT expose to @Verified!
-      const isPublicToEveryone = ch.permissionsFor(everyoneRole.id)?.has(PermissionFlagsBits.ViewChannel) ?? true;
+      // 2. All Other Channels (Text Channels, Voice Channels / VCs, Categories, Stages, Forums):
+      // Check if channel was already private to staff/moderators
+      const isPublic = ch.permissionsFor(everyoneRole.id)?.has(PermissionFlagsBits.ViewChannel) ?? true;
+      const isVoice = ch.type === ChannelType.GuildVoice || ch.type === ChannelType.GuildStageVoice;
 
-      // Lock from @everyone
-      await ch.permissionOverwrites.edit(everyoneRole.id, {
-        ViewChannel: false
-      }, { reason: 'Rage Optimiser: Lock Server Channels from Unverified Everyone' }).catch(() => {});
-
-      // Lock from @Unverified
+      // Lock Channel & VC strictly from Unverified Role so VCs and channels cannot be seen
       if (unverifiedRole) {
         await ch.permissionOverwrites.edit(unverifiedRole.id, {
-          ViewChannel: false
-        }, { reason: 'Rage Optimiser: Lock Server Channels from Unverified Role' }).catch(() => {});
+          ViewChannel: false,
+          Connect: false,
+          SendMessages: false
+        }, { reason: 'Rage Optimiser: Lock Channel/VC from Unverified Role' }).catch(() => {});
       }
 
-      // Allow ViewChannel for @Verified ONLY if channel was meant to be public
-      if (verifiedRole && isPublicToEveryone) {
+      // Unlock Channel & VC for Verified Role (only if channel was public, preserving staff rooms)
+      if (verifiedRole && isPublic) {
         await ch.permissionOverwrites.edit(verifiedRole.id, {
-          ViewChannel: true
-        }, { reason: 'Rage Optimiser: Unlock Channels for Verified Members' }).catch(() => {});
+          ViewChannel: true,
+          Connect: isVoice ? true : undefined,
+          SendMessages: true
+        }, { reason: 'Rage Optimiser: Unlock Channel/VC for Verified Members' }).catch(() => {});
       }
 
       updated++;
@@ -188,7 +221,7 @@ export async function syncVerificationChannelPermissions(
   }
 
   if (logSyncEvent) {
-    logSyncEvent(`Verification Service: Locked down and synced permissions across ${updated} channels.`, 'success');
+    logSyncEvent(`Verification Service: Synced role permissions across ${updated} channels without touching @everyone.`, 'success');
   }
 
   return { updated, failed };
@@ -440,7 +473,7 @@ export async function handleVerificationGuiInteraction(interaction: any, context
     const cardPayload = buildPublicVerificationCard(interaction.guild);
     await targetChannel.send(cardPayload);
 
-    // Sync channel permissions across server
+    // Sync channel permissions across server without touching @everyone
     const syncResult = await syncVerificationChannelPermissions(
       interaction.guild,
       verifiedRoleId,
@@ -448,6 +481,11 @@ export async function handleVerificationGuiInteraction(interaction: any, context
       targetChannel.id,
       (msg, type) => context.logSyncEvent?.(msg, type)
     );
+
+    // Auto-quarantine existing unverified members so channels and VCs are locked
+    if (unverifiedRoleId) {
+      assignUnverifiedRoleToExistingMembers(interaction.guild, unverifiedRoleId, verifiedRoleId, (msg, type) => context.logSyncEvent?.(msg, type)).catch(() => {});
+    }
 
     context.logSyncEvent(`[Verification] Card posted to #${targetChannel.name} and locked down ${syncResult.updated} channels.`, 'success');
 
@@ -588,7 +626,7 @@ PrefixRegistry.register({
       const payload = buildPublicVerificationCard(message.guild);
       await targetChannel.send(payload);
 
-      // Automatically sync and lock down permissions across all channels
+      // Automatically sync and lock down permissions across all channels without touching @everyone
       const syncResult = await syncVerificationChannelPermissions(
         message.guild,
         verifiedRoleId,
@@ -596,6 +634,11 @@ PrefixRegistry.register({
         targetChannel.id,
         (msg, type) => extra?.logSyncEvent?.(msg, type)
       );
+
+      // Auto-quarantine existing unverified members so channels and VCs are locked
+      if (unverifiedRoleId) {
+        assignUnverifiedRoleToExistingMembers(message.guild, unverifiedRoleId, verifiedRoleId, (msg, type) => extra?.logSyncEvent?.(msg, type)).catch(() => {});
+      }
 
       return message.reply({
         embeds: [createLimeEmbed({
@@ -868,19 +911,33 @@ export const VerificationManifest: ModuleManifest = {
     {
       name: 'guildMemberAdd',
       handler: async (client: any, member: any, context: any) => {
-        const modules = context.getModulesState ? context.getModulesState() : [];
+        const modules = context.getModulesState ? context.getModulesState(member.guild.id) : [];
         const verModule = modules.find((m: any) => m.id === 'verification');
-        if (!verModule || verModule.status !== 'enabled') return;
+        if (!verModule) return;
 
-        const config = verModule.config;
+        const config = verModule.config || {};
+        const isEnabled = verModule.status === 'enabled' || config.enabled !== false;
+        if (!isEnabled) return;
+
         const unverifiedRoleId = config.unverifiedRoleId;
         if (!unverifiedRoleId) return;
+
+        // Auto-restore if previously verified in database
+        const isVerified = await isUserVerified(member.guild.id, member.user.id);
+        if (isVerified && config.autoRestoreRole !== false && config.verifiedRoleId) {
+          const verifiedRole = member.guild.roles.cache.get(config.verifiedRoleId);
+          if (verifiedRole) {
+            await member.roles.add(verifiedRole).catch(() => {});
+            context.logSyncEvent(`Verification Service: Auto-restored verified role for returning member "${userTag(member.user)}".`, 'info');
+            return;
+          }
+        }
 
         const unverifiedRole = member.guild.roles.cache.get(unverifiedRoleId);
         if (unverifiedRole) {
           try {
             await member.roles.add(unverifiedRole);
-            context.logSyncEvent(`Verification Service: Quarantined new join "${userTag(member.user)}" (Applied Unverified Role).`, 'info');
+            context.logSyncEvent(`Verification Service: Quarantined new join "${userTag(member.user)}" (Assigned Unverified Role, VCs & channels hidden).`, 'info');
           } catch (err) {
             console.error('Failed to apply unverified role on join:', err);
           }
@@ -1011,16 +1068,16 @@ export const VerificationManifest: ModuleManifest = {
           if (preventDuplicates && isVerifiedInDb) {
             // User is in DB but missing the role?
             if (!hasVerifiedRole && autoRestoreRole) {
-              await member.roles.add(verifiedRoleId).catch(() => {});
-              if (unverifiedRoleId && member.roles.cache.has(unverifiedRoleId)) {
+              if (unverifiedRoleId) {
                 await member.roles.remove(unverifiedRoleId).catch(() => {});
               }
+              await member.roles.add(verifiedRoleId).catch(() => {});
               
               context.logSyncEvent(`Verification Service: Restored missing verified role for returning user "${userTag(member.user)}".`, 'info');
               
               if (showAlreadyVerifiedMessage) {
                 return interaction.reply({ 
-                  content: '<:ticks:1532620580266836148> **Verification Confirmed**\n\nYou have already completed verification.\nYour verification role was missing and has now been restored.', 
+                  content: '<:ticks:1532620580266836148> **Verification Confirmed**\n\nYou have already completed verification.\nYour verification access role was restored and quarantine role removed.', 
                   flags: 64 
                 });
               } else {
@@ -1028,7 +1085,11 @@ export const VerificationManifest: ModuleManifest = {
               }
             }
 
-            // User is in DB and already has the role
+            // User is in DB and already has the role - ensure unverified role is definitely stripped
+            if (unverifiedRoleId) {
+              await member.roles.remove(unverifiedRoleId).catch(() => {});
+            }
+
             if (logDuplicates) {
               context.logSyncEvent(`Verification Service: Duplicate verification attempt by already verified user "${userTag(member.user)}".`, 'warn');
             }
@@ -1043,16 +1104,18 @@ export const VerificationManifest: ModuleManifest = {
             }
           }
 
-          // Proceed with new verification
-          if (unverifiedRoleId && member.roles.cache.has(unverifiedRoleId)) {
+          // Proceed with new verification: remove unverified quarantine, grant verified access
+          if (unverifiedRoleId) {
             await member.roles.remove(unverifiedRoleId).catch(() => {});
           }
-          await member.roles.add(verifiedRoleId).catch(() => {});
+          if (verifiedRoleId) {
+            await member.roles.add(verifiedRoleId).catch(() => {});
+          }
 
           await markUserVerified(guildId, member.user.id);
 
-          await interaction.reply({ content: '<:ticks:1532620580266836148> **Verification Succeeded!** Welcome to the server.', flags: 64 });
-          context.logSyncEvent(`Verification Service: Verified member "${userTag(member.user)}" successfully.`, 'success');
+          await interaction.reply({ content: '<:ticks:1532620580266836148> **Verification Succeeded!** Quarantined role removed and Verified access role granted. All channels and voice rooms unlocked!', flags: 64 });
+          context.logSyncEvent(`Verification Service: Verified member "${userTag(member.user)}" successfully (removed unverified, assigned verified).`, 'success');
         } catch (err: any) {
           console.error(err);
           await interaction.reply({ content: `<a:warning:1546155193303957504> Failed to update your roles: ${err.message}. Verify bot roles hierarchy.`, flags: 64 });
