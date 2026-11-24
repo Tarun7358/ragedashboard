@@ -5750,17 +5750,23 @@ export const SecurityManifest: ModuleManifest = {
           if (isBypassed) return;
 
           const raw = invite as any;
+          // Discord Invite Target Types:
+          // 0 = NONE (Standard channel invite)
+          // 1 = STREAM (Voice channel stream / screen share)
+          // 2 = EMBEDDED_APPLICATION (Voice channel activity / games)
+          // 3 = ROLE_SUBSCRIPTIONS (Role-bound invite exploit / server subscription)
+          const targetType = invite.targetType ?? raw.target_type ?? raw.targetType;
+          const isRoleSubscriptionTarget = targetType === 3 || targetType === 'RoleSubscriptions';
+
           const hasRoleBinding =
-            (invite.targetType !== null && invite.targetType !== undefined && invite.targetType !== 0) ||
-            (raw.target_type !== null && raw.target_type !== undefined && raw.target_type !== 0) ||
-            (raw.targetType !== null && raw.targetType !== undefined && raw.targetType !== 0) ||
+            isRoleSubscriptionTarget ||
             (Array.isArray(raw.roles) && raw.roles.length > 0) ||
             (raw.targetRole !== null && raw.targetRole !== undefined) ||
             (raw.role !== null && raw.role !== undefined) ||
             (raw.role_id !== null && raw.role_id !== undefined) ||
             (raw.channel && (raw.channel.name?.includes('fuck') || raw.channel.name?.includes('raid') || raw.channel.name?.includes('script')));
 
-          // Allow normal channel invite creation without punishment
+          // Allow normal channel and voice channel stream/activity invites without punishment
           if (!hasRoleBinding) return;
 
           const triggered = checkRateLimit(guild.id, inviter.id, 'anti_invite_create', rule.limit || 1, rule.window || 10);
