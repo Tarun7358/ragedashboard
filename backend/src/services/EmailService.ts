@@ -17,6 +17,9 @@ function cfg() {
     from:     process.env.ALERT_EMAIL_FROM?.trim()     || '',
     password: process.env.ALERT_EMAIL_PASSWORD?.trim() || '',
     to:       process.env.ALERT_EMAIL_TO?.trim()       || '',
+    host:     process.env.SMTP_HOST?.trim()            || '',
+    port:     parseInt(process.env.SMTP_PORT?.trim() || '465', 10),
+    secure:   process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : true,
   };
 }
 
@@ -33,11 +36,33 @@ function getTransporter(): Transporter | null {
   if (!isConfigured()) return null;
   if (_transporter) return _transporter;
 
-  const { from, password } = cfg();
-  _transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: from, pass: password }
-  });
+  const { from, password, host, port, secure } = cfg();
+
+  if (host) {
+    // Custom SMTP host explicitly provided
+    _transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user: from, pass: password },
+      tls: { rejectUnauthorized: false }
+    });
+  } else if (from.toLowerCase().endsWith('@gmail.com')) {
+    // Gmail service fallback
+    _transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: from, pass: password }
+    });
+  } else {
+    // Custom domain mail (e.g. GoDaddy ragefps.in) default to GoDaddy smtpout.secureserver.net:465
+    _transporter = nodemailer.createTransport({
+      host: 'smtpout.secureserver.net',
+      port: 465,
+      secure: true,
+      auth: { user: from, pass: password },
+      tls: { rejectUnauthorized: false }
+    });
+  }
 
   return _transporter;
 }
