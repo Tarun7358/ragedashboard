@@ -164,6 +164,38 @@ async function sendSecurityAlert(guild: Guild, alertChannelId: string | null | u
   } catch { }
 }
 
+function dispatchRaidAlertNotifications(
+  guild: Guild,
+  config: any,
+  reason: string,
+  enabled: boolean = true
+): void {
+  const recipient = config?.alertEmail || undefined;
+
+  // Dispatch Email Alert to linked owner email (fire-and-forget, never blocks)
+  import('../services/EmailService.js').then(({ EmailService }) => {
+    EmailService.sendRaidModeAlert({
+      guildName: guild.name,
+      guildId: guild.id,
+      triggeredBy: reason,
+      enabled,
+      memberCount: guild.memberCount,
+      toOverride: recipient
+    }).catch(err => console.error('[AdvSec] Raid Email alert failed:', err));
+  }).catch(() => {});
+
+  // Dispatch WhatsApp Alert if configured
+  import('../services/WhatsAppService.js').then(({ WhatsAppService }) => {
+    WhatsAppService.sendSecurityAlert({
+      type: enabled ? 'RAID LOCKDOWN ACTIVATED' : 'RAID LOCKDOWN LIFTED',
+      guildName: guild.name,
+      executor: 'Rage Threat Intelligence',
+      details: reason,
+      actionTaken: enabled ? 'Server Verification Elevated to Very High & Invites Disabled' : 'Normal Operations Restored'
+    }).catch(() => {});
+  }).catch(() => {});
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPER: Quarantine a member (strip admin roles + timeout + quarantine role)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -524,6 +556,13 @@ export async function handleMemberJoinRaidCheck(client: Client, member: GuildMem
         `> Auto-unlock in **15 minutes** or use \`r!lockdown disable\`.`
       );
 
+      dispatchRaidAlertNotifications(
+        guild,
+        config,
+        `Critical Mass Raid Surge: ${fresh.length} accounts joined in 60s (Tier 3)`,
+        true
+      );
+
       armAutoUnlockTimer(guild, config, context, 15);
       return;
     }
@@ -559,6 +598,13 @@ export async function handleMemberJoinRaidCheck(client: Client, member: GuildMem
         `${SECURITY_SHIELD_ICON} **RAID WAVE DETECTED (TIER 2)** — **${fresh.length} members** joined in under 60 seconds.\n` +
         `> Server verification set to **Very High**. All new invites disabled.\n` +
         `> Auto-unlocking in **10 minutes**. Use \`r!lockdown disable\` to manually unlock.`
+      );
+
+      dispatchRaidAlertNotifications(
+        guild,
+        config,
+        `Raid Wave Detected: ${fresh.length} accounts joined in 60s (Tier 2)`,
+        true
       );
 
       armAutoUnlockTimer(guild, config, context, 10);
@@ -687,6 +733,13 @@ export async function handleRaidMessageCheck(
         `> All participating accounts have been **quarantined**, messages suppressed, and server elevated to **Tier 2 Lockdown**.`
       );
 
+      dispatchRaidAlertNotifications(
+        guild,
+        config,
+        `Correlated Spam Raid: ${distinctUsers.size} accounts coordinated spamming matching content in 30s`,
+        true
+      );
+
       return {
         isRaid: true,
         reason: `Correlated multi-account raid pattern (${distinctUsers.size} accounts)`
@@ -727,6 +780,12 @@ function armAutoUnlockTimer(guild: Guild, config: any, context: any, minutes: nu
     });
     await sendSecurityAlert(guild, config.alertChannelId,
       `<:ticks:1532620580266836148> **Raid Lockdown Lifted** — Verification restored to Medium and invite permissions re-enabled. Monitor activity closely.`
+    );
+    dispatchRaidAlertNotifications(
+      guild,
+      config,
+      `Automatic ${minutes}-minute raid lockdown timer completed. Server verification restored to Medium.`,
+      false
     );
   }, minutes * 60 * 1000);
 
