@@ -87,16 +87,13 @@ export function Settings({ onSaveConfig, modules, registry, onUpdateConfig }: Se
       {/* Header */}
       <div className="page-header">
         <h1 className="page-title">Settings & Configurations</h1>
-        <p className="page-subtitle">Adjust core bot preferences, Discord OAuth rules, and notification dispatch logs.</p>
+        <p className="page-subtitle">Adjust core bot preferences and voice presence settings.</p>
       </div>
 
       <div className="section-panel">
         <div className="tabs-nav">
           <button className={`tab-btn ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>General</button>
-          <button className={`tab-btn ${activeTab === 'discord' ? 'active' : ''}`} onClick={() => setActiveTab('discord')}>Discord Linkage</button>
-          <button className={`tab-btn ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => setActiveTab('notifications')}>Notifications Config</button>
           <button className={`tab-btn ${activeTab === 'voice_presence' ? 'active' : ''}`} onClick={() => setActiveTab('voice_presence')}>Voice Presence</button>
-          <button className={`tab-btn ${activeTab === 'migration' ? 'active' : ''}`} onClick={() => setActiveTab('migration')}>Version Manager</button>
         </div>
 
         <div className="panel-body">
@@ -122,64 +119,6 @@ export function Settings({ onSaveConfig, modules, registry, onUpdateConfig }: Se
 
               <button className="btn btn-primary" onClick={handleSaveSettings} style={{ alignSelf: 'flex-start' }}>
                 Save Preferences
-              </button>
-            </div>
-          )}
-
-          {/* Discord linkage settings */}
-          {activeTab === 'discord' && (
-            <div className="form-section" style={{ maxWidth: '600px' }}>
-              <div className="form-group-row">
-                <div>
-                  <div className="form-label">Bot Guild Synchronization</div>
-                  <div className="form-help">Sync member metadata and role trees every 30 minutes.</div>
-                </div>
-                <label className="switch">
-                  <input type="checkbox" checked={botSync} onChange={(e) => setBotSync(e.target.checked)} />
-                  <span className="slider"></span>
-                </label>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Bot Application Invites Scope</label>
-                <select className="form-select" value={inviteScope} onChange={(e) => setInviteScope(e.target.value)}>
-                  <option>Administrator role required (Standard)</option>
-                  <option>Custom bot authorization permissions (Secure)</option>
-                </select>
-              </div>
-
-              <button className="btn btn-primary" onClick={handleSaveSettings} style={{ alignSelf: 'flex-start' }}>
-                Save Linkage Configs
-              </button>
-            </div>
-          )}
-
-          {/* Notifications dispatch settings */}
-          {activeTab === 'notifications' && (
-            <div className="form-section" style={{ maxWidth: '600px' }}>
-              <div className="form-group-row">
-                <div>
-                  <div className="form-label">Incident Webhook Dispatch</div>
-                  <div className="form-help">Send critical anti-nuke / anti-raid incidents to staff private channel webhook.</div>
-                </div>
-                <label className="switch">
-                  <input type="checkbox" checked={incidentDispatch} onChange={(e) => setIncidentDispatch(e.target.checked)} />
-                  <span className="slider"></span>
-                </label>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Incident Dispatch Webhook URL</label>
-                <input 
-                  type="password" 
-                  className="form-input-text" 
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                />
-              </div>
-
-              <button className="btn btn-primary" onClick={handleSaveSettings} style={{ alignSelf: 'flex-start' }}>
-                Save Notification Prefs
               </button>
             </div>
           )}
@@ -273,37 +212,6 @@ export function Settings({ onSaveConfig, modules, registry, onUpdateConfig }: Se
 
               <button className="btn btn-primary" onClick={handleSaveVoice} style={{ alignSelf: 'flex-start' }}>
                 Save Voice Presence Settings
-              </button>
-            </div>
-          )}
-
-          {/* Version Manager settings */}
-          {activeTab === 'migration' && (
-            <div className="form-section" style={{ maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div className="form-group-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px' }}>
-                <div>
-                  <div className="form-label" style={{ fontWeight: 'bold' }}>Welcome System vNext (V2)</div>
-                  <div className="form-help">Route welcome card generation (Puppeteer), DMs, boosters roles, server milestones, and birthdays to the modular V2 architecture.</div>
-                </div>
-                <label className="switch">
-                  <input type="checkbox" checked={useV2Welcome} onChange={(e) => setUseV2Welcome(e.target.checked)} />
-                  <span className="slider"></span>
-                </label>
-              </div>
-
-              <div className="form-group-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '8px' }}>
-                <div>
-                  <div className="form-label" style={{ fontWeight: 'bold' }}>Ticket System vNext (V2)</div>
-                  <div className="form-help">Activate dynamic ticket panels, questionnaire wizard forms, staff claim states, ticket escalations, and automated transcript archives.</div>
-                </div>
-                <label className="switch">
-                  <input type="checkbox" checked={useV2Tickets} onChange={(e) => setUseV2Tickets(e.target.checked)} />
-                  <span className="slider"></span>
-                </label>
-              </div>
-
-              <button className="btn btn-primary" onClick={handleSaveSettings} style={{ alignSelf: 'flex-start' }}>
-                Save Version Controls
               </button>
             </div>
           )}
