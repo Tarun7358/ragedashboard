@@ -232,54 +232,162 @@ export function registerBotAvatarCommands(): void {
   });
 
   // ─────────────────────────────────────────────
-  // 3. COMMAND: r!botbanner (Global Profile Banner)
+  // 3. COMMAND: r!botbanner (Server Profile Banner)
   // ─────────────────────────────────────────────
   PrefixRegistry.register({
     name: 'botbanner',
-    category: 'System',
-    description: 'Customize or reset the bot\'s global Discord user profile banner.',
-    usage: 'r!botbanner <image_url | attachment | reset | view>',
-    aliases: ['setbanner', 'setbotbanner', 'globalbanner'],
-    cooldownSeconds: 10,
+    category: 'Community',
+    description: 'Customize or reset the bot\'s profile banner specifically for this server.',
+    usage: 'r!botbanner <image_url | attachment | reset | view> [--global]',
+    aliases: ['serverbanner', 'guildbanner', 'setbotbanner', 'setbanner'],
+    cooldownSeconds: 5,
     examples: [
       'r!botbanner https://example.com/banner.png',
       'r!botbanner (with attached image file)',
       'r!botbanner reset',
-      'r!botbanner view'
+      'r!botbanner view',
+      'r!botbanner https://example.com/banner.png --global (Bot Developer only)'
     ],
     moduleOwnerId: 'community',
-    dangerLevel: 'High',
+    dangerLevel: 'Low',
     hidden: false,
     execute: async (message: any, args: string[], extra?: any) => {
-      const { PrefixPermissionManager } = await import('../../core/prefix/PrefixPermissionManager.js');
-      const isOwner =
-        message.author.id === '830993126301630485' ||
-        PrefixPermissionManager.isDeveloper(message.author.id, message) ||
-        message.guild?.ownerId === message.author.id;
+      const guild = message.guild;
+      if (!guild) return;
 
-      if (!isOwner) {
+      const { PrefixPermissionManager } = await import('../../core/prefix/PrefixPermissionManager.js');
+      const isDevOrBotOwner =
+        message.author.id === '830993126301630485' ||
+        PrefixPermissionManager.isDeveloper(message.author.id, message);
+
+      const isServerAuthorized =
+        guild.ownerId === message.author?.id ||
+        message.member?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+        (await isOwnerOrExtraOwner(message.author.id, guild).catch(() => false)) ||
+        isDevOrBotOwner;
+
+      if (!isServerAuthorized) {
         return message.reply({
-          content: `${WRONG_ICON} **Access Denied**: Modifying the bot's global profile banner is strictly restricted to the **Bot Owner / Developer**.`
+          content: `${WRONG_ICON} **Access Denied**: Changing the bot's server banner requires Administrator permissions or Server Ownership.`
         });
       }
 
-      const client = message.client;
-      const firstArg = (args[0] || '').toLowerCase().trim();
+      const isGlobal = args.some(a => a.toLowerCase() === '--global' || a.toLowerCase() === '-g');
+      if (isGlobal && !isDevOrBotOwner) {
+        return message.reply({
+          content: `${WRONG_ICON} **Access Denied**: Modifying the bot's global Discord profile banner is strictly restricted to the **Bot Developer**.`
+        });
+      }
+
+      // Filter out --global flag from args for input handling
+      const cleanArgs = args.filter(a => a.toLowerCase() !== '--global' && a.toLowerCase() !== '-g');
+      const firstArg = (cleanArgs[0] || '').toLowerCase().trim();
+
+      // ─────────────────────────────────────────
+      // GLOBAL SCOPE (Developer only with --global)
+      // ─────────────────────────────────────────
+      if (isGlobal) {
+        const client = message.client;
+
+        if (firstArg === 'reset' || firstArg === 'clear' || firstArg === 'default' || firstArg === 'remove') {
+          const resetRes = await BotAvatarService.resetGlobalBanner(client);
+          if (!resetRes.success) {
+            return message.reply({
+              content: `${WRONG_ICON} **Failed to reset global banner**: ${resetRes.error}`
+            });
+          }
+
+          const resetEmbed = new EmbedBuilder()
+            .setColor(Colors.LIME)
+            .setTitle(`${VERIFIED_ICON} Bot Global Profile Banner Reset`)
+            .setDescription([
+              '> The bot\'s global profile banner has been **cleared**.',
+              '',
+              `> **Updated By**: <@${message.author.id}>`
+            ].join('\n'))
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+
+          return message.reply({ embeds: [resetEmbed] });
+        }
+
+        const attachment = message.attachments?.first();
+        const hasImageInput = Boolean(attachment || (cleanArgs.length > 0 && /^https?:\/\//i.test(cleanArgs[0])));
+
+        if (!hasImageInput) {
+          await client.user?.fetch().catch(() => null);
+          const currentBanner = client.user?.bannerURL({ size: 1024 });
+
+          const viewEmbed = new EmbedBuilder()
+            .setColor(Colors.BRAND)
+            .setTitle(`${CONFIG_ICON} Bot Global Profile Banner`)
+            .setDescription([
+              '> **Discord User Profile Banner (Global)**',
+              '> This banner appears at the top of the bot\'s user profile card across all servers.',
+              '',
+              `> **Current Banner**: ${currentBanner ? `[Direct Link](${currentBanner})` : '`None (Default Black)`'}`,
+              '',
+              '**Command Reference**',
+              '> • `r!botbanner <image_url> --global` — Set global banner',
+              '> • `r!botbanner reset --global` — Clear global banner'
+            ].join('\n'))
+            .setImage(currentBanner || null)
+            .setFooter({ text: BRAND_FOOTER })
+            .setTimestamp();
+
+          return message.reply({ embeds: [viewEmbed] });
+        }
+
+        let imageSource: string | Buffer = attachment ? attachment.url : cleanArgs[0];
+        const statusMsg = await message.reply({
+          content: '<a:loading:1546134304625528882> Uploading and updating global profile banner via Discord REST API...'
+        });
+
+        const applyRes = await BotAvatarService.setGlobalBanner(client, imageSource);
+        if (!applyRes.success) {
+          return statusMsg.edit({
+            content: `${WRONG_ICON} **Failed to update global banner**: ${applyRes.error}`
+          });
+        }
+
+        await client.user?.fetch().catch(() => null);
+        const newBannerUrl = applyRes.bannerUrl || client.user?.bannerURL({ size: 1024 });
+
+        const successCard = new EmbedBuilder()
+          .setColor(Colors.LIME)
+          .setTitle(`${VERIFIED_ICON} Bot Global Profile Banner Updated`)
+          .setDescription([
+            `> Rage Optimiser's global profile banner has been updated!`,
+            '',
+            `> **Updated By**: <@${message.author.id}>`,
+            `> **Scope**: Global (Appears across all servers in profile popout)`
+          ].join('\n'))
+          .setImage(newBannerUrl || null)
+          .setFooter({ text: 'Rage Optimiser Enterprise • Global Customization' })
+          .setTimestamp();
+
+        return statusMsg.edit({ content: '', embeds: [successCard] });
+      }
+
+      // ─────────────────────────────────────────
+      // SERVER SCOPE (Per-Server Profile Banner)
+      // ─────────────────────────────────────────
 
       // Subcommand: RESET / CLEAR
       if (firstArg === 'reset' || firstArg === 'clear' || firstArg === 'default' || firstArg === 'remove') {
-        const resetRes = await BotAvatarService.resetGlobalBanner(client);
+        const resetRes = await BotAvatarService.resetServerBanner(guild, message.author.id);
         if (!resetRes.success) {
           return message.reply({
-            content: `${WRONG_ICON} **Failed to reset banner**: ${resetRes.error}`
+            content: `${WRONG_ICON} **Failed to reset server banner**: ${resetRes.error}`
           });
         }
 
         const resetEmbed = new EmbedBuilder()
           .setColor(Colors.LIME)
-          .setTitle(`${VERIFIED_ICON} Bot Profile Banner Reset`)
+          .setTitle(`${VERIFIED_ICON} Bot Server Profile Banner Reset`)
           .setDescription([
-            '> The bot\'s global profile banner has been **cleared**.',
+            `> The bot's profile banner for **${guild.name}** has been **reset to default**.`,
+            '> It will now display the global profile banner or default theme.',
             '',
             `> **Updated By**: <@${message.author.id}>`
           ].join('\n'))
@@ -291,51 +399,54 @@ export function registerBotAvatarCommands(): void {
 
       // Subcommand: VIEW / STATUS
       const attachment = message.attachments?.first();
-      const hasImageInput = Boolean(attachment || (args.length > 0 && /^https?:\/\//i.test(args[0])));
+      const hasImageInput = Boolean(attachment || (cleanArgs.length > 0 && /^https?:\/\//i.test(cleanArgs[0])));
 
-      if (!hasImageInput && (firstArg === 'view' || firstArg === 'status' || firstArg === 'info' || args.length === 0)) {
-        await client.user?.fetch().catch(() => null);
-        const currentBanner = client.user?.bannerURL({ size: 1024 });
+      if (!hasImageInput && (firstArg === 'view' || firstArg === 'status' || firstArg === 'info' || cleanArgs.length === 0)) {
+        const stored = await BotAvatarService.getCustomization(guild.id);
+        const meMember = guild.members.me || (await guild.members.fetchMe().catch(() => null));
+        const currentBanner = (meMember as any)?.bannerURL?.({ size: 1024 }) || stored?.serverBannerUrl;
 
         const viewEmbed = new EmbedBuilder()
           .setColor(Colors.BRAND)
-          .setTitle(`${CONFIG_ICON} Bot Global Profile Banner`)
+          .setTitle(`${CONFIG_ICON} Bot Server Profile Banner`)
           .setDescription([
-            '> **Discord User Profile Banner**',
-            '> This banner appears at the top of the bot\'s user profile card Discord-wide.',
+            `> **Per-Server Profile Banner — ${guild.name}**`,
+            `> This banner appears exclusively when viewing the bot inside **${guild.name}**.`,
+            `> The bot's global profile across other servers is completely unaffected.`,
             '',
-            `> **Current Banner**: ${currentBanner ? `[Direct Link](${currentBanner})` : '`None (Default Black)`'}`,
+            `> **Current Server Banner**: ${currentBanner ? `[Direct Link](${currentBanner})` : '`None (Default Global Banner)`'}`,
+            `> **Last Updated By**: ${stored?.updatedBy ? `<@${stored.updatedBy}>` : '`Not Recorded`'}`,
             '',
             '**Command Reference**',
-            '> • `r!botbanner <image_url>` — Set from image URL',
-            '> • `r!botbanner` (with upload) — Set from attached file',
-            '> • `r!botbanner reset` — Clear banner back to default',
-            '',
-            '-# Note: Discord rate-limits global banner changes to twice per 10 minutes.'
+            '> • `r!botbanner <image_url>` — Set server profile banner from direct link',
+            '> • `r!botbanner` (upload file) — Set server profile banner by attaching an image',
+            '> • `r!botbanner reset` — Clear server profile banner back to default'
           ].join('\n'))
           .setImage(currentBanner || null)
-          .setFooter({ text: BRAND_FOOTER })
+          .setFooter({ text: `${guild.name} • Server Profile Customization` })
           .setTimestamp();
 
         return message.reply({ embeds: [viewEmbed] });
       }
 
-      // Action: APPLY BANNER
+      // Action: APPLY SERVER BANNER
       let imageSource: string | Buffer;
       if (attachment && attachment.url) {
         imageSource = attachment.url;
-      } else if (args[0] && /^https?:\/\//i.test(args[0])) {
-        imageSource = args[0];
+      } else if (cleanArgs[0] && /^https?:\/\//i.test(cleanArgs[0])) {
+        imageSource = cleanArgs[0];
       } else {
         const syntaxCard = new EmbedBuilder()
           .setColor(Colors.WARN)
-          .setTitle(`${CONFIG_ICON} Configure Global Bot Profile Banner`)
+          .setTitle(`${CONFIG_ICON} Configure Server Bot Profile Banner`)
           .setDescription([
             '> **Usage**: `r!botbanner <image_url | file attachment>`',
             '> **Reset**: `r!botbanner reset`',
             '> **Status**: `r!botbanner view`',
             '',
             '> **Recommended Size**: `600x240` or `1100x440` (Aspect ratio ~2.5:1, under 8 MB)',
+            `> **Scope**: Changes the bot's banner **only inside ${guild.name}** without affecting other servers.`,
+            '',
             '> *(You can also type `r!botbanner` and attach an image file directly)*'
           ].join('\n'))
           .setFooter({ text: BRAND_FOOTER });
@@ -344,32 +455,33 @@ export function registerBotAvatarCommands(): void {
       }
 
       const statusMsg = await message.reply({
-        content: '<a:loading:1546134304625528882> Uploading and updating global profile banner via Discord REST API...'
+        content: `<a:loading:1546134304625528882> Uploading and updating bot server profile banner for **${guild.name}**...`
       });
 
-      const applyRes = await BotAvatarService.setGlobalBanner(client, imageSource);
+      const applyRes = await BotAvatarService.setServerBanner(guild, imageSource, message.author.id);
 
       if (!applyRes.success) {
         return statusMsg.edit({
-          content: `${WRONG_ICON} **Failed to update banner**: ${applyRes.error}`
+          content: `${WRONG_ICON} **Failed to update server banner**: ${applyRes.error}`
         });
       }
 
-      await client.user?.fetch().catch(() => null);
-      const newBannerUrl = applyRes.bannerUrl || client.user?.bannerURL({ size: 1024 });
+      const meMember = await guild.members.fetchMe().catch(() => null);
+      const newBannerUrl = applyRes.bannerUrl || (meMember as any)?.bannerURL?.({ size: 1024 });
 
       const successCard = new EmbedBuilder()
         .setColor(Colors.LIME)
-        .setTitle(`${VERIFIED_ICON} Bot Global Profile Banner Updated`)
+        .setTitle(`${VERIFIED_ICON} Bot Server Profile Banner Updated`)
         .setDescription([
-          `> Rage Optimiser's Discord profile banner has been successfully updated!`,
+          `> The bot's profile banner for **${guild.name}** has been successfully updated!`,
           '',
           `> **Updated By**: <@${message.author.id}>`,
-          `> **Scope**: Global (Appears across all servers in profile popout)`,
-          '> **Reversion**: Run `r!botbanner reset` anytime to revert.'
+          `> **Scope**: **${guild.name} Only** (Per-server profile banner)`,
+          '> **Note**: Global bot profile in other servers remains untouched.',
+          '> **Reversion**: Run `r!botbanner reset` anytime to restore default.'
         ].join('\n'))
         .setImage(newBannerUrl || null)
-        .setFooter({ text: 'Rage Optimiser Enterprise • Global Profile Customization' })
+        .setFooter({ text: `Rage Optimiser Enterprise • ${guild.name} Customization` })
         .setTimestamp();
 
       return statusMsg.edit({ content: '', embeds: [successCard] });

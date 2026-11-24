@@ -5,6 +5,7 @@ import { Database } from '../core/Database.js';
 export interface GuildBotCustomization {
   guildId: string;
   serverAvatarUrl: string | null;
+  serverBannerUrl: string | null;
   serverNickname: string | null;
   updatedBy: string;
   updatedAt: number;
@@ -26,11 +27,17 @@ export class BotAvatarService {
         CREATE TABLE IF NOT EXISTS guild_bot_customization (
           guildId TEXT PRIMARY KEY,
           serverAvatarUrl TEXT,
+          serverBannerUrl TEXT,
           serverNickname TEXT,
           updatedBy TEXT,
           updatedAt INTEGER
         );
       `);
+
+      try {
+        await db.exec(`ALTER TABLE guild_bot_customization ADD COLUMN serverBannerUrl TEXT;`);
+      } catch {}
+
       this.isInitialized = true;
     } catch (err) {
       console.error('[BotAvatarService] Error creating guild_bot_customization table:', err);
@@ -53,6 +60,7 @@ export class BotAvatarService {
       return {
         guildId: row.guildId,
         serverAvatarUrl: row.serverAvatarUrl || null,
+        serverBannerUrl: row.serverBannerUrl || null,
         serverNickname: row.serverNickname || null,
         updatedBy: row.updatedBy || 'system',
         updatedAt: row.updatedAt || 0
@@ -238,6 +246,149 @@ export class BotAvatarService {
     } catch (err: any) {
       console.error(`[BotAvatarService] setServerNickname failed in ${guild.id}:`, err);
       return { success: false, error: err?.message || 'Failed to change server nickname.' };
+    }
+  }
+
+  /**
+   * Sets the bot's server-specific profile banner via Discord REST API (PATCH /guilds/{id}/members/@me).
+   */
+  public static async setServerBanner(
+    guild: Guild,
+    imageSource: string | Buffer,
+    updatedBy: string
+  ): Promise<{ success: boolean; bannerUrl?: string; error?: string }> {
+    await this.ensureTable();
+
+    try {
+      let imageBuffer: Buffer;
+      let originalUrl: string | null = null;
+
+      // 1. Resolve image into a Buffer
+      if (typeof imageSource === 'string') {
+        originalUrl = imageSource;
+        if (!/^https?:\/\//i.test(imageSource)) {
+          return { success: false, error: 'Invalid URL. Please provide a direct http/https link or file attachment.' };
+        }
+
+        const res = await fetch(imageSource);
+        if (!res.ok) {
+          return { success: false, error: `Failed to download image (HTTP ${res.status}: ${res.statusText}).` };
+        }
+        const arrayBuf = await res.arrayBuffer();
+        imageBuffer = Buffer.from(arrayBuf);
+      } else {
+        imageBuffer = imageSource;
+      }
+
+      if (!imageBuffer || imageBuffer.length === 0) {
+        return { success: false, error: 'Image file was empty or could not be processed.' };
+      }
+
+      // Check max payload size (10 MB)
+      if (imageBuffer.length > 10 * 1024 * 1024) {
+        return { success: false, error: 'Banner image exceeds maximum limit of 10 MB.' };
+      }
+
+      // 2. Validate and format image with Sharp
+      const metadata = await sharp(imageBuffer).metadata().catch(() => null);
+      if (!metadata || !metadata.format) {
+        return { success: false, error: 'Unsupported or corrupted image format. Please use PNG, JPEG, WebP, or GIF.' };
+      }
+
+      let mimeType = `image/${metadata.format as string}`;
+      let finalBuffer = imageBuffer;
+
+      // Optimize oversized banner images (> 1100x440 or > 2.5MB static)
+      if (metadata.format !== 'gif') {
+        if ((metadata.width && metadata.width > 1100) || (metadata.height && metadata.height > 440) || imageBuffer.length > 2.5 * 1024 * 1024) {
+          finalBuffer = await sharp(imageBuffer)
+            .resize(1100, 440, { fit: 'inside', withoutEnlargement: true })
+            .png({ quality: 90 })
+            .toBuffer();
+          mimeType = 'image/png';
+        }
+      }
+
+      // Convert to Discord Base64 Data URI
+      const base64DataUri = `data:${mimeType};base64,${finalBuffer.toString('base64')}`;
+
+      // 3. Dispatch to Discord REST API (Modify Current Member in this Guild)
+      const patchResult: any = await guild.client.rest.patch(
+        Routes.guildMember(guild.id, '@me'),
+        {
+          body: { banner: base64DataUri }
+        }
+      );
+
+      // Invalidate and refresh cache for guild.members.me
+      const meMember = await guild.members.fetchMe().catch(() => null);
+
+      // 4. Persist to SQLite
+      const db = Database.getDb();
+      if (db) {
+        const storedUrl = originalUrl || 'attachment_upload';
+        await db.run(
+          `INSERT INTO guild_bot_customization (guildId, serverBannerUrl, updatedBy, updatedAt)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(guildId) DO UPDATE SET
+             serverBannerUrl = excluded.serverBannerUrl,
+             updatedBy = excluded.updatedBy,
+             updatedAt = excluded.updatedAt`,
+          [guild.id, storedUrl, updatedBy, Date.now()]
+        );
+      }
+
+      const clientUserId = guild.client.user?.id;
+      const bannerUrl =
+        (meMember as any)?.bannerURL?.({ size: 1024 }) ||
+        (patchResult?.banner && clientUserId
+          ? `https://cdn.discordapp.com/guilds/${guild.id}/users/${clientUserId}/banners/${patchResult.banner}.png?size=1024`
+          : undefined);
+
+      return { success: true, bannerUrl };
+    } catch (err: any) {
+      console.error(`[BotAvatarService] setServerBanner failed in ${guild.id}:`, err);
+      let errorMsg = err?.message || 'Failed to update bot server banner.';
+      if (err?.code === 50035) {
+        errorMsg = 'Discord rejected the banner image format or payload. Please try a standard PNG, JPEG, or GIF under 8 MB.';
+      } else if (err?.status === 429) {
+        errorMsg = 'Rate limit encountered: Discord allows setting server profiles only a few times per minute. Please try again shortly.';
+      }
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Resets the bot's server banner to default (clears server profile banner).
+   */
+  public static async resetServerBanner(
+    guild: Guild,
+    updatedBy: string
+  ): Promise<{ success: boolean; error?: string }> {
+    await this.ensureTable();
+
+    try {
+      await guild.client.rest.patch(
+        Routes.guildMember(guild.id, '@me'),
+        {
+          body: { banner: null }
+        }
+      );
+
+      await guild.members.fetchMe().catch(() => null);
+
+      const db = Database.getDb();
+      if (db) {
+        await db.run(
+          `UPDATE guild_bot_customization SET serverBannerUrl = NULL, updatedBy = ?, updatedAt = ? WHERE guildId = ?`,
+          [updatedBy, Date.now(), guild.id]
+        );
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error(`[BotAvatarService] resetServerBanner failed in ${guild.id}:`, err);
+      return { success: false, error: err?.message || 'Failed to reset server banner.' };
     }
   }
 
