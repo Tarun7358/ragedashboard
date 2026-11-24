@@ -24,8 +24,8 @@ function cfg() {
 }
 
 function isConfigured(): boolean {
-  const { from, password, to } = cfg();
-  return Boolean(from && password && to);
+  const { from, password } = cfg();
+  return Boolean(from && password);
 }
 
 // ─── Singleton transporter (lazy-init) ───────────────────────────────────────
@@ -214,14 +214,18 @@ export class EmailService {
     const t = getTransporter();
     if (!t) return;
     const { from, to } = cfg();
+    const recipient = toOverride || to;
+    if (!recipient) {
+      return;
+    }
     try {
       await t.sendMail({
         from: `"Rage Optimiser Security" <${from}>`,
-        to:   toOverride || to,
+        to:   recipient,
         subject,
         html
       });
-      console.log(`[EmailService] Alert sent -> ${toOverride || to} | "${subject}"`);
+      console.log(`[EmailService] Alert sent -> ${recipient} | "${subject}"`);
     } catch (err: any) {
       console.error(`[EmailService] Send failed: ${err.message}`);
     }
@@ -418,11 +422,13 @@ export class EmailService {
   /** Send a test email. Returns true on success. */
   public static async sendTestEmail(toOverride?: string): Promise<boolean> {
     if (!isConfigured()) return false;
+    const recipient = toOverride || cfg().to;
+    if (!recipient) return false;
 
     const details = renderDetails([
       { label: 'System Status', value: 'ONLINE & AUTHENTICATED', isSuccess: true },
-      { label: 'Delivery Gateway', value: 'GMAIL ENTERPRISE SMTP' },
-      { label: 'Dispatched To', value: toOverride || cfg().to, isMono: true },
+      { label: 'Delivery Gateway', value: 'ENTERPRISE SMTP DISPATCH' },
+      { label: 'Dispatched To', value: recipient, isMono: true },
       { label: 'Timestamp', value: new Date().toUTCString(), isMono: true }
     ]);
 
