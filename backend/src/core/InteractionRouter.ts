@@ -435,6 +435,11 @@ export class InteractionRouter {
 
     // Help center buttons — handled directly, no module dispatch needed
     if (interaction.customId.startsWith('help_btn_')) {
+      if (interaction.customId.split(':')[0] !== 'help_btn_close') {
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferUpdate().catch(() => {});
+        }
+      }
       await PrefixHelpCenter.handleButtonInteraction(interaction).catch(console.error);
       return;
     }
@@ -591,6 +596,9 @@ export class InteractionRouter {
 
     // Help center select menus (category & command selection) — handled directly
     if (interaction.customId.startsWith('help_category_select') || interaction.customId.startsWith('help_command_select')) {
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferUpdate().catch(() => {});
+      }
       await PrefixHelpCenter.handleSelectMenuInteraction(interaction).catch(console.error);
       return;
     }
