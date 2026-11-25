@@ -374,12 +374,13 @@ process.on('uncaughtException', (err: Error, origin: string) => {
 
 const isMainFile = () => {
   try {
-    if (!process.argv[1]) return false;
+    if (process.env.pm_id !== undefined) return true;
+    if (!process.argv[1]) return true;
     const mainPath = path.resolve(process.argv[1]);
     const currentPath = path.resolve(fileURLToPath(import.meta.url));
-    return mainPath === currentPath;
+    return mainPath === currentPath || process.argv.some(a => a.includes('index.js') || a.includes('index.ts'));
   } catch {
-    return false;
+    return true;
   }
 };
 
