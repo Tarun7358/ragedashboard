@@ -7,6 +7,7 @@ import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { Database } from '../../core/Database.js';
+import { PayloadFormatter } from '../../core/PayloadFormatter.js';
 import { buildLimeOverviewCard, buildMinimalAction, createLimeEmbed, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, SHIELD_ICON, CONFIG_ICON, MEMBER_ICON, VIP_ICON, Colors, BRAND_FOOTER, ARROW_ICON } from '../../core/UIFactory.js';
 
 // Safe display name helper
@@ -142,7 +143,8 @@ export function buildLimeWelcomePayload(config: any, member: any, countOverride?
     embed.setFooter({ text: parseWelcomeVariables(rawFooter, member, countOverride, cfg) });
   }
 
-  return { content, embeds: [embed], ...(files ? { files } : {}) };
+  const rawPayload = { content, embeds: [embed], ...(files ? { files } : {}) };
+  return PayloadFormatter.normalize(rawPayload, member?.user || member);
 }
 
 export function registerWelcomeCommands(): void {
