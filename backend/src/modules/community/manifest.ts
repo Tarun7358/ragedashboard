@@ -1,7 +1,11 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, PermissionFlagsBits } from 'discord.js';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { ModuleManifest, DiscordResourceRegistry } from '../../core/types.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { Database } from '../../core/Database.js';
 import { buildLimeOverviewCard, buildMinimalAction, createLimeEmbed, VERIFIED_ICON, WRONG_ICON, TIMER_ICON, SHIELD_ICON, CONFIG_ICON, MEMBER_ICON, VIP_ICON, Colors, BRAND_FOOTER, ARROW_ICON } from '../../core/UIFactory.js';
 
